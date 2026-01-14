@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react';
+import { useKV } from '@github/spark/hooks';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -18,6 +19,8 @@ import {
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { ScriptGenerator } from '@/components/ScriptGenerator';
+import { GiftHistory } from '@/components/GiftHistory';
+import { GiftHistoryEntry } from '@/lib/types';
 
 type ConnectionStatus = 'disconnected' | 'connected' | 'loading';
 type RedemptionStatus = 'idle' | 'redeeming' | 'complete' | 'error';
@@ -30,9 +33,29 @@ function App() {
   const [totalGifts, setTotalGifts] = useState(0);
   const [isPanelExpanded, setIsPanelExpanded] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [giftHistory, setGiftHistory] = useKV<GiftHistoryEntry[]>('gift-history', []);
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
   const STORE_URL = 'https://home.startrekfleetcommand.com/store';
+
+  const addToHistory = (giftElement: HTMLElement) => {
+    const giftTitle = giftElement.textContent?.trim() || 'Unknown Gift';
+    const giftDescription = giftElement.getAttribute('aria-label') || 'Claimed gift from STFC store';
+    
+    const newEntry: GiftHistoryEntry = {
+      id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      giftTitle: giftTitle.substring(0, 100),
+      giftDescription: giftDescription.substring(0, 200),
+      quantity: '1',
+      claimedAt: new Date().toISOString(),
+      category: 'permanent',
+    };
+
+    setGiftHistory((currentHistory) => {
+      const history = currentHistory || [];
+      return [newEntry, ...history];
+    });
+  };
 
   const handleIframeLoad = () => {
     setConnectionStatus('connected');
@@ -164,6 +187,8 @@ function App() {
               break;
             }
           }
+          
+          addToHistory(button);
           
           setGiftsRedeemed(i + 1);
           setProgress(((i + 1) / giftButtons.length) * 100);
@@ -341,6 +366,8 @@ function App() {
             )}
           </div>
         </Card>
+
+        <GiftHistory />
 
         <ScriptGenerator />
       </div>

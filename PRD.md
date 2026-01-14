@@ -12,6 +12,13 @@ This is an automated gift redemption tool that interfaces with an external websi
 
 ## Essential Features
 
+### Gift History Tracker
+- **Functionality**: Persistently tracks all previously claimed gifts with timestamp and details
+- **Purpose**: Provides users with a record of rewards claimed over time, helps track daily patterns
+- **Trigger**: Automatically records each gift when successfully redeemed
+- **Progression**: Gift claimed → Details extracted from DOM → Entry created with timestamp → Saved to persistent storage → Displayed in history list
+- **Success criteria**: All claimed gifts saved with accurate details, history persists across sessions, sortable by date, clearable by user
+
 ### Store Website Integration
 - **Functionality**: Opens the STFC store website in an embedded iframe with authentication flow
 - **Purpose**: Provides secure access to the actual gift redemption interface
@@ -96,13 +103,14 @@ Animations should feel like starship console interactions—crisp, purposeful, a
 ## Component Selection
 
 - **Components**:
-  - Card: Floating control panel with backdrop blur and semi-transparent background; Manual script card with code display
-  - Button: Primary "Redeem All Gifts" button with loading states; secondary "Open Store" button; "Copy Script" button for manual approach
+  - Card: Floating control panel with backdrop blur and semi-transparent background; Manual script card with code display; Gift history card with expandable list
+  - Button: Primary "Redeem All Gifts" button with loading states; secondary "Open Store" button; "Copy Script" button for manual approach; "Clear History" button for gift history
   - Progress: Linear progress bar for redemption status with percentage display
-  - Badge: Status indicators showing connection state and redemption count
+  - Badge: Status indicators showing connection state and redemption count; category badges in history entries
   - Alert: Error notifications for failed operations; informational alerts about cross-origin restrictions
-  - Dialog: Confirmation modal for bulk redemption with summary
-  - Separator: Dividers in control panel with subtle neon glow
+  - Dialog: Confirmation modal for bulk redemption with summary; confirmation for clearing history
+  - Separator: Dividers in control panel with subtle neon glow; dividers between history entries
+  - ScrollArea: Scrollable gift history list
   - Code Block: Syntax-highlighted script display with copy functionality
   
 - **Customizations**:
@@ -111,16 +119,19 @@ Animations should feel like starship console interactions—crisp, purposeful, a
   - Progress indicator with animated gradient fill
   - Status badge with pulsing animation for active operations
   - Script generator component with formatted code display and one-click copy
+  - Gift history tracker with collapsible view and persistent storage
+  - History entry cards with timestamp, category badges, and gift details
   
 - **States**:
   - Buttons: Default (glowing), hover (brighter glow + scale 1.05), active (scale 0.98), loading (spinner), disabled (muted)
   - Control panel: Expanded (full controls visible), minimized (compact bar), hidden (only toggle visible)
   - Connection: Disconnected (warning state), connected (success indicator), loading (pulsing animation)
   - Copy button: Default (Copy), success (Copied! with checkmark for 3s)
+  - History panel: Expanded (showing all entries with scroll), collapsed (showing summary only)
   
 - **Icon Selection**:
   - Rocket (app branding)
-  - Gift (redemption actions)
+  - Gift (redemption actions and history entries)
   - Lightning (automation indicator)
   - CheckCircle (success states)
   - WarningCircle (error states)
@@ -129,6 +140,10 @@ Animations should feel like starship console interactions—crisp, purposeful, a
   - ArrowSquareOut (open in new tab)
   - Code (manual script section)
   - Copy (copy to clipboard action)
+  - ClockCounterClockwise (gift history icon)
+  - Calendar (timestamp display)
+  - Package (empty state for history)
+  - Trash (clear history action)
   
 - **Spacing**:
   - Control panel padding: p-4 md:p-6
@@ -144,3 +159,5 @@ Animations should feel like starship console interactions—crisp, purposeful, a
   - Swipe down to dismiss/minimize control panel
   - Full-screen iframe option for focused interaction
   - Script code block with horizontal scroll for long lines
+  - Gift history with touch-friendly scroll and collapsible view
+  - Stacked layout for all cards on mobile

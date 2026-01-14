@@ -11,3 +11,12 @@ export interface Gift {
   quantity: string;
   imageUrl?: string;
 }
+
+export interface GiftHistoryEntry {
+  id: string;
+  giftTitle: string;
+  giftDescription: string;
+  quantity: string;
+  claimedAt: string;
+  category: GiftCategory;
+}
