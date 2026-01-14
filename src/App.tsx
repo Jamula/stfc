@@ -17,6 +17,7 @@ import {
 } from '@phosphor-icons/react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { ScriptGenerator } from '@/components/ScriptGenerator';
 
 type ConnectionStatus = 'disconnected' | 'connected' | 'loading';
 type RedemptionStatus = 'idle' | 'redeeming' | 'complete' | 'error';
@@ -64,18 +65,120 @@ function App() {
         description: 'Looking for available free gifts',
       });
 
-      const simulatedGifts = 5;
-      setTotalGifts(simulatedGifts);
+      const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+      
+      if (!iframeDoc) {
+        throw new Error('Cannot access store content. Cross-origin restrictions may apply.');
+      }
 
-      for (let i = 0; i < simulatedGifts; i++) {
-        await new Promise((resolve) => setTimeout(resolve, 800));
-        setGiftsRedeemed(i + 1);
-        setProgress(((i + 1) / simulatedGifts) * 100);
+      const giftSelectors = [
+        'button:not([disabled])',
+        '[class*="gift"]',
+        '[class*="free"]',
+        '[class*="claim"]',
+        '[class*="redeem"]',
+        '[data-testid*="gift"]',
+        '[data-testid*="claim"]',
+        'a[href*="gift"]',
+        'div[role="button"]',
+      ];
+
+      const allButtons: HTMLElement[] = [];
+      
+      for (const selector of giftSelectors) {
+        try {
+          const elements = iframeDoc.querySelectorAll(selector);
+          elements.forEach((el) => {
+            const element = el as HTMLElement;
+            const text = element.textContent?.toLowerCase() || '';
+            const className = element.className?.toLowerCase() || '';
+            const id = element.id?.toLowerCase() || '';
+            
+            if (
+              (text.includes('gift') || 
+               text.includes('free') || 
+               text.includes('claim') || 
+               text.includes('redeem')) &&
+              !text.includes('buy') &&
+              !text.includes('purchase') &&
+              !allButtons.includes(element)
+            ) {
+              allButtons.push(element);
+            } else if (
+              className.includes('gift') || 
+              className.includes('free') || 
+              className.includes('claim') ||
+              id.includes('gift') ||
+              id.includes('claim')
+            ) {
+              if (!allButtons.includes(element)) {
+                allButtons.push(element);
+              }
+            }
+          });
+        } catch (e) {
+          console.warn(`Selector ${selector} failed:`, e);
+        }
+      }
+
+      const giftButtons = allButtons.filter((btn) => {
+        const rect = btn.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0;
+      });
+
+      if (giftButtons.length === 0) {
+        throw new Error('No gift buttons found. Make sure you are logged in to the STFC store.');
+      }
+
+      setTotalGifts(giftButtons.length);
+      
+      toast.info(`Found ${giftButtons.length} potential gifts`, {
+        description: 'Starting redemption process...',
+      });
+
+      for (let i = 0; i < giftButtons.length; i++) {
+        const button = giftButtons[i];
+        
+        try {
+          button.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          await new Promise((resolve) => setTimeout(resolve, 500));
+          
+          button.click();
+          
+          await new Promise((resolve) => setTimeout(resolve, 1200));
+          
+          const confirmButtons = iframeDoc.querySelectorAll(
+            'button, [role="button"], a'
+          );
+          
+          for (const confirmBtn of Array.from(confirmButtons)) {
+            const text = (confirmBtn as HTMLElement).textContent?.toLowerCase() || '';
+            if (
+              text.includes('confirm') ||
+              text.includes('accept') ||
+              text.includes('claim') ||
+              text.includes('yes')
+            ) {
+              (confirmBtn as HTMLElement).click();
+              await new Promise((resolve) => setTimeout(resolve, 800));
+              break;
+            }
+          }
+          
+          setGiftsRedeemed(i + 1);
+          setProgress(((i + 1) / giftButtons.length) * 100);
+          
+          toast.success(`Gift ${i + 1} claimed`, {
+            description: `${giftButtons.length - i - 1} remaining`,
+          });
+        } catch (btnError) {
+          console.warn(`Failed to click button ${i + 1}:`, btnError);
+        }
       }
 
       setRedemptionStatus('complete');
-      toast.success('All Gifts Redeemed!', {
-        description: `Successfully claimed ${simulatedGifts} gifts`,
+      toast.success('All Gifts Processed!', {
+        description: `Attempted to claim ${giftButtons.length} gifts`,
       });
     } catch (error) {
       setRedemptionStatus('error');
@@ -95,7 +198,7 @@ function App() {
     <div className="min-h-screen bg-background flex flex-col">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,oklch(0.25_0.08_240),transparent_50%),radial-gradient(circle_at_70%_60%,oklch(0.20_0.10_145),transparent_50%)] pointer-events-none" />
 
-      <div className="relative z-10 m-4 md:m-6">
+      <div className="relative z-10 m-4 md:m-6 space-y-4">
         <Card
           className={cn(
             'backdrop-blur-xl bg-card/90 border-2 border-primary/30 shadow-[0_4px_20px_rgba(100,181,246,0.2)] transition-all duration-300',
@@ -225,10 +328,21 @@ function App() {
                 <p className="text-xs text-muted-foreground text-center">
                   Authenticate with your STFC account in the embedded store below
                 </p>
+                
+                <Alert className="border-2 border-primary/30">
+                  <Gift weight="fill" className="w-4 h-4" />
+                  <AlertDescription className="text-xs">
+                    <strong>Note:</strong> If automation fails due to cross-origin restrictions, 
+                    open the store in a new tab and run the redemption script there. 
+                    The app will attempt to interact with the embedded store first.
+                  </AlertDescription>
+                </Alert>
               </div>
             )}
           </div>
         </Card>
+
+        <ScriptGenerator />
       </div>
 
       <div className="relative flex-1 mx-4 md:mx-6 mb-4 md:mb-6 rounded-lg overflow-hidden border-2 border-primary/30 shadow-[0_4px_20px_rgba(100,181,246,0.2)]">
@@ -266,7 +380,7 @@ function App() {
             title="STFC Web Store"
             onLoad={handleIframeLoad}
             onError={handleIframeError}
-            sandbox="allow-same-origin allow-scripts allow-forms allow-popups"
+            sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation"
           />
         )}
       </div>

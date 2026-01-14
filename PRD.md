@@ -20,11 +20,18 @@ This is an automated gift redemption tool that interfaces with an external websi
 - **Success criteria**: Iframe loads correctly, authentication persists, user can navigate store seamlessly
 
 ### Automated Gift Redemption
-- **Functionality**: Automatically identifies and redeems all available free gifts with one click
+- **Functionality**: Automatically identifies and redeems all available free gifts with one click using JavaScript DOM manipulation
 - **Purpose**: Eliminates tedious manual clicking through multiple gift pages
 - **Trigger**: User clicks "Redeem All Gifts" button
-- **Progression**: User clicks button → Script scans for free gifts → Each gift claimed automatically → Progress shown → Completion summary displayed
-- **Success criteria**: All free gifts successfully redeemed, clear progress feedback, error handling for failed redemptions
+- **Progression**: User clicks button → Script accesses iframe DOM → Scans for gift/free/claim buttons → Each gift clicked automatically with confirmation → Progress shown in real-time → Completion summary displayed
+- **Success criteria**: All free gifts successfully redeemed, clear progress feedback, error handling for failed redemptions, graceful fallback for cross-origin restrictions
+
+### Manual Script Alternative
+- **Functionality**: Provides a copy-paste JavaScript snippet users can run directly in the STFC store tab's console
+- **Purpose**: Bypass cross-origin iframe restrictions when automated clicking from iframe fails
+- **Trigger**: Displayed below control panel as alternative method
+- **Progression**: User copies script → Opens store in new tab → Opens browser console (F12) → Pastes script → Script runs and auto-claims gifts
+- **Success criteria**: Script successfully scans and clicks gift buttons, handles confirmations, provides console logging of progress
 
 ### Authentication Management
 - **Functionality**: Securely stores authentication state for the STFC website
@@ -43,11 +50,13 @@ This is an automated gift redemption tool that interfaces with an external websi
 ## Edge Case Handling
 
 - **Authentication Failures**: Clear error message with retry option when login fails or session expires
-- **CORS Issues**: Graceful handling if iframe embedding is blocked by the external site
+- **CORS/Cross-Origin Issues**: Graceful handling with iframe automation attempt first, then fallback to manual script copy-paste method with clear instructions
 - **Network Errors**: Retry mechanism with exponential backoff for failed redemption attempts
 - **No Gifts Available**: Display encouraging message when all gifts have been claimed with next reset timer
 - **Partial Redemption Failures**: Continue processing remaining gifts even if one fails, report failures at end
 - **Browser Compatibility**: Fallback to direct link if iframe features are unsupported
+- **DOM Structure Changes**: Flexible selectors that search for multiple button patterns (gift, free, claim, redeem keywords in text, classes, and IDs)
+- **Confirmation Dialogs**: Script automatically detects and clicks confirmation buttons after clicking gift buttons
 
 ## Design Direction
 
@@ -87,24 +96,27 @@ Animations should feel like starship console interactions—crisp, purposeful, a
 ## Component Selection
 
 - **Components**:
-  - Card: Floating control panel with backdrop blur and semi-transparent background
-  - Button: Primary "Redeem All Gifts" button with loading states; secondary "Open Store" button
+  - Card: Floating control panel with backdrop blur and semi-transparent background; Manual script card with code display
+  - Button: Primary "Redeem All Gifts" button with loading states; secondary "Open Store" button; "Copy Script" button for manual approach
   - Progress: Linear progress bar for redemption status with percentage display
   - Badge: Status indicators showing connection state and redemption count
-  - Alert: Error notifications for failed operations
+  - Alert: Error notifications for failed operations; informational alerts about cross-origin restrictions
   - Dialog: Confirmation modal for bulk redemption with summary
   - Separator: Dividers in control panel with subtle neon glow
+  - Code Block: Syntax-highlighted script display with copy functionality
   
 - **Customizations**:
   - Custom iframe wrapper component with loading overlay and error states
   - Floating control panel that can be minimized/expanded
   - Progress indicator with animated gradient fill
   - Status badge with pulsing animation for active operations
+  - Script generator component with formatted code display and one-click copy
   
 - **States**:
   - Buttons: Default (glowing), hover (brighter glow + scale 1.05), active (scale 0.98), loading (spinner), disabled (muted)
   - Control panel: Expanded (full controls visible), minimized (compact bar), hidden (only toggle visible)
   - Connection: Disconnected (warning state), connected (success indicator), loading (pulsing animation)
+  - Copy button: Default (Copy), success (Copied! with checkmark for 3s)
   
 - **Icon Selection**:
   - Rocket (app branding)
@@ -115,12 +127,15 @@ Animations should feel like starship console interactions—crisp, purposeful, a
   - CircleNotch (loading spinner)
   - CaretUp/CaretDown (panel expand/collapse)
   - ArrowSquareOut (open in new tab)
+  - Code (manual script section)
+  - Copy (copy to clipboard action)
   
 - **Spacing**:
   - Control panel padding: p-4 md:p-6
   - Button spacing: gap-3 md:gap-4
   - Status indicators: gap-2
   - Panel margin from edges: m-4 md:m-6
+  - Script card spacing: space-y-4 between elements
   
 - **Mobile**:
   - Control panel anchored to top on mobile, floats on desktop
@@ -128,3 +143,4 @@ Animations should feel like starship console interactions—crisp, purposeful, a
   - Collapsible panel to maximize iframe viewport
   - Swipe down to dismiss/minimize control panel
   - Full-screen iframe option for focused interaction
+  - Script code block with horizontal scroll for long lines
