@@ -1,8 +1,7 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Code, Copy, CheckCircle } from '@phosphor-icons/react';
+import { Copy, CheckCircle, Info } from '@phosphor-icons/react';
 import { toast } from 'sonner';
 
 export function ScriptGenerator() {
@@ -122,57 +121,51 @@ export function ScriptGenerator() {
   };
 
   return (
-    <Card className="backdrop-blur-xl bg-card/90 border-2 border-primary/30 shadow-[0_4px_20px_rgba(100,181,246,0.2)]">
-      <div className="p-4 md:p-6 space-y-4">
-        <div className="flex items-center gap-3">
-          <div className="bg-primary/20 p-2 rounded-lg border-2 border-primary/50">
-            <Code weight="fill" className="w-6 h-6 text-primary" />
-          </div>
-          <div>
-            <h2 className="text-lg font-bold text-foreground">Manual Script</h2>
-            <p className="text-sm text-muted-foreground">
-              Use this if iframe automation fails
-            </p>
-          </div>
-        </div>
-
-        <Alert className="border-2 border-accent/30 bg-accent/5">
-          <AlertDescription className="text-sm space-y-2">
-            <p className="font-semibold text-foreground">Instructions:</p>
-            <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
-              <li>Open the STFC store in a new tab</li>
-              <li>Log in to your account</li>
-              <li>Press F12 to open Developer Tools</li>
-              <li>Go to the "Console" tab</li>
-              <li>Copy and paste the script below</li>
-              <li>Press Enter to run it</li>
-            </ol>
-          </AlertDescription>
-        </Alert>
-
-        <div className="relative">
-          <pre className="bg-secondary/50 border-2 border-primary/20 rounded-lg p-4 text-xs font-mono overflow-x-auto max-h-64 overflow-y-auto">
-            <code className="text-foreground">{automationScript}</code>
-          </pre>
-          <Button
-            onClick={copyScript}
-            size="sm"
-            className="absolute top-2 right-2 bg-primary/90 hover:bg-primary text-primary-foreground"
-          >
-            {copied ? (
-              <>
-                <CheckCircle weight="fill" className="w-4 h-4 mr-1" />
-                Copied!
-              </>
-            ) : (
-              <>
-                <Copy weight="bold" className="w-4 h-4 mr-1" />
-                Copy Script
-              </>
-            )}
-          </Button>
-        </div>
+    <div className="space-y-4">
+      <div className="space-y-2">
+        <h3 className="text-sm font-semibold text-foreground">Manual Redemption Script</h3>
+        <p className="text-xs text-muted-foreground">
+          Use this if iframe automation fails due to CORS restrictions
+        </p>
       </div>
-    </Card>
+
+      <Alert className="border-2 border-accent/30 bg-accent/5">
+        <Info weight="fill" className="w-4 h-4" />
+        <AlertDescription className="text-xs space-y-2">
+          <p className="font-semibold text-foreground">Instructions:</p>
+          <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
+            <li>Open the STFC store in a new tab</li>
+            <li>Log in to your account</li>
+            <li>Press F12 to open Developer Tools</li>
+            <li>Go to the "Console" tab</li>
+            <li>Copy and paste the script below</li>
+            <li>Press Enter to run it</li>
+          </ol>
+        </AlertDescription>
+      </Alert>
+
+      <div className="relative">
+        <pre className="bg-secondary/50 border-2 border-primary/20 rounded-lg p-4 text-[10px] font-mono overflow-x-auto max-h-96 overflow-y-auto">
+          <code className="text-foreground">{automationScript}</code>
+        </pre>
+        <Button
+          onClick={copyScript}
+          size="sm"
+          className="absolute top-2 right-2 bg-primary/90 hover:bg-primary text-primary-foreground text-xs"
+        >
+          {copied ? (
+            <>
+              <CheckCircle weight="fill" className="w-4 h-4 mr-1" />
+              Copied!
+            </>
+          ) : (
+            <>
+              <Copy weight="bold" className="w-4 h-4 mr-1" />
+              Copy
+            </>
+          )}
+        </Button>
+      </div>
+    </div>
   );
 }

@@ -41,11 +41,11 @@ This is an automated gift redemption tool that interfaces with an external websi
 - **Success criteria**: Script successfully scans and clicks gift buttons, handles confirmations, provides console logging of progress
 
 ### Authentication Management
-- **Functionality**: Securely stores authentication state for the STFC website
-- **Purpose**: Prevents repeated login prompts while maintaining security
-- **Trigger**: User authenticates through the embedded store
-- **Progression**: User logs in → Auth state detected → Credentials cached (if browser allows) → User remains logged in
-- **Success criteria**: Authentication persists across sessions, secure handling of credentials
+- **Functionality**: Detects and persists authentication state for the STFC website using session keys and periodic auth checking
+- **Purpose**: Prevents repeated login prompts while maintaining security and provides clear auth status
+- **Trigger**: User authenticates through the embedded store, app checks auth state every 30 seconds
+- **Progression**: User logs in → Auth state detected → Session key saved with useKV → Auth status badge updates → User remains logged in across sessions
+- **Success criteria**: Authentication persists across sessions, clear visual indicators of login state, automatic session refresh on reload
 
 ### Manual Gift Access
 - **Functionality**: Allows users to manually browse and claim specific gifts
@@ -67,7 +67,7 @@ This is an automated gift redemption tool that interfaces with an external websi
 
 ## Design Direction
 
-The design should feel like accessing a Starfleet command interface overlay on top of the official store—a tactical HUD that enhances the native experience. The embedded store should be the focus, with our automation controls floating above it in a sleek, semi-transparent control panel that doesn't obstruct the view. Users should feel like they're using advanced fleet technology to streamline their operations.
+The design should feel like accessing a Starfleet command interface—a tactical HUD that provides full-screen access to the store with streamlined controls in a persistent sidebar. The embedded store should dominate the viewport, with automation controls in a dedicated sidebar panel that provides quick access to history and tools without cluttering the main interface. Users should feel like they're using advanced fleet technology to streamline their operations with maximum efficiency.
 
 ## Color Selection
 
@@ -103,31 +103,32 @@ Animations should feel like starship console interactions—crisp, purposeful, a
 ## Component Selection
 
 - **Components**:
-  - Card: Floating control panel with backdrop blur and semi-transparent background; Manual script card with code display; Gift history card with expandable list
-  - Button: Primary "Redeem All Gifts" button with loading states; secondary "Open Store" button; "Copy Script" button for manual approach; "Clear History" button for gift history
+  - Tabs: Sidebar navigation for History and Script sections with clean tab transitions
+  - Button: Primary "Redeem All Gifts" button with loading states; secondary "Open Store" and "Refresh" buttons; "Copy Script" button for manual approach; "Clear History" button for gift history
   - Progress: Linear progress bar for redemption status with percentage display
-  - Badge: Status indicators showing connection state and redemption count; category badges in history entries
-  - Alert: Error notifications for failed operations; informational alerts about cross-origin restrictions
-  - Dialog: Confirmation modal for bulk redemption with summary; confirmation for clearing history
-  - Separator: Dividers in control panel with subtle neon glow; dividers between history entries
-  - ScrollArea: Scrollable gift history list
-  - Code Block: Syntax-highlighted script display with copy functionality
+  - Badge: Status indicators showing connection state, authentication state, and redemption count; category badges in history entries
+  - Alert: Error notifications for failed operations; informational alerts about session persistence and cross-origin restrictions
+  - Separator: Dividers between history entries
+  - ScrollArea: Scrollable gift history list and script code
   
 - **Customizations**:
-  - Custom iframe wrapper component with loading overlay and error states
-  - Floating control panel that can be minimized/expanded
+  - Full-screen iframe with persistent login state tracking
+  - Sidebar control panel (fixed width ~384px on desktop, full-screen on mobile)
+  - Tabbed interface for History and Script sections
+  - Session key persistence using useKV for maintaining login state
+  - Authentication status detection with periodic checking (every 30s)
   - Progress indicator with animated gradient fill
-  - Status badge with pulsing animation for active operations
+  - Status badges with connection and auth state
   - Script generator component with formatted code display and one-click copy
-  - Gift history tracker with collapsible view and persistent storage
+  - Gift history tracker with persistent storage and relative timestamps
   - History entry cards with timestamp, category badges, and gift details
   
 - **States**:
   - Buttons: Default (glowing), hover (brighter glow + scale 1.05), active (scale 0.98), loading (spinner), disabled (muted)
-  - Control panel: Expanded (full controls visible), minimized (compact bar), hidden (only toggle visible)
   - Connection: Disconnected (warning state), connected (success indicator), loading (pulsing animation)
+  - Authentication: Unknown (checking), authenticated (logged in badge), unauthenticated (not logged in warning)
   - Copy button: Default (Copy), success (Copied! with checkmark for 3s)
-  - History panel: Expanded (showing all entries with scroll), collapsed (showing summary only)
+  - Tabs: Default (muted), active (highlighted with bottom border and background)
   
 - **Icon Selection**:
   - Rocket (app branding)
@@ -135,8 +136,9 @@ Animations should feel like starship console interactions—crisp, purposeful, a
   - Lightning (automation indicator)
   - CheckCircle (success states)
   - WarningCircle (error states)
-  - CircleNotch (loading spinner)
-  - CaretUp/CaretDown (panel expand/collapse)
+  - CircleNotch (loading spinner and refresh action)
+  - Globe (connection status)
+  - ShieldCheck (authentication status)
   - ArrowSquareOut (open in new tab)
   - Code (manual script section)
   - Copy (copy to clipboard action)
@@ -144,20 +146,20 @@ Animations should feel like starship console interactions—crisp, purposeful, a
   - Calendar (timestamp display)
   - Package (empty state for history)
   - Trash (clear history action)
+  - Info (informational alerts)
   
 - **Spacing**:
+  - Sidebar width: w-full lg:w-96 (384px on desktop, full-width on mobile)
   - Control panel padding: p-4 md:p-6
-  - Button spacing: gap-3 md:gap-4
-  - Status indicators: gap-2
-  - Panel margin from edges: m-4 md:m-6
-  - Script card spacing: space-y-4 between elements
+  - Button spacing: gap-2 between button groups
+  - Status indicators: gap-2, flex-wrap for multiple badges
+  - Tab content padding: p-4
+  - History entries: space-y-3
   
 - **Mobile**:
-  - Control panel anchored to top on mobile, floats on desktop
+  - Sidebar takes full screen on mobile with iframe hidden or stacked below
   - Touch-optimized button sizes (min 44px tap targets)
-  - Collapsible panel to maximize iframe viewport
-  - Swipe down to dismiss/minimize control panel
-  - Full-screen iframe option for focused interaction
+  - Full-screen store view prioritized on larger screens
   - Script code block with horizontal scroll for long lines
-  - Gift history with touch-friendly scroll and collapsible view
-  - Stacked layout for all cards on mobile
+  - Gift history with touch-friendly scroll
+  - Responsive layout switches to vertical stack on small screens
