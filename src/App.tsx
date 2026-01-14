@@ -17,7 +17,6 @@ import {
   ClockCounterClockwise,
   Code,
   Globe,
-  ShieldCheck,
 } from '@phosphor-icons/react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -27,12 +26,10 @@ import { GiftHistoryEntry } from '@/lib/types';
 
 type ConnectionStatus = 'disconnected' | 'connected' | 'loading';
 type RedemptionStatus = 'idle' | 'redeeming' | 'complete' | 'error';
-type AuthStatus = 'unknown' | 'authenticated' | 'unauthenticated';
 
 function App() {
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('loading');
   const [redemptionStatus, setRedemptionStatus] = useState<RedemptionStatus>('idle');
-  const [authStatus, setAuthStatus] = useState<AuthStatus>('unknown');
   const [progress, setProgress] = useState(0);
   const [giftsRedeemed, setGiftsRedeemed] = useState(0);
   const [totalGifts, setTotalGifts] = useState(0);
@@ -43,35 +40,6 @@ function App() {
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
   const STORE_URL = 'https://home.startrekfleetcommand.com/store';
-
-  useEffect(() => {
-    const checkAuthPeriodically = setInterval(() => {
-      checkAuthStatus();
-    }, 30000);
-
-    return () => clearInterval(checkAuthPeriodically);
-  }, []);
-
-  const checkAuthStatus = async () => {
-    try {
-      const iframe = iframeRef.current;
-      if (!iframe || !iframe.contentWindow) return;
-
-      const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
-      if (!iframeDoc) return;
-
-      const loginButtons = iframeDoc.querySelectorAll('[href*="login"], button[class*="login"], a[class*="signin"]');
-      const userElements = iframeDoc.querySelectorAll('[class*="user"], [class*="profile"], [class*="avatar"]');
-
-      if (userElements.length > 0 && loginButtons.length === 0) {
-        setAuthStatus('authenticated');
-      } else if (loginButtons.length > 0) {
-        setAuthStatus('unauthenticated');
-      }
-    } catch (e) {
-      console.warn('Cannot check auth status due to CORS');
-    }
-  };
 
   const addToHistory = (giftElement: HTMLElement) => {
     const giftTitle = giftElement.textContent?.trim() || 'Unknown Gift';
@@ -94,9 +62,8 @@ function App() {
 
   const handleIframeLoad = () => {
     setConnectionStatus('connected');
-    checkAuthStatus();
     toast.info('Store Loaded', {
-      description: 'Log in to the store to enable gift redemption',
+      description: 'You can now log in to the store in the frame on the right',
     });
   };
 
@@ -126,133 +93,14 @@ function App() {
         throw new Error('Store not loaded');
       }
 
-      toast.info('Scanning for gifts...', {
-        description: 'Looking for available free gifts',
-      });
+      throw new Error('Due to browser security (CORS), this app cannot directly access the STFC store content. Please use the browser console script from the "Script" tab or open the store in a new tab and paste the script there.');
 
-      const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
-      
-      if (!iframeDoc) {
-        throw new Error('Cannot access store content. Cross-origin restrictions may apply.');
-      }
-
-      const giftSelectors = [
-        'button:not([disabled])',
-        '[class*="gift"]',
-        '[class*="free"]',
-        '[class*="claim"]',
-        '[class*="redeem"]',
-        '[data-testid*="gift"]',
-        '[data-testid*="claim"]',
-        'a[href*="gift"]',
-        'div[role="button"]',
-      ];
-
-      const allButtons: HTMLElement[] = [];
-      
-      for (const selector of giftSelectors) {
-        try {
-          const elements = iframeDoc.querySelectorAll(selector);
-          elements.forEach((el) => {
-            const element = el as HTMLElement;
-            const text = element.textContent?.toLowerCase() || '';
-            const className = element.className?.toLowerCase() || '';
-            const id = element.id?.toLowerCase() || '';
-            
-            if (
-              (text.includes('gift') || 
-               text.includes('free') || 
-               text.includes('claim') || 
-               text.includes('redeem')) &&
-              !text.includes('buy') &&
-              !text.includes('purchase') &&
-              !allButtons.includes(element)
-            ) {
-              allButtons.push(element);
-            } else if (
-              className.includes('gift') || 
-              className.includes('free') || 
-              className.includes('claim') ||
-              id.includes('gift') ||
-              id.includes('claim')
-            ) {
-              if (!allButtons.includes(element)) {
-                allButtons.push(element);
-              }
-            }
-          });
-        } catch (e) {
-          console.warn(`Selector ${selector} failed:`, e);
-        }
-      }
-
-      const giftButtons = allButtons.filter((btn) => {
-        const rect = btn.getBoundingClientRect();
-        return rect.width > 0 && rect.height > 0;
-      });
-
-      if (giftButtons.length === 0) {
-        throw new Error('No gift buttons found. Make sure you are logged in to the STFC store.');
-      }
-
-      setTotalGifts(giftButtons.length);
-      
-      toast.info(`Found ${giftButtons.length} potential gifts`, {
-        description: 'Starting redemption process...',
-      });
-
-      for (let i = 0; i < giftButtons.length; i++) {
-        const button = giftButtons[i];
-        
-        try {
-          button.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          await new Promise((resolve) => setTimeout(resolve, 500));
-          
-          button.click();
-          
-          await new Promise((resolve) => setTimeout(resolve, 1200));
-          
-          const confirmButtons = iframeDoc.querySelectorAll(
-            'button, [role="button"], a'
-          );
-          
-          for (const confirmBtn of Array.from(confirmButtons)) {
-            const text = (confirmBtn as HTMLElement).textContent?.toLowerCase() || '';
-            if (
-              text.includes('confirm') ||
-              text.includes('accept') ||
-              text.includes('claim') ||
-              text.includes('yes')
-            ) {
-              (confirmBtn as HTMLElement).click();
-              await new Promise((resolve) => setTimeout(resolve, 800));
-              break;
-            }
-          }
-          
-          addToHistory(button);
-          
-          setGiftsRedeemed(i + 1);
-          setProgress(((i + 1) / giftButtons.length) * 100);
-          
-          toast.success(`Gift ${i + 1} claimed`, {
-            description: `${giftButtons.length - i - 1} remaining`,
-          });
-        } catch (btnError) {
-          console.warn(`Failed to click button ${i + 1}:`, btnError);
-        }
-      }
-
-      setRedemptionStatus('complete');
-      toast.success('All Gifts Processed!', {
-        description: `Attempted to claim ${giftButtons.length} gifts`,
-      });
     } catch (error) {
       setRedemptionStatus('error');
       const message = error instanceof Error ? error.message : 'Unknown error occurred';
       setErrorMessage(message);
-      toast.error('Redemption Failed', {
-        description: message,
+      toast.error('Redemption Not Available', {
+        description: 'Please use the Script tab for redemption instructions',
       });
     }
   };
@@ -296,81 +144,27 @@ function App() {
               <Globe weight="fill" className="w-3 h-3 mr-1" />
               {connectionStatus}
             </Badge>
-
-            {authStatus !== 'unknown' && (
-              <Badge
-                variant="outline"
-                className={cn(
-                  'uppercase tracking-wider text-xs font-medium border-2',
-                  authStatus === 'authenticated' &&
-                    'bg-accent/20 border-accent/50 text-accent-foreground',
-                  authStatus === 'unauthenticated' &&
-                    'bg-destructive/20 border-destructive/50 text-destructive-foreground'
-                )}
-              >
-                <ShieldCheck weight="fill" className="w-3 h-3 mr-1" />
-                {authStatus === 'authenticated' ? 'Logged In' : 'Not Logged In'}
-              </Badge>
-            )}
           </div>
 
           {errorMessage && (
             <Alert variant="destructive" className="border-2">
               <WarningCircle weight="fill" className="w-4 h-4" />
-              <AlertDescription className="text-xs">{errorMessage}</AlertDescription>
-            </Alert>
-          )}
-
-          {redemptionStatus === 'redeeming' && (
-            <div className="space-y-2">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground font-medium">
-                  Redeeming gifts...
-                </span>
-                <span className="font-mono font-semibold text-primary">
-                  {giftsRedeemed} / {totalGifts}
-                </span>
-              </div>
-              <Progress
-                value={progress}
-                className="h-2 bg-secondary [&>div]:bg-gradient-to-r [&>div]:from-primary [&>div]:to-accent [&>div]:shadow-[0_0_10px_rgba(100,181,246,0.5)]"
-              />
-            </div>
-          )}
-
-          {redemptionStatus === 'complete' && (
-            <Alert className="border-2 border-accent/50 bg-accent/10">
-              <CheckCircle weight="fill" className="w-4 h-4 text-accent" />
-              <AlertDescription className="text-accent-foreground text-xs">
-                Successfully redeemed {giftsRedeemed} gifts!
-              </AlertDescription>
+              <AlertDescription className="text-xs leading-relaxed">{errorMessage}</AlertDescription>
             </Alert>
           )}
 
           <div className="flex flex-col gap-2">
             <Button
               onClick={handleRedeemAll}
-              disabled={
-                connectionStatus !== 'connected' ||
-                redemptionStatus === 'redeeming'
-              }
+              disabled={true}
               className={cn(
                 'w-full font-semibold tracking-wide transition-all duration-200',
-                'bg-accent text-accent-foreground hover:bg-accent/90 hover:scale-105 active:scale-95',
-                'shadow-[0_0_15px_rgba(125,232,168,0.4)] border-2 border-accent/50'
+                'bg-muted text-muted-foreground cursor-not-allowed',
+                'border-2 border-border'
               )}
             >
-              {redemptionStatus === 'redeeming' ? (
-                <>
-                  <CircleNotch className="w-5 h-5 mr-2 animate-spin" />
-                  Redeeming...
-                </>
-              ) : (
-                <>
-                  <Lightning weight="fill" className="w-5 h-5 mr-2" />
-                  Redeem All Gifts
-                </>
-              )}
+              <Lightning weight="fill" className="w-5 h-5 mr-2" />
+              Redeem All Gifts (Use Script Tab)
             </Button>
 
             <div className="flex gap-2">
@@ -393,26 +187,26 @@ function App() {
             </div>
           </div>
 
-          {!showAuthWarning && authStatus === 'unauthenticated' && (
-            <Alert className="border-2 border-destructive/50 bg-destructive/10">
-              <WarningCircle weight="fill" className="w-4 h-4 text-destructive" />
+          {!showAuthWarning && (
+            <Alert className="border-2 border-primary/50 bg-primary/10">
+              <WarningCircle weight="fill" className="w-4 h-4 text-primary" />
               <AlertDescription className="text-xs space-y-2">
-                <p className="font-semibold text-destructive-foreground">
-                  Authentication Required
+                <p className="font-semibold text-primary-foreground">
+                  Important: Browser Security Limitations
                 </p>
-                <p className="text-destructive-foreground/90">
-                  Due to browser security restrictions, embedded iframe login sessions cannot persist between page reloads. 
-                  You'll need to log in each time you use this app.
+                <p className="text-foreground/90 leading-relaxed">
+                  Due to browser CORS policies, this app cannot directly interact with the STFC store in the iframe. 
+                  Use the "Script" tab to get a bookmarklet or console script you can run directly on the store page.
                 </p>
                 <div className="pt-2 flex gap-2">
                   <Button
                     size="sm"
                     variant="outline"
                     onClick={openInNewTab}
-                    className="text-xs border-destructive/30 hover:bg-destructive/20"
+                    className="text-xs border-primary/30 hover:bg-primary/20"
                   >
                     <ArrowSquareOut weight="bold" className="w-3 h-3 mr-1" />
-                    Use Store in New Tab
+                    Open Store in New Tab
                   </Button>
                   <Button
                     size="sm"
@@ -423,15 +217,6 @@ function App() {
                     Dismiss
                   </Button>
                 </div>
-              </AlertDescription>
-            </Alert>
-          )}
-          
-          {authStatus === 'authenticated' && (
-            <Alert className="border-2 border-accent/50 bg-accent/10">
-              <CheckCircle weight="fill" className="w-4 h-4 text-accent" />
-              <AlertDescription className="text-xs text-accent-foreground">
-                <strong>Authenticated:</strong> You can now redeem gifts. Note: You'll need to log in again after refreshing this page.
               </AlertDescription>
             </Alert>
           )}
