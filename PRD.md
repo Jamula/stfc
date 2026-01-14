@@ -1,41 +1,61 @@
 # Planning Guide
 
-**Experience Qualities**:
+Automated gift redemption system for Star Trek Fleet Command with both web app and browser extension versions, featuring persistent authentication in the extension.
 
 **Experience Qualities**:
 1. **Automated** - One-click redemption of all available gifts with real-time status updates and visual feedback
-2. **Reliable** - Robust error handling with clear messaging when authentication or redemption fails
+2. **Reliable** - Robust error handling with clear messaging when authentication or redemption fails; browser extension version provides persistent authentication
 3. **Immersive** - Star Trek aesthetic that feels native to the STFC universe with sci-fi inspired design elements
 
-### Gift History Tracker
-- **Purpose**: Provides users with a record of rewards claimed over time, helps track daily patterns
+**Complexity Level**: Light Application (multiple features with basic state)
+This is a specialized tool with focused functionality—automated gift claiming, history tracking, and dual deployment options (web app + browser extension).
 
+## Essential Features
 
+### Browser Extension with Persistent Authentication
+- **Functionality**: Standalone browser extension that maintains user authentication across sessions
+- **Purpose**: Solves the web app's iframe authentication limitation by running as a trusted browser component
+- **Trigger**: User installs extension, navigates to STFC store, and clicks extension icon
+- **Progression**: Install extension → Open STFC store → Log in once → Authentication persists indefinitely → Click extension icon → Redeem gifts
+- **Success criteria**: Login session survives page reloads, browser restarts, and extension popup closes; no re-authentication required
 
-- **Trigger**: On app lo
-- **Success criteria**: Iframe loads correctly, authentication persists, user can navigate store
+### Web App with Embedded Store
+- **Functionality**: Web-based interface with embedded STFC store iframe for quick access
+- **Purpose**: Provides instant access without installation for occasional users
+- **Trigger**: User visits web app URL
+- **Progression**: Load app → Iframe loads STFC store → User logs in → Redemption available → Session expires on refresh
+- **Success criteria**: Iframe loads correctly, redemption works while session active, clear messaging about session limitations
+
 ### Automated Gift Redemption
-- **Purpose**: Eliminates tedious manual clicking through multiple gift p
-- **Progression**: User clicks button → Script accesses iframe DOM → Scans for gift/free/claim buttons → Each gift clicked automatically with confirm
+- **Functionality**: Scans page for claimable gifts and automatically clicks through claim flow
+- **Purpose**: Eliminates tedious manual clicking through multiple gift pages and confirmation dialogs
+- **Trigger**: User clicks "Redeem All Gifts" button
+- **Progression**: User clicks button → Script scans DOM for gift buttons → Each gift clicked → Confirmation dialogs auto-accepted → Progress tracked → History updated
+- **Success criteria**: Script successfully scans and clicks gift buttons, handles confirmations, updates progress bar in real-time
 
+### Gift History Tracker
+- **Functionality**: Records all claimed gifts with timestamps and descriptions
+- **Purpose**: Provides users with a record of rewards claimed over time, helps track daily patterns
+- **Trigger**: Automatically triggered when gifts are redeemed
+- **Progression**: Gift claimed → Entry created with title, description, timestamp → Stored in KV (web) or Chrome Storage (extension) → Displayed in history tab
+- **Success criteria**: All claimed gifts logged accurately, history persists between sessions, clear history option available
 
-- **Trigger**: Displayed belo
-- **Success criteria**: Script successfully scans and clicks gift buttons, handles confirmations
-### Authentication Management
-- **Purpose**: Informs users when they need to authenticate 
-- **Progression**: User logs in → Auth state detected → Auth status badge updates → Warning explains session limitations
-
-
-- **Trigger**: User interacts
-- **Success criteria**: Full store functionality accessible, no interference from automation layer
+### Authentication Status Detection
+- **Functionality**: Monitors user's login state and displays current authentication status
+- **Purpose**: Informs users when they need to authenticate and explains persistence differences
+- **Trigger**: Page load, periodic checks every 30s (web) or 5s (extension)
+- **Progression**: Script checks DOM for login/user elements → Status badge updates → Warning shown if unauthenticated → Success message if authenticated
+- **Success criteria**: Accurate auth state detection, clear visual indicators, helpful messaging about extension vs web app differences
 ## Edge Case Handling
-- **Authentication Failures**: Clear error message w
-- **Iframe Session Persistence**: Due to browser security (same-origin policy), embedded iframe login sessions cannot persist between page reloads—app clearly explains this limitation and provides "Open Store in New
-- **No Gifts Available**: Display encouraging message when all gifts have been claimed with next reset timer
-
-- **Confirmation Dialogs**: S
+- **Authentication Failures in Web App**: Clear error message when iframe blocks authentication; "Open Store" button to access in new tab where login works normally
+- **Iframe Session Persistence**: Web app clearly explains that embedded iframe login sessions cannot persist between page reloads due to browser security (same-origin policy); recommends browser extension for persistent auth
+- **Extension Not on Store Page**: Extension displays "disconnected" status with "Open STFC Store" button; only enables redemption when user is on correct page
+- **No Gifts Available**: Display encouraging message when all gifts have been claimed; shows total claimed count
+- **Cross-Origin Restrictions**: Extension uses content scripts and browser APIs to bypass CORS; web app gracefully handles access errors with user-friendly messages
+- **Confirmation Dialogs**: Script intelligently searches for confirm/accept/yes buttons and handles multiple confirmation patterns
+- **Browser Compatibility**: Extension manifest v3 for Chrome/Edge; provides Firefox-compatible installation instructions; web app works in all modern browsers
 ## Design Direction
-The design should feel like accessing a Starfleet command interface—a tactical HUD that provides
+The design should feel like accessing a Starfleet command interface—a tactical HUD that provides mission-critical information with precision and clarity. The extension popup should maintain the same aesthetic in a compact format.
 ## Color Selection
 A bold sci-fi palette combining deep space blacks with vibrant neon accents reminiscent of warp plasma and starship HUDs.
 - **Primary Color**: Electric Blue (oklch(0.65 0.18 240)) - Represents dilithium energy and advanced technology, used for primary CTAs

@@ -7,6 +7,9 @@
         "dev": "vite",
         "kill": "fuser -k 5000/tcp",
         "build": "tsc -b --noCheck && vite build",
+        "build:extension": "node scripts/create-icons.js && tsc -b --noCheck && vite build --config vite.config.extension.ts && node scripts/post-build-extension.js",
+        "dev:extension": "vite build --config vite.config.extension.ts --watch",
+        "icons": "node scripts/create-icons.js",
         "lint": "eslint .",
         "optimize": "vite optimize",
         "preview": "vite preview"
