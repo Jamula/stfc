@@ -1,76 +1,75 @@
 # Planning Guide
 
-A mobile-first web app that automatically redeems free gifts from the Star Trek Fleet Command web store by interfacing with https://home.startrekfleetcommand.com/store, eliminating manual claiming and ensuring players never miss rewards.
+**Experience Qualities**:
 
 **Experience Qualities**:
 1. **Automated** - One-click redemption of all available gifts with real-time status updates and visual feedback
 2. **Reliable** - Robust error handling with clear messaging when authentication or redemption fails
 3. **Immersive** - Star Trek aesthetic that feels native to the STFC universe with sci-fi inspired design elements
 
-**Complexity Level**: Light Application (multiple features with basic state)
-This is an automated gift redemption tool that interfaces with an external website, handles authentication, and provides real-time feedback—a focused utility app with persistent configuration.
-
-## Essential Features
-
 ### Gift History Tracker
-- **Functionality**: Persistently tracks all previously claimed gifts with timestamp and details
 - **Purpose**: Provides users with a record of rewards claimed over time, helps track daily patterns
-- **Trigger**: Automatically records each gift when successfully redeemed
-- **Progression**: Gift claimed → Details extracted from DOM → Entry created with timestamp → Saved to persistent storage → Displayed in history list
-- **Success criteria**: All claimed gifts saved with accurate details, history persists across sessions, sortable by date, clearable by user
 
-### Store Website Integration
-- **Functionality**: Opens the STFC store website in an embedded iframe with authentication flow
-- **Purpose**: Provides secure access to the actual gift redemption interface
-- **Trigger**: On app load or when user initiates connection
-- **Progression**: App loads → User authenticates with STFC account → Store loads in iframe → User can interact with store
-- **Success criteria**: Iframe loads correctly, authentication persists, user can navigate store seamlessly
 
+
+- **Trigger**: On app lo
+- **Success criteria**: Iframe loads correctly, authentication persists, user can navigate store
 ### Automated Gift Redemption
-- **Functionality**: Automatically identifies and redeems all available free gifts with one click using JavaScript DOM manipulation
-- **Purpose**: Eliminates tedious manual clicking through multiple gift pages
-- **Trigger**: User clicks "Redeem All Gifts" button
-- **Progression**: User clicks button → Script accesses iframe DOM → Scans for gift/free/claim buttons → Each gift clicked automatically with confirmation → Progress shown in real-time → Completion summary displayed
-- **Success criteria**: All free gifts successfully redeemed, clear progress feedback, error handling for failed redemptions, graceful fallback for cross-origin restrictions
+- **Purpose**: Eliminates tedious manual clicking through multiple gift p
+- **Progression**: User clicks button → Script accesses iframe DOM → Scans for gift/free/claim buttons → Each gift clicked automatically with confirm
 
-### Manual Script Alternative
-- **Functionality**: Provides a copy-paste JavaScript snippet users can run directly in the STFC store tab's console
-- **Purpose**: Bypass cross-origin iframe restrictions when automated clicking from iframe fails
-- **Trigger**: Displayed below control panel as alternative method
-- **Progression**: User copies script → Opens store in new tab → Opens browser console (F12) → Pastes script → Script runs and auto-claims gifts
-- **Success criteria**: Script successfully scans and clicks gift buttons, handles confirmations, provides console logging of progress
 
+- **Trigger**: Displayed belo
+- **Success criteria**: Script successfully scans and clicks gift buttons, handles confirmations
 ### Authentication Management
-- **Functionality**: Detects authentication state in the embedded iframe and provides clear feedback about login requirements
-- **Purpose**: Informs users when they need to authenticate and explains browser security limitations
-- **Trigger**: User authenticates through the embedded store, app checks auth state every 30 seconds
+- **Purpose**: Informs users when they need to authenticate 
 - **Progression**: User logs in → Auth state detected → Auth status badge updates → Warning explains session limitations
-- **Success criteria**: Clear visual indicators of login state, informative alerts about iframe security restrictions, prominent option to use store in separate tab where auth DOES persist
 
-### Manual Gift Access
-- **Functionality**: Allows users to manually browse and claim specific gifts
-- **Purpose**: Provides fallback when automation fails or user wants control
-- **Trigger**: User interacts with embedded store directly
-- **Progression**: User views store → Clicks on desired gift → Manual redemption through native interface
+
+- **Trigger**: User interacts
 - **Success criteria**: Full store functionality accessible, no interference from automation layer
-
 ## Edge Case Handling
-
-- **Authentication Failures**: Clear error message with retry option when login fails or session expires
-- **CORS/Cross-Origin Issues**: Graceful handling with iframe automation attempt first, then fallback to manual script copy-paste method with clear instructions
-- **Iframe Session Persistence**: Due to browser security (same-origin policy), embedded iframe login sessions cannot persist between page reloads—app clearly explains this limitation and provides "Open Store in New Tab" option where authentication WILL persist normally
-- **Network Errors**: Retry mechanism with exponential backoff for failed redemption attempts
+- **Authentication Failures**: Clear error message w
+- **Iframe Session Persistence**: Due to browser security (same-origin policy), embedded iframe login sessions cannot persist between page reloads—app clearly explains this limitation and provides "Open Store in New
 - **No Gifts Available**: Display encouraging message when all gifts have been claimed with next reset timer
-- **Partial Redemption Failures**: Continue processing remaining gifts even if one fails, report failures at end
-- **Browser Compatibility**: Fallback to direct link if iframe features are unsupported
-- **DOM Structure Changes**: Flexible selectors that search for multiple button patterns (gift, free, claim, redeem keywords in text, classes, and IDs)
-- **Confirmation Dialogs**: Script automatically detects and clicks confirmation buttons after clicking gift buttons
 
+- **Confirmation Dialogs**: S
 ## Design Direction
-
-The design should feel like accessing a Starfleet command interface—a tactical HUD that provides full-screen access to the store with streamlined controls in a persistent sidebar. The embedded store should dominate the viewport, with automation controls in a dedicated sidebar panel that provides quick access to history and tools without cluttering the main interface. Users should feel like they're using advanced fleet technology to streamline their operations with maximum efficiency.
-
+The design should feel like accessing a Starfleet command interface—a tactical HUD that provides
 ## Color Selection
+A bold sci-fi palette combining deep space blacks with vibrant neon accents reminiscent of warp plasma and starship HUDs.
+- **Primary Color**: Electric Blue (oklch(0.65 0.18 240)) - Represents dilithium energy and advanced technology, used for primary CTAs
+
+  - Background Deep Navy (okl
+  - Accent Warp Green (oklch(0.75 0.20 145)): Deep Space Navy (oklch(0.15 0.02 250)) - Ratio 6.8:1 ✓
+
+
+
+- **Secondary**: JetBrains Mono - Monospace for codes, quantities, and technical details
+
+  - H2 (Gift Title): S
+  - Caption (Status badges): Space Grotesk Medium/12px/wide tracking (0.05em)
+
+
+
+
+
+  - Progress: Linear 
+
+  - ScrollArea: Scrollable gift history list and script code
+- **Customizations**:
+  - Sidebar control panel (fixed width ~384px on desktop, full-screen on mobile)
+  - Authentication status detection with periodic checking (every 30s)
+  - Progress indicator with animated gradient fill
+  - Script generator component with formatted code display and one-click copy
+  - History entry cards with timestamp, category badges, and gift details
+- **States**:
+
+  - Copy button: De
+
+  - Rocket (app branding)
+
+  - WarningCircle 
 
 A bold sci-fi palette combining deep space blacks with vibrant neon accents reminiscent of warp plasma and starship HUDs.
 
@@ -113,11 +112,11 @@ Animations should feel like starship console interactions—crisp, purposeful, a
   - ScrollArea: Scrollable gift history list and script code
   
 - **Customizations**:
-  - Full-screen iframe with authentication state detection
+  - Full-screen iframe with persistent login state tracking
   - Sidebar control panel (fixed width ~384px on desktop, full-screen on mobile)
   - Tabbed interface for History and Script sections
+  - Session key persistence using useKV for maintaining login state
   - Authentication status detection with periodic checking (every 30s)
-  - Alert system explaining iframe authentication limitations with dismissible warning
   - Progress indicator with animated gradient fill
   - Status badges with connection and auth state
   - Script generator component with formatted code display and one-click copy
@@ -145,22 +144,22 @@ Animations should feel like starship console interactions—crisp, purposeful, a
   - Copy (copy to clipboard action)
   - ClockCounterClockwise (gift history icon)
   - Calendar (timestamp display)
-  - Package (empty state for history)
-  - Trash (clear history action)
-  - Info (informational alerts)
-  
-- **Spacing**:
-  - Sidebar width: w-full lg:w-96 (384px on desktop, full-width on mobile)
-  - Control panel padding: p-4 md:p-6
-  - Button spacing: gap-2 between button groups
-  - Status indicators: gap-2, flex-wrap for multiple badges
-  - Tab content padding: p-4
-  - History entries: space-y-3
-  
-- **Mobile**:
-  - Sidebar takes full screen on mobile with iframe hidden or stacked below
-  - Touch-optimized button sizes (min 44px tap targets)
-  - Full-screen store view prioritized on larger screens
-  - Script code block with horizontal scroll for long lines
-  - Gift history with touch-friendly scroll
-  - Responsive layout switches to vertical stack on small screens
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
