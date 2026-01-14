@@ -41,11 +41,11 @@ This is an automated gift redemption tool that interfaces with an external websi
 - **Success criteria**: Script successfully scans and clicks gift buttons, handles confirmations, provides console logging of progress
 
 ### Authentication Management
-- **Functionality**: Detects and persists authentication state for the STFC website using session keys and periodic auth checking
-- **Purpose**: Prevents repeated login prompts while maintaining security and provides clear auth status
+- **Functionality**: Detects authentication state in the embedded iframe and provides clear feedback about login requirements
+- **Purpose**: Informs users when they need to authenticate and explains browser security limitations
 - **Trigger**: User authenticates through the embedded store, app checks auth state every 30 seconds
-- **Progression**: User logs in → Auth state detected → Session key saved with useKV → Auth status badge updates → User remains logged in across sessions
-- **Success criteria**: Authentication persists across sessions, clear visual indicators of login state, automatic session refresh on reload
+- **Progression**: User logs in → Auth state detected → Auth status badge updates → Warning explains session limitations
+- **Success criteria**: Clear visual indicators of login state, informative alerts about iframe security restrictions, prominent option to use store in separate tab where auth DOES persist
 
 ### Manual Gift Access
 - **Functionality**: Allows users to manually browse and claim specific gifts
@@ -58,6 +58,7 @@ This is an automated gift redemption tool that interfaces with an external websi
 
 - **Authentication Failures**: Clear error message with retry option when login fails or session expires
 - **CORS/Cross-Origin Issues**: Graceful handling with iframe automation attempt first, then fallback to manual script copy-paste method with clear instructions
+- **Iframe Session Persistence**: Due to browser security (same-origin policy), embedded iframe login sessions cannot persist between page reloads—app clearly explains this limitation and provides "Open Store in New Tab" option where authentication WILL persist normally
 - **Network Errors**: Retry mechanism with exponential backoff for failed redemption attempts
 - **No Gifts Available**: Display encouraging message when all gifts have been claimed with next reset timer
 - **Partial Redemption Failures**: Continue processing remaining gifts even if one fails, report failures at end
@@ -112,11 +113,11 @@ Animations should feel like starship console interactions—crisp, purposeful, a
   - ScrollArea: Scrollable gift history list and script code
   
 - **Customizations**:
-  - Full-screen iframe with persistent login state tracking
+  - Full-screen iframe with authentication state detection
   - Sidebar control panel (fixed width ~384px on desktop, full-screen on mobile)
   - Tabbed interface for History and Script sections
-  - Session key persistence using useKV for maintaining login state
   - Authentication status detection with periodic checking (every 30s)
+  - Alert system explaining iframe authentication limitations with dismissible warning
   - Progress indicator with animated gradient fill
   - Status badges with connection and auth state
   - Script generator component with formatted code display and one-click copy

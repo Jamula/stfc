@@ -38,8 +38,8 @@ function App() {
   const [totalGifts, setTotalGifts] = useState(0);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [giftHistory, setGiftHistory] = useKV<GiftHistoryEntry[]>('gift-history', []);
-  const [iframeKey, setIframeKey] = useKV<number>('iframe-session-key', Date.now());
-  const [lastAuthCheck, setLastAuthCheck] = useKV<number>('last-auth-check', 0);
+  const [iframeKey, setIframeKey] = useState(Date.now());
+  const [showAuthWarning, setShowAuthWarning] = useKV<boolean>('auth-warning-dismissed', false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
   const STORE_URL = 'https://home.startrekfleetcommand.com/store';
@@ -65,7 +65,6 @@ function App() {
 
       if (userElements.length > 0 && loginButtons.length === 0) {
         setAuthStatus('authenticated');
-        setLastAuthCheck(Date.now());
       } else if (loginButtons.length > 0) {
         setAuthStatus('unauthenticated');
       }
@@ -96,8 +95,8 @@ function App() {
   const handleIframeLoad = () => {
     setConnectionStatus('connected');
     checkAuthStatus();
-    toast.success('Store Connected', {
-      description: 'Login state will be preserved across sessions',
+    toast.info('Store Loaded', {
+      description: 'Log in to the store to enable gift redemption',
     });
   };
 
@@ -394,13 +393,48 @@ function App() {
             </div>
           </div>
 
-          <Alert className="border-2 border-primary/30">
-            <ShieldCheck weight="fill" className="w-4 h-4" />
-            <AlertDescription className="text-xs">
-              <strong>Session Persistence:</strong> Your login state is automatically saved. 
-              Simply log in once and the app will remember your session.
-            </AlertDescription>
-          </Alert>
+          {!showAuthWarning && authStatus === 'unauthenticated' && (
+            <Alert className="border-2 border-destructive/50 bg-destructive/10">
+              <WarningCircle weight="fill" className="w-4 h-4 text-destructive" />
+              <AlertDescription className="text-xs space-y-2">
+                <p className="font-semibold text-destructive-foreground">
+                  Authentication Required
+                </p>
+                <p className="text-destructive-foreground/90">
+                  Due to browser security restrictions, embedded iframe login sessions cannot persist between page reloads. 
+                  You'll need to log in each time you use this app.
+                </p>
+                <div className="pt-2 flex gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={openInNewTab}
+                    className="text-xs border-destructive/30 hover:bg-destructive/20"
+                  >
+                    <ArrowSquareOut weight="bold" className="w-3 h-3 mr-1" />
+                    Use Store in New Tab
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setShowAuthWarning(true)}
+                    className="text-xs text-muted-foreground"
+                  >
+                    Dismiss
+                  </Button>
+                </div>
+              </AlertDescription>
+            </Alert>
+          )}
+          
+          {authStatus === 'authenticated' && (
+            <Alert className="border-2 border-accent/50 bg-accent/10">
+              <CheckCircle weight="fill" className="w-4 h-4 text-accent" />
+              <AlertDescription className="text-xs text-accent-foreground">
+                <strong>Authenticated:</strong> You can now redeem gifts. Note: You'll need to log in again after refreshing this page.
+              </AlertDescription>
+            </Alert>
+          )}
         </div>
 
         <Tabs defaultValue="history" className="flex-1 flex flex-col overflow-hidden">
