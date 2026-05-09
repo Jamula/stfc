@@ -15,7 +15,9 @@
         "skill:redeem-codes": "tsx src/cli.ts redeem-codes",
         "test":               "node --import tsx --test tests/index.test.ts",
         "test:watch":         "node --import tsx --test --watch tests/index.test.ts",
-        "typecheck":          "tsc --noEmit"
+        "typecheck":          "tsc --noEmit",
+        "capture-token":      "node scripts/capture-token.mjs",
+        "playwright:install": "npx playwright install chromium"
     },
     "dependencies": {
         "tsx": "^4.19.2",
@@ -23,6 +25,7 @@
     },
     "devDependencies": {
         "@types/node": "^22.10.5",
+        "playwright": "^1.49.1",
         "typescript": "~5.7.2"
     }
 }

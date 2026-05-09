@@ -6,34 +6,40 @@ How to decide who handles what.
 
 | Work Type | Route To | Examples |
 |-----------|----------|----------|
-| {domain 1} | {Name} | {example tasks} |
-| {domain 2} | {Name} | {example tasks} |
-| {domain 3} | {Name} | {example tasks} |
-| Code review | {Name} | Review PRs, check quality, suggest improvements |
-| Testing | {Name} | Write tests, find edge cases, verify fixes |
-| Scope & priorities | {Name} | What to build next, trade-offs, decisions |
+| Architecture, scope, direction | Picard | "Should we add multi-account support?", design proposals, trade-off calls |
+| TypeScript / CLI / build | Scotty | Refactor `src/`, fix CLI flag, update `tsconfig.json`, dependency bumps |
+| STFC API, auth, secrets | Uhura | JWT capture, redemption requests, response parsing, bookmarklet, `STFC_ACCOUNTS` format |
+| Tests, fixtures, coverage | Bashir | Add unit tests, write integration tests, debug flaky CI tests, fix test fixtures |
+| Critique, risk, assumptions | Borg Queen | Pre-mortem a plan, audit a proposal, surface blind spots, devil's-advocate review |
+| Code review | Picard (with Borg Queen on request) | Non-trivial PR review, architectural sign-off |
+| GitHub Actions workflows | Scotty (build/test) / Uhura (cron + secrets) | `.github/workflows/*.yml` changes |
 | Session logging | Scribe | Automatic — never needs routing |
 
 ## Issue Routing
 
 | Label | Action | Who |
 |-------|--------|-----|
-| `squad` | Triage: analyze issue, assign `squad:{member}` label | Lead |
-| `squad:{name}` | Pick up issue and complete the work | Named member |
+| `squad` | Triage: analyze issue, assign `squad:{member}` label | Picard |
+| `squad:picard` | Architecture / triage / review work | Picard |
+| `squad:scotty` | TypeScript / CLI / build work | Scotty |
+| `squad:uhura` | STFC API / auth / secrets work | Uhura |
+| `squad:bashir` | Test work | Bashir |
+| `squad:borg-queen` | Critique / risk audit | Borg Queen |
 
 ### How Issue Assignment Works
 
-1. When a GitHub issue gets the `squad` label, the **Lead** triages it — analyzing content, assigning the right `squad:{member}` label, and commenting with triage notes.
+1. When a GitHub issue gets the `squad` label, **Picard** triages it — analyzing content, assigning the right `squad:{member}` label, and commenting with triage notes.
 2. When a `squad:{member}` label is applied, that member picks up the issue in their next session.
 3. Members can reassign by removing their label and adding another member's label.
-4. The `squad` label is the "inbox" — untriaged issues waiting for Lead review.
+4. The `squad` label is the "inbox" — untriaged issues waiting for Picard's review.
 
 ## Rules
 
 1. **Eager by default** — spawn all agents who could usefully start work, including anticipatory downstream work.
 2. **Scribe always runs** after substantial work, always as `mode: "background"`. Never blocks.
-3. **Quick facts → coordinator answers directly.** Don't spawn an agent for "what port does the server run on?"
-4. **When two agents could handle it**, pick the one whose domain is the primary concern.
+3. **Quick facts → coordinator answers directly.** Don't spawn an agent for "what's the cron schedule?"
+4. **When two agents could handle it**, pick the one whose domain is the primary concern. API shape questions go to Uhura even if the code lives in `src/` (Scotty's house).
 5. **"Team, ..." → fan-out.** Spawn all relevant agents in parallel as `mode: "background"`.
-6. **Anticipate downstream work.** If a feature is being built, spawn the tester to write test cases from requirements simultaneously.
-7. **Issue-labeled work** — when a `squad:{member}` label is applied to an issue, route to that member. The Lead handles all `squad` (base label) triage.
+6. **Anticipate downstream work.** If Uhura is changing an API contract, spawn Bashir to update fixtures simultaneously.
+7. **Issue-labeled work** — when a `squad:{member}` label is applied to an issue, route to that member. Picard handles all `squad` (base label) triage.
+8. **Borg Queen as default critique** — for non-trivial proposals, spawn Borg Queen alongside the implementer to challenge assumptions in parallel. The team decides; she informs.

@@ -1,9 +1,9 @@
 ---
-updated_at: 2026-05-09T03:07:11.837Z
-focus_area: Initial setup
+updated_at: 2026-05-08T21:09:39-07:00
+focus_area: Crew assembled — ready for first task
 active_issues: []
 ---
 
 # What We're Focused On
 
-Getting started. Updated by coordinator at session start.
+The Star Trek crew has just been hired for stfc-gift-redeemer. No active work item yet — waiting for cyrusj's first task.
