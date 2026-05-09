@@ -304,10 +304,11 @@ async function finalize(
 }
 
 /**
- * Append one row per account that successfully claimed at least one gift.
- * No-op when nothing was claimed in this run (avoids spamming the log with
- * hourly empty entries). Writes UTC date + time so cron rows are stable
- * regardless of runner timezone.
+ * Insert one row per account that successfully claimed at least one gift,
+ * directly under the markdown table header (newest at the top). No-op when
+ * nothing was claimed in this run (avoids spamming the log with hourly
+ * empty entries). Writes UTC date + time so cron rows are stable regardless
+ * of runner timezone.
  */
 async function appendHistory(filePath: string, report: RunAllReport, now: Date): Promise<void> {
   const date = now.toISOString().slice(0, 10);          // YYYY-MM-DD
@@ -325,10 +326,35 @@ async function appendHistory(filePath: string, report: RunAllReport, now: Date):
 
   // Lazy import so test runs that don't pass historyPath have zero fs cost.
   const fs = await import("node:fs/promises");
-  // The orchestrator never creates the file from scratch — `docs/redeem-history.md`
-  // is committed to the repo with a header. If it's somehow missing we still
-  // append rows; future readers can grep them out.
-  await fs.appendFile(filePath, rows.join("\n") + "\n", "utf8");
+
+  let existing: string;
+  try {
+    existing = await fs.readFile(filePath, "utf8");
+  } catch {
+    // File missing entirely — write a fresh header + the new rows. This
+    // shouldn't happen in normal operation (the file is committed to the
+    // repo) but the orchestrator must never lose claim records.
+    const header =
+      "# Redeem history\n\n" +
+      "Auto-appended log of every successful gift claim. Rows are inserted at\n" +
+      "the top so the most recent run is always visible first.\n\n" +
+      "| Date (UTC) | Time (UTC) | Account | Gifts claimed |\n" +
+      "| --- | --- | --- | --- |\n";
+    await fs.writeFile(filePath, header + rows.join("\n") + "\n", "utf8");
+    return;
+  }
+
+  // Find the markdown table separator line `| --- | --- | --- | --- |` and
+  // splice the new rows in immediately after it. Falls back to appending at
+  // the end if the structure is unrecognized, so we never lose data.
+  const lines = existing.split("\n");
+  const sepIdx = lines.findIndex((l) => /^\s*\|\s*-{3,}\s*(\|\s*-{3,}\s*)+\|\s*$/.test(l));
+  if (sepIdx === -1) {
+    await fs.appendFile(filePath, rows.join("\n") + "\n", "utf8");
+    return;
+  }
+  lines.splice(sepIdx + 1, 0, ...rows);
+  await fs.writeFile(filePath, lines.join("\n"), "utf8");
 }
 
 function renderSummary(report: RunAllReport, exitCode: number): string {
