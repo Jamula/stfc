@@ -114,11 +114,11 @@ jobs:
             (map(select(.name != $n))) + [{name: $n, token: $t}]
           ' <<< "$BASE")
 
-          # Push via gh (uses GH_TOKEN env var). --body-file - reads from stdin
-          # so the secret never lands on the command line.
+          # Push via gh (uses GH_TOKEN env var). Without --body, gh reads
+          # the secret value from stdin — so it never lands on a command
+          # line, in shell history, or in process listings.
           printf '%s' "$MERGED" | gh secret set STFC_ACCOUNTS \
-            --repo "$GITHUB_REPOSITORY" \
-            --body-file -
+            --repo "$GITHUB_REPOSITORY"
 
           # Cleanup the temp file with the JWT in it.
           rm -f /tmp/captured.json
