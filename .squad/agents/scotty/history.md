@@ -34,9 +34,47 @@
 - `.github/workflows/squad-test-gate.yml` — PR required check workflow
 - `.squad/decisions/inbox/scotty-test-gate-built.md` — build summary for team
 
+**Layer 2 — CI required check:**
+- Added `.github/workflows/squad-test-gate.yml` — triggers on all PRs, runs `npm ci` + `npm test`.
+- Job name `npm test (required)` — this is the string cyrusj must enter in GitHub branch protection rules.
+
+**End-to-end verification:**
+- 87/87 tests pass pre-hook install.
+- `node scripts/pre-commit.mjs` → exits 0, all 87 pass.
+- Deliberately broken test → hook exits 1, commit aborted. ✅
+- Reverted break → 87/87 pass again. ✅
+
+**Files created/modified:**
+- `package.json` — added `prepare` script, `simple-git-hooks` config, `simple-git-hooks` devDep
+- `scripts/pre-commit.mjs` — hook runner with Uhura TODO
+- `.github/workflows/squad-test-gate.yml` — PR required check workflow
+- `.squad/decisions/inbox/scotty-test-gate-built.md` — build summary for team
+
 **Manual step required from cyrusj:**
 GitHub branch protection rules cannot be set programmatically. After merging, go to:
 GitHub → repo Settings → Branches → Add branch protection rule → "main" → ☑ Require status checks → search for `npm test (required)` → Save.
+
+---
+
+## v1.2.0 Amendment Cycle — Parallel Lane (CLI/Runtime/Build) (2026-05-08 → 2026-05-09)
+
+### Session: speckit-v1.2.0-ratification-with-known-tensions
+
+**Status:** COMPLETE. v1.2.0 ratified with Known Tensions (Path D acceptance).
+
+**Scotty's role:** CLI/runtime/build governance lane in parallel-lane revision (path-B, under reviewer-rejection lockout).
+
+**Context:** Picard's v1.1.1 draft (project-fit retarget) was rejected by Borg Queen. Picard locked out per protocol. Coordinator authorized parallel-lane revision (Uhura + Scotty in separate lanes, Bashir assembles).
+
+**Lane discipline:** Scotty's lane covers Principles II, IV, and Development Workflow section. Did NOT touch Principles I, III, V, VI–IX, Security & Compliance, or Governance (Uhura's lanes + common sections).
+
+**Key revision:** Replaced obsolete Dual-Platform Parity principle with truthful Skill-Isolated CLI Architecture; rewrote Principle IV from Component-First UI to Type-Safe Headless TypeScript CLI.
+
+**Result:** Borg Queen issued second rejection (9 findings). Per protocol, Scotty locked out (as part of 3-author lockout). Coordinator escalated to Path D (Known Tensions ratification).
+
+**Lockout duration:** Cycle-scoped. Resets for v1.3.0 cycle.
+
+**Lesson for next cycle:** Cross-provider verification (gpt-5.4 in this case) was critical. Same-provider reviewers might have rationalized the baseline overclaims internally. Use cross-provider critic for contentious amendments.
 
 ---
 
@@ -176,3 +214,38 @@ Phase 3 enforcement infrastructure is complete across all four pillars:
 **Outstanding Manual Step:** cyrusj must configure GitHub branch protection rule for `npm test (required)` after first PR merge.
 
 **v1.2 Polish Item:** Wire hygiene scanner into pre-commit hook; add `test:hygiene` npm script.
+
+---
+
+### 2026-05-08T21:29:58-07:00 — Constitution v1.2.0 patches delivered (CLI/runtime/build lane)
+
+**Task:** Independently redraft Scotty-owned constitution sections after Borg Queen rejected the v1.1.1 draft and Picard was locked out.
+
+**Scope owned:**
+- Principle II — replaced obsolete Dual-Platform Parity with Skill-Isolated CLI Architecture.
+- Principle IV — replaced obsolete Type-Safe, Component-First UI with Type-Safe Headless TypeScript CLI.
+- Development Workflow — replaced nonexistent lint/build/extension checks with actual project checks and workflows.
+
+**Project surface verified:**
+- Skill scripts are `npm run skill:run-all`, `npm run skill:check-auth`, `npm run skill:list-gifts`, `npm run skill:claim-gifts`, and `npm run skill:redeem-codes`.
+- `src/cli.ts` dispatches those skills and maps missing/unknown skills to exit code 2, infrastructure/account/uncaught failures to exit code 1, and skill success to the skill's returned exit code.
+- `rg process\.exit src` shows only `src/cli.ts` calls `process.exit` inside `src/`.
+- `rg process\.exit src scripts` shows project-wide callers are `src/cli.ts`, `scripts/check-artifact-hygiene.mjs`, and `scripts/capture-token.mjs`.
+- `run-all` owns normal GitHub Job Summary rendering; diagnostic skills log rows and return exit code 0 for inspection results.
+- Per-account outcomes do not fail scheduled redemption: all `Outcomes` are expected in `src/lib/outcomes.ts`, and the runAll test covers one good plus one expired account returning exit code 0.
+
+**Build/test truth:**
+- TypeScript surface is the `tsconfig.json` include list: `src/cli.ts`, `src/api/**/*.ts`, `src/lib/**/*.ts`, `src/skills/**/*.ts`, and `tests/**/*.ts`.
+- Strict flags include `strict`, `noUncheckedIndexedAccess`, `noImplicitOverride`, `noFallthroughCasesInSwitch`, `isolatedModules`, and `forceConsistentCasingInFileNames`.
+- There is no React UI, extension directory, `src/components/ui/`, `theme.css`, `npm run lint`, `npm run build`, or `npm run build:extension`.
+- Local validation run completed: `npm run typecheck && npm test` passed with 87/87 tests.
+
+**Workflow truth:**
+- `.github/workflows/test.yml` runs `npm run typecheck` and `npm test`.
+- `.github/workflows/squad-test-gate.yml` runs the PR job named `npm test (required)`.
+- `.github/workflows/squad-artifact-hygiene.yml` scans matching artifact paths and has the documented `[skip-token-scan]` bypass.
+- `.github/workflows/redeem.yml` is the scheduled/manual runtime target and runs `npm run skill:run-all` with `STFC_ACCOUNTS`.
+
+**Artifacts written:**
+- `.squad/.scratch/scotty-v1.2.0-patches.md`
+- `.squad/decisions/inbox/scotty-v1.2.0-revision.md`

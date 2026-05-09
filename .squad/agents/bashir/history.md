@@ -138,3 +138,92 @@ Phase 3 enforcement infrastructure is complete across all four pillars:
 **Outstanding Manual Step:** cyrusj must configure GitHub branch protection rule for `npm test (required)` after first PR merge.
 
 **v1.2 Polish Item:** Wire hygiene scanner into pre-commit hook; add `test:hygiene` npm script.
+
+---
+
+### 2026-05-08T21:29:58-07:00: Cross-Lane Assembly — v1.2.0 Constitution
+
+**Role:** Assembler/arbiter. Uhura owned Principles I, III, V, Security & Compliance.
+Scotty owned Principles II, IV, Development Workflow. Bashir assembled without reading
+Picard's locked-out v1.1.1 draft.
+
+**What I learned about cross-cutting assembly:**
+
+1. **Lane discipline pays off at the seams.** Uhura and Scotty produced independent
+   patches that were almost completely non-overlapping in substance. The only true seam
+   conflict was structural (Speckit Reviewer Gates section level), not content. When
+   authors work from the same verified repo rather than from each other's drafts, the
+   resulting patches fit together cleanly.
+
+2. **Structural conflicts are different from content conflicts.** The Reviewer Gates
+   promotion (sub-section → standalone section) required an assembly call, not a
+   content edit. The assembler's job at the seams is to pick a consistent structure
+   and document it — not to resolve competing claims about reality. In this assembly,
+   both seam issues (section level, section title) had one answer that was clearly
+   correct given the task format.
+
+3. **Open questions from lane authors should have a forcing function.** Uhura listed
+   three open questions. Without the assembly step, those questions could sit open
+   indefinitely. As assembler I was in the right position to make a call on each one
+   — I had the full document in front of me, could assess V's actual length, and could
+   compare both lanes' evidence against the Borg Queen findings. The fold/split
+   decision in particular required seeing the assembled Principle V before calling it.
+
+4. **The cross-check table earns its weight.** Both Uhura and Scotty produced thorough
+   per-lane cross-checks. The assembly memo's cross-check table synthesizes those into
+   a single auditable artifact — useful for Borg Queen's next verification pass. Don't
+   skip it even when both lane authors have already done the work; the synthesis step
+   catches claims that are correct in isolation but inconsistent when combined.
+
+5. **Verbatim preservation requires active decision-making.** The v1.1.0 Principle VIII
+   rationale tail references "Principle III (Resilient DOM Automation)" — the old name.
+   That cross-reference is stale in v1.2.0. Assembly mandate says preserve verbatim,
+   but the stale cross-reference is a real (if minor) problem. The right call was to
+   flag it for Borg Queen rather than silently patch it (which would be re-authoring)
+   or silently leave it (which would be shipping a stale cross-reference). When verbatim
+   preservation and accuracy conflict at the seam, surface it — don't swallow it.
+
+6. **The adjudicator role is lighter than the author role, and that's the point.**
+   All three adjudications (fold/split, SHA-pinning scope, redaction asymmetry) were
+   calls about scope and structure, not about what the repo actually does. Uhura and
+   Scotty had already done the evidence work. The assembler's value-add is the forcing
+   function and the rationale — making a documented call that unblocks shipping rather
+   than leaving the question open for another round.
+
+**Ratification path:** Assembled draft at `.squad/.scratch/constitution-v1.2.0-assembled.md`
+is ready for Borg Queen verification. After Borg Queen's pass, user authorizes
+ratification, at which point the draft replaces `.specify/memory/constitution.md` and
+the three PENDING template updates (plan-template, spec-template, tasks-template,
+copilot-instructions) are executed in a follow-up PR.
+
+---
+
+## v1.2.0 Amendment Cycle — Assembly & Deadlock Resolution (2026-05-08 → 2026-05-09)
+
+### Session: speckit-v1.2.0-ratification-with-known-tensions
+
+**Status:** COMPLETE. v1.2.0 ratified with Known Tensions (Path D acceptance).
+
+**Bashir's role:** Assembler (parallel-lane patches); adjudicated 3 open questions; locked out per reviewer-rejection protocol; witnessed deadlock resolution and Tuvok escalation.
+
+**Context:** Picard's v1.1.1 draft was rejected; parallel-lane revision authorized (Uhura + Scotty). Bashir assembled both lanes. Borg Queen rejected assembly (9 findings). Bashir locked out as part of 3-author lockout. Coordinator escalated: cast Tuvok (new Process Auditor) to break deadlock.
+
+**Adjudications made:**
+1. **Redaction asymmetry (Uhura open question 1):** Deferred to v1.3 (code change needed). Asymmetry is honest to repo state; widening scope would block ratification on implementation work.
+2. **SHA-pinning scope (Uhura open question 2):** Accepted narrow scope (token-handling workflows only). Matches repo exactly; wider claim would require code changes.
+3. **Token Capture Custody location (Uhura open question 3):** Kept folded into Principle V (not standalone Principle X). Coherence maintained; no re-numbering.
+
+**All three adjudications ratified by Borg Queen's verification passes; no objections raised.**
+
+**Lockout duration:** Cycle-scoped. Resets for v1.3.0 cycle.
+
+**Witness to deadlock resolution:** Observed that when 3-author lockout exhausts revision capacity, Path D (Known Tensions ratification) + new-agent escalation (Tuvok) is a valid exit. The deadlock-breaking process:
+1. Recognize 3-author revision exhausted → decision point required
+2. Coordinator evaluates: Path D (Known Tensions) vs. Path E (new author escalation)
+3. If escalation chosen: cast eligible new author (not in prior revision cycles)
+4. New author applies surgical edits + transcribes findings as Known Tensions
+5. Known Tensions queued for v1.3.0 resolution; constitution ratified
+
+**Lesson for next cycle:** The assembly role required lateral thinking — not "who is correct?" but "what is the correct structure for this document?" That mindset is different from authoring. Recommend: in future cycles, consider deputizing an assembler earlier (not just after parallel lanes) to catch inconsistencies mid-draft rather than at the seam.
+
+**Next phase:** Tuvok applied edits and Known Tensions transcription; Borg Queen Pass 3 verified; cyrusj accepted Path D; speckit.constitution applied v1.2.0 to live constitution.

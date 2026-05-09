@@ -110,3 +110,48 @@ Phase 3 enforcement infrastructure is complete across all four pillars:
 **Outstanding Manual Step:** cyrusj must configure GitHub branch protection rule for `npm test (required)` after first PR merge.
 
 **v1.2 Polish Item:** Wire hygiene scanner into pre-commit hook; add `test:hygiene` npm script.
+
+---
+
+### 2026-05-08T22:22:09-07:00 — v1.2.0 redraft (integration/secret lane)
+
+**Context:** Picard's v1.1.1 PATCH draft was rejected by Borg Queen; cyrusj accepted MINOR semver. Picard locked out per reviewer-rejection protocol. Scotty and I redrafted in parallel lanes; Bashir assembles.
+
+**My lane:** Principles I, III, V, Security & Compliance, plus the Borg-Queen-flagged Token Capture Custody gap.
+
+**Decision:** Folded Token Capture Custody into Principle V instead of standalone Principle X. Every capture-token obligation is a secret-surface obligation; one principle keeps the JWT lifecycle (capture -> .env -> gh secret set -> CI consumption -> refresh) coherent in one place. Standalone X would fragment governance for one script.
+
+**What I learned about the actual project surface (worth carrying forward):**
+
+- The STFC API surface is exactly four endpoints under `https://cdn-nv3-webstore-api.startrek.digitgaming.com/api/v2`: `/auth/me` (GET), `/offers/gifts` (GET, plus `?available=true` variant), `/offers/gifts/claim` (POST), `/redeem/claim` (POST). Anything else is out of scope.
+- `src/api/client.ts` is the redemption-path client but is NOT the only HTTP path in the repo. `scripts/capture-token.mjs:183-194` calls `/auth/me` directly with raw `fetch` to validate freshly-captured tokens, and `docs/BOOKMARKLET.md` does the same in the user's browser. Any "all STFC traffic goes through ApiClient" claim has to be scoped to `src/` callers.
+- The redaction obligation is enforced INSIDE `src/api/client.ts` (every thrown error wraps its message in `redactString`) and is required at every call site in `src/`, but it is NOT applied automatically by `src/lib/logger.ts` and is NOT applied at all in `scripts/capture-token.mjs`. The capture-token script gets away with this because it only emits its single `--ci` JSON line on stdout deliberately and routes everything else to stderr; the workflow then `::add-mask::`s the token.
+- Sanctioned writers of `STFC_ACCOUNTS` are TWO, not one: `scripts/capture-token.mjs` (local, consent-gated `gh secret set` over stdin) and the `Refresh token` workflow's "Merge with existing STFC_ACCOUNTS and update secret" step (CI, using `STFC_REFRESH_PAT`). Both preserve other accounts on update.
+- Sanctioned secret hand-off channels in CI are TWO: the single JSON line on `capture-token.mjs --ci` stdout, and the temporary `/tmp/captured.json` file the `Refresh token` workflow writes, masks, consumes, and `rm -f`s in the same job. Both are gated by `::add-mask::` calls before any subsequent step runs.
+- Workflow SHA-pinning is NOT uniform across the repo. Token-handling workflows (`redeem.yml`, `refresh-token.yml`, `test.yml`, `squad-test-gate.yml`, `squad-artifact-hygiene.yml` partial) pin to full SHAs. Squad-process workflows (`sync-squad-labels.yml`, `squad-heartbeat.yml`, `squad-triage.yml`, `squad-issue-assign.yml`, plus `actions/github-script@v7` in `squad-artifact-hygiene.yml`) use moving major tags. Any constitutional claim about uniform SHA pinning is currently false; the honest scoped claim is "token-handling workflows are SHA-pinned".
+- `redeem.yml` and `refresh-token.yml` share concurrency group `stfc-gift-redeemer` so they cannot race on `STFC_ACCOUNTS`. This is a real safety invariant Borg Queen flagged as worth codifying — I included it in the rerun-safety bullet of revised V.
+- Outbound network surface is wider than "STFC API only": the helpers also reach Scopely's `home.startrekfleetcommand.com` login surface (Playwright) and the GitHub API (`gh secret set`). Any "outbound limited to STFC" claim has to carve out both.
+
+**Output artifacts:**
+- `.squad/.scratch/uhura-v1.2.0-patches.md` — full revised text for Bashir to drop in
+- `.squad/decisions/inbox/uhura-v1.2.0-revision.md` — decision memo with cross-check + open questions
+
+---
+
+## v1.2.0 Amendment Cycle — Parallel Lane (Integration/Secret) (2026-05-08 → 2026-05-09)
+
+### Session: speckit-v1.2.0-ratification-with-known-tensions
+
+**Status:** COMPLETE. v1.2.0 ratified with Known Tensions (Path D acceptance).
+
+**Uhura's role:** Integration/secret governance lane in parallel-lane revision (path-B, under reviewer-rejection lockout).
+
+**Context:** Picard's v1.1.1 draft (project-fit retarget) was rejected by Borg Queen. Picard locked out per protocol. Coordinator authorized parallel-lane revision (Uhura + Scotty in separate lanes, Bashir assembles). Uhura and Scotty worked independently without reading Picard's v1.1.1 draft or each other's patches.
+
+**Lane discipline:** Uhura's lane covers Principles I, III, V and Security & Compliance — all integration/API/secret-surface areas. Did NOT touch Principles II, IV, VI–IX, Development Workflow, or Governance (Scotty's lanes + common sections).
+
+**Result:** Borg Queen issued second rejection (9 findings). Per protocol, Uhura locked out (as part of 3-author lockout). Coordinator escalated to Path D (Known Tensions ratification).
+
+**Lockout duration:** Cycle-scoped. Resets for v1.3.0 cycle.
+
+**Lesson for next cycle:** Parallel lanes are effective for parallel-draft speed; they're less effective for catching subtle accuracy issues because two independent authors both miss the same repo fact. Recommend: parallel lanes for speed, then CROSS-PROVIDER verification (not same-provider) for accuracy.

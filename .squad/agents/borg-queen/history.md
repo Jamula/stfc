@@ -7,6 +7,14 @@
 
 ## Learnings
 
+### Critique Framing Matters More Than Critic Confidence (2026-05-08T21:29:58-07:00)
+
+1. **"Verify the fix" is not the same as "verify the truth."** A review framed as "did this amendment defuse my last concerns?" can still miss a false baseline. Constitution reviews have to re-check every concrete claim in the amended draft, including unchanged text, against the repo.
+
+2. **Claim-by-claim verification catches structural lies that delta-focused review misses.** In this repo, that framing exposed facts the earlier pass glossed over: helper scripts besides `src/cli.ts` call `process.exit`, `scripts/capture-token.mjs` is a sanctioned `STFC_ACCOUNTS` writer, and the workflow fleet is not uniformly SHA-pinned.
+
+3. **Project-fit verification must treat docs, scripts, workflows, and helper surfaces as first-class reality.** The redeem CLI in `src/` is not the whole product; `scripts/capture-token.mjs`, `.github/workflows/refresh-token.yml`, and CI helper scripts materially define secret custody, token rotation, and operational safety.
+
 ### Speckit Adoption Context (2026-05-08)
 
 1. **Project is maintenance-mode:** STFC Gift Redeemer is a feature-complete 4-hour cron orchestrator. ~90% of PRs are maintenance (bug fixes, selector improvements, dependency updates). Only ~5% are "non-trivial features" that warrant spec-driven flow.
@@ -126,3 +134,45 @@ RECOMMENDED (within 30 days):
 **Most important unaddressed risk:** Artifact hygiene CI check is not implemented. If deferred beyond first speckit merge, real tokens will leak into the repository, violating Principle I (User Safety & Trust First). HIGHEST PRIORITY.
 
 **Conclusion:** Picard's v1.1 constitution is **honest, operationally sound, and ready for ratification upon completion of the blocking defect fix.** It genuinely defuses four of four Phase 1 concerns. New defects are either known gaps (acknowledged in Sync Report) or manageable process ambiguities. The proposal reflects strong cross-agent synthesis (Uhura's hygiene rules, Bashir's test discipline, Scotty's trigger threshold, Borg Queen's prerequisites all incorporated). Recommend team ratification + execute blocking/urgent follow-ups on parallel track.
+
+### Assembly Artifacts Need Their Own Audit (2026-05-08T21:29:58-07:00)
+
+1. **A clean seam edit does not rescue a false source claim.** In this pass, Bashir's structural edits (Reviewer Gates promotion, section-title shortening, cross-reference repair) were faithful; the surviving failures came from lane text that still overstated repo reality.
+
+2. **Secret-custody verification has to include unhappy paths, not just the documented happy path.** `scripts/capture-token.mjs` mostly behaves safely, but the malformed-`.env` error path can still echo existing secret material, and `refresh-token.yml` only deletes `/tmp/captured.json` on the success path. A constitution that ignores failure-path custody is still lying.
+
+3. **Second-pass verification must re-audit inherited baseline text.** Principle VII and Principle IX still overclaim merge-block enforcement even though the v1.2.0 work focused elsewhere. "Unchanged" is not the same thing as "true."
+
+### Delta Verification Needs a "New Claim" Trap (2026-05-08T21:29:58-07:00)
+
+1. **A surgical fix can still smuggle in fresh fiction.** In this pass, Tuvok correctly narrowed several overclaims, but the replacement text introduced two new inaccuracies: Principle III still overstated which per-account failures stay non-fatal, and Principle VII/Security overstated `.github/` scan coverage versus the workflow trigger.
+
+2. **Workflow truth lives in both trigger scope and step scope.** A reviewer who checks only `scripts/check-artifact-hygiene.mjs` will miss that `.github/workflows/squad-artifact-hygiene.yml` only triggers on `.github/**/*.md`. Delta verification has to compare both layers before accepting any "changed files are scanned" sentence.
+
+3. **Scope discipline is part of fidelity, not housekeeping.** Even a harmless sync-report note is still an out-of-scope edit if the mandate was "five edits, no more." On a lockout-driven rescue pass, the author has to be judged on restraint as well as correctness.
+
+---
+
+## v1.2.0 Amendment Cycle — Cross-Provider Critic Role (2026-05-08 → 2026-05-09)
+
+### Session: speckit-v1.2.0-ratification-with-known-tensions
+
+**Status:** COMPLETE. v1.2.0 ratified with Known Tensions (Path D acceptance).
+
+**Borg Queen's role:** Cross-provider critic (gpt-5.4) performed 4 verification passes on the v1.2.0 amendment cycle.
+
+**Pass 1 — v1.1.1 rejection:** Identified 9 accuracy defects in Picard's project-fit retarget. Rejected.
+
+**Pass 2 — v1.2.0 assembly rejection:** Verified Bashir's parallel-lane assembly (Uhura + Scotty patches). Found 9 additional accuracy defects across Principles I, III, V, VII, Security, Workflow. Rejected.
+
+**Pass 3 — Post-Tuvok verification:** 3 of 5 editorial corrections fully resolved; 2 partially resolved (new overclaims introduced in the fix text). Partial resolution noted but acknowledged as acceptable under Path D (Known Tensions ratification).
+
+**Key pattern learned:** **Cross-provider critique is asymmetrically valuable.** The same-provider reviewers (Picard as author) likely would have rationalized the overclaims internally. Borg Queen (different provider, gpt-5.4) caught structural lies that match-provider logic would have missed. Recommendation: Deploy cross-provider critic for contentious amendments; use same-provider for routine decisions.
+
+**Coordinator's framing-error lesson update:** The v1.2.0 cycle re-confirmed Picard's lesson from v1.1.0. Picard's concern: "verify concerns are defused" framing is too narrow. This cycle, the team asked Borg Queen the broader question: "does every concrete claim match the repository?" She caught not just the new principles' failures, but also inherted baseline text overclaiming enforcement coverage. Lesson reinforced: verify the entire document against the project, not just the diff.
+
+**Most important finding:** Claim-by-claim verification against live repo code (not just the diff) is the distinguishing factor that separates hollow governance from real governance. When Borg Queen checked every concrete reference against `src/`, `scripts/`, `.github/workflows/`, and `tests/` directories, the false claims were impossible to hide. Recommendation for future cycles: Frame Borg Queen's role explicitly as "ground-truth baseline audit, not just delta review."
+
+**Lockout duration:** Cycle-scoped. Reviewer-rejection lockout applied to all revision authors (Picard, Uhura, Scotty, Bashir, Tuvok). Resets for v1.3.0 cycle per coordinator decision.
+
+**Next cycle (v1.3.0):** 3 Known Tensions to resolve. Backlog tracked in `.squad/decisions/inbox/v1.3.0-constitution-backlog.md`. Recommend same cross-provider critic (Borg Queen) for consistency.

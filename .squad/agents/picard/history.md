@@ -139,3 +139,35 @@
 
 **Draft status:** READY for infra-gated ratification. Ratification step (overwriting `.specify/memory/constitution.md`) is blocked pending Uhura/Scotty/Bashir completing the CI gates.
 
+
+### Verifying baselines, not just diffs (2026-05-08, post-v1.1.0 ratification)
+
+**The error.** v1.1.0 was a MINOR amendment that added Principles VI–IX. The Phase 2 critique pass framed Borg Queen's role as "verify your Phase 1 concerns are defused" — i.e., interrogate the new principles. We did. We caught the IV/IX contradiction, tightened Principle VI's exemption, promoted enforcement infra. What we did NOT do is read the v1.0.0 baseline against the actual project. The baseline described a web app + browser extension stack (Shadcn/Radix/Tailwind, Spark KV, `chrome.storage.local`, Manifest V3, `src/App.tsx`, `extension/manifest.json`, `npm run lint`, `npm run build`, `npm run build:extension`) — none of which exists in this repository. We trusted the boilerplate. `speckit.constitution` caught it AFTER ratification.
+
+**The lesson.** When critiquing an amendment, the diff is necessary but not sufficient. The full document goes live, including the lines you didn't touch. Every preserved line is a fresh assertion. For any future amendment critique pass, the protocol is:
+
+1. Read the diff and verify the additions (current practice — keep doing this).
+2. **Then** read the un-diffed body and ask, for every concrete reference (file path, npm script, command, technology name): "does this exist in the project I'm shipping?" If no — flag it, even if it's not in the diff.
+3. Don't assume the previous version was project-fit just because it was previously ratified. v1.0.0 was almost certainly generated from a generic template and never audited against reality.
+
+**Operational rule for myself.** When someone asks me to review a constitution amendment, my first tool call should be a project-fit grep of the LIVE document (not the diff) for: file paths under `src/`, file paths under `.github/workflows/`, every `npm run` invocation, every dependency name, every "MUST be `X`" architectural claim. Cross-check each against the working tree. Only after that pass do I look at the diff.
+
+**Cost of getting this wrong.** A constitution that lies about its own project loses moral authority instantly. Contributors will (correctly) ignore rules that reference files they can't find. The whole point of governance — that the document is binding — collapses. v1.1.1 is cheap; rebuilding trust in a constitution after contributors stop trusting it is not.
+
+**Cost of the fix.** ~1 hour to retarget five principles + two sections, with no new obligations imposed. PATCH semantics. The lesson is more valuable than the patch.
+
+---
+
+## v1.2.0 Amendment Cycle — Lockout & Ratification (2026-05-08 → 2026-05-09)
+
+### Session: speckit-v1.2.0-ratification-with-known-tensions
+
+**Status:** COMPLETE. v1.2.0 ratified with Known Tensions (Path D acceptance).
+
+**Summary:** Picard's v1.1.1 draft (project-fit retarget) was rejected by Borg Queen with 9 findings. Per reviewer-rejection lockout protocol, Picard was locked out from further revisions. Uhura and Scotty revised in parallel lanes (path-B); Bashir assembled. Borg Queen issued second rejection (9 findings across parallel-lane draft). All revision authors locked out. Coordinator escalated: cast Tuvok (new Process Auditor / Editorial Specialist) to break deadlock. Tuvok applied 5 surgical edits and documented 3 Known Tensions. cyrusj accepted Path D. v1.2.0 ratified with Known Tensions; v1.3.0 backlog created.
+
+**Key lesson:** The "verify concerns are defused" framing from v1.1.0's critique was too narrow. It checked ADDITIONS but missed a false baseline (the v1.0.0 boilerplate claimed web-app/extension stack that doesn't exist). Future amendments must verify the entire document against the live project, not just the diff. Lesson encoded in this history for next amendment cycle.
+
+**Lockout duration:** Cycle-scoped. Picard (and all revision authors: Uhura, Scotty, Bashir, Tuvok) are locked out from v1.2.0 amendments. Lockout resets for v1.3.0 cycle per coordinator decision.
+
+**Next cycle (v1.3.0):** 3 Known Tensions to resolve. Backlog tracked in `.squad/decisions/inbox/v1.3.0-constitution-backlog.md`.

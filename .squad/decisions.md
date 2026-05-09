@@ -237,6 +237,154 @@ _(Bonus: manual smoke-test section for automation-logic changes per Development 
 
 ---
 
+---
+
+## v1.2.0 Constitution Amendment Cycle — Full Journey
+
+### 2026-05-08T22:00:38-07:00: Picard — v1.1.1 Constitution PATCH (project-fit retarget)
+
+**By:** Picard
+**Status:** Draft ready for Borg Queen review and speckit.constitution ratification.
+
+**What**
+
+Drafted a v1.1.1 PATCH of `.specify/memory/constitution.md` at
+`.squad/.scratch/constitution-v1.1.1-retargeted.md`. The patch corrects
+a documentation accuracy defect: the v1.0.0 baseline (preserved
+unchanged through the v1.1.0 amendment) described a web app + browser
+extension stack that does not exist in this repository. The actual
+project is a headless TS Node CLI on a 4-hour GitHub Actions cron.
+
+Per-principle disposition:
+
+| #    | Principle (v1.1.0 → v1.1.1)                                   | Action     | One-line reason |
+|------|---------------------------------------------------------------|------------|-----------------|
+| I    | User Safety & Trust First                                     | REWRITE    | Same intent; replaced DOM/cookie language with JWT + `STFC_ACCOUNTS` + `src/lib/redact.ts` reality. |
+| II   | Dual-Platform Parity → Skill-Isolated CLI Architecture        | REPLACE    | No second platform exists. New text codifies the actual shape: skills + `cli.ts` is the only `process.exit` caller + per-account outcomes don't fail the workflow. |
+| III  | Resilient DOM Automation → Resilient Upstream-API Automation  | REWRITE    | Same defensive posture, retargeted from DOM selectors to the typed JSON-API surface in `src/api/`. |
+| IV   | Type-Safe, Component-First UI → Type-Safe TypeScript Discipline | REWRITE  | Removed Shadcn/Radix/Tailwind/`src/components/ui/`/`theme.css`/`npm run lint` (none exist); kept strict-TS intent and tied it to `npm run typecheck`. |
+| V    | Transparent Local-Only Persistence → Stateless Operation & Secret Custody | REPLACE | No Spark KV / `chrome.storage.local`. Project is stateless across runs; only durable inputs are `STFC_ACCOUNTS` and `promo-codes.txt`. |
+| VI   | Specification-First Governance                                | KEEP       | Project-agnostic process; verified all references (skill:* etc.) are accurate. |
+| VII  | Artifact Hygiene                                              | KEEP       | All references (`.github/workflows/`, JWT-shape scan) accurate. |
+| VIII | Wire-First Discovery                                          | KEEP       | All references accurate; complements the rewritten Principle III. |
+| IX   | Test-First Discipline                                         | KEEP       | All references (`npm test`, `tests/`, `.github/workflows/`) accurate. |
+
+**Why**: This corrects a documentation accuracy defect inherited from the v1.0.0 boilerplate. The defect was caught by `speckit.constitution`'s pre-ratification verification pass after v1.1.0 had already been ratified. Closed with lesson: future amendment critique passes must verify project-fit of the entire document, not just the diff.
+
+---
+
+### 2026-05-08T21:29:58-07:00: Borg Queen — v1.1.1 Rejection + Reviewer-Lockout Invoked
+
+**By:** Borg Queen (cross-provider critique on gpt-5.4)
+
+**Verdict:** ❌ REJECT v1.1.1 — Found multiple accuracy defects. Per reviewer-rejection lockout protocol, Picard locked out from further revisions this cycle.
+
+**Why**: Picard's v1.1.1 draft overstated redaction coverage, misrepresented helper-script secret handling, and missed that schema-mismatch failures DO fail the workflow (contradicting the stated contract). The team elected to move to a MINOR (v1.2.0) retarget cycle with independent lane authors (Uhura, Scotty, Bashir) instead of iteration rounds.
+
+---
+
+### 2026-05-08T22:22:09-07:00: Uhura — v1.2.0 revision (integration/secret lane)
+
+**By:** Uhura (Picard locked out per reviewer-rejection protocol)
+
+**What**
+
+- **Principle I — User Safety & Trust First** rewritten. Describes the actual handling surface: the four orchestrator endpoints, three sanctioned auth paths (bookmarklet, local `capture-token`, CI `refresh-token`), redaction obligation scoped to `src/`, and shape-only-diagnostics rule for helper scripts.
+- **Principle III — Resilient Upstream-API Automation** rewritten. Describes the actual JSON-API client, typed errors, zod validation, 10s timeout, jittered retry on safe methods only, mandatory routing through `ApiClient` for `src/` callers.
+- **Principle V — Stateless Operation & Secret Custody** rewritten and extended to absorb token-capture custody. Lists every durable input, every sanctioned secret surface, every writer, and the rerun-safety invariant.
+- **Security & Compliance Constraints** rewritten. Drops Manifest V3 / extension claims; adds canonical credential store, sanctioned-writer list, workflow-permissions rule, scoped outbound-network rule, SHA-pinning rule for token-handling workflows.
+- **Token Capture Custody** folded into Principle V (not standalone Principle X).
+
+**Why**: Borg Queen's findings flagged Principles I, III, V, and Security & Compliance as inaccurate. Each rewrite addresses specific findings. MINOR scope (material expansion of V with new obligations).
+
+---
+
+### 2026-05-08T21:29:58-07:00: Scotty — v1.2.0 revision (CLI/runtime/build lane)
+
+**By:** Scotty (Picard locked out per reviewer-rejection protocol)
+
+**What**: Replaced the obsolete Dual-Platform Parity lane with truthful Skill-Isolated CLI Architecture draft; rewrote Principle IV as **Type-Safe Headless TypeScript CLI**; rewrote Development Workflow checks around real commands (`typecheck`, `npm test`, `npm run skill:*`).
+
+**Why**: Borg Queen rejected v1.1.1 for false repository claims. Scotty's lane removes web-app/extension fiction, ties TypeScript claims to actual `tsconfig.json`, and avoids overstating branch-protection enforcement.
+
+---
+
+### 2026-05-08T21:29:58-07:00: Bashir — v1.2.0 constitution assembly
+
+**By:** Bashir (Picard locked out; assembled without reading v1.1.1 draft)
+
+**What**: Assembled Uhura's and Scotty's lane patches into a single coherent v1.2.0 draft at `.squad/.scratch/constitution-v1.2.0-assembled.md`. Adjudicated three open questions. Resolved seam-level structural conflicts. Ran cross-check against repo.
+
+**Why**: Parallel-lane assembly prevents single-author bias. Adjudications: (1) defer helper-script redaction parity to v1.3 (honest asymmetry); (2) accept narrow SHA-pinning scope (matches repo); (3) keep Token Capture Custody folded into Principle V (maintains coherence).
+
+---
+
+### 2026-05-08T21:29:58-07:00: Borg Queen — v1.2.0 rejection (9 findings, Path B lockout)
+
+**By:** Borg Queen (cross-provider critique on gpt-5.4)
+
+**Verdict:** ❌ REJECT v1.2.0 — Found 9 distinct accuracy defects across Principles I, III, V, VII, Security, and Development Workflow sections.
+
+**Key findings**:
+- Principle I still overclaims redaction coverage (`every` outward string) and helper-script token safety.
+- Principle III contradicts itself: states "per-account failures MUST NOT fail the workflow" but schema-mismatch failures DO fail it.
+- Principle V doesn't acknowledge malformed-`.env` stderr leak or incomplete cleanup of `/tmp/captured.json`.
+- Principle VII / Security overclaim artifact-hygiene as a "hard gate" (merge-blocking depends on external GitHub settings) and misstate the bypass mechanism (PR body, not title).
+
+**Result**: Bashir, Uhura, Scotty locked out per protocol (3 authors already revised; extended iteration counterproductive). Coordinator escalates to Path D (ship with Known Tensions) or recruit new deadlock-breaking author.
+
+---
+
+### 2026-05-08T22:58:53-07:00: Tuvok — v1.2.0 editorial corrections (5 findings)
+
+**By:** Tuvok (new agent, cast as Process Auditor per coordinator escalation to break lockout deadlock)
+
+**What**: Applied Borg Queen's five mandated edits to `.squad/.scratch/constitution-v1.2.0-assembled.md`. Output: `.squad/.scratch/constitution-v1.2.0-edited.md`. Version stays 1.2.0.
+
+**Edits applied**:
+1. Principle I: Scoped redaction obligation to credential-bearing strings; acknowledged malformed-`.env` stderr surface.
+2. Principle III: Narrowed failure taxonomy to distinguish schema-mismatch (fails workflow) from transient/token-expiry (non-fatal).
+3. Principle VII + Security: Removed "hard gate" fiction; corrected bypass to PR description; acknowledged code-comments/fixtures outside scope.
+4. Principle V: Added "Known stderr surface" note for malformed-`.env` condition.
+5. Principle V: Changed cleanup guarantee to success-path-only; marked unconditional cleanup as v1.3 follow-up.
+
+**Verification**: Each edit cross-checked against live repo code paths. No new false claims introduced.
+
+---
+
+### 2026-05-08T21:29:58-07:00: Borg Queen — v1.2.0 Pass 3 verification (post-Tuvok edits)
+
+**By:** Borg Queen (cross-provider critique on gpt-5.4)
+
+**Verdict**: 🟡 Partially resolved. 3 of 5 findings fully resolved; 2 introduced new overclaims.
+
+**Resolved**:
+- Finding 1 (Principle I redaction/helper-script overclaim): ✅ Narrowing scoped to credential-bearing strings.
+- Finding 4 (capture-token.mjs stderr leak): ✅ Acknowledged with operator remediation.
+- Finding 5 (`/tmp/captured.json` cleanup): ✅ Changed to success-path-only.
+
+**Partially resolved (new overclaims introduced)**:
+- Finding 2 (Principle III failure taxonomy): 🟡 Schema-mismatch fix correct, BUT new sentence claims transient/unclassified `auth/me` failures are non-fatal — false.
+- Finding 3 (Principle VII scan coverage): 🟡 Hard-gate and bypass fixes correct, BUT new sentence claims `.github/` files are scanned — false (only `.github/**/*.md`).
+
+**Verdict**: Further iteration would be counterproductive (3-author lockout). Coordinator to evaluate Path D (accept as Known Tensions) or split new findings into v1.3.0 backlog.
+
+---
+
+### 2026-05-08T21:29:58-07:00: Tuvok — v1.2.0 Known Tensions documentation (Path D acceptance)
+
+**By:** Tuvok (transcription of Borg Queen Pass 3 + Pass 2 findings)
+
+**What**: Added 3 Known Tensions entries to v1.2.0:
+
+1. **Principle III auth/me failure taxonomy overclaim** — Principle III text (Tuvok's edit) says transient and unclassified HTTP errors "MUST NOT fail the workflow," which is false for non-schema `auth/me` failures.
+2. **Principle VII / Security `.github/` scan path overclaim** — Principle VII and Security & Compliance text says changed `.github/` files are scanned in PRs, but the workflow trigger only covers `.github/**/*.md`.
+3. **Redeem/refresh concurrency lock un-principled** — The repo enforces a real safety invariant via shared `concurrency.group` across `redeem.yml` and `refresh-token.yml`, but no principle states this lock is required.
+
+**Result**: v1.2.0 ratified with 3 documented tensions scheduled for v1.3.0 resolution. Prevents indefinite revision cycles while creating accountability for follow-ups.
+
+---
+
 ## Governance
 
 - All meaningful changes require team consensus

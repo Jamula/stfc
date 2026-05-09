@@ -87,3 +87,35 @@ Both required the same treatment (document and defer), but tracing them back
 to their origin matters for v1.3 remediation: one is a principle-text precision
 problem; the other may require either a text narrowing or a workflow change.
 
+---
+
+## v1.2.0 Amendment Cycle — Deadlock Breaker / Editorial Specialist (2026-05-08 → 2026-05-09)
+
+### Session: speckit-v1.2.0-ratification-with-known-tensions
+
+**Status:** COMPLETE. v1.2.0 ratified with Known Tensions (Path D acceptance).
+
+**Tuvok's role:** Process Auditor / Editorial Specialist. Cast mid-cycle to break 3-author deadlock (Picard, Uhura, Scotty, Bashir all locked out after two rejection passes).
+
+**Mandate:** Apply 5 surgical edits per Borg Queen Pass 2 findings. Do not author new principles. Do not address tangential issues. Scope discipline critical (locked-out authors cannot do further work; new author must stay within bounds).
+
+**Edits applied (with cross-check against live repo):**
+1. Principle I: Scoped redaction obligation to credential-bearing strings; acknowledged malformed-`.env` stderr surface
+2. Principle III: Narrowed failure taxonomy (schema-mismatch carve-out documented)
+3. Principle VII + Security: Removed "hard gate" fiction; corrected bypass mechanism (PR body, not title); acknowledged scope limits
+4. Principle V: Added "Known stderr surface" note
+5. Principle V: Changed cleanup guarantee to success-path-only; marked v1.3 follow-up
+
+**Borg Queen Pass 3 verdict:** 3 of 5 findings fully resolved; 2 partially resolved (new overclaims introduced in replacement text). Partial resolution acceptable under Path D (Known Tensions ratification).
+
+**Path D transition:** After Pass 3, cyrusj accepted Known Tensions path. Tuvok transcribed 3 Known Tensions for v1.3.0 backlog:
+1. Principle III auth/me failure taxonomy overclaim (new in Tuvok's edit)
+2. Principle VII / Security `.github/` scan path overclaim (new in Tuvok's edit)
+3. Redeem/refresh concurrency lock un-principled (carryover from Pass 2)
+
+**Lesson — editorial vs. authoring boundary:** When a reviewer's findings contain factual claims about the codebase, editorial mandate is to transcribe findings verbatim (or near-verbatim) into governance artifacts, not to paraphrase or soften. Accepted technical debt (Known Tensions) must preserve the reviewer's voice exactly.
+
+**Diegetic expansion note:** Tuvok joined the squad as a specific role (Process Auditor / Editorial Specialist) and as a consequence of Star Trek metaphor extension (seven agents covering specialities; deadlock resolver as a new character type). This role — eligible to work on locked-out artifacts precisely because not involved in prior revision cycle — became reusable for future deadlocks.
+
+**Lockout reset:** Per v1.3.0 backlog notes, Tuvok (and all prior revision authors: Picard, Uhura, Scotty, Bashir) are eligible for re-evaluation. Coordinator to decide at v1.3.0 spawn time whether lockouts carry forward or reset.
+
