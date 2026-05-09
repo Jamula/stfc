@@ -1,0 +1,120 @@
+# Artifact hygiene gate — Constitution Principle VII enforcement.
+#
+# Scans files changed in a PR for JWT tokens, API keys, bearer credentials,
+# and STFC account data. Fails the PR and posts remediation guidance on match.
+#
+# Trigger: pull_request touching spec/plan/task/doc files.
+# Override: add "[skip-token-scan]" to the PR description for false positives.
+#
+# Secrets are NEVER printed; all matched content is redacted to <REDACTED-TOKEN>.
+name: Squad Artifact Hygiene
+
+on:
+  pull_request:
+    paths:
+      - 'specs/**'
+      - 'plans/**'
+      - 'tasks/**'
+      - '.specify/memory/**'
+      - '.specify/templates/**'
+      - 'docs/**'
+      - '.github/**/*.md'
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  hygiene-scan:
+    name: Scan for secret leakage (Principle VII)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.0
+        with:
+          fetch-depth: 0  # full history needed for three-dot diff
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4.4.0
+        with:
+          node-version-file: .nvmrc
+
+      # Check whether the PR author opted out of this scan.
+      - name: Check for [skip-token-scan] override
+        id: skip
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          if printf '%s' "$PR_BODY" | grep -qF '[skip-token-scan]'; then
+            echo "bypass=true" >> "$GITHUB_OUTPUT"
+            echo "::warning::Artifact hygiene scan bypassed via [skip-token-scan] in PR description."
+          else
+            echo "bypass=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Collect the files changed in this PR that fall within watched paths.
+      # The three-dot diff gives us only changes introduced by the PR branch,
+      # not additional commits made on the base branch after the branch point.
+      - name: Scan changed files for secrets
+        id: scan
+        if: steps.skip.outputs.bypass != 'true'
+        run: |
+          git fetch --no-tags --quiet origin "${{ github.base_ref }}"
+
+          FILES=$(git diff --name-only \
+            "origin/${{ github.base_ref }}"...HEAD \
+            | grep -E '\.(md|yaml|yml|txt|json)$' \
+            | grep -E '^(specs/|plans/|tasks/|\.specify/memory/|\.specify/templates/|docs/|\.github/)' \
+            || true)
+
+          if [ -z "$FILES" ]; then
+            echo "Artifact hygiene: no applicable files changed in this PR. ✓"
+            exit 0
+          fi
+
+          echo "Files to scan:"
+          echo "$FILES"
+          echo "---"
+
+          # Pass file list to the scanner. Content matches are redacted in output.
+          echo "$FILES" | xargs node scripts/check-artifact-hygiene.mjs
+
+      # Post human-readable remediation guidance as a PR comment when blocked.
+      - name: Post remediation guidance
+        if: failure() && steps.scan.outcome == 'failure'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body = [
+              '## 🚨 Artifact Hygiene Violation — Constitution §VII',
+              '',
+              'This PR was **blocked by the artifact hygiene scanner**.',
+              'One or more changed files contain patterns that match real tokens, API keys,',
+              'bearer credentials, or STFC account data.',
+              '',
+              '### Why this matters',
+              'Committed specs, plans, and tasks are indexed by search engines and AI systems.',
+              'Real tokens in these files create security debt that application-level safeguards',
+              'cannot cover. **Constitution §VII — Artifact Hygiene** extends Principle I',
+              '(User Safety & Trust First) to the development process itself.',
+              '',
+              '### How to fix',
+              '1. **Check the workflow run log** for `VIOLATION` lines.',
+              '   Matched content is redacted — only the file, line number, and pattern name are shown.',
+              '2. **Replace real values** with `<REDACTED>` placeholders in the flagged lines.',
+              '3. **Move raw API captures** to `.env` or an untracked local location.',
+              '   Extract a sanitized shape for the spec\'s API Contract section, then delete the raw capture.',
+              '4. **Use `tests/fixtures/artifact-hygiene/clean-spec.md`** as a template',
+              '   for writing spec sections that reference API shapes.',
+              '',
+              '### If this is a false positive',
+              'Add `[skip-token-scan]` to this PR description and document why.',
+              'A squad member should confirm the bypass in code review.',
+            ].join('\n');
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body,
+            });

@@ -100,6 +100,56 @@
 - **[Entity 1]**: [What it represents, key attributes without implementation]
 - **[Entity 2]**: [What it represents, relationships to other entities]
 
+### API Contract *(mandatory for changes touching external integrations)*
+
+<!--
+  Required by Principle VIII (Wire-First Discovery) for any feature that
+  calls, parses, or depends on an external API (e.g., the STFC web store).
+  Omit only when the feature is purely local/UI and touches no integration.
+
+  REQUIRED BY PRINCIPLE VII (Artifact Hygiene): Use `<REDACTED>` placeholders
+  for tokens, real account/player IDs, real gift IDs, and any live response
+  body. Never paste captured JWTs, cookies, or session tokens here.
+-->
+
+**Endpoints touched** (method + path + auth requirement):
+
+- `GET /path/to/resource` — Bearer `<REDACTED>`
+
+**Request shape** (sanitized example):
+
+```json
+{ "field": "<placeholder>" }
+```
+
+**Success response shape** (sanitized example, with HTTP status):
+
+```text
+200 OK
+```
+
+```json
+{ "field": "<placeholder>" }
+```
+
+**Error responses** (status code + shape + when emitted):
+
+- `401 Unauthorized` — token missing/expired; trigger re-auth flow.
+- `429 Too Many Requests` — rate limited; honor `Retry-After`.
+- `5xx` — upstream failure; retry with backoff per Principle III.
+
+**Known edge cases**:
+
+- Token expiry mid-request.
+- Rate-limit headers absent on 429.
+- Schema drift (fields added/removed without notice).
+
+**Source of contract** (cite at least one per Principle VIII):
+
+- [ ] Captured HTTP request/response pair (file path or location, sanitized)
+- [ ] Upstream documentation / changelog (URL or reference)
+- [ ] Measured test against a real account (test file)
+
 ## Success Criteria *(mandatory)*
 
 <!--

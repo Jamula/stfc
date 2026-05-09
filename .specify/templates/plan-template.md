@@ -31,7 +31,25 @@
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-[Gates determined based on constitution file]
+For every principle below, state PASS / FAIL / N/A and (if not PASS) describe
+the mitigation or record an entry in Complexity Tracking. The constitution
+lives at `.specify/memory/constitution.md`.
+
+| # | Principle | Status | Notes |
+|---|-----------|--------|-------|
+| I | User Safety & Trust First (NON-NEGOTIABLE) | | No credential/cookie/token capture; actions stay within what a logged-in user could do manually. |
+| II | Dual-Platform Parity | | New capability ships in both surfaces, or platform-exclusive with documented reason. |
+| III | Resilient DOM Automation | | Multi-pattern selectors, defensive lookups, surfaced progress/errors. |
+| IV | Type-Safe, Component-First UI | | TS strict, Shadcn/Radix/Tailwind reuse, lint-clean. |
+| V | Transparent Local-Only Persistence | | Spark KV / `chrome.storage.local`, no remote backend, additive schema. |
+| VI | Specification-First Governance | | Speckit trigger threshold met (or documented bypass per Principle VI's "Direct PR permitted" list). |
+| VII | Artifact Hygiene | | No JWTs, real tokens, account names, gift IDs, or live response bodies in spec/plan/tasks. CI scanner enforced. |
+| VIII | Wire-First Discovery | | Parser/error/retry changes backed by captured request/response, upstream docs, or a measured test. |
+| IX | Test-First Discipline (NON-NEGOTIABLE) | | Acceptance criteria mapped to tests; bug fixes include reproducing test; `npm test` green. |
+| — | Artifact Hygiene Check (CI gate) | | Spec/plan/tasks files contain no JWT-shaped or bearer-token strings. CI workflow under `.github/workflows/` enforces. |
+
+Re-run this table after Phase 1 design and document any newly introduced
+deviations in Complexity Tracking before continuing.
 
 ## Project Structure
 
