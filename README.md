@@ -1,182 +1,186 @@
-# 🚀 STFC Gift Redeemer
+# stfc-gift-redeemer
 
-A dual-platform solution for automating gift redemption from the Star Trek Fleet Command web store, available as both a web app and browser extension.
-
-## 📦 Two Versions Available
-
-### 🌐 Web App (This Page)
-- Instant access via web browser
-- No installation required
-- ⚠️ **Limitation**: Authentication resets on page refresh (browser security)
-- Best for: Quick, occasional use
-
-### 🔌 Browser Extension (Recommended)
-- Install once, use anytime
-- ✅ **Persistent authentication** - login survives page reloads and browser restarts
-- Faster performance, no CORS restrictions
-- Best for: Regular users who claim gifts frequently
-
-👉 **[Installation Guide](./INSTALLATION.md)** - Learn how to install the browser extension
+A headless TypeScript CLI that automatically redeems web-store gifts and promo
+codes from the **Star Trek Fleet Command** store. It is designed to run as a
+scheduled GitHub Action every 4 hours, so daily login bonuses, free packs, and
+promotional codes are claimed without you ever opening the store in a browser.
 
 ---
 
-## ✨ Features
+## Quick start
 
-### Both Versions
-- **Automated Gift Redemption**: One-click scanning and claiming of all available free gifts
-- **Gift History Tracking**: Persistent record of all claimed rewards with timestamps
-- **Real-time Progress**: Visual feedback during the redemption process
-- **Authentication Monitoring**: Live status badges showing connection and login state
-
-### Web App Exclusive
-- **Manual Script Alternative**: Copy-paste JavaScript snippet for direct browser console use
-- **Embedded Store View**: See the STFC store directly in the app
-- **Mobile-Friendly**: Responsive design optimized for all screen sizes
-
-### Extension Exclusive
-- **Persistent Authentication**: Login once, stay logged in across sessions
-- **Native Browser Integration**: Works seamlessly with STFC store pages
-- **Background Monitoring**: Detects authentication changes automatically
-- **Compact Popup**: Quick access from your browser toolbar
+1. **Capture your store token.** Log in to
+   `https://home.startrekfleetcommand.com/store` in your browser, open DevTools,
+   and run the bookmarklet from [docs/BOOKMARKLET.md](docs/BOOKMARKLET.md). It
+   finds your JWT, validates it against the live API, and copies the working
+   token to your clipboard.
+2. **Set the `STFC_ACCOUNTS` GitHub secret.** In your fork of this repo, go to
+   *Settings → Secrets and variables → Actions* and add a new repository secret
+   named `STFC_ACCOUNTS`. The value is a JSON array — see
+   [docs/SETUP.md](docs/SETUP.md) for the exact format.
+3. **Enable the `Redeem gifts` workflow** under the Actions tab. It will run on
+   the cron schedule (every 4 hours) from then on. You can also trigger it
+   manually with the **Run workflow** button to verify everything works.
 
 ---
 
-## 🔒 Understanding Authentication
+## How it works
 
-### Why Doesn't the Web App Persist Login?
+The orchestrator talks to the official STFC web-store API at:
 
-The web app loads the STFC store in an `<iframe>`. Due to browser security policies (same-origin policy), cookies and session data from the iframe are isolated and don't persist when you refresh the page. **This is a browser security feature, not a bug.**
-
-### How the Extension Solves This
-
-The browser extension:
-- Runs as a trusted browser component
-- Has permission to access `startrekfleetcommand.com`
-- Uses the browser's native cookie storage
-- Maintains authentication just like opening the store in a regular tab
-
-**Your login persists across:**
-- ✅ Extension popup closes
-- ✅ Page refreshes
-- ✅ Browser restarts
-- ✅ System reboots
-
----
-
-## 🎮 How to Use
-
-### Web App - Method 1: Embedded Store
-1. Open the app (this page)
-2. Log in to the STFC store in the embedded iframe
-3. Click "Redeem All Gifts" to automatically claim rewards
-4. ⚠️ Note: You'll need to log in again after refreshing
-
-### Web App - Method 2: Manual Script (Recommended)
-1. Click the "Script" tab in the sidebar
-2. Click "Copy" to copy the automation script
-3. Click "Open Store" to open the STFC store in a new tab
-4. Log in (your session persists normally in a dedicated tab)
-5. Press `F12` to open Developer Tools
-6. Navigate to the "Console" tab
-7. Paste the script and press Enter
-8. Watch as it automatically claims all gifts
-
-### Browser Extension (Best Experience)
-1. [Install the extension](./INSTALLATION.md) (one-time setup)
-2. Navigate to https://home.startrekfleetcommand.com/store
-3. Log in (only need to do this once!)
-4. Click the extension icon in your toolbar
-5. Click "Redeem All Gifts"
-6. View your history in the History tab
-
----
-
-## 🚀 Quick Start - Browser Extension
-
-```bash
-# Build the extension
-npm run build:extension
-
-# Load in Chrome/Edge
-1. Go to chrome://extensions/
-2. Enable "Developer mode"
-3. Click "Load unpacked"
-4. Select the extension/dist folder
-
-# That's it! Your authentication will now persist.
+```
+https://cdn-nv3-webstore-api.startrek.digitgaming.com/api/v2
 ```
 
-For detailed installation instructions, see **[INSTALLATION.md](./INSTALLATION.md)**
+For each account it performs roughly:
+
+- `GET  /auth/me`             — verify the JWT is still valid and identify the player.
+- `GET  /offers/gifts`        — list pending gifts (daily login, mail attachments, etc).
+- `POST /offers/gifts/claim`  — claim each pending gift.
+- `POST /redeem/claim`        — submit each promo code from `promo-codes.txt`.
+
+The JWT used as the `Authorization: Bearer …` header is taken from your normal
+browser session and stored encrypted in a GitHub Actions secret. Nothing is
+ever written back to the store, and no credentials (email/password) are
+required by this tool.
 
 ---
 
-## 📊 Comparison
+## Available skills
 
-| Feature | Web App | Browser Extension |
-|---------|---------|-------------------|
-| Installation | ❌ None needed | ✅ One-time setup |
-| Persistent Auth | ❌ No | ✅ Yes |
-| Works After Refresh | ❌ Need re-login | ✅ Yes |
-| CORS Limitations | ⚠️ Some | ❌ None |
-| Speed | 🐢 Slower | ⚡ Instant |
-| Mobile Support | ✅ Yes | ❌ Desktop only |
-| Best For | Quick testing | Regular use |
+The CI workflow runs:
 
----
+```bash
+npm run skill:run-all
+```
 
-## 🛠️ Technical Details
+which iterates every account in `STFC_ACCOUNTS` and runs the full pipeline
+(check auth → list gifts → claim gifts → redeem codes), printing a per-account
+summary at the end.
 
-Built with:
-- **Frontend**: React 19 + TypeScript
-- **Styling**: Tailwind CSS + Shadcn UI v4
-- **Storage**: Spark KV (web) / Chrome Storage API (extension)
-- **Icons**: Phosphor Icons
-- **Animations**: Framer Motion
-- **Build**: Vite 7
+For local diagnostics you can run individual steps:
+
+| Skill                       | Purpose                                                  |
+| --------------------------- | -------------------------------------------------------- |
+| `npm run skill:check-auth`  | Decode the JWT and confirm `/auth/me` accepts it.        |
+| `npm run skill:list-gifts`  | List pending gifts without claiming them.                |
+| `npm run skill:claim-gifts` | Claim pending gifts.                                     |
+| `npm run skill:redeem-codes`| Submit every code in `promo-codes.txt`.                  |
 
 ---
 
-## 📁 Project Structure
+## Project layout
 
 ```
 .
-├── src/                      # Web app source
-│   ├── App.tsx              # Main web app component
-│   ├── components/
-│   │   ├── ExtensionPopup.tsx  # Extension popup component
-│   │   ├── GiftHistory.tsx
-│   │   └── ScriptGenerator.tsx
-│   └── ...
-├── extension/               # Browser extension
-│   ├── manifest.json       # Extension config
-│   ├── popup.html          # Extension popup
-│   ├── popup.jsx           # Popup entry point
-│   ├── background.js       # Service worker
-│   ├── content.js          # Content script
-│   └── icons/              # Extension icons
-├── scripts/                 # Build scripts
-│   ├── post-build-extension.js
-│   └── create-icons.js
-├── INSTALLATION.md          # Extension installation guide
-└── README.md               # This file
+├── .github/
+│   └── workflows/
+│       ├── redeem.yml       # scheduled gift redemption (every 4h)
+│       └── test.yml         # typecheck + tests on push/PR
+├── docs/
+│   ├── BOOKMARKLET.md       # one-click token grabber
+│   └── SETUP.md             # end-to-end setup guide
+├── src/                     # TypeScript source (api client, orchestrator, skills)
+├── tests/                   # vitest suite
+├── promo-codes.txt          # one promo code per line, # for comments
+├── package.json
+└── README.md
 ```
 
 ---
 
-## 🤝 Contributing
+## Multi-account support
 
-This project is open source. Contributions are welcome!
+`STFC_ACCOUNTS` is a JSON **array**, one entry per account. The orchestrator
+iterates the entire array, so you can manage as many accounts as you like with
+a single secret:
+
+```json
+[
+  {"name": "main",  "token": "<JWT-1>"},
+  {"name": "alt",   "token": "<JWT-2>"},
+  {"name": "farm",  "token": "<JWT-3>"}
+]
+```
+
+Capture each token from a different browser profile (cookies are profile-scoped).
 
 ---
 
-## 📄 License
+## Promo codes
 
-The Spark Template files and resources from GitHub are licensed under the terms of the MIT license, Copyright GitHub, Inc.
+Promo codes live in `promo-codes.txt`. The format is dead simple:
+
+- One code per line.
+- Lines starting with `#` are ignored.
+- Inline comments after a code (whitespace + `#`) are stripped.
+
+```
+# Star Trek Day 2024 promo
+STARTREKDAY2024
+FLEETCMD-WELCOME    # one-time welcome bonus
+```
+
+Codes are resubmitted on every scheduled run. The API returns
+`CODE_ALREADY_USED` for codes you have already redeemed, so the file is
+**naturally idempotent** — no local state is tracked. Just append new codes
+whenever you find them; old ones will quietly no-op.
 
 ---
 
-## 🆘 Need Help?
+## Token expiry
 
-- **For extension installation**: See [INSTALLATION.md](./INSTALLATION.md)
-- **For troubleshooting**: Check the troubleshooting sections in the installation guide
-- **For technical details**: See [extension/README.md](./extension/README.md)
+JWTs from the STFC store have an `exp` claim (typically a few weeks out). The
+orchestrator decodes every token at the start of a run and prints something
+like:
+
+```
+[main] token expires in 12 days
+```
+
+When a token has fewer than a few days left it is highlighted, and once it
+actually expires the run summary clearly flags it as **TOKEN_EXPIRED** so you
+know to re-capture and update the secret. Expired tokens for one account do
+**not** stop other accounts from being processed.
+
+---
+
+## Notifications
+
+By design this tool is **summary-only**: it does not send emails, push
+notifications, or Discord webhooks. Everything you need is on the workflow run
+page (Actions tab → Redeem gifts → latest run → job summary).
+
+If you want to be notified when a run fails, enable
+*Settings → Notifications → Actions → Send notifications for failed workflows
+only* in your personal GitHub settings.
+
+---
+
+## Disclaimer
+
+Automating interactions with the STFC web store may be against the
+**Scopely** / **Star Trek Fleet Command** Terms of Service. Use at your own
+risk — you, the operator, assume all responsibility for any consequences,
+including but not limited to account suspension. This project is provided
+for educational purposes and is not affiliated with or endorsed by Scopely,
+Digit Game Studios, CBS, or Paramount.
+
+---
+
+## Local development
+
+```bash
+npm install
+npm test
+npm run typecheck
+```
+
+To run skills locally against your own account, copy your `STFC_ACCOUNTS` JSON
+into a `.env` file in the repo root:
+
+```
+STFC_ACCOUNTS=[{"name":"main","token":"<JWT>"}]
+```
+
+then run e.g. `npm run skill:check-auth`. The `.env` file is gitignored.

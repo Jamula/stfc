@@ -3,7 +3,10 @@
 // can never leak a Bearer token.
 
 const JWT_RE = /\b[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b/g;
-const AUTH_HEADER_RE = /(authorization\s*[:=]\s*"?)(Bearer\s+)?[^",\s}]+/gi;
+// Matches both HTTP-style `Authorization: Bearer <tok>` and JSON-style
+// `"authorization":"Bearer <tok>"`. The optional `"?` between the field
+// name and `:` lets us catch the JSON form.
+const AUTH_HEADER_RE = /(authorization\s*"?\s*[:=]\s*"?)(Bearer\s+)?[^",\s}]+/gi;
 
 export function redactString(input: string): string {
   return input.replace(AUTH_HEADER_RE, "$1[REDACTED]").replace(JWT_RE, "[REDACTED-JWT]");
@@ -27,7 +30,8 @@ export function redactValue(value: unknown): unknown {
   return value;
 }
 
-// For Errors and unknowns: stringify, then redact.
+// For Errors and unknowns: redact deeply, then stringify, then redact again
+// (catches anything the structural pass missed).
 export function redactForLog(value: unknown): string {
   let raw: string;
   if (value instanceof Error) {
@@ -35,7 +39,8 @@ export function redactForLog(value: unknown): string {
   } else if (typeof value === "string") {
     raw = value;
   } else {
-    try { raw = JSON.stringify(value); } catch { raw = String(value); }
+    try { raw = JSON.stringify(redactValue(value)); } catch { raw = String(value); }
   }
   return redactString(raw);
 }
+
