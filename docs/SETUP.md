@@ -75,7 +75,7 @@ Once the secret is set:
 - **Manual:** repo → **Actions** → **Redeem gifts** → **Run workflow**.
 - **CLI:** `gh workflow run "Redeem gifts"` (followed by `gh run watch` to
   tail it).
-- **Cron:** every 4 hours automatically. The job summary on each run shows
+- **Cron:** every hour automatically. The job summary on each run shows
   what was claimed, which codes were already used, and any tokens that have
   expired.
 
@@ -187,4 +187,5 @@ the visible browser and solve the challenge there.
 GitHub Actions disables scheduled workflows on forks after **60 days of
 repo inactivity**. Just push a commit (or click **Run workflow** manually)
 to wake it up.
+
 

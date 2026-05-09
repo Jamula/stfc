@@ -2,7 +2,7 @@
 
 A headless TypeScript CLI that automatically redeems web-store gifts and promo
 codes from the **Star Trek Fleet Command** store. It is designed to run as a
-scheduled GitHub Action every 4 hours, so daily login bonuses, free packs, and
+scheduled GitHub Action every hour, so daily login bonuses, free packs, and
 promotional codes are claimed without you ever opening the store in a browser.
 
 ---
@@ -29,7 +29,7 @@ promotional codes are claimed without you ever opening the store in a browser.
    `capture-token` wrote to `.env` into *Settings → Secrets and variables →
    Actions → STFC_ACCOUNTS*.
 3. **Enable the `Redeem gifts` workflow** under the Actions tab. It will run
-   on the cron schedule (every 4 hours) from then on. You can also trigger
+   on the cron schedule (every hour) from then on. You can also trigger
    it manually with the **Run workflow** button to verify everything works.
 
 > **Optional:** if you'd rather never re-capture your JWT by hand when it
@@ -203,3 +203,4 @@ STFC_ACCOUNTS=[{"name":"main","token":"<JWT>"}]
 ```
 
 then run e.g. `npm run skill:check-auth`. The `.env` file is gitignored.
+
