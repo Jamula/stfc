@@ -37,11 +37,11 @@ lives at `.specify/memory/constitution.md`.
 
 | # | Principle | Status | Notes |
 |---|-----------|--------|-------|
-| I | User Safety & Trust First (NON-NEGOTIABLE) | | No credential/cookie/token capture; actions stay within what a logged-in user could do manually. |
-| II | Dual-Platform Parity | | New capability ships in both surfaces, or platform-exclusive with documented reason. |
-| III | Resilient DOM Automation | | Multi-pattern selectors, defensive lookups, surfaced progress/errors. |
-| IV | Type-Safe, Component-First UI | | TS strict, Shadcn/Radix/Tailwind reuse, lint-clean. |
-| V | Transparent Local-Only Persistence | | Spark KV / `chrome.storage.local`, no remote backend, additive schema. |
+| I | User Safety & Trust First (NON-NEGOTIABLE) | | Acts only as a logged-in player could via the official store; credential-bearing strings surfaced from `src/` pass through `src/lib/redact.ts`; helper-script secret surfaces stay within the sanctioned channels in Principle V. |
+| II | Skill-Isolated CLI Architecture | | New behaviour lives behind the `src/cli.ts` dispatcher and a `src/skills/*.ts` module; skills return `{ result, exitCode }` and do not call `process.exit` from `src/`; shared logic stays in `src/lib/` and `src/api/`. |
+| III | Resilient Upstream-API Automation | | All STFC-API traffic from `src/` goes through `src/api/client.ts` / `src/api/endpoints.ts`; responses validated by zod; typed errors (`TokenExpiredError`, `TransientError`, `SchemaMismatchError`, `ApiError`); GET retried once with jitter, POST/PUT not retried; `AbortSignal` timeout. |
+| IV | Type-Safe Headless TypeScript CLI | | Changes covered by `tsconfig.json` strict surface (no React/Shadcn/Tailwind/extension/build pipeline introduced); `npm run typecheck` clean; `tsx` runtime preserved. |
+| V | Stateless Operation & Secret Custody | | No persisted run state; durable inputs limited to `STFC_ACCOUNTS` / `promo-codes.txt` (+ refresh-pipeline secrets); secrets only in sanctioned surfaces; any new `STFC_ACCOUNTS` writer requires a constitutional amendment; `scripts/capture-token.mjs` honours its `--ci` / interactive / `--debug` obligations. |
 | VI | Specification-First Governance | | Speckit trigger threshold met (or documented bypass per Principle VI's "Direct PR permitted" list). |
 | VII | Artifact Hygiene | | No JWTs, real tokens, account names, gift IDs, or live response bodies in spec/plan/tasks. CI scanner enforced. |
 | VIII | Wire-First Discovery | | Parser/error/retry changes backed by captured request/response, upstream docs, or a measured test. |

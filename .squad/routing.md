@@ -11,6 +11,7 @@ How to decide who handles what.
 | STFC API, auth, secrets | Uhura | JWT capture, redemption requests, response parsing, bookmarklet, `STFC_ACCOUNTS` format |
 | Tests, fixtures, coverage | Bashir | Add unit tests, write integration tests, debug flaky CI tests, fix test fixtures |
 | Critique, risk, assumptions | Borg Queen | Pre-mortem a plan, audit a proposal, surface blind spots, devil's-advocate review |
+| Editorial passes on governance docs per explicit reviewer findings | Tuvok | Apply Borg Queen's findings as surgical edits to constitution drafts, change-impact accounting, cross-reference fixes |
 | Code review | Picard (with Borg Queen on request) | Non-trivial PR review, architectural sign-off |
 | GitHub Actions workflows | Scotty (build/test) / Uhura (cron + secrets) | `.github/workflows/*.yml` changes |
 | Session logging | Scribe | Automatic — never needs routing |

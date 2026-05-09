@@ -6,6 +6,14 @@
       "assignment_id": "stfc-gift-redeemer-initial-2026-05-08",
       "agent_count": 5,
       "user_requested": true
+    },
+    {
+      "universe": "Star Trek",
+      "assigned_at": "2026-05-08T21:29:58-07:00",
+      "assignment_id": "stfc-gift-redeemer-initial-2026-05-08",
+      "expansion_type": "diegetic",
+      "agent_added": "Tuvok",
+      "reason": "Editorial specialist recruited to break constitutional revision deadlock"
     }
   ],
   "assignment_cast_snapshots": {
@@ -19,6 +27,9 @@
         { "name": "Uhura", "role": "Integrations Dev" },
         { "name": "Bashir", "role": "Tester" },
         { "name": "Borg Queen", "role": "Critic" }
+      ],
+      "overflow_additions": [
+        { "name": "Tuvok", "role": "Process Auditor / Editorial Specialist", "added_at": "2026-05-08T21:29:58-07:00", "expansion_type": "diegetic" }
       ]
     }
   }

@@ -17,6 +17,7 @@
 | Uhura | Integrations Dev | `.squad/agents/uhura/charter.md` | ✅ Active |
 | Bashir | Tester | `.squad/agents/bashir/charter.md` | ✅ Active |
 | Borg Queen | Critic | `.squad/agents/borg-queen/charter.md` | ✅ Active |
+| Tuvok | Process Auditor / Editorial Specialist | `.squad/agents/tuvok/charter.md` | ✅ Active |
 | Scribe | Session Logger | `.squad/agents/scribe/charter.md` | 📋 Silent |
 | Ralph | Work Monitor | — | 🔄 Monitor |
 
