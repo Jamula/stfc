@@ -5,7 +5,7 @@
     "description": "Headless redemption of Star Trek Fleet Command web-store gifts and promo codes, runnable as a scheduled GitHub Action.",
     "type": "module",
     "engines": {
-        "node": ">=22"
+        "node": ">=24"
     },
     "scripts": {
         "skill:run-all": "tsx src/cli.ts run-all",
@@ -28,7 +28,7 @@
         "zod": "^3.25.76"
     },
     "devDependencies": {
-        "@types/node": "^22.10.5",
+        "@types/node": "^24.0.0",
         "playwright": "^1.49.1",
         "simple-git-hooks": "^2.13.1",
         "typescript": "~5.7.2"
