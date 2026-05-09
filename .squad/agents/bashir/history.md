@@ -38,3 +38,60 @@
 - **Picard coordinating amendment:** Will incorporate Uhura's secret hygiene (essential), Bashir's test-first gates (essential), Scotty's trigger threshold + checkpoints, Borg Queen's five prerequisites.
 
 **Status:** Phase 1 (Briefing) complete. Phase 2 pending: Picard drafts constitutional amendment v1.1 with Sync Impact Report. Bashir owns test-quality checklist template.
+
+---
+
+### 2026-05-08T21:33:38Z: Phase 2 Critique Convergence — v1.1 Constitution Proposal Complete
+
+**Verdict:** APPROVE_WITH_EDITS (two enforcement gaps identified across team)
+
+**Full critique at** `.squad/orchestration-log/2026-05-08T21-33-38Z-bashir.md`
+
+**Team Convergence on Enforcement Infrastructure:**
+- **Scotty:** Confirmed build/tooling requirements met; no new infrastructure debt.
+- **Uhura:** Flagged CI enforcement gap (token-scanner is blocking prerequisite for Principle VII).
+- **Borg Queen:** Caught Principle IV/IX contradiction; new test suite must be acknowledged in v1.0.0 text.
+
+**Two Enforcement Gaps Identified:**
+
+1. **Pre-commit hook missing (Principle IX)** — "run tests before check-in" is stated but has no mechanical enforcement. NON-NEGOTIABLE language requires automation, not honor-system. Recommend: implement `scripts/pre-commit.sh` to block commits if `npm test` fails, OR add TODO with clear pre-ratification commitment.
+
+2. **Verification gap on test-first (Principle IX)** — Reviewers cannot verify that test actually failed before fix in direct PR context. Recommend: add documentation requirement to PR description (test failure output with timestamp, or commit history evidence).
+
+**Reviewer Gates Section:** ✅ All four veto powers granted as Phase 1 proposed. Language is strong ("may BLOCK"). This is excellent.
+
+**What's Strong:**
+- Principle IX overall is excellent (NON-NEGOTIABLE language, clear test-first rule, acceptance-criteria coverage mandate).
+- Direct PR exception is pragmatic and honest about project's maintenance-heavy reality.
+- Speckit Reviewer Gates section grants all Phase 1 proposed veto powers.
+
+**Ratification Path:** Fix enforcement gaps (pre-commit hook OR TODO) before merge. Verify Principle IV/IX contradiction is resolved.
+
+---
+
+### 2026-05-08T21:29:57-07:00: Phase 2 — Critique of v1.1 Constitution Proposal
+
+**Four-question critique delivered to `.squad/decisions/inbox/bashir-speckit-v1.1-critique.md`**
+
+#### Key findings:
+
+1. **Q1 — Test-first on bug fixes: 🟡** Principle IX is crystal-clear on test-first requirement ("fails before the fix, passes after"), but has verification gap: reviewers cannot inspect commit history from PR alone to confirm test actually failed before fix. Recommend adding documentation requirement to PR description.
+
+2. **Q2 — Run tests before check-in: 🟡** Rule is unambiguous and command matches package.json exactly, but **CRITICAL: no enforcement mechanism.** Constitution says "MUST pass locally" but names no pre-commit hook, no CI gate, no automation. It's a rule without teeth — pure developer honor. This contradicts the NON-NEGOTIABLE language in Principle IX. Recommend pre-commit hook implementation or explicit TODO before ratification.
+
+3. **Q3 — Reviewer veto powers: ✅** All four veto powers granted exactly as I proposed in Phase 1: (a) spec testability, (b) task-level test requirements, (c) implementation coverage mapping, (d) bug-fix test-first. Speckit Reviewer Gates section is strong and explicit.
+
+4. **Q4 — Checklist template format: Answered** The veto powers are sufficient for the constitution. Checklist should be a separate operational artifact (`.specify/templates/checklist-template.md`), not codified in governance. Constitution names the gates; tooling (checklist) evolves separately.
+
+#### Overall verdict: 🟡 Solid structure; two enforcement gaps need closing
+
+- **Q2 is the blocker:** The "MUST pass locally" rule for `npm test` has no enforcement gate. Without a pre-commit hook or CI required-check, this rule is aspirational, not binding.
+- **Q1 has a gap:** Test-first for bug fixes is clear, but verification relies on reviewer honor and undocumented test failure.
+
+#### Strengths observed:
+- Principle IX overall is excellent (NON-NEGOTIABLE, clear test-first, acceptance-criteria coverage mandate)
+- All four reviewer veto powers granted explicitly
+- Direct PR pragmatism is honest about maintenance-heavy reality (~80–90% of PRs are single-file maintenance)
+
+#### Recommendation for Picard:
+Ratification should be conditioned on (a) commitment to pre-commit hook for `npm test` blocking, (b) one-sentence addition to Principle IX about verifying test failure via PR description documentation.

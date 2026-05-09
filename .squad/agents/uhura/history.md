@@ -34,3 +34,44 @@
 - **Picard coordinating amendment:** Will incorporate Uhura's secret hygiene (essential), Bashir's test-first gates (essential), Scotty's trigger threshold + checkpoints, Borg Queen's five prerequisites.
 
 **Status:** Phase 1 (Briefing) complete. Phase 2 pending: Picard drafts constitutional amendment v1.1 with Sync Impact Report.
+
+---
+
+### 2026-05-08T21:33:38Z: Phase 2 Critique Convergence — v1.1 Constitution Proposal Complete
+
+**Verdict:** READY_WITH_CONDITION (team convergence verified)
+
+**Full critique at** `.squad/orchestration-log/2026-05-08T21-33-38Z-uhura.md`
+
+**Team Input Integrated:**
+- **Scotty:** Confirmed `.specify/features/` structure must be verified pre-ratification.
+- **Bashir:** Flagged pre-commit hook gap for test-first rule; enforcement infrastructure is a blocker.
+- **Borg Queen:** Caught Principle IV/IX contradiction (v1.0.0 "no test suite" vs. v1.1 mandate); must fix Principle IV text.
+
+**Critical Condition for Ratification:** Artifact Hygiene CI gate (JWT-shaped string scanning) MUST be implemented before merge. This is a blocking prerequisite, NOT post-ratification work. Deferring to TODO creates a zombie rule (principle without enforcement).
+
+**Recommendation:** Implement CI token-scanner as part of v1.1 amendment. Effort: 2–4 hours. Prevents secret-leakage risk that Phase 1 briefing flagged as HIGH urgency.
+
+**Process:** Scan spec.md, plan.md, tasks.md for JWT/API-key/account-data patterns; block commit on match; allow override with `[skip-token-scan]` comment for false positives.
+
+---
+
+### 2026-05-08T21:29:57-07:00: Phase 2 Critique — v1.1 Constitution Proposal Delivered
+
+**Phase 2 Review Complete.** Evaluated Picard's v1.1 proposal against four critical questions from integrations seat. Detailed critique at `.squad/decisions/inbox/uhura-speckit-v1.1-critique.md`.
+
+**Key findings:**
+
+1. **Artifact Hygiene (Principle VII): 🟡 Acceptable with acknowledged gap.** The principle is well-written: JWTs explicitly forbidden, response bodies (account data) addressed, workflow for necessary captures documented, code review gate named. BUT: CI enforcement is deferred to a TODO. Without pre-commit scanning, the principle is honor-system. Risk: real secrets slip into committed specs.
+
+2. **Wire-First Discovery (Principle VIII): 🟡 Pragmatic but permissive.** Justification is a 3-option OR (captured traffic, documentation, measured test) rather than hierarchy. Does not mandate wire-first as Phase 1 briefing recommended. However, principle does guide recovery (treat upstream changes as spec amendments). Acceptable IF spec template's API Contract section (pending) enforces wire-first for contract changes.
+
+3. **"STFC API contract" threshold: ✅ Acceptable.** Principle VI explicitly lists: new endpoints, changed request/response shapes (includes payload structure changes), auth-flow modifications. Response-shape changes WILL trigger speckit. Specific enough in practice.
+
+4. **CI token-scanning timing: 🟡 Deferral is risky; recommend prerequisite.** Principle VII is constitutional law; CI gate is enforcement. Deferring gate to post-ratification TODO risks zombie rule: Phase 3 ratification passes without gate, gate TODO deprioritized, secrets ship in specs. RECOMMENDATION: Make CI gate a blocking prerequisite for Phase 3 ratification (not a TODO). Estimate 2–4 hours; implementable before ratification.
+
+**OVERALL VERDICT: ✅ READY FOR PHASE 3 WITH ONE CONDITION**
+
+Constitution v1.1.0 is well-drafted and addresses Phase 1 concerns. Ratification may proceed when CI artifact-hygiene enforcement (JWT scanning) is operational. This is not a post-ratification TODO; it's a prerequisite.
+
+**Next phase:** Await Picard's decision on CI gate timing. If gate is pre-ratification, proceed to Phase 3. If deferred, flag as high-risk but proceed pending community consensus.

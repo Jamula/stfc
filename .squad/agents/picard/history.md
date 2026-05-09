@@ -44,3 +44,63 @@
 **Picard's role:** Coordinate constitutional amendment that incorporates Uhura's secret hygiene rule (essential), Bashir's test-first gates (essential), Scotty's trigger threshold and checkpoints, and Borg Queen's five prerequisites. Phase 2 drafting; Phase 3 merge into constitution.
 
 **Status:** Phase 1 (Briefing) complete. Awaiting Phase 2 convergence.
+
+---
+
+### Constitution v1.1 Drafting — Phase 2 Complete (2026-05-08T21:14:47-07:00)
+
+---
+
+### Team Critique & Convergence — Phase 2 Complete (2026-05-08T21:33:38Z)
+
+**Session:** speckit-v1.1-critique — All five agents submitted critiques of v1.1 proposal.
+
+**Verdicts Summary:**
+- **Scotty:** APPROVE_WITH_EDITS (verify `.specify/features/` structure pre-ratification)
+- **Uhura:** READY_WITH_CONDITION (CI token-scanner MUST be implemented before ratification, not deferred)
+- **Bashir:** APPROVE_WITH_EDITS (two enforcement gaps: pre-commit hook for test rule; verification doc for bug-fix test-first)
+- **Borg Queen:** PHASE_2_COMPLETE (Principle IV/IX contradiction MUST be fixed before ratification)
+
+**Convergent Findings — Two Classes of Follow-Up:**
+
+1. **Drafting Fixes** (must complete before ratification):
+   - Fix Principle IV (v1.0.0 text) — resolve "no test suite" contradiction with Principle IX
+   - Assign artifact hygiene reviewer (recommend: Uhura)
+   - Clarify `package.json` scripts exemption in Principle VI (optional edit)
+   - Tighten test-first verification (add documentation requirement)
+
+2. **Enforcement Infrastructure** (pre-ratification blockers):
+   - Implement CI token-scanner for Artifact Hygiene (Uhura: blocking prerequisite, not TODO)
+   - Implement pre-commit hook for `npm test` gate OR document pre-ratification commitment (Bashir)
+   - Verify `.specify/features/` directory structure (Scotty)
+
+**Critical Issues Identified by Team:**
+- **Borg Queen caught Principle IV/IX contradiction** — v1.0.0 "has no automated test suite" vs. v1.1 "npm test MUST pass." This creates ambiguity for implementation.
+- **Uhura flagged CI enforcement gap** — Principle VII (Artifact Hygiene) is strong but unenforceable without CI token-scanner. Deferring to post-ratification is unacceptable.
+- **Bashir flagged pre-commit hook gap** — NON-NEGOTIABLE language in Principle IX requires mechanical enforcement, not honor-system.
+- **Smoke-test operational runbook undefined** — WHO performs smoke-test, HOW to document, WHEN, WHERE. Needs follow-up.
+
+**Adoption Threshold Decision:** Keep 50% as stated (Borg Queen recommendation accepted).
+
+---
+
+### Constitution v1.1 Drafting — Phase 2 Complete (2026-05-08T21:14:47-07:00)
+
+**What was produced:** Full v1.1.0 constitution proposal (`.squad/.scratch/constitution-v1.1-proposal.md`) and decision memo (`.squad/decisions/inbox/picard-speckit-v1.1-proposal.md`).
+
+**Key synthesis decisions:**
+
+1. **Trigger threshold (Pragmatic/Option B) is explicit and operational.** Listed as bullet criteria in Principle VI — not a hand-wave. "Multi-file, cross-skill, >4h, API-contract, or build/config changes" → speckit required. "One-liners, typos, bumps, single-file bug fixes, doc edits" → direct PR.
+
+2. **Test command is `npm test`** (confirmed from `package.json`: `node --import tsx --test tests/index.test.ts`). Encoded as a hard rule in Principle IX — no skip clauses, no CI-deferred exceptions.
+
+3. **Borg Queen's concerns answered structurally, not dismissed.** Brownfield reality acknowledged in Known Tensions §1; smoke-test collision resolved as "agents implement, humans verify" in §2; abandonment risk addressed with 3-consecutive-skip retro rule in §3; annual review in §4.
+
+4. **Reviewer gates name specific veto powers.** Bashir blocks: untestable specs, missing test tasks, uncovered acceptance criteria. Picard blocks: scope creep, principle violations, speckit bypass without justification.
+
+5. **All v1.0.0 principles preserved unchanged.** No modifications, no removals, no weakening. New principles are additive (MINOR bump).
+
+**What I learned about constitutional drafting:**
+- Synthesizing 5 team briefings requires respecting each viewpoint while making hard calls about what goes in the constitution vs. what stays as operational guidance. Bashir's full 20-item checklist is too granular for the constitution — named it as a follow-up artifact instead.
+- The Borg Queen's pre-mortem was the most structurally important input. Without answering those concerns directly in the document, the proposal would be aspirational rather than credible.
+- Uhura's Artifact Hygiene principle extends Principle I into the development process itself — a gap the v1.0.0 constitution didn't cover. This is the highest-urgency addition.

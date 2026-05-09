@@ -1,0 +1,183 @@
+# .squad/decisions/ — Decision Registry
+
+**Updated:** 2026-05-08T21:33:38Z  
+**Session:** speckit-v1.1-critique
+
+---
+
+### 2026-05-08T21:14:47-07:00: Picard — v1.1 Constitution Proposal (DRAFT for team review)
+
+**By:** Picard (synthesizing Scotty, Uhura, Bashir, Borg Queen briefings)
+
+**What:** This is the complete v1.1.0 constitution proposal, located at `.squad/.scratch/constitution-v1.1-proposal.md`. It adds four new Core Principles (VI. Specification-First Governance, VII. Artifact Hygiene, VIII. Wire-First Discovery, IX. Test-First Discipline), a Speckit Reviewer Gates sub-section in Development Workflow, and a Known Tensions & Structural Answers sub-section in Governance. All five existing v1.0.0 principles (I–V) are preserved unchanged. The Security & Compliance section is preserved unchanged. Development Workflow gains `npm test` as a required pre-merge check and explicit reconciliation of the smoke-test gate with agent-authored code. Governance gains compliance review guidance for direct PRs, an abandonment early-warning signal (3-skip retro rule), and an annual process review commitment.
+
+**Why:** The user directive "use speckit when possible" requires operationalization — not as a vague aspiration, but as an enforceable constitutional rule with a clear trigger threshold. The user selected the Pragmatic threshold (Option B): speckit is required for multi-file, cross-skill, >4-hour, or API-contract work; direct PRs are permitted for one-liners, typos, version bumps, single-file bug fixes, and doc edits. The user also mandated "run tests before checking in" as a hard rule — encoded in Principle IX with `npm test` as the specific command.
+
+Borg Queen's pre-mortem concerns are answered directly in the Known Tensions section: (1) the trigger threshold honestly acknowledges the project's brownfield/maintenance-heavy PR mix; (2) the smoke-test collision is resolved as "agents implement, humans verify" — sequential gates, not contradictory ones; (3) the 3-consecutive-skip retro rule provides an early-warning signal against silent abandonment; (4) the annual review commitment prevents the constitution from becoming a zombie document.
+
+**Open questions for team review:**
+
+1. **Scotty:** Is the trigger threshold calibrated correctly for your day-to-day? Specifically: should "changes touching `package.json` scripts" require speckit, or is that too aggressive for routine dependency work? (I included it because Scotty flagged build/config changes as requiring the full pipeline, but a simple `tsx` version bump might not warrant it.)
+
+2. **Uhura:** Should we implement the CI pre-commit check for JWT-shaped strings in spec/plan/tasks files as part of this constitutional amendment, or defer it to a follow-up PR? The principle (VII) is written; the automation is listed as a TODO in the Sync Impact Report.
+
+3. **Bashir:** The reviewer gates name what you can block, but they don't specify a *format* for your review (e.g., a checklist template vs. free-form comments). Do you want a specific `/speckit.checklist` template codified in the constitution, or is naming the veto powers sufficient and the checklist lives as a separate operational artifact?
+
+4. **Borg Queen:** The annual review commitment says "amend if adoption drops below 50% for qualifying PRs." Is 50% the right threshold, or should it be higher (75%)? And: does the 3-consecutive-skip retro rule address your abandonment concern adequately, or do you want a harder gate (e.g., automated PR label that flags non-trivial PRs without a spec link)?
+
+---
+
+### 2026-05-08T21:29:57.505-07:00: Scotty — Critique of v1.1 constitution proposal
+
+**By:** Scotty  
+**What:** Detailed analysis of Principle VI trigger threshold, Principle IX test rule, build/tooling implications, and response to Picard's open question.
+**Verdict:** APPROVE_WITH_EDITS
+
+**Key Findings:**
+- Principle VI trigger threshold (multi-file, cross-skill, >4 hours, config, API contract) is pragmatic and unambiguous. Direct PR exceptions (one-liners, bumps, single-file fixes, docs) are crisp.
+- Principle IX test rule command is correct per package.json. Enforcement via CI + code review is strong; pre-commit hook would strengthen further.
+- `.specify/features/` directory structure must be verified pre-ratification; no new build/tooling required.
+- For Picard's open question on `package.json` scripts: KEEP the rule as written. Clarify to remove ambiguity: "version bumps alone = direct PR; script edits = speckit required."
+
+**Required edits before ratification:**
+1. Verify `.specify/features/` directory structure exists; if not, create or add TODO.
+2. (Optional) Clarify line 168–169: "or `package.json` scripts (but not bare version bumps in `dependencies`/`devDependencies`)."
+
+---
+
+### 2026-05-08T21:29:57-07:00: Uhura — Critique of v1.1 Constitution Proposal
+
+**By:** Uhura  
+**What:** Phase 2 review of Picard's constitutional amendment (v1.0.0 → v1.1.0), focused on Principles VI–IX with emphasis on Artifact Hygiene (VII) and Wire-First Discovery (VIII).
+**Verdict:** READY_WITH_CONDITION
+
+**Key Findings:**
+
+**Q1: Artifact Hygiene (Principle VII) — Does it close the leak vectors?**
+- ✅ JWTs explicitly named, response bodies addressed, rule for necessary captures provided.
+- ❌ **GAP:** No CI enforcement hook. Principle VII relies entirely on code review (honor system). The Sync Impact Report defers CI implementation to TODO(POST-RATIFICATION).
+- **Risk:** If a reviewer misses a real JWT in an example HTTP request, it ships to the repository and is indexed by search engines.
+
+**Q2: Wire-First Discovery (Principle VIII) — Does it mandate traffic capture or allow "I read the docs"?**
+- The principle is a 3-option OR (captured traffic OR upstream docs OR measured test), not a hierarchy.
+- **Pragmatic but permissive:** Wire-first capture is one acceptable approach; developed can justify changes by upstream docs or personal account testing.
+- Acceptable if: The API Contract section in spec template mandates "captured request/response pair" for ANY contract change; then spec authoring enforces wire-first even if constitution permits alternatives.
+
+**Q3: Threshold gap — "STFC API contract" definition tight enough?**
+- ✅ ACCEPTABLE. "New endpoints, changed request/response shapes, auth-flow modifications" is specific enough. Covers high-risk integration work.
+
+**Q4: CI token-scanning automation timing:**
+- **DO NOT defer.** Principle VII + CI gate must ship together, or Principle VII is unenforceable. Ratification without enforcement = zombie rule.
+- **Recommendation (Option A):** Move CI gate from TODO to blocking prerequisite for Phase 3 ratification. Implement before merge.
+
+**OVERALL VERDICT: CONSTITUTION v1.1.0 IS READY FOR PHASE 3 RATIFICATION WITH ONE CONDITION**
+- **Condition:** Artifact Hygiene CI gate (JWT scanning) MUST be implemented and operational before Phase 3 ratification lands. This is not post-ratification; it's a prerequisite.
+
+---
+
+### 2026-05-08T21:29:57-07:00: Bashir — Critique of v1.1 Constitution Proposal
+
+**By:** Bashir (Tester)
+**What:** Critique focused on test-first discipline, pre-checkin gates, and reviewer veto powers.
+**Verdict:** APPROVE_WITH_EDITS (two enforcement gaps)
+
+**Key Findings:**
+
+**Q1: Test-First on Bug Fixes — 🟡 Granted but weak**
+- Principle IX is clear: "Every bug fix MUST include a test that reproduces the bug (fails before the fix, passes after)."
+- **Loophole:** Direct PR exception (Principle VI, lines 179-181) permits "Single-file bug fixes" to bypass speckit. Does this also bypass test-first? Reading strictly, Principle IX applies to ALL bug fixes, but direct PRs create an honor-system gap: reviewers cannot verify that the test actually failed before the fix.
+- **Required tightening:** Add to Principle IX after line 265: "Reviewers MUST verify test failure before the fix by requiring the contributor to document the failure or (preferably) commit history showing the test failing first."
+
+**Q2: Run Tests Before Check-In — 🟡 Granted but toothless**
+- Lines 259-261 are unambiguous: "`npm test` MUST pass locally with zero failures before any commit lands on any branch. No exceptions."
+- **Critical gap:** No enforcement mechanism. No pre-commit hook. No CI required-check. Rule is honor-system only, contradicting the NON-NEGOTIABLE language.
+- **Required tightening:** Add after line 261: "This obligation is enforced by a pre-commit hook (`scripts/pre-commit.sh`) that blocks commits if `npm test` fails. The hook MUST NOT have a bypass flag. CI MUST also require passing tests before merge as a required-check." Or alternatively: "TODO(PRE-RATIFICATION): Implement pre-commit hook to block commits if `npm test` fails."
+
+**Q3: Reviewer Veto Powers — ✅ All four granted as written**
+- All Phase 1 proposals are granted: spec testability veto, task test-tasks veto, implementation coverage veto, bug-fix test-first veto.
+- Language is strong: "may BLOCK" grants explicit veto authority.
+
+**Q4: Picard's Open Question — Checklist Template Format**
+- ✅ Veto powers sufficient for constitution. Checklist should be separate operational artifact in `.specify/templates/`.
+
+**OVERALL VERDICT: 🟡 Solid governance; two enforcement gaps need closing**
+- Top two issues: (1) No pre-commit hook for test rule. (2) Verification gap on test-first for bug fixes.
+- What's strong: Principle IX overall excellent; Speckit Reviewer Gates section is exactly what Phase 1 proposed; Direct PR exception pragmatic.
+
+---
+
+### 2026-05-08T21:29:57-07:00: Borg Queen — Adversarial Verification of v1.1 Constitution Proposal
+
+**By:** Borg Queen
+**What:** Adversarial pre-mortem verification of v1.1 constitution proposal against Phase 1 concerns and new structural issues.
+**Verdict:** PHASE_2_VERIFICATION_COMPLETE
+
+**Concern Verdicts:**
+
+**1. "When Possible" Operational Definition — ✅ DEFUSED**
+- Principle VI replaces "when possible" with Pragmatic threshold (multi-file / cross-skill / new feature / >4hr / build-config / API contract → speckit required; one-liners / typos / bumps / single-file fixes → direct PR).
+- Threshold specific enough; two developers would categorize same PR the same way 95% of time. Escape hatches are narrow and honest.
+
+**2. Overhead vs. Project Shape — ✅ DEFUSED**
+- Direct PR exemptions (single-file bug fixes, version bumps, doc edits) cover ~80% maintenance PR mix.
+- Honest acknowledgment of brownfield project reality in Known Tensions section.
+
+**3. Smoke-Test / Agent Governance Collision — ✅ DEFUSED (with one unstated process dependency)**
+- Known Tensions Section 2 resolves as "Agents implement; humans verify" — sequential gates, not contradictory.
+- Process dependency exists but unstated: WHO performs smoke-test, HOW to document, WHEN, WHERE.
+
+**4. Abandonment Early-Warning — 🟡 PARTIALLY REAL**
+- 3-consecutive-skip retro rule is operational; has named actor (Picard); is externally observable.
+- Annual 50% adoption review is real in intent but not yet metered. Add TODO to track spec adoption monthly.
+
+**NEW Concerns — Defects Introduced by v1.1:**
+
+**5a. Contradiction Between v1.0.0 Principle IV and v1.1 Principle IX — MUST FIX**
+- Principle IV (v1.0.0): "The codebase is small and has no automated test suite."
+- Principle IX (v1.1): "`npm test` MUST pass... No exceptions."
+- **Contradiction:** If no test suite, how can `npm test` be mandatory? 
+- **Fix:** Amend Principle IV's rationale to: "The codebase is small and now maintains an automated test suite per Principle IX. The type system, test suite, and consistent component vocabulary are the primary safety nets."
+
+**5b. Semver Bump (1.0.0 → 1.1.0) — ✅ Correct**
+- MINOR bump justified (backward-compatible additions, four new Core Principles, no removals or redefinitions).
+
+**5c. Unstated Process Dependency: Smoke-Test Operational Runbook — ADD FOLLOW-UP**
+- Constitution assumes manual smoke-test "before merge" but does NOT specify WHO, HOW, WHEN, WHERE.
+- Without operational details, smoke-test gate is a "handshake protocol" with inconsistent reviewer expectations.
+- Recommendation: Add follow-up PR with smoke-test verification checklist.
+
+**5d. Principle VI / VII Interaction: Artifact Hygiene Reviewer — ASSIGN REVIEWER**
+- Principle VII names required code review gate but does NOT assign reviewer.
+- WHO verifies artifact hygiene? (Picard covers scope/architecture; Bashir covers test coverage; Uhura must verify artifact safety.)
+
+**OVERALL VERDICT: READY FOR RATIFICATION WITH CRITICAL AMENDMENTS**
+- Fix Principle IV (v1.0.0 text) to resolve contradiction.
+- Assign artifact hygiene reviewer (recommend: Uhura as primary, with Picard as secondary).
+- Add operational runbook TODOs for smoke-test verification format and monthly adoption tracking.
+- Adoption threshold: Keep 50% as stated.
+
+---
+
+## CONVERGENT FINDING ACROSS TEAM
+
+**Two classes of follow-up work identified:**
+
+1. **Drafting Fixes** (must complete before ratification):
+   - Fix Principle IV text (v1.0.0 → v1.1.0 contradiction).
+   - Assign artifact hygiene reviewer (Uhura).
+   - Clarify `package.json` scripts exemption (Scotty's optional edit).
+   - Tighten test-first verification requirement (Bashir's doc requirement).
+
+2. **Enforcement Infrastructure** (pre-ratification blockers):
+   - Implement CI token-scanner for Artifact Hygiene (Uhura: Option A — blocking prerequisite).
+   - Implement pre-commit hook for test gate OR add TODO with clear pre-ratification commitment (Bashir).
+   - Verify `.specify/features/` directory structure exists (Scotty).
+
+**Operational Runbooks** (post-ratification enhancements):
+   - Smoke-test verification template and format documentation.
+   - Monthly spec adoption tracking.
+   - Checklist template for reviewer gates (separate from constitution).
+
+---
+
+**Decision Registry Last Updated:** 2026-05-08T21:33:38Z

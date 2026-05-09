@@ -45,6 +45,26 @@
 
 ---
 
+### Phase 2 Critique Delivered — v1.1 Constitution Proposal (2026-05-08T21:33:38Z)
+
+**Verdict:** APPROVE_WITH_EDITS
+
+**Four-question critique at** `.squad/orchestration-log/2026-05-08T21-33-38Z-scotty.md`
+
+**Key Findings:**
+1. **Principle VI trigger threshold** — unambiguous; tested against 10 plausible PR types; two developers would categorize 95% the same.
+2. **Principle IX test command** — correct per package.json; CI-backed enforcement strong (pre-commit hook would strengthen further).
+3. **Build/tooling assumptions** — `.specify/features/` directory structure MUST be verified pre-ratification; no new infrastructure required.
+4. **Response to Picard's open question** — KEEP `package.json` scripts rule as written; clarify version-bump exemption in text: "version bumps alone = direct PR; script edits = speckit required."
+
+**Required edits before ratification:**
+- Verify `.specify/features/` directory structure exists; create or add TODO if missing.
+- (Optional) Clarify line 168–169 to remove ambiguity about version bumps.
+
+**No blockers.** Constitution ready to sign after `.specify/` structure verification.
+
+---
+
 ### Cross-Agent Sync: Speckit Briefing Phase 1 Complete (2026-05-08T21:20Z)
 
 **Team briefing delivered:** Picard, Scotty, Uhura, Bashir, Borg Queen all submitted specialized input on speckit adoption implications.
@@ -57,3 +77,47 @@
 - **Borg Queen flagged overhead & governance collision:** "When possible" is vague; adoption will be abandoned in 6 months without decision gates, overhead accounting, annual review lock-in.
 
 **Status:** Phase 1 (Briefing) complete. Phase 2: Picard coordinates constitutional amendment incorporating Uhura's secret hygiene (essential), Bashir's test-first gates (essential), Scotty's trigger threshold + checkpoints, Borg Queen's five prerequisites.
+
+---
+
+### Constitution v1.1 Critique — Phase 2 (2026-05-08T21:29Z)
+
+**Task:** Focused critique from the Core Dev seat. Answer 4 questions on Principle VI (trigger threshold), Principle IX (test rule), build assumptions, and Picard's open question.
+
+**Q1 — Trigger Threshold Practicality:** ✅ APPROVE
+- Tested against 10 PR types (typo, dep bump, retry-logic, new skill, orchestrator refactor, new CLI flag, Actions workflow, README, eslint config, test fixture).
+- Threshold is UNAMBIGUOUS. Multi-file, cross-skill, >4-hour, config, API-contract are concrete. Exemptions are crisp.
+- Single ambiguity: New CLI flags might be multi-module or single-file. **Not a defect** — "when in doubt, use speckit" is the safety valve.
+- **Verdict:** Threshold is pragmatic, calibrated correctly, holds up under day-to-day scrutiny.
+
+**Q2 — Test-Before-Checkin Rule:** ✅ APPROVE
+- Command accuracy: Principle IX quotes `npm test` — matches package.json exactly (line 16).
+- Enforceability: Not purely honor-system. CI runs `npm test` as a required pre-merge gate. Reviewers can demand fresh attestation.
+- Threats mitigated: "no exceptions, no deferrals, no skip clauses" is non-negotiable language with teeth.
+- Enhancement (optional): Pre-commit hook (Husky) would strengthen enforcement from CI-backed to mechanical. Not a blocker.
+- **Verdict:** Rule is correct, command is accurate, enforceable via CI + review. Strong.
+
+**Q3 — Build/Tooling Assumptions:** 🟡 APPROVE WITH EDIT
+- Principle VI implicitly requires `.specify/features/` directory for versioned artifact storage (line 194).
+- **Required pre-ratification check:** Verify `.specify/features/` exists and directory structure is correct. If not, create it or add TODO.
+- No new build infrastructure required. All speckit agents already available. Deferred TODOs (CI token scanner, checklist template) are post-ratification enhancements, not blockers.
+- **Verdict:** One pre-ratification verification needed; otherwise clear.
+
+**Q4 — Picard's Open Question (package.json scripts exception):** ✅ KEEP AS WRITTEN + OPTIONAL CLARIFICATION
+- Picard asked: Should version bumps in `package.json` require speckit, or is that too aggressive?
+- **Answer:** KEEP the rule. A bare version bump (e.g., `tsx` 4.19 → 4.20 in dependencies) does NOT trigger the rule — the trigger says "changes touching...`package.json` scripts," not version numbers.
+- **Where it catches bad behavior:** A version bump PLUS a script refactor in the same PR = speckit required. Good.
+- **Optional clarity edit (line 168–169):** Add "(but not version bumps in `dependencies`/`devDependencies` if only version numbers change)" to remove doubt.
+- **Verdict:** Rule is correct as written. Clarification is optional but recommended.
+
+**OVERALL VERDICT:** **APPROVE_WITH_EDITS**
+- Principle VI (trigger threshold) is well-calibrated and unambiguous.
+- Principle IX (test rule) is correct and enforceable.
+- No new build/tooling debt.
+- Picard's concern is answered: the rule works.
+
+**Required edits before ratification:**
+1. Pre-ratification: Verify `.specify/features/` directory structure exists. Create if missing.
+2. Optional: Clarify line 168–169 re: version bumps.
+
+**Blocking issues:** None. Constitution is ready to sign.
