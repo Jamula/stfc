@@ -47,7 +47,23 @@
 
 ---
 
-### Constitution v1.1 Drafting — Phase 2 Complete (2026-05-08T21:14:47-07:00)
+### 2026-05-08T21:47Z — Phase 3 COMPLETE: Enforcement Infrastructure Operational
+
+**Phase Status:** COMPLETE
+
+**Deliverables:**
+1. **Picard — Constitution v1.1 FINAL:** Fixed IV/IX contradiction, tightened VI exemptions, promoted enforcement infrastructure to ratified policy. Ready for ratification.
+2. **Uhura — Artifact Hygiene Scanner:** JWT/token detector + CI gate. 6 patterns covered. Tested. Operational.
+3. **Scotty — npm test Gate:** Pre-commit hook + CI workflow. All 87 tests pass. Hook verified to abort on test failure.
+4. **Bashir — Test-First Proof Workflow:** PR template + CONTRIBUTING guide + reviewer runbook with SHA verification.
+
+**Ratification Status:** PENDING — awaiting user (cyrusj) approval to merge v1.1 draft to `.specify/memory/constitution.md`.
+
+**Manual Step Outstanding:** After first PR merge, configure GitHub branch protection rule for `npm test (required)` job.
+
+**Outstanding Polish (v1.2 candidate):** Wire Uhura's hygiene scanner into Scotty's pre-commit hook; add `test:hygiene` npm script.
+
+---
 
 ---
 
@@ -104,3 +120,22 @@
 - Synthesizing 5 team briefings requires respecting each viewpoint while making hard calls about what goes in the constitution vs. what stays as operational guidance. Bashir's full 20-item checklist is too granular for the constitution — named it as a follow-up artifact instead.
 - The Borg Queen's pre-mortem was the most structurally important input. Without answering those concerns directly in the document, the proposal would be aspirational rather than credible.
 - Uhura's Artifact Hygiene principle extends Principle I into the development process itself — a gap the v1.0.0 constitution didn't cover. This is the highest-urgency addition.
+
+---
+
+### Constitution v1.1 Finalize — Phase 3 Complete (2026-05-08T21:37:54-07:00)
+
+**What was produced:** Finalized v1.1.0 constitution draft (`.squad/.scratch/constitution-v1.1-proposal.md`) and finalize memo (`.squad/decisions/inbox/picard-v1.1-finalized.md`).
+
+**Changes from Phase 2 draft to final:**
+
+1. **Principle IV/IX contradiction fixed** (Borg Queen hard-fix). Rewrote Principle IV's rationale to acknowledge the test suite exists as of v1.1.0 and frame the type system and test suite as complementary safety nets. The v1.0.0-era "no automated test suite" claim is retired.
+
+2. **Principle VI version-bump exemption tightened** (Scotty critique). Narrowed the exemption to `dependencies`/`devDependencies` field changes only. Added explicit NOTE that `package.json` scripts, build config, and CI workflows are NOT exempt — they meet the trigger threshold.
+
+3. **Enforcement infrastructure promoted from TODO to policy** (Path A — Full Ship). CI token-scanner (Uhura) and npm test CI gate (Scotty/Bashir) are now stated as enforced outcomes. Constitution references `.github/workflows/` without hardcoding specific filenames. Deferred TODOs removed from Impact Report for these items.
+
+4. **Sync Impact Report updated** with finalize pass timestamp, summary of edits, and enforcement infrastructure block.
+
+**Draft status:** READY for infra-gated ratification. Ratification step (overwriting `.specify/memory/constitution.md`) is blocked pending Uhura/Scotty/Bashir completing the CI gates.
+

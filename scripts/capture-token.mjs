@@ -49,13 +49,14 @@ const API_HOST  = "cdn-nv3-webstore-api.startrek.digitgaming.com";
 // ----------------------------------------------------------------------------
 
 function parseArgs(argv) {
-  const out = { name: "main", timeout: 300, debug: false, force: false, help: false, invalid: false };
+  const out = { name: "main", timeout: 300, debug: false, force: false, help: false, invalid: false, ci: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--name" && argv[i + 1]) { out.name = argv[++i]; continue; }
     if (a === "--timeout" && argv[i + 1]) { out.timeout = Number(argv[++i]); continue; }
     if (a === "--debug") { out.debug = true; continue; }
     if (a === "--force") { out.force = true; continue; }
+    if (a === "--ci") { out.ci = true; continue; }
     if (a === "--help" || a === "-h") { out.help = true; continue; }
     console.error(`Unknown arg: ${a}`);
     out.invalid = true;
@@ -73,7 +74,7 @@ function parseArgs(argv) {
 
 function printUsage() {
   console.log(`
-Usage: npm run capture-token -- [--name <accountName>] [--timeout <seconds>] [--debug] [--force]
+Usage: npm run capture-token -- [--name <accountName>] [--timeout <seconds>] [--debug] [--force] [--ci]
 
   --name      Name to record this account under in STFC_ACCOUNTS. Default: "main".
               Re-run with a different name to add additional accounts.
@@ -82,6 +83,16 @@ Usage: npm run capture-token -- [--name <accountName>] [--timeout <seconds>] [--
               sessionStorage / cookie diagnostics. Never includes raw values.
   --force     Allow overwriting an existing STFC_ACCOUNTS entry that fails to
               parse as JSON. Default: refuse and exit non-zero.
+  --ci        Headless, non-interactive mode for GitHub Actions. Outputs the
+              captured JWT as JSON {"name":"<name>","token":"<jwt>"} to stdout
+              (everything else goes to stderr). Skips .env writes and gh
+              prompts. Requires STFC_EMAIL + STFC_PASSWORD env vars.
+
+Environment variables:
+  STFC_EMAIL     If set together with STFC_PASSWORD, the script auto-fills
+                 the Scopely Okta login form (no manual login required).
+  STFC_PASSWORD  See above. NEVER pass on the command line — always via env
+                 or a .env file. Required when --ci is set.
 `);
 }
 
@@ -360,6 +371,83 @@ async function confirm(prompt, def = false) {
 }
 
 // ----------------------------------------------------------------------------
+// Auto-login (Scopely Okta). When STFC_EMAIL + STFC_PASSWORD are set the
+// script fills the form for you. The selectors are deliberately generic
+// (input[type=email], input[type=password]) with class fallbacks that match
+// the current Okta-hosted form. If those break, the script logs which
+// selectors were tried so the next maintainer knows what to update.
+// ----------------------------------------------------------------------------
+
+async function tryAutoLogin(page, { email, password, log }) {
+  const EMAIL_SELECTORS = [
+    'input[type="email"]',
+    'input[name="username"]',
+    'input[name="email"]',
+    'input.ant-input',
+  ];
+  const PASSWORD_SELECTORS = [
+    'input[type="password"]',
+    'input[name="password"]',
+  ];
+  const SUBMIT_SELECTORS = [
+    'button[type="submit"]',
+    'button.submitButtonEnabled',
+    'button.primary',
+    'button:has-text("Continue")',
+    'button:has-text("Sign in")',
+    'button:has-text("Log in")',
+  ];
+
+  log("auto-login: waiting for the login form to appear…");
+  const emailField = await waitForFirstSelector(page, EMAIL_SELECTORS, 60_000);
+  if (!emailField) {
+    log("auto-login: no email field appeared within 60s — falling back to interactive login.");
+    return false;
+  }
+
+  log("auto-login: filling email");
+  await emailField.fill(email);
+  await clickFirstAvailable(page, SUBMIT_SELECTORS);
+
+  log("auto-login: waiting for password field…");
+  const passwordField = await waitForFirstSelector(page, PASSWORD_SELECTORS, 30_000);
+  if (!passwordField) {
+    log("auto-login: no password field appeared within 30s. Possible MFA / captcha challenge — falling back to interactive login.");
+    return false;
+  }
+
+  log("auto-login: filling password");
+  await passwordField.fill(password);
+  await clickFirstAvailable(page, SUBMIT_SELECTORS);
+
+  log("auto-login: submitted credentials. Network listeners will catch the resulting JWT.");
+  return true;
+}
+
+async function waitForFirstSelector(page, selectors, timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    for (const sel of selectors) {
+      const el = await page.$(sel).catch(() => null);
+      if (el && (await el.isVisible().catch(() => false))) return el;
+    }
+    await page.waitForTimeout(500);
+  }
+  return null;
+}
+
+async function clickFirstAvailable(page, selectors) {
+  for (const sel of selectors) {
+    const el = await page.$(sel).catch(() => null);
+    if (el && (await el.isVisible().catch(() => false)) && (await el.isEnabled().catch(() => false))) {
+      await el.click().catch(() => {});
+      return true;
+    }
+  }
+  return false;
+}
+
+// ----------------------------------------------------------------------------
 // Main.
 // ----------------------------------------------------------------------------
 
@@ -367,47 +455,79 @@ async function main() {
   const args = parseArgs(process.argv.slice(2));
   if (args.help || args.invalid) { printUsage(); process.exit(args.invalid ? 2 : 0); }
 
-  console.log(`\nSTFC Gift Redeemer — JWT capture`);
-  console.log(`────────────────────────────────`);
-  console.log(`  account name : ${args.name}`);
-  console.log(`  timeout      : ${args.timeout}s`);
-  console.log(`  store URL    : ${STORE_URL}`);
-  console.log("");
+  // In CI mode, redirect everything diagnostic to stderr so stdout is reserved
+  // for the captured-token JSON the workflow consumes.
+  const log = args.ci ? (...a) => console.error(...a) : (...a) => console.log(...a);
+  const err = (...a) => console.error(...a);
+
+  const email = process.env.STFC_EMAIL?.trim() || "";
+  const password = process.env.STFC_PASSWORD || "";
+  const wantAutoLogin = email.length > 0 && password.length > 0;
+
+  if (args.ci && !wantAutoLogin) {
+    err(`--ci requires STFC_EMAIL and STFC_PASSWORD env vars.`);
+    process.exit(2);
+  }
+
+  log(`\nSTFC Gift Redeemer — JWT capture`);
+  log(`────────────────────────────────`);
+  log(`  account name : ${args.name}`);
+  log(`  timeout      : ${args.timeout}s`);
+  log(`  store URL    : ${STORE_URL}`);
+  log(`  auto-login   : ${wantAutoLogin ? `yes (${email})` : "no (interactive)"}`);
+  log(`  mode         : ${args.ci ? "CI (headless)" : "interactive (visible browser)"}`);
+  log("");
 
   let browser;
   try {
-    browser = await chromium.launch({ headless: false });
-  } catch (err) {
-    console.error(`\nFailed to launch Chromium: ${err instanceof Error ? err.message : err}`);
-    console.error(`\nIf this is the first run, install the browser binary:`);
-    console.error(`  npm run playwright:install\n`);
+    browser = await chromium.launch({ headless: args.ci });
+  } catch (e) {
+    err(`\nFailed to launch Chromium: ${e instanceof Error ? e.message : e}`);
+    err(`\nIf this is the first run, install the browser binary:`);
+    err(`  npm run playwright:install\n`);
     process.exit(1);
   }
 
   const context = await browser.newContext();
   const page = await context.newPage();
 
-  console.log(`Watching network traffic for /auth/login response or Bearer header…`);
-  console.log(`Log in normally in the browser window. The browser will close automatically once a token is captured.\n`);
+  log(`Watching network traffic for /auth/login response or Bearer header…`);
+  if (!wantAutoLogin) {
+    log(`Log in normally in the browser window. The browser will close automatically once a token is captured.\n`);
+  }
 
   const capturePromise = captureToken({ context, timeoutMs: args.timeout * 1000 });
   await page.goto(STORE_URL, { waitUntil: "domcontentloaded" }).catch(() => {});
 
+  if (wantAutoLogin) {
+    // Run auto-login in parallel with the network capture; if it succeeds the
+    // /auth/login response handler picks up the JWT. If auto-login fails (e.g.
+    // CAPTCHA) the user can still complete login manually in the visible
+    // browser when not in --ci mode.
+    tryAutoLogin(page, { email, password, log }).catch((e) => {
+      err(`auto-login failed: ${e instanceof Error ? e.message : e}`);
+    });
+  }
+
   const { token, source } = await capturePromise;
 
   if (!token) {
-    console.error(`\nTimed out after ${args.timeout}s without capturing a token.`);
-    console.error(`Possible causes:`);
-    console.error(`  - You closed the browser before logging in.`);
-    console.error(`  - The login flow used a route we don't know about.`);
-    console.error(`  - Network requests are happening but with a different host.`);
+    err(`\nTimed out after ${args.timeout}s without capturing a token.`);
+    if (args.ci) {
+      err(`In CI mode this usually means: bad credentials, MFA challenge, or CAPTCHA.`);
+    } else {
+      err(`Possible causes:`);
+      err(`  - You closed the browser before logging in.`);
+      err(`  - The login flow used a route we don't know about.`);
+      err(`  - Network requests are happening but with a different host.`);
+    }
 
-    if (args.debug || (await confirm("Write redacted storage/cookie diagnostics?"))) {
+    if (args.debug || (!args.ci && (await confirm("Write redacted storage/cookie diagnostics?")))) {
       try {
         const file = await dumpDiagnostics(context, page);
-        console.error(`Diagnostics written to ${file}`);
-      } catch (err) {
-        console.error(`Failed to write diagnostics: ${err instanceof Error ? err.message : err}`);
+        err(`Diagnostics written to ${file}`);
+      } catch (e) {
+        err(`Failed to write diagnostics: ${e instanceof Error ? e.message : e}`);
       }
     }
 
@@ -415,31 +535,39 @@ async function main() {
     process.exit(1);
   }
 
-  console.log(`\nCaptured a candidate token via: ${source}`);
+  log(`\nCaptured a candidate token via: ${source}`);
 
-  console.log(`Validating against ${API_BASE}/auth/me…`);
+  log(`Validating against ${API_BASE}/auth/me…`);
   const v = await validateToken(token);
   if (!v.ok) {
-    console.error(`Validation failed: HTTP ${v.status}${v.error ? ` (${v.error})` : ""}`);
+    err(`Validation failed: HTTP ${v.status}${v.error ? ` (${v.error})` : ""}`);
     await browser.close();
     process.exit(1);
   }
-  console.log(`Validation OK (HTTP 200).`);
+  log(`Validation OK (HTTP 200).`);
 
   const payload = decodeJwt(token);
-  console.log(`Token expiry: ${describeExpiry(payload)}`);
+  log(`Token expiry: ${describeExpiry(payload)}`);
+
+  if (args.ci) {
+    // The workflow consumes a single line of JSON: {"name":"<n>","token":"<t>"}.
+    // Everything else has gone to stderr.
+    process.stdout.write(JSON.stringify({ name: args.name, token }) + "\n");
+    await browser.close();
+    return;
+  }
 
   let merged;
   try {
     merged = await mergeIntoEnv({ name: args.name, token, force: args.force });
-  } catch (err) {
-    console.error(`\nFailed to update ${ENV_PATH}:`);
-    console.error(err instanceof Error ? err.message : String(err));
+  } catch (e) {
+    err(`\nFailed to update ${ENV_PATH}:`);
+    err(e instanceof Error ? e.message : String(e));
     await browser.close();
     process.exit(1);
   }
 
-  console.log(`\nUpdated ${ENV_PATH}: STFC_ACCOUNTS now contains ${merged.length} account(s) [${merged.map((a) => a.name).join(", ")}].`);
+  log(`\nUpdated ${ENV_PATH}: STFC_ACCOUNTS now contains ${merged.length} account(s) [${merged.map((a) => a.name).join(", ")}].`);
 
   const ghOk = await ghAvailable();
   if (ghOk) {

@@ -91,6 +91,59 @@ one to your clipboard.
 > extractable JWT string, which isn't always the case. If you see "No
 > valid token found in storage", switch to `capture-token`.
 
+## Optional: fully automated token refresh in CI
+
+The store JWT lives ~30 days. If you'd rather never re-capture by hand,
+the **`Refresh token` workflow** (`.github/workflows/refresh-token.yml`) can
+run weekly in GitHub Actions, log in for you with Playwright, and update
+the `STFC_ACCOUNTS` secret automatically.
+
+This is opt-in — it requires three additional secrets:
+
+| Secret               | What it is                                                                                       |
+|----------------------|---------------------------------------------------------------------------------------------------|
+| `STFC_EMAIL`         | The email address you log in to the Scopely store with.                                           |
+| `STFC_PASSWORD`      | Your Scopely password. (The workflow also accepts the legacy name `cj_pwd` if you've already set that.) |
+| `STFC_REFRESH_PAT`   | A **fine-grained PAT** with `Secrets: Read & write` permission for this repo. The default `GITHUB_TOKEN` cannot write secrets, hence the PAT requirement. |
+
+### Creating the PAT
+
+1. <https://github.com/settings/personal-access-tokens/new>
+2. **Resource owner**: `Jamula` (or whoever owns the fork).
+3. **Repository access**: *Only select repositories* → pick `stfc-gift-redeemer`.
+4. **Permissions** → **Repository permissions**:
+   - **Actions: Read** (default — keep it)
+   - **Secrets: Read and write** (set this; default is none)
+5. **Generate token** and copy the value.
+6. Go to your repo → *Settings → Secrets and variables → Actions* and add
+   it as **`STFC_REFRESH_PAT`**.
+
+### How it runs
+
+- **Weekly**: cron `0 4 * * 0` (Sunday 04:00 UTC).
+- **On demand**: the **Run workflow** button on the Actions tab. You can
+  pass a different `account_name` input if you have multiple accounts.
+
+The workflow is `concurrency`-grouped with the redeem workflow, so the two
+never race each other on writes.
+
+### When auto-refresh fails
+
+The most common failure is **Scopely serving a CAPTCHA or MFA challenge to
+the headless browser**. The workflow's job summary will say so explicitly
+and you can fall back to running `npm run capture-token` locally — that
+uses a visible browser and you can solve any challenge interactively.
+
+### A note on credential safety
+
+- The workflow masks the captured JWT (and any existing tokens in
+  `STFC_ACCOUNTS`) so they don't appear in the live log even if a step
+  prints them by accident.
+- The new value is piped into `gh secret set --body-file -` via stdin —
+  it never lands on a command line.
+- The PAT lives only in GitHub's encrypted secret store; the workflow
+  reads it as `${{ secrets.STFC_REFRESH_PAT }}`.
+
 ## Troubleshooting
 
 ### `npm run capture-token` says "Failed to launch Chromium"
@@ -118,11 +171,17 @@ this error, you most likely pasted the wrong value into the secret. Re-run
 JWT the API accepts.
 
 ### `TOKEN_EXPIRED` outcome on a workflow run
-Your stored JWT's `exp` claim is in the past. Re-run
-`npm run capture-token -- --name <accountName>` for the affected account.
-The script preserves your other accounts and only touches the named one.
-Then update the GitHub secret (the script does this for you if `gh` is
-available).
+Your stored JWT's `exp` claim is in the past. Either:
+- Trigger the **Refresh token** workflow manually (if you've set up the
+  three secrets above), or
+- Re-run `npm run capture-token -- --name <accountName>` locally for the
+  affected account. The script preserves your other accounts and only
+  touches the named one. Then update the GitHub secret (the script does
+  this for you if `gh` is available).
+
+### `Refresh token` workflow says "Scopely served a CAPTCHA"
+Headless-browser bot detection. Run `npm run capture-token` locally with
+the visible browser and solve the challenge there.
 
 ### Workflow doesn't run on schedule
 GitHub Actions disables scheduled workflows on forks after **60 days of

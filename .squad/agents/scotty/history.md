@@ -3,6 +3,43 @@
 - **Owner:** cyrusj
 - **Project:** stfc-gift-redeemer — a headless TypeScript CLI that automatically redeems web-store gifts and promo codes from the Star Trek Fleet Command store. Runs on a GitHub Actions cron schedule (every 4 hours).
 - **Stack:** TypeScript, Node.js, GitHub Actions
+
+## Learnings
+
+### Phase 3 — Principle IX Enforcement Gate Built (2026-05-08T21:29:58-07:00)
+
+**Task:** Build two-layer `npm test` enforcement gate for Principle IX (Path A).
+
+**Layer 1 — Local pre-commit hook:**
+- Chose `simple-git-hooks` (1 devDep, no postinstall surprises, cross-platform via Git Bash on Windows).
+- Hook command: `node scripts/pre-commit.mjs` — a Node.js wrapper (no shell required, runs on any OS with Node).
+- `scripts/pre-commit.mjs` runs `npm test`; exits non-zero on failure → commit aborted.
+- TODO left in wrapper for Uhura's `check-artifact-hygiene.*` (runs before `npm test` once landed).
+- Emergency bypass documented in wrapper: `git commit --no-verify`.
+- `"prepare": "simple-git-hooks"` added to package.json scripts — hooks auto-register on `npm install`.
+
+**Layer 2 — CI required check:**
+- Added `.github/workflows/squad-test-gate.yml` — triggers on all PRs, runs `npm ci` + `npm test`.
+- Job name `npm test (required)` — this is the string cyrusj must enter in GitHub branch protection rules.
+
+**End-to-end verification:**
+- 87/87 tests pass pre-hook install.
+- `node scripts/pre-commit.mjs` → exits 0, all 87 pass.
+- Deliberately broken test → hook exits 1, commit aborted. ✅
+- Reverted break → 87/87 pass again. ✅
+
+**Files created/modified:**
+- `package.json` — added `prepare` script, `simple-git-hooks` config, `simple-git-hooks` devDep
+- `scripts/pre-commit.mjs` — hook runner with Uhura TODO
+- `.github/workflows/squad-test-gate.yml` — PR required check workflow
+- `.squad/decisions/inbox/scotty-test-gate-built.md` — build summary for team
+
+**Manual step required from cyrusj:**
+GitHub branch protection rules cannot be set programmatically. After merging, go to:
+GitHub → repo Settings → Branches → Add branch protection rule → "main" → ☑ Require status checks → search for `npm test (required)` → Save.
+
+---
+
 - **Created:** 2026-05-08
 
 ## Learnings
@@ -121,3 +158,21 @@
 2. Optional: Clarify line 168–169 re: version bumps.
 
 **Blocking issues:** None. Constitution is ready to sign.
+
+---
+
+### 2026-05-08T21:47Z — Phase 3 COMPLETE: All Enforcement Infrastructure Operational
+
+**Team Status Report:**
+
+Phase 3 enforcement infrastructure is complete across all four pillars:
+1. ✅ **Picard:** v1.1 Constitution finalized and ready for ratification
+2. ✅ **Uhura:** Artifact Hygiene Scanner deployed and tested
+3. ✅ **Scotty:** npm test enforcement gates (pre-commit + CI) wired and verified
+4. ✅ **Bashir:** Test-first proof workflow (PR template + runbook) deployed
+
+**Ratification Status:** PENDING user approval. No blockers. Infrastructure is live.
+
+**Outstanding Manual Step:** cyrusj must configure GitHub branch protection rule for `npm test (required)` after first PR merge.
+
+**v1.2 Polish Item:** Wire hygiene scanner into pre-commit hook; add `test:hygiene` npm script.

@@ -75,3 +75,38 @@
 Constitution v1.1.0 is well-drafted and addresses Phase 1 concerns. Ratification may proceed when CI artifact-hygiene enforcement (JWT scanning) is operational. This is not a post-ratification TODO; it's a prerequisite.
 
 **Next phase:** Await Picard's decision on CI gate timing. If gate is pre-ratification, proceed to Phase 3. If deferred, flag as high-risk but proceed pending community consensus.
+
+---
+
+### 2026-05-08T21:29:58-07:00: Phase 3 — Artifact Hygiene Scanner Built (Principle VII)
+
+**Path A condition fulfilled.** The CI token-scanner I required as a ratification prerequisite is now operational.
+
+**Files created:**
+- `scripts/check-artifact-hygiene.mjs` — Cross-platform Node.js scanner. Six patterns: JWT, BEARER_TOKEN, GITHUB_TOKEN, AWS_ACCESS_KEY, API_KEY, STFC_ACCOUNT_DATA. Exit 0 = clean, exit 1 = violations. Secrets never logged; all output redacted to `<REDACTED-TOKEN>`.
+- `.github/workflows/squad-artifact-hygiene.yml` — CI gate on `pull_request` for spec/plan/task/doc paths. Posts PR comment with remediation guidance on failure. `[skip-token-scan]` override for false positives.
+- `tests/fixtures/artifact-hygiene/clean-spec.md` — PASS fixture (exit 0 verified).
+- `tests/fixtures/artifact-hygiene/contaminated-spec.md` — FAIL fixture with 6 obviously-fake pattern triggers (exit 1 verified, 8 violations detected).
+- `.squad/decisions/inbox/uhura-hygiene-test-integration.md` — Scotty coordination: recommend `test:hygiene` script in `package.json`.
+
+**Test results:** Clean fixture exits 0; contaminated exits 1 with 8 violations; default scan of 48 tracked files exits 0 (test fixtures correctly excluded from auto-scan).
+
+**Principle VII status:** Operational. Not honor-system. Ratification condition met.
+
+---
+
+### 2026-05-08T21:47Z — Phase 3 COMPLETE: All Enforcement Infrastructure Operational
+
+**Team Status Report:**
+
+Phase 3 enforcement infrastructure is complete across all four pillars:
+1. ✅ **Picard:** v1.1 Constitution finalized and ready for ratification
+2. ✅ **Uhura:** Artifact Hygiene Scanner deployed and tested
+3. ✅ **Scotty:** npm test enforcement gates (pre-commit + CI) wired and verified
+4. ✅ **Bashir:** Test-first proof workflow (PR template + runbook) deployed
+
+**Ratification Status:** PENDING user approval. No blockers. Infrastructure is live.
+
+**Outstanding Manual Step:** cyrusj must configure GitHub branch protection rule for `npm test (required)` after first PR merge.
+
+**v1.2 Polish Item:** Wire hygiene scanner into pre-commit hook; add `test:hygiene` npm script.

@@ -1,0 +1,30 @@
+name: Squad Test Gate
+# Dedicated PR required check — enforces npm test on every pull request.
+# After adding this workflow, cyrusj must manually enable it as a required
+# status check in GitHub → Settings → Branches → Branch protection rules.
+# Check name to require: "npm test (required)"
+# See: .squad/decisions/inbox/scotty-test-gate-built.md
+
+on:
+  pull_request:
+    branches: ["**"]
+
+permissions:
+  contents: read
+
+jobs:
+  test-gate:
+    name: npm test (required)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.0
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4.4.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm test

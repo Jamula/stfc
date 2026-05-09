@@ -95,3 +95,46 @@
 
 #### Recommendation for Picard:
 Ratification should be conditioned on (a) commitment to pre-commit hook for `npm test` blocking, (b) one-sentence addition to Principle IX about verifying test failure via PR description documentation.
+
+---
+
+### 2026-05-08T21:29:58-07:00: Phase 3 (Path A) — Test-first proof workflow built
+
+**What:** Closed the Principle IX honor-system gap identified in Phase 2 critique. Three files created:
+
+1. **`.github/pull_request_template.md`** — New PR template with five required sections:
+   - *Type of change* (checkboxes; at least one must be ticked)
+   - *Test-first evidence* (conditional; required when "Bug fix" is ticked — asks for failing-test commit SHA, test name + path, failure stdout, and passing stdout after fix)
+   - *Spec linkage* (required for non-trivial changes per Principle VI threshold, or explicit exempt justification)
+   - *Tests run* (checkbox confirming `npm test` passed locally)
+   - *Constitution check* (checkbox + space for documented tensions)
+   - *Manual smoke-test* (required for automation-logic changes)
+
+2. **`CONTRIBUTING.md`** — Repo root contributor guide with three sections:
+   - *Test-first discipline for bug fixes* — full concrete example (failing commit → fix commit → PR description), explicit statement that PRs without evidence get `request-changes` from Bashir
+   - *Speckit usage* — decision tree keyed to Principle VI's Pragmatic threshold (when required vs. when direct PR is allowed)
+   - *Review gates* — all four Tester veto powers named explicitly: (a) spec testability, (b) task-level test requirements, (c) implementation coverage mapping, (d) bug-fix test-first
+
+3. **`.specify/memory/reviewer-runbook.md`** — Step-by-step reviewer checklist (9 steps) covering: type-of-change read, bug-fix SHA verification procedure, spec linkage check, artifact-hygiene scan (Uhura's domain), tests-run checkbox, constitution check, CI gate, smoke-test gate, and a decision table. Closes the gap by giving reviewers a concrete procedure — not just a principle.
+
+**Why:** The Phase 2 critique identified that "the PR description MUST cite the test" is unenforceable without a template that forces the author to supply specific evidence. Reviewer honor alone cannot verify test-first. The SHA verification step in the runbook makes the check mechanical: `git checkout <sha> && npm test` either shows the test failing or it doesn't.
+
+**Coordination note:** Left `.squad/decisions/inbox/bashir-test-first-proof-built.md` for Scotty (pre-commit hook) and Uhura (artifact scanner) per their domains.
+
+---
+
+### 2026-05-08T21:47Z — Phase 3 COMPLETE: All Enforcement Infrastructure Operational
+
+**Team Status Report:**
+
+Phase 3 enforcement infrastructure is complete across all four pillars:
+1. ✅ **Picard:** v1.1 Constitution finalized and ready for ratification
+2. ✅ **Uhura:** Artifact Hygiene Scanner deployed and tested
+3. ✅ **Scotty:** npm test enforcement gates (pre-commit + CI) wired and verified
+4. ✅ **Bashir:** Test-first proof workflow (PR template + runbook) deployed
+
+**Ratification Status:** PENDING user approval. No blockers. Infrastructure is live.
+
+**Outstanding Manual Step:** cyrusj must configure GitHub branch protection rule for `npm test (required)` after first PR merge.
+
+**v1.2 Polish Item:** Wire hygiene scanner into pre-commit hook; add `test:hygiene` npm script.

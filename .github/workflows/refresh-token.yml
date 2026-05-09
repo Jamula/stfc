@@ -1,0 +1,146 @@
+# Auto-refresh the STFC store JWT.
+#
+# Logs in to the Scopely store via Playwright using STFC_EMAIL +
+# STFC_PASSWORD secrets, captures the resulting JWT, and updates the
+# STFC_ACCOUNTS repo secret (preserving any other accounts).
+#
+# Required secrets:
+#   STFC_EMAIL          your Scopely login email
+#   STFC_PASSWORD       your Scopely password (mapped from your `cj_pwd`
+#                       secret in the Refresh step below if you prefer to
+#                       keep the existing name)
+#   STFC_REFRESH_PAT    fine-grained PAT with "Secrets: Read & write"
+#                       permission for THIS repo. Default GITHUB_TOKEN
+#                       cannot write secrets, hence the PAT requirement.
+#
+# Optional inputs (workflow_dispatch only):
+#   account_name        which account in STFC_ACCOUNTS to refresh (default
+#                       "main"). Set this if you have multiple accounts and
+#                       want to refresh just one.
+name: Refresh token
+
+on:
+  schedule:
+    - cron: "0 4 * * 0"   # Sunday 04:00 UTC, well before any 30-day expiry
+  workflow_dispatch:
+    inputs:
+      account_name:
+        description: "Account name in STFC_ACCOUNTS to refresh"
+        type: string
+        required: false
+        default: "main"
+
+permissions:
+  contents: read
+
+# Don't race with the redeem workflow (both touch STFC_ACCOUNTS).
+concurrency:
+  group: stfc-gift-redeemer
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.0
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4.4.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright + Chromium with system deps
+        run: npx playwright install --with-deps chromium
+
+      - name: Capture fresh JWT
+        id: capture
+        env:
+          STFC_EMAIL: ${{ secrets.STFC_EMAIL }}
+          STFC_PASSWORD: ${{ secrets.STFC_PASSWORD || secrets.cj_pwd }}
+        run: |
+          set -euo pipefail
+          if [ -z "${STFC_EMAIL:-}" ] || [ -z "${STFC_PASSWORD:-}" ]; then
+            echo "::error::STFC_EMAIL and STFC_PASSWORD (or cj_pwd) secrets must be set."
+            exit 1
+          fi
+          NAME="${{ inputs.account_name || 'main' }}"
+          # Capture into a file so we don't echo the JWT into the live log.
+          # Stdout from --ci is exactly one line of JSON; stderr is diagnostic.
+          npm --silent run capture-token -- --ci --name "$NAME" --timeout 180 \
+            > /tmp/captured.json
+          # Sanity check (without revealing the value)
+          if ! jq -e '.token | length > 0' /tmp/captured.json > /dev/null; then
+            echo "::error::capture-token produced no token."
+            exit 1
+          fi
+          # Mask the token value in any subsequent log output.
+          TOKEN=$(jq -r '.token' /tmp/captured.json)
+          echo "::add-mask::$TOKEN"
+          echo "captured=true" >> "$GITHUB_OUTPUT"
+
+      - name: Merge with existing STFC_ACCOUNTS and update secret
+        env:
+          GH_TOKEN: ${{ secrets.STFC_REFRESH_PAT }}
+          EXISTING: ${{ secrets.STFC_ACCOUNTS }}
+        run: |
+          set -euo pipefail
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "::error::STFC_REFRESH_PAT secret is missing. Create a fine-grained PAT scoped to this repo with 'Secrets: Read & write' permission, store it as STFC_REFRESH_PAT, and re-run."
+            exit 1
+          fi
+          NEW_NAME=$(jq -r '.name' /tmp/captured.json)
+          NEW_TOKEN=$(jq -r '.token' /tmp/captured.json)
+          # Mask the new token value too (belt + braces; capture step also did this).
+          echo "::add-mask::$NEW_TOKEN"
+
+          # Build the merged JSON. If STFC_ACCOUNTS is unset/empty/invalid,
+          # start from an empty array. Otherwise replace the matching name or
+          # append a new entry.
+          if [ -z "${EXISTING:-}" ]; then
+            BASE='[]'
+          else
+            # Mask existing tokens too so they don't leak via diffs in case of error.
+            for tok in $(echo "$EXISTING" | jq -r '.[].token // empty' 2>/dev/null || true); do
+              echo "::add-mask::$tok"
+            done
+            BASE=$(echo "$EXISTING" | jq -c . 2>/dev/null || echo '[]')
+          fi
+
+          MERGED=$(jq -c --arg n "$NEW_NAME" --arg t "$NEW_TOKEN" '
+            (map(select(.name != $n))) + [{name: $n, token: $t}]
+          ' <<< "$BASE")
+
+          # Push via gh (uses GH_TOKEN env var). --body-file - reads from stdin
+          # so the secret never lands on the command line.
+          printf '%s' "$MERGED" | gh secret set STFC_ACCOUNTS \
+            --repo "$GITHUB_REPOSITORY" \
+            --body-file -
+
+          # Cleanup the temp file with the JWT in it.
+          rm -f /tmp/captured.json
+
+          echo "✅ STFC_ACCOUNTS updated. Account refreshed: $NEW_NAME"
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "## Refresh token"
+            if [ "${{ steps.capture.outputs.captured }}" = "true" ]; then
+              echo ""
+              echo "✅ Captured a fresh JWT and updated the STFC_ACCOUNTS secret."
+              echo "Account: \`${{ inputs.account_name || 'main' }}\`"
+            else
+              echo ""
+              echo "❌ Refresh failed. Common causes:"
+              echo "- STFC_EMAIL / STFC_PASSWORD secret missing or wrong"
+              echo "- STFC_REFRESH_PAT secret missing or lacking secrets:write"
+              echo "- Scopely served a CAPTCHA / MFA challenge to the headless browser"
+              echo ""
+              echo "Fall back to running \`npm run capture-token\` locally."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

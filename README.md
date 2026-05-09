@@ -32,6 +32,11 @@ promotional codes are claimed without you ever opening the store in a browser.
    on the cron schedule (every 4 hours) from then on. You can also trigger
    it manually with the **Run workflow** button to verify everything works.
 
+> **Optional:** if you'd rather never re-capture your JWT by hand when it
+> expires (~30 days), set up the **`Refresh token` workflow** that logs in
+> for you in CI. See [docs/SETUP.md](docs/SETUP.md#optional-fully-automated-token-refresh-in-ci)
+> for the (small) extra setup.
+
 ---
 
 ## How it works
@@ -49,10 +54,14 @@ For each account it performs roughly:
 - `POST /offers/gifts/claim`  — claim each pending gift.
 - `POST /redeem/claim`        — submit each promo code from `promo-codes.txt`.
 
-The JWT used as the `Authorization: Bearer …` header is taken from your normal
-browser session and stored encrypted in a GitHub Actions secret. Nothing is
-ever written back to the store, and no credentials (email/password) are
-required by this tool.
+The JWT used as the `Authorization: Bearer …` header is taken from your
+normal browser session (via the `npm run capture-token` Playwright helper)
+and stored encrypted in a GitHub Actions secret named `STFC_ACCOUNTS`.
+
+Optionally, you can also store your Scopely email + password as repo
+secrets and let the **`Refresh token` workflow** log in for you weekly so
+the JWT never goes stale — see
+[docs/SETUP.md](docs/SETUP.md#optional-fully-automated-token-refresh-in-ci).
 
 ---
 
