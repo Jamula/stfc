@@ -379,46 +379,81 @@ async function confirm(prompt, def = false) {
 // ----------------------------------------------------------------------------
 
 async function tryAutoLogin(page, { email, password, log }) {
-  const EMAIL_SELECTORS = [
-    'input[type="email"]',
-    'input[name="username"]',
-    'input[name="email"]',
-    'input.ant-input',
-  ];
-  const PASSWORD_SELECTORS = [
-    'input[type="password"]',
-    'input[name="password"]',
-  ];
-  const SUBMIT_SELECTORS = [
-    'button[type="submit"]',
-    'button.submitButtonEnabled',
-    'button.primary',
-    'button:has-text("Continue")',
-    'button:has-text("Sign in")',
-    'button:has-text("Log in")',
-  ];
+  // Stage A: dismiss the OneTrust cookie banner if present (it intercepts
+  // clicks on the page-level Sign-in button).
+  log("auto-login: dismissing cookie banner if present");
+  for (const sel of ["#onetrust-accept-btn-handler", "#onetrust-reject-all-handler"]) {
+    const el = await page.$(sel).catch(() => null);
+    if (el && (await el.isVisible().catch(() => false))) {
+      await el.click().catch(() => {});
+      await page.waitForTimeout(1000);
+      break;
+    }
+  }
 
-  log("auto-login: waiting for the login form to appear…");
-  const emailField = await waitForFirstSelector(page, EMAIL_SELECTORS, 60_000);
+  // Stage B: click "Sign in with Scopely" inside the modal (the page-level
+  // duplicate is hidden behind the modal). `.last()` reliably picks the
+  // visible one.
+  log("auto-login: clicking Sign in with Scopely (modal)");
+  try {
+    const btn = page.locator("#log-in-button").last();
+    await btn.waitFor({ state: "visible", timeout: 30_000 });
+    await btn.click({ timeout: 10_000 });
+  } catch (e) {
+    log(`auto-login: could not click Sign in with Scopely (${e.message?.slice(0, 100)}); falling back to interactive login.`);
+    return false;
+  }
+
+  // Stage C: wait for the Scopely Okta email form, fill, click Continue.
+  log("auto-login: waiting for Scopely email form…");
+  const emailField = await waitForFirstSelector(page, [
+    'input[name="email"]',
+    'input[type="email"]',
+    'input.ant-input',
+  ], 60_000);
   if (!emailField) {
     log("auto-login: no email field appeared within 60s — falling back to interactive login.");
     return false;
   }
-
-  log("auto-login: filling email");
+  log("auto-login: filling email and clicking Continue");
   await emailField.fill(email);
-  await clickFirstAvailable(page, SUBMIT_SELECTORS);
+  await clickFirstAvailable(page, [
+    'button:has-text("Continue")',
+    'button[type="submit"]',
+    'button.ant-btn-primary',
+  ]);
 
-  log("auto-login: waiting for password field…");
-  const passwordField = await waitForFirstSelector(page, PASSWORD_SELECTORS, 30_000);
-  if (!passwordField) {
-    log("auto-login: no password field appeared within 30s. Possible MFA / captcha challenge — falling back to interactive login.");
+  // Stage D: by default Scopely sends a magic-link / OTP. Click "Sign in
+  // with password instead" to switch to password flow. If the link doesn't
+  // appear, we may already be on the password page (or the account is
+  // configured for OTP-only).
+  log("auto-login: switching to password flow");
+  const switched = await clickWithRetry(page,
+    'a:has-text("Sign in with password instead"), a.switchAuthenticator, a:has-text("password instead"), button:has-text("Sign in with password instead")',
+    8_000,
+  );
+  if (!switched) {
+    log("auto-login: 'Sign in with password instead' not found within 8s. Account may be OTP-only — falling back to interactive login.");
     return false;
   }
 
-  log("auto-login: filling password");
+  // Stage E: wait for password field, fill, click Sign in.
+  log("auto-login: waiting for password field…");
+  const passwordField = await waitForFirstSelector(page, [
+    'input[type="password"]',
+    'input[name="password"]',
+  ], 15_000);
+  if (!passwordField) {
+    log("auto-login: no password field appeared within 15s — falling back to interactive login.");
+    return false;
+  }
+  log("auto-login: filling password and clicking Sign in");
   await passwordField.fill(password);
-  await clickFirstAvailable(page, SUBMIT_SELECTORS);
+  await clickFirstAvailable(page, [
+    'button:has-text("Sign in")',
+    'button[type="submit"]',
+    'button.ant-btn-primary',
+  ]);
 
   log("auto-login: submitted credentials. Network listeners will catch the resulting JWT.");
   return true;
@@ -443,6 +478,21 @@ async function clickFirstAvailable(page, selectors) {
       await el.click().catch(() => {});
       return true;
     }
+  }
+  return false;
+}
+
+async function clickWithRetry(page, selector, timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const el = page.locator(selector).first();
+    if (await el.count() > 0) {
+      try {
+        await el.click({ timeout: 2_000 });
+        return true;
+      } catch { /* retry */ }
+    }
+    await page.waitForTimeout(500);
   }
   return false;
 }
