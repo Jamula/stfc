@@ -79,6 +79,13 @@ export interface RunAllOptions {
   accounts: Account[];
   promoCodesPath?: string;
   summary?: SummaryWriter;
+  /** Path to the redeem-history Markdown table (e.g. docs/redeem-history.md).
+   *  When set, a row is appended for every account that successfully claimed
+   *  at least one gift in this run. No row is appended when there's nothing
+   *  to log (avoids spamming the file with hourly empties). */
+  historyPath?: string;
+  /** Override clock for tests. */
+  now?: () => Date;
   /** Test seam: build a custom client per account. */
   clientFactory?: (account: Account) => ApiClient;
   /** Test seam: override fetch globally. */
@@ -97,7 +104,7 @@ export async function runAll(opts: RunAllOptions): Promise<RunAllOutput> {
     } catch (err) {
       if (err instanceof PromoCodesFileError) {
         report.errors.push({ message: redactForLog(err) });
-        return finalize(report, opts.summary);
+        return finalize(report, opts.summary, opts.historyPath, opts.now);
       }
       throw err;
     }
@@ -108,7 +115,7 @@ export async function runAll(opts: RunAllOptions): Promise<RunAllOutput> {
     report.accounts.push(accountReport);
   }
 
-  return finalize(report, opts.summary);
+  return finalize(report, opts.summary, opts.historyPath, opts.now);
 }
 
 async function processAccount(
@@ -272,7 +279,12 @@ async function processOneCode(
   }
 }
 
-async function finalize(report: RunAllReport, summary: SummaryWriter | undefined): Promise<RunAllOutput> {
+async function finalize(
+  report: RunAllReport,
+  summary: SummaryWriter | undefined,
+  historyPath: string | undefined,
+  now: (() => Date) | undefined,
+): Promise<RunAllOutput> {
   const exitCode = report.errors.length > 0 ? 1 : 0;
   if (summary) {
     try {
@@ -281,7 +293,42 @@ async function finalize(report: RunAllReport, summary: SummaryWriter | undefined
       log.warn("could not write summary:", redactForLog(err));
     }
   }
+  if (historyPath) {
+    try {
+      await appendHistory(historyPath, report, now ? now() : new Date());
+    } catch (err) {
+      log.warn("could not append history:", redactForLog(err));
+    }
+  }
   return { result: report, exitCode };
+}
+
+/**
+ * Append one row per account that successfully claimed at least one gift.
+ * No-op when nothing was claimed in this run (avoids spamming the log with
+ * hourly empty entries). Writes UTC date + time so cron rows are stable
+ * regardless of runner timezone.
+ */
+async function appendHistory(filePath: string, report: RunAllReport, now: Date): Promise<void> {
+  const date = now.toISOString().slice(0, 10);          // YYYY-MM-DD
+  const time = now.toISOString().slice(11, 16);         // HH:MM
+  const rows: string[] = [];
+  for (const account of report.accounts) {
+    const claimed = account.items
+      .filter((i) => i.outcome === Outcomes.CLAIMED)
+      .map((i) => i.id);
+    if (claimed.length === 0) continue;
+    const list = claimed.map(escapeMd).join(", ");
+    rows.push(`| ${date} | ${time} | ${escapeMd(account.name)} | ${list} |`);
+  }
+  if (rows.length === 0) return;
+
+  // Lazy import so test runs that don't pass historyPath have zero fs cost.
+  const fs = await import("node:fs/promises");
+  // The orchestrator never creates the file from scratch — `docs/redeem-history.md`
+  // is committed to the repo with a header. If it's somehow missing we still
+  // append rows; future readers can grep them out.
+  await fs.appendFile(filePath, rows.join("\n") + "\n", "utf8");
 }
 
 function renderSummary(report: RunAllReport, exitCode: number): string {

@@ -266,4 +266,56 @@ describe("runAll", () => {
     assert.match(contents, /\|/, "summary should contain a Markdown table");
     assert.match(contents, /CLAIMED|expires|expiry|EXPIRED/i, "summary should mention expiry/outcome");
   });
+
+  it("history file: appends one row per account that claimed at least one gift", async () => {
+    const historyPath = path.join(dir, "history.md");
+    fs.writeFileSync(historyPath, "# Header\n\n| D | T | A | Gifts |\n| - | - | - | - |\n", "utf8");
+
+    const fake = makeFakeClient({
+      listGifts: async () => ({
+        items: [
+          { bundleId: 100, title: "Daily Officer Pack", isClaimable: true },
+          { bundleId: 101, title: "Premium Bundle", hasCost: true }, // skipped
+          { bundleId: 102, title: "Weekly Chest", isClaimable: true },
+        ],
+      }),
+    });
+
+    const fixedNow = new Date("2026-05-09T08:30:00Z");
+    await runAll({
+      accounts: [{ name: "main", token: makeJwt({ exp: 9999999999 }) }],
+      clientFactory: () => fake as unknown as ApiClient,
+      promoCodesPath: emptyPromoFile(),
+      historyPath,
+      now: () => fixedNow,
+    });
+
+    const contents = fs.readFileSync(historyPath, "utf8");
+    assert.match(contents, /\| 2026-05-09 \| 08:30 \| main \| Daily Officer Pack, Weekly Chest \|/);
+    assert.doesNotMatch(contents, /Premium Bundle/, "skipped gifts should not appear in history");
+  });
+
+  it("history file: does NOT append when nothing was claimed (avoids hourly empties)", async () => {
+    const historyPath = path.join(dir, "history.md");
+    const initial = "# Header\n\n| D | T | A | Gifts |\n| - | - | - | - |\n";
+    fs.writeFileSync(historyPath, initial, "utf8");
+
+    const fake = makeFakeClient({
+      listGifts: async () => ({
+        items: [
+          { bundleId: 200, title: "Already had it", isClaimed: true }, // ALREADY_CLAIMED, no claim attempted
+        ],
+      }),
+    });
+
+    await runAll({
+      accounts: [{ name: "main", token: makeJwt({ exp: 9999999999 }) }],
+      clientFactory: () => fake as unknown as ApiClient,
+      promoCodesPath: emptyPromoFile(),
+      historyPath,
+    });
+
+    assert.equal(fs.readFileSync(historyPath, "utf8"), initial,
+      "history file must be unchanged when nothing was newly claimed");
+  });
 });

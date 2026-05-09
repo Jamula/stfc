@@ -16,6 +16,7 @@ import { redeemCodes } from "./skills/redeemCodes.ts";
 const log = createLogger("cli");
 
 const PROMO_CODES_PATH = "promo-codes.txt";
+const HISTORY_PATH = "docs/redeem-history.md";
 
 const SKILLS = ["run-all", "check-auth", "list-gifts", "claim-gifts", "redeem-codes"] as const;
 type SkillName = (typeof SKILLS)[number];
@@ -23,6 +24,7 @@ type SkillName = (typeof SKILLS)[number];
 interface SkillOptions {
   accounts: Account[];
   promoCodesPath?: string;
+  historyPath?: string;
   summary?: SummaryWriter;
 }
 type SkillOutput = { result: unknown; exitCode: number };
@@ -59,7 +61,7 @@ async function main(): Promise<number> {
 
   try {
     const skill = SKILL_FNS[skillName];
-    const out = await skill({ accounts, promoCodesPath: PROMO_CODES_PATH, summary });
+    const out = await skill({ accounts, promoCodesPath: PROMO_CODES_PATH, historyPath: HISTORY_PATH, summary });
     return out.exitCode;
   } catch (err) {
     const detail = redactForLog(err);

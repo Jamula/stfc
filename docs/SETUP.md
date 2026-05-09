@@ -79,17 +79,16 @@ Once the secret is set:
   what was claimed, which codes were already used, and any tokens that have
   expired.
 
-## Fallback path: bookmarklet (browser-only, no install)
+## Fallback path: manual JWT extraction (browser-only, no install)
 
-If you can't install Node locally — or you just want a quick one-off — see
-[`BOOKMARKLET.md`](BOOKMARKLET.md). It's a JS snippet you paste into
-DevTools that scans storage for JWT-shaped strings and copies the working
-one to your clipboard.
-
-> ⚠️ The bookmarklet is **less reliable** than `capture-token`. It depends
-> on the JWT being present in `localStorage`/`sessionStorage` as an
-> extractable JWT string, which isn't always the case. If you see "No
-> valid token found in storage", switch to `capture-token`.
+If you can't install Node locally — or just want a quick one-off — open
+DevTools on the STFC store after logging in, switch to the **Network**
+tab, find any request to `cdn-nv3-webstore-api.startrek.digitgaming.com`,
+copy the `Authorization` header value (everything after `Bearer `), and
+paste it into the `STFC_ACCOUNTS` GitHub secret as
+`[{"name":"main","token":"<that JWT>"}]`. The `capture-token` script
+automates exactly this and is strongly recommended over the manual
+approach.
 
 ## Optional: fully automated token refresh in CI
 

@@ -78,7 +78,7 @@ export function loadAccounts(opts: LoadAccountsOptions = {}): Account[] {
     if (!isJwtShaped(a.token)) {
       throw new AccountsConfigError(
         `Account "${a.name}" token is not JWT-shaped (expected three base64url segments separated by dots). ` +
-        `Use the bookmarklet in docs/BOOKMARKLET.md to capture a valid token.`,
+        `Run \`npm run capture-token\` to capture a valid token.`,
       );
     }
   }

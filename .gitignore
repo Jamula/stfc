@@ -31,3 +31,6 @@ playwright-diagnostics/
 # Squad: SubSquad activation file (local to this machine)
 .squad-workstream
 
+
+# CLI runtime output
+summary.md

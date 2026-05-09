@@ -22,8 +22,7 @@ promotional codes are claimed without you ever opening the store in a browser.
    the script captures the JWT from the network traffic, validates it, and
    writes it to your local `.env`. If `gh` is on your `PATH`, it also
    offers to set the GitHub repo secret for you. See
-   [docs/SETUP.md](docs/SETUP.md) for multi-account, flags, and the
-   browser-only [bookmarklet](docs/BOOKMARKLET.md) fallback.
+   [docs/SETUP.md](docs/SETUP.md) for multi-account and flag options.
 2. **Confirm the `STFC_ACCOUNTS` GitHub secret is set.** If you let
    `capture-token` use `gh`, it's already done. Otherwise, paste the JSON
    `capture-token` wrote to `.env` into *Settings → Secrets and variables →
@@ -94,14 +93,17 @@ For local diagnostics you can run individual steps:
 .
 ├── .github/
 │   └── workflows/
-│       ├── redeem.yml       # scheduled gift redemption (every 4h)
-│       └── test.yml         # typecheck + tests on push/PR
+│       ├── redeem.yml          # scheduled gift redemption (every hour)
+│       ├── refresh-token.yml   # weekly JWT refresh via Playwright auto-login
+│       └── test.yml            # typecheck + tests on push/PR
 ├── docs/
-│   ├── BOOKMARKLET.md       # one-click token grabber
-│   └── SETUP.md             # end-to-end setup guide
-├── src/                     # TypeScript source (api client, orchestrator, skills)
-├── tests/                   # vitest suite
-├── promo-codes.txt          # one promo code per line, # for comments
+│   ├── SETUP.md                # end-to-end setup guide
+│   └── redeem-history.md       # auto-appended log of every successful claim
+├── scripts/
+│   └── capture-token.mjs       # Playwright-driven JWT capture
+├── src/                        # TypeScript source (api client, orchestrator, skills)
+├── tests/                      # node:test suite
+├── promo-codes.txt             # one promo code per line, # for comments
 ├── package.json
 └── README.md
 ```
