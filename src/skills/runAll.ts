@@ -256,10 +256,12 @@ async function processOneCode(
 ): Promise<PromoResult> {
   try {
     const res = await redeemCode(client, code);
+    // Live API uses `redeem_result` (numeric); fall back to legacy `code`.
+    const resultCode = res.redeem_result ?? res.code;
     return {
       code,
-      outcome: classifyRedeemResult({ code: res.code, message: res.message }),
-      detail: res.message,
+      outcome: classifyRedeemResult({ code: resultCode, message: res.message }),
+      detail: res.message ?? (resultCode !== undefined ? `redeem_result=${resultCode}` : undefined),
     };
   } catch (err) {
     if (err instanceof SchemaMismatchError) {

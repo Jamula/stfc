@@ -54,8 +54,12 @@ export type ClaimResponse = z.infer<typeof ClaimResponseSchema>;
 
 export const RedeemResponseSchema = z
   .object({
+    // Legacy field names (kept for backward-compat in tests / older API surface):
     code: numericOrString.optional(),
     message: z.string().optional(),
+    // Live API as of May 2026:
+    redeem_result: z.number().optional(),
+    promo_code: z.string().optional(),
   })
   .passthrough();
 export type RedeemResponse = z.infer<typeof RedeemResponseSchema>;
