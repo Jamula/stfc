@@ -1,0 +1,251 @@
+// The orchestrator. Iterates every account × every action, collects an
+// outcome per item, and renders a Markdown summary. Returns its exit code
+// to the caller (cli.ts) — never calls process.exit itself, so it stays
+// fully unit-testable.
+
+import type { Account } from "../lib/accounts.ts";
+import { decodeJwt, describeExpiry, JwtParseError } from "../lib/jwt.ts";
+import { createLogger } from "../lib/logger.ts";
+import {
+  classifyGiftSkip,
+  classifyHttpError,
+  classifyRedeemResult,
+  isExpectedOutcome,
+  Outcomes,
+  type Outcome,
+} from "../lib/outcomes.ts";
+import { PromoCodesFileError, readPromoCodes } from "../lib/promoCodes.ts";
+import { redactForLog } from "../lib/redact.ts";
+import { heading, table, type SummaryWriter } from "../lib/summary.ts";
+import { ApiClient, SchemaMismatchError, TokenExpiredError } from "../api/client.ts";
+import { claimGift, getMe, listGifts, redeemCode } from "../api/endpoints.ts";
+import type { Gift } from "../api/schemas.ts";
+
+const log = createLogger("runAll");
+
+export interface ItemResult {
+  label: string;
+  outcome: Outcome;
+  detail?: string;
+}
+
+export interface AccountReport {
+  accountName: string;
+  expiryHuman: string;
+  items: ItemResult[];
+  ok: boolean;
+}
+
+export interface RunAllReport {
+  accounts: AccountReport[];
+  errors: string[];
+}
+
+export interface RunAllOutput {
+  result: RunAllReport;
+  exitCode: number;
+}
+
+export interface RunAllOptions {
+  accounts: Account[];
+  promoCodesPath?: string;
+  summary?: SummaryWriter;
+  clientFactory?: (token: string) => ApiClient;
+  fetchImpl?: typeof fetch;
+}
+
+export async function runAll(opts: RunAllOptions): Promise<RunAllOutput> {
+  const report: RunAllReport = { accounts: [], errors: [] };
+  const factory = opts.clientFactory ?? ((token: string) => new ApiClient(token, undefined, opts.fetchImpl));
+
+  let promoCodes: string[] = [];
+  if (opts.promoCodesPath) {
+    try {
+      promoCodes = await readPromoCodes(opts.promoCodesPath);
+    } catch (err) {
+      if (err instanceof PromoCodesFileError) {
+        report.errors.push(redactForLog(err));
+        return finalize(report, opts.summary);
+      }
+      throw err;
+    }
+  }
+
+  for (const account of opts.accounts) {
+    const accountReport = await processAccount(account, promoCodes, factory);
+    report.accounts.push(accountReport);
+  }
+
+  return finalize(report, opts.summary);
+}
+
+async function processAccount(
+  account: Account,
+  promoCodes: string[],
+  factory: (token: string) => ApiClient,
+): Promise<AccountReport> {
+  const expiryHuman = describeAccountExpiry(account.token);
+  const items: ItemResult[] = [];
+  const client = factory(account.token);
+
+  log.info(`account "${account.name}" — ${expiryHuman}`);
+
+  const authResult = await checkAuth(client);
+  if (authResult) {
+    items.push(authResult);
+    if (authResult.outcome === Outcomes.TOKEN_EXPIRED) {
+      return { accountName: account.name, expiryHuman, items, ok: items.every((i) => isExpectedOutcome(i.outcome)) };
+    }
+  }
+
+  const giftItems = await processGifts(client);
+  items.push(...giftItems);
+
+  const codeItems = await processCodes(client, promoCodes);
+  items.push(...codeItems);
+
+  return {
+    accountName: account.name,
+    expiryHuman,
+    items,
+    ok: items.every((i) => isExpectedOutcome(i.outcome)),
+  };
+}
+
+function describeAccountExpiry(token: string): string {
+  try {
+    return describeExpiry(decodeJwt(token)).human;
+  } catch (err) {
+    if (err instanceof JwtParseError) return "(could not decode)";
+    return "(could not decode)";
+  }
+}
+
+async function checkAuth(client: ApiClient): Promise<ItemResult | null> {
+  try {
+    await getMe(client);
+    return { label: "auth/me", outcome: Outcomes.TOKEN_VALID };
+  } catch (err) {
+    if (err instanceof TokenExpiredError) {
+      return { label: "auth/me", outcome: Outcomes.TOKEN_EXPIRED, detail: redactForLog(err) };
+    }
+    if (err instanceof SchemaMismatchError) {
+      throw err;
+    }
+    return {
+      label: "auth/me",
+      outcome: classifyHttpError(err),
+      detail: redactForLog(err),
+    };
+  }
+}
+
+async function processGifts(client: ApiClient): Promise<ItemResult[]> {
+  let gifts: Gift[];
+  try {
+    gifts = await listGifts(client);
+  } catch (err) {
+    if (err instanceof SchemaMismatchError) throw err;
+    return [{ label: "gifts/list", outcome: classifyHttpError(err), detail: redactForLog(err) }];
+  }
+
+  if (gifts.length === 0) {
+    return [{ label: "gifts", outcome: Outcomes.NO_GIFTS_AVAILABLE }];
+  }
+
+  const items: ItemResult[] = [];
+  for (const gift of gifts) {
+    items.push(await processOneGift(client, gift));
+  }
+  return items;
+}
+
+async function processOneGift(client: ApiClient, gift: Gift): Promise<ItemResult> {
+  const label = `gift:${describeGift(gift)}`;
+  const skip = classifyGiftSkip(gift);
+  if (skip !== null) {
+    return { label, outcome: skip };
+  }
+
+  const bundleId = gift.bundleId ?? gift.id;
+  if (bundleId === undefined) {
+    return { label, outcome: Outcomes.UNKNOWN_RESULT, detail: "no bundleId or id field" };
+  }
+
+  try {
+    await claimGift(client, bundleId);
+    return { label, outcome: Outcomes.CLAIMED };
+  } catch (err) {
+    if (err instanceof SchemaMismatchError) throw err;
+    return { label, outcome: classifyHttpError(err), detail: redactForLog(err) };
+  }
+}
+
+function describeGift(gift: Gift): string {
+  if (gift.title && gift.title.length > 0) return gift.title;
+  if (gift.bundleId !== undefined) return String(gift.bundleId);
+  if (gift.id !== undefined) return String(gift.id);
+  return "(unnamed)";
+}
+
+async function processCodes(client: ApiClient, codes: string[]): Promise<ItemResult[]> {
+  const items: ItemResult[] = [];
+  for (const code of codes) {
+    items.push(await processOneCode(client, code));
+  }
+  return items;
+}
+
+async function processOneCode(client: ApiClient, code: string): Promise<ItemResult> {
+  const label = `code:${code}`;
+  try {
+    const res = await redeemCode(client, code);
+    return {
+      label,
+      outcome: classifyRedeemResult({ code: res.code, message: res.message }),
+      detail: res.message,
+    };
+  } catch (err) {
+    if (err instanceof SchemaMismatchError) throw err;
+    return { label, outcome: classifyHttpError(err), detail: redactForLog(err) };
+  }
+}
+
+async function finalize(report: RunAllReport, summary: SummaryWriter | undefined): Promise<RunAllOutput> {
+  const exitCode = report.errors.length > 0 ? 1 : 0;
+  if (summary) {
+    try {
+      await summary.append(renderSummary(report, exitCode));
+    } catch (err) {
+      log.warn("could not write summary:", redactForLog(err));
+    }
+  }
+  return { result: report, exitCode };
+}
+
+function renderSummary(report: RunAllReport, exitCode: number): string {
+  const status = exitCode === 0 ? "✅" : "❌";
+  const parts: string[] = [];
+  parts.push(heading(1, `${status} STFC Gift Redeemer`));
+
+  if (report.errors.length > 0) {
+    parts.push(heading(2, "Infrastructure errors"));
+    for (const e of report.errors) {
+      parts.push(`- ${escapeMd(e)}\n`);
+    }
+  }
+
+  for (const account of report.accounts) {
+    const accStatus = account.ok ? "✅" : "⚠️";
+    parts.push(heading(2, `${accStatus} ${account.accountName}`));
+    parts.push(`Token: ${escapeMd(account.expiryHuman)}\n\n`);
+    const rows = account.items.map((i) => [i.label, i.outcome, i.detail ? redactForLog(i.detail) : ""]);
+    parts.push(table(["Item", "Outcome", "Detail"], rows));
+  }
+
+  return parts.join("\n");
+}
+
+function escapeMd(s: string): string {
+  return s.replace(/\r?\n/g, " ").replace(/\|/g, "\\|");
+}

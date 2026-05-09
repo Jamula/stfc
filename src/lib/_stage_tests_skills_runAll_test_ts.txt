@@ -1,0 +1,269 @@
+import { describe, it, beforeEach, afterEach } from "node:test";
+import assert from "node:assert/strict";
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
+import { runAll } from "../../src/skills/runAll.ts";
+import { createSummaryWriter } from "../../src/lib/summary.ts";
+import { Outcomes } from "../../src/lib/outcomes.ts";
+// Note: the api/client module exports these; the orchestrator may need them too.
+import {
+  ApiClient,
+  TokenExpiredError,
+  SchemaMismatchError,
+} from "../../src/api/client.ts";
+
+// ----------------------------------------------------------------------------
+// Test-contract assumptions for the orchestrator (documented here for the
+// skills implementer):
+//
+//   runAll({
+//     accounts:        Account[],
+//     clientFactory:   (account: Account) => ApiClient,
+//     summary:         SummaryWriter,
+//     promoCodesPath:  string,
+//     now?:            Date,
+//   }): Promise<{ result: RunReport, exitCode: number }>
+//
+//   RunReport.accounts: Array<{
+//     name: string,
+//     tokenStatus: Outcome,        // TOKEN_VALID | TOKEN_EXPIRED | UNKNOWN_RESULT
+//     items: Array<{ kind: "gift" | "code", id: string, outcome: Outcome }>,
+//     promoCodes?: Array<{ code: string, outcome: Outcome }>,
+//   }>
+//   RunReport.errors: Array<{ account?: string, message: string }>
+//
+//   exitCode is 0 unless an infrastructure-class error was raised (schema
+//   mismatch, malformed accounts, uncaught crash) — in which case 1.
+//
+// The fake client below is treated as ApiClient-shaped via a cast. The real
+// ApiClient just needs methods that look like these (the orchestrator should
+// use thin wrappers like `getMe`, `listGifts`, `claimGift`, `redeemCode`).
+// ----------------------------------------------------------------------------
+
+function b64url(s: string): string {
+  return Buffer.from(s, "utf8")
+    .toString("base64")
+    .replace(/=/g, "")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_");
+}
+
+function makeJwt(payload: object = {}): string {
+  const h = b64url(JSON.stringify({ alg: "none", typ: "JWT" }));
+  const p = b64url(JSON.stringify(payload));
+  return `${h}.${p}.signaturePartZZZ`;
+}
+
+interface FakeGift {
+  bundleId: number;
+  title: string;
+  isClaimable?: boolean;
+  isClaimed?: boolean;
+  isSpecial?: boolean;
+  hasCost?: boolean;
+  isAtMax?: boolean;
+}
+
+interface FakeClient {
+  getMe(): Promise<{ id: number; level: number }>;
+  listGifts(): Promise<{ items: FakeGift[] }>;
+  claimGift(bundleId: number): Promise<{ success: boolean; bundleId?: number; error?: string }>;
+  redeemCode(code: string): Promise<{ code?: number; message?: string }>;
+}
+
+function makeFakeClient(overrides: Partial<FakeClient> = {}): FakeClient {
+  return {
+    getMe: overrides.getMe ?? (async () => ({ id: 1, level: 50 })),
+    listGifts: overrides.listGifts ?? (async () => ({ items: [] })),
+    claimGift: overrides.claimGift ?? (async (id) => ({ success: true, bundleId: id })),
+    redeemCode: overrides.redeemCode ?? (async () => ({ code: 0, message: "redeem_success" })),
+  };
+}
+
+describe("runAll", () => {
+  let dir: string;
+  let savedSummaryEnv: string | undefined;
+
+  beforeEach(() => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), "stfc-runall-"));
+    savedSummaryEnv = process.env.GITHUB_STEP_SUMMARY;
+    delete process.env.GITHUB_STEP_SUMMARY;
+  });
+
+  afterEach(() => {
+    fs.rmSync(dir, { recursive: true, force: true });
+    if (savedSummaryEnv === undefined) delete process.env.GITHUB_STEP_SUMMARY;
+    else process.env.GITHUB_STEP_SUMMARY = savedSummaryEnv;
+  });
+
+  function emptyPromoFile(): string {
+    const file = path.join(dir, "promo.txt");
+    fs.writeFileSync(file, "", "utf8");
+    return file;
+  }
+
+  it("happy path: 1 account, 3 gifts (1 claimable), claim succeeds → exitCode 0", async () => {
+    const fake = makeFakeClient({
+      listGifts: async () => ({
+        items: [
+          { bundleId: 100, title: "Daily Officer Pack", isClaimable: true },
+          { bundleId: 101, title: "Premium Crystal Bundle", isClaimable: false, hasCost: true },
+          { bundleId: 102, title: "Yesterday's Gift", isClaimed: true },
+        ],
+      }),
+    });
+
+    const summary = createSummaryWriter(undefined);
+    const { result, exitCode } = await runAll({
+      accounts: [{ name: "main", token: makeJwt({ exp: 9999999999 }) }],
+      clientFactory: () => fake as unknown as ApiClient,
+      summary,
+      promoCodesPath: emptyPromoFile(),
+    });
+
+    assert.equal(exitCode, 0);
+    assert.equal(result.accounts.length, 1);
+    const items = result.accounts[0]!.items;
+    const outcomes = items.map((i: { outcome: string }) => i.outcome).sort();
+    assert.ok(outcomes.includes(Outcomes.CLAIMED), `expected CLAIMED in ${outcomes.join(",")}`);
+    assert.ok(
+      outcomes.includes(Outcomes.HAS_COST),
+      `expected HAS_COST in ${outcomes.join(",")}`,
+    );
+    assert.ok(
+      outcomes.includes(Outcomes.ALREADY_CLAIMED),
+      `expected ALREADY_CLAIMED in ${outcomes.join(",")}`,
+    );
+  });
+
+  it("multi-account: one OK, one TokenExpired → both reported, exitCode 0", async () => {
+    const goodFake = makeFakeClient({
+      listGifts: async () => ({
+        items: [{ bundleId: 1, title: "Free pack", isClaimable: true }],
+      }),
+    });
+    const badFake = makeFakeClient({
+      getMe: async () => {
+        throw new TokenExpiredError("expired");
+      },
+    });
+
+    const accounts = [
+      { name: "good", token: makeJwt({ exp: 9999999999 }) },
+      { name: "bad", token: makeJwt({ exp: 9999999999 }) },
+    ];
+
+    const { result, exitCode } = await runAll({
+      accounts,
+      clientFactory: (a) => (a.name === "good" ? goodFake : badFake) as unknown as ApiClient,
+      summary: createSummaryWriter(undefined),
+      promoCodesPath: emptyPromoFile(),
+    });
+
+    assert.equal(exitCode, 0);
+    assert.equal(result.accounts.length, 2);
+
+    const good = result.accounts.find((a: { name: string }) => a.name === "good")!;
+    const bad = result.accounts.find((a: { name: string }) => a.name === "bad")!;
+
+    assert.ok(
+      good.items.some((i: { outcome: string }) => i.outcome === Outcomes.CLAIMED),
+      "good account should have CLAIMED",
+    );
+    assert.equal(bad.tokenStatus, Outcomes.TOKEN_EXPIRED);
+  });
+
+  it("promo codes mix: success / used / invalid / unknown classified correctly", async () => {
+    const codeFile = path.join(dir, "promo.txt");
+    fs.writeFileSync(
+      codeFile,
+      "TESTCODE1\nUSEDCODE\nOLDCODE\nWEIRDCODE\n",
+      "utf8",
+    );
+
+    const fake = makeFakeClient({
+      listGifts: async () => ({ items: [] }),
+      redeemCode: async (code: string) => {
+        switch (code) {
+          case "TESTCODE1":
+            return { code: 0, message: "redeem_success" };
+          case "USEDCODE":
+            return { message: "redeem_error_code_used_before" };
+          case "OLDCODE":
+            return { code: 1, message: "redeem_error_code_expired" };
+          case "WEIRDCODE":
+            return { message: "something_unrecognized" };
+          default:
+            return { message: "unknown" };
+        }
+      },
+    });
+
+    const { result, exitCode } = await runAll({
+      accounts: [{ name: "main", token: makeJwt({ exp: 9999999999 }) }],
+      clientFactory: () => fake as unknown as ApiClient,
+      summary: createSummaryWriter(undefined),
+      promoCodesPath: codeFile,
+    });
+
+    assert.equal(exitCode, 0);
+    const promo = result.accounts[0]!.promoCodes ?? [];
+    const byCode = new Map(
+      promo.map((p: { code: string; outcome: string }) => [p.code, p.outcome] as const),
+    );
+    assert.equal(byCode.get("TESTCODE1"), Outcomes.CODE_REDEEMED);
+    assert.equal(byCode.get("USEDCODE"), Outcomes.CODE_ALREADY_USED);
+    assert.equal(byCode.get("OLDCODE"), Outcomes.CODE_INVALID_OR_EXPIRED);
+    assert.equal(byCode.get("WEIRDCODE"), Outcomes.UNKNOWN_RESULT);
+  });
+
+  it("schema mismatch in auth/me → recorded in errors, exitCode 1", async () => {
+    const badFake = makeFakeClient({
+      getMe: async () => {
+        throw new SchemaMismatchError("unexpected /me payload");
+      },
+    });
+
+    const { result, exitCode } = await runAll({
+      accounts: [{ name: "main", token: makeJwt({ exp: 9999999999 }) }],
+      clientFactory: () => badFake as unknown as ApiClient,
+      summary: createSummaryWriter(undefined),
+      promoCodesPath: emptyPromoFile(),
+    });
+
+    assert.equal(exitCode, 1);
+    assert.ok(
+      Array.isArray(result.errors) && result.errors.length > 0,
+      "expected at least one error entry",
+    );
+  });
+
+  // SKIPPED: promo file read error case — readPromoCodes treats ENOENT as
+  // empty, so a "missing path" doesn't error. Triggering a real read failure
+  // would require mocking fs or pointing at a directory (platform-specific).
+  // We accept this gap rather than introduce flaky platform-dependent tests.
+
+  it("summary writer is populated with account name, expiry, and item table", async () => {
+    const summaryFile = path.join(dir, "summary.md");
+    const summary = createSummaryWriter(summaryFile);
+
+    const fake = makeFakeClient({
+      listGifts: async () => ({
+        items: [{ bundleId: 100, title: "Daily Officer Pack", isClaimable: true }],
+      }),
+    });
+
+    await runAll({
+      accounts: [{ name: "main", token: makeJwt({ exp: 9999999999 }) }],
+      clientFactory: () => fake as unknown as ApiClient,
+      summary,
+      promoCodesPath: emptyPromoFile(),
+    });
+
+    const contents = fs.readFileSync(summaryFile, "utf8");
+    assert.match(contents, /main/, "summary should mention account name");
+    assert.match(contents, /\|/, "summary should contain a Markdown table");
+    assert.match(contents, /CLAIMED|expires|expiry|EXPIRED/i, "summary should mention expiry/outcome");
+  });
+});

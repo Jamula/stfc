@@ -1,0 +1,41 @@
+# Scheduled web-store gift redemption.
+#
+# Reads STFC store JWTs from the STFC_ACCOUNTS secret (a JSON array of
+# {name, token} objects) and runs the orchestrator against every account.
+#
+# Per-account outcomes (claimed, already-claimed, token-expired, code-used,
+# etc.) do NOT fail the workflow — they are surfaced in the run summary.
+# Only infrastructure failures (malformed secret, schema mismatch, uncaught
+# crash) cause a non-zero exit.
+name: Redeem gifts
+
+on:
+  schedule:
+    - cron: "0 */4 * * *"   # every 4 hours
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+# Prevent cron + manual dispatch from racing.
+concurrency:
+  group: stfc-gift-redeemer
+  cancel-in-progress: false
+
+jobs:
+  redeem:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run skill:run-all
+        env:
+          STFC_ACCOUNTS: ${{ secrets.STFC_ACCOUNTS }}

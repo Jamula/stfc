@@ -1,0 +1,1 @@
+{ "success": false, "error": "already_claimed" }

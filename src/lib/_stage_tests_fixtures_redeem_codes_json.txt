@@ -1,0 +1,6 @@
+{
+  "TESTCODE1": { "code": 0, "message": "redeem_success" },
+  "USEDCODE":  { "message": "redeem_error_code_used_before" },
+  "OLDCODE":   { "code": 1, "message": "redeem_error_code_expired" },
+  "WEIRDCODE": { "message": "something_unrecognized" }
+}

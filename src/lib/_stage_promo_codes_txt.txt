@@ -1,0 +1,10 @@
+# One promo code per line. Lines beginning with # are ignored.
+# Inline comments after a code (whitespace + #) are also stripped.
+#
+# Examples:
+#   STARTREKDAY2024
+#   FLEETCMD-WELCOME    # one-time welcome bonus
+#
+# Codes are submitted on every scheduled run; the API returns
+# CODE_ALREADY_USED for codes that have already been redeemed,
+# so this file is naturally idempotent. No state is tracked.

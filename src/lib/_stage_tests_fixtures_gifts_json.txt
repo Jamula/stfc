@@ -1,0 +1,20 @@
+{
+  "items": [
+    {
+      "bundleId": 100,
+      "title": "Daily Officer Pack",
+      "isClaimable": true
+    },
+    {
+      "bundleId": 101,
+      "title": "Premium Crystal Bundle",
+      "isClaimable": false,
+      "hasCost": true
+    },
+    {
+      "bundleId": 102,
+      "title": "Yesterday's Gift",
+      "isClaimed": true
+    }
+  ]
+}

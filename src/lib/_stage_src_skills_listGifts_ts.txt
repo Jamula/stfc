@@ -1,0 +1,68 @@
+// Diagnostic skill: prints each account's available gifts as a small table.
+// Always exits 0; this is for humans inspecting the API state, not CI.
+
+import type { Account } from "../lib/accounts.ts";
+import { ApiClient } from "../api/client.ts";
+import { listGifts as apiListGifts } from "../api/endpoints.ts";
+import type { Gift } from "../api/schemas.ts";
+import { createLogger } from "../lib/logger.ts";
+import { redactForLog } from "../lib/redact.ts";
+
+const log = createLogger("listGifts");
+
+export interface ListGiftsOptions {
+  accounts: Account[];
+  promoCodesPath?: string;
+  clientFactory?: (token: string) => ApiClient;
+  fetchImpl?: typeof fetch;
+}
+
+export interface ListGiftsRow {
+  accountName: string;
+  gifts: Gift[];
+  error?: string;
+}
+
+export interface ListGiftsOutput {
+  result: { rows: ListGiftsRow[] };
+  exitCode: number;
+}
+
+export async function listGifts(opts: ListGiftsOptions): Promise<ListGiftsOutput> {
+  const factory = opts.clientFactory ?? ((token: string) => new ApiClient(token, undefined, opts.fetchImpl));
+  const rows: ListGiftsRow[] = [];
+
+  for (const account of opts.accounts) {
+    const client = factory(account.token);
+    try {
+      const gifts = await apiListGifts(client);
+      printGiftTable(account.name, gifts);
+      rows.push({ accountName: account.name, gifts });
+    } catch (err) {
+      const detail = redactForLog(err);
+      log.error(`[${account.name}] failed to list gifts: ${detail}`);
+      rows.push({ accountName: account.name, gifts: [], error: detail });
+    }
+  }
+
+  return { result: { rows }, exitCode: 0 };
+}
+
+function printGiftTable(accountName: string, gifts: Gift[]): void {
+  log.info(`[${accountName}] ${gifts.length} gift(s):`);
+  for (const g of gifts) {
+    const id = g.bundleId ?? g.id ?? "?";
+    const flags = describeFlags(g);
+    log.info(`  - id=${String(id)} title=${g.title ?? "(no title)"} ${flags}`);
+  }
+}
+
+function describeFlags(g: Gift): string {
+  const parts: string[] = [];
+  if (g.isClaimable === true) parts.push("claimable");
+  if (g.isClaimed === true) parts.push("claimed");
+  if (g.isSpecial === true) parts.push("special");
+  if (g.hasCost === true) parts.push("has-cost");
+  if (g.isAtMax === true) parts.push("at-max");
+  return parts.length > 0 ? `[${parts.join(",")}]` : "";
+}

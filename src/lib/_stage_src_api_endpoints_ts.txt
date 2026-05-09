@@ -1,0 +1,57 @@
+// Typed wrappers around ApiClient. One function per real endpoint we use,
+// returning already-validated data so callers in src/skills/ never touch
+// raw fetch responses.
+
+import { ApiClient } from "./client.ts";
+import {
+  AuthMeResponseSchema,
+  ClaimResponseSchema,
+  GiftsResponseSchema,
+  RedeemResponseSchema,
+  type AuthMeResponse,
+  type ClaimResponse,
+  type Gift,
+  type RedeemResponse,
+} from "./schemas.ts";
+
+export async function getMe(client: ApiClient): Promise<AuthMeResponse> {
+  return client.request({ path: "/auth/me", method: "GET", schema: AuthMeResponseSchema });
+}
+
+export async function listGifts(client: ApiClient): Promise<Gift[]> {
+  const raw = await client.request({
+    path: "/offers/gifts",
+    method: "GET",
+    schema: GiftsResponseSchema,
+  });
+  return normalizeGifts(raw);
+}
+
+export async function claimGift(client: ApiClient, bundleId: number | string): Promise<ClaimResponse> {
+  return client.request({
+    path: "/offers/gifts/claim",
+    method: "POST",
+    body: { bundleId },
+    schema: ClaimResponseSchema,
+  });
+}
+
+export async function redeemCode(client: ApiClient, code: string): Promise<RedeemResponse> {
+  return client.request({
+    path: "/redeem/claim",
+    method: "POST",
+    body: { promo_code: code },
+    schema: RedeemResponseSchema,
+  });
+}
+
+function normalizeGifts(raw: unknown): Gift[] {
+  if (Array.isArray(raw)) return raw as Gift[];
+  if (raw && typeof raw === "object") {
+    const obj = raw as Record<string, unknown>;
+    if (Array.isArray(obj.items)) return obj.items as Gift[];
+    if (Array.isArray(obj.data)) return obj.data as Gift[];
+    if (Array.isArray(obj.gifts)) return obj.gifts as Gift[];
+  }
+  return [];
+}
