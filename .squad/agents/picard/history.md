@@ -171,3 +171,23 @@
 **Lockout duration:** Cycle-scoped. Picard (and all revision authors: Uhura, Scotty, Bashir, Tuvok) are locked out from v1.2.0 amendments. Lockout resets for v1.3.0 cycle per coordinator decision.
 
 **Next cycle (v1.3.0):** 3 Known Tensions to resolve. Backlog tracked in `.squad/decisions/inbox/v1.3.0-constitution-backlog.md`.
+
+---
+
+### Current-State System Specification — Reverse-Engineering Synthesis (2026-05-08T23:59:26-07:00)
+
+**What was produced:** Authoritative system specification at `.specify/specs/000-current-state/spec.md`, reverse-engineered from commit `20a5d96`. 6 user stories (P1–P6), 61 functional requirements (FR-001 through FR-061), 10 success criteria (SC-001 through SC-010), 13 NEEDS CLARIFICATION markers.
+
+**Architectural patterns surfaced during synthesis:**
+
+1. **Outcome-driven exit codes.** The most distinctive architectural pattern in this codebase is the strict separation between "expected outcomes" (all 13 defined outcomes, including failures like TOKEN_EXPIRED and CODE_ALREADY_USED) and "infrastructure errors" (schema mismatches, config errors). Only infrastructure errors cause non-zero exit codes. This inversion — where most "failures" are actually expected — is the key insight for reimplementers. It means the system is designed to run quietly for months even as tokens expire and codes become stale, only alarming on genuine upstream contract breakage.
+
+2. **Stateless idempotency via upstream delegation.** The system deliberately maintains zero local state between runs. No "already redeemed" database, no run-state file, no checkpoint. Idempotency is entirely delegated to the upstream API's "already done" responses. This is a conscious architectural choice (Constitution Principle V), not a gap. Reimplementers must resist the temptation to add local state tracking — it would break the stateless-rerun safety guarantee.
+
+3. **Centralized exit vs. distributed result.** Sub-commands return structured `{ result, exitCode }` objects; only the CLI entry point calls process exit. This pattern is essential for testability and composition. Reimplementers should not let sub-commands terminate the process directly.
+
+4. **Redaction as a cross-cutting concern.** Redaction is applied at multiple layers (API client wraps errors, CLI wraps uncaught exceptions, summary writer scrubs output). This is not a single-point filter — it's defense-in-depth. A reimplementation must apply redaction at every output boundary, not just one.
+
+5. **Schema permissiveness for API resilience.** The API client uses permissive schema validation (accepting unknown fields) while still enforcing required field shapes. This is a deliberate trade-off: strict enough to catch contract breakage, loose enough to survive upstream additions. Both field naming inconsistency (snake_case vs camelCase) and type flexibility (boolean vs 0/1) are accommodated.
+
+**Implications for future specs:** The 000-current-state spec is now the baseline. Any future feature spec should reference it and specify only the delta. The 13 NEEDS CLARIFICATION markers are the immediate backlog for user resolution — several (rate limiting, non-ENOENT file errors, concurrency semantics) could become FR additions once clarified.

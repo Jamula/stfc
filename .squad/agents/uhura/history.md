@@ -155,3 +155,35 @@ Phase 3 enforcement infrastructure is complete across all four pillars:
 **Lockout duration:** Cycle-scoped. Resets for v1.3.0 cycle.
 
 **Lesson for next cycle:** Parallel lanes are effective for parallel-draft speed; they're less effective for catching subtle accuracy issues because two independent authors both miss the same repo fact. Recommend: parallel lanes for speed, then CROSS-PROVIDER verification (not same-provider) for accuracy.
+
+---
+
+### 2026-05-08T23:40:33-07:00 — Recon Complete: Integration/Auth/CI Surface Documented
+
+**Mission:** Reverse-engineer the codebase to produce a recon document enabling reimplementation in any language.
+
+**Output:** `.squad/.scratch/spec-recon-uhura.md` — 8 sections, 300+ lines, language-agnostic specification.
+
+**What I discovered (actual surface, not architecture):**
+
+1. **STFC API is exactly four endpoints, all under `/api/v2`.** No hidden endpoints. All responses validated via permissive Zod schemas (.passthrough()) to tolerate field-name drift (snake_case vs camelCase). Gift bundle ID has 3-fallback order: bundleId → bundle_id → id. All requests timeout at 10s; GET retries once on 5xx/network with jitter(500,1000)ms; POST never retries (state-changing).
+
+2. **JWT lifecycle is capture → validate → merge → (optionally refresh).** Capture via Playwright network interception (POST /auth/login response.accessToken or Bearer header). Validation via GET /auth/me. Merge into STFC_ACCOUNTS JSON array (preserves multi-account, detects duplicates). Refresh weekly via refresh-token.yml + headless Playwright (MFA/CAPTCHA fails silently; manual intervention required).
+
+3. **Token handling has TWO sanctioned write paths:** capture-token.mjs (local via gh secret set --body-file - on stdin) and refresh-token.yml (CI via STFC_REFRESH_PAT). Both preserve other accounts. Redaction is manual at call-site (src/api/client.ts wraps every error message), not automatic in logger.
+
+4. **STFC_ACCOUNTS is JSON array with strict parsing:** [{"name":"main","token":"eyJ..."},...]. Rejects empty, duplicates, non-JWT tokens. Multi-account runs process sequentially; one expired token does NOT block others.
+
+5. **Promo codes are one-per-line text file, naturally idempotent.** Blank lines ignored; # comments (whole-line or inline) stripped. No de-duplication file-side; API returns CODE_ALREADY_USED if already redeemed. Code sourcing is manual (public game wikis); no auto-refresh.
+
+6. **Redeem runs cron every hour (0 * * * *).** Refresh runs cron every Sunday at 04:00 UTC (0 4 * * 0). Both share concurrency group `stfc-gift-redeemer` with cancel-in-progress: true (tight scheduling risk: refresh could interrupt active redeem if dispatched manually during run).
+
+7. **13 outcome terms classify all per-attempt results; ALL exit 0 (expected).** Only unhandled exceptions (infra errors) exit 1. Outcome vocabulary: CLAIMED, ALREADY_CLAIMED, AT_MAX, IS_SPECIAL, HAS_COST, CODE_REDEEMED, CODE_ALREADY_USED, CODE_INVALID_OR_EXPIRED, LEVEL_TOO_LOW, TOKEN_VALID, TOKEN_EXPIRED, NO_GIFTS_AVAILABLE, TRANSIENT.
+
+8. **Run summary is GitHub Actions step summary (GITHUB_STEP_SUMMARY Markdown).** Per-account section includes token expiry, gift outcomes table, code outcomes table. Redact called before rendering. Redeem-history.md auto-appends one row per account that claimed ≥1 gift (UTC timestamps, newest first).
+
+9. **Redaction is defense-in-depth.** Patterns: JWT (3 base64url segments ≥8 chars), Authorization header (any case variant), code applies redactString at throw-site. Logger calls redactForLog on errors. Summary calls redactForLog before GITHUB_STEP_SUMMARY write. No redaction in capture-token.mjs (mitigated by stderr-only output + ::add-mask::).
+
+10. **Open questions flagged:** API field-name normalization (bundle_id vs bundleId inconsistency), gift title vs name fallback semantics, promo result code docs (external JS bundle source; can go stale), MFA/CAPTCHA unhandled (manual fallback required), concurrency race window (redeem + manual refresh dispatch), redeem-history duplicate rows (audit trail or oversight?), 429 rate-limit handling (not documented), cj_pwd secret purpose (unknown).
+
+**Recon document is complete and language-agnostic.** Any team can reimplement the integration surface given this spec, STFC API contract changes are immediately visible against these shapes, and CI/secret flows are fully documented.

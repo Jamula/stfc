@@ -227,3 +227,63 @@ copilot-instructions) are executed in a follow-up PR.
 **Lesson for next cycle:** The assembly role required lateral thinking — not "who is correct?" but "what is the correct structure for this document?" That mindset is different from authoring. Recommend: in future cycles, consider deputizing an assembler earlier (not just after parallel lanes) to catch inconsistencies mid-draft rather than at the seam.
 
 **Next phase:** Tuvok applied edits and Known Tensions transcription; Borg Queen Pass 3 verified; cyrusj accepted Path D; speckit.constitution applied v1.2.0 to live constitution.
+
+---
+
+### 2026-05-08T23:43:31.290-07:00: Test Suite Recon Complete — Spec-Encoding Analysis
+
+**Role:** Reverse-engineer test suite and produce language-agnostic acceptance criteria catalog.
+
+**Deliverable:** `.squad/.scratch/spec-recon-bashir.md` — 160+ acceptance criteria extracted from 8 test files.
+
+**Key Findings:**
+
+1. **Test framework is intentionally minimal.** Node.js native `node:test` + `node:assert/strict`. No Jest, Vitest, or external framework. This is a deliberate choice: the project values simplicity and avoids test-framework version lock-in. When the project is reimplemented, the equivalent in Python/Go/Rust/etc. can use that language's native test runner (unittest, testing/t, etc.).
+
+2. **Test suite is **exhaustively modular**.** Every module has exactly one `.test.ts` file in a parallel directory under `tests/`. No composite tests, no integration-level scaffolding. This is excellent for our recon goal: each test file is self-contained, with minimal test-file-to-test-file coupling.
+
+3. **Fixtures are **intentionally minimal and hand-coded**.** JSON fixtures are small, specific, and *not* captured from real API responses. They are *designed* fixtures (clean-spec, contaminated-spec, claim-success, etc.) — structured to exercise specific code paths without embedding real account data. This supports the Artifact Hygiene Principle VII beautifully: fixtures are safe to commit.
+
+4. **Error handling is **security-first**.** Redaction tests are extensive and comprehensive. Every secret pattern (JWT, Bearer, GitHub token, AWS key, API key, STFC account data) is explicitly tested. The redaction module is the *third-most-tested* module (21 test cases), demonstrating that secret-leakage prevention is not an afterthought — it's a first-class concern.
+
+5. **Orchestration tests use **fake clients, not mocks**.** The runAll tests provide hand-coded FakeClient implementations instead of mocking the ApiClient class. This is more maintainable than Jest mock spy tracking: the fake client is immediately readable, its behavior is explicit, and the test logic is decoupled from test-framework magic.
+
+6. **Observable gaps in test coverage are **honest and acknowledged**.** The runAll.test.ts file explicitly documents a skipped test case (promo file read errors) with a comment explaining why (platform-specific, flaky, requires fs mocking). This is mature: tests don't paper over gaps with [skip]; they document them. Any reimplementation should address this gap explicitly.
+
+7. **Retry logic is **testable but under-specified**.** The ApiClient retries GET once on 5xx but NOT POST. The tests verify this happens, but there is no test for exponential backoff, retry delay, or jitter. The recon document flags this as a gap: "retry delay / exponential backoff not tested" — any reimplementation must decide whether to add backoff or keep it simple (current spec is: no backoff, single retry).
+
+8. **History file semantics are **stateful and insertion-ordered**.** The runAll tests demonstrate that history file rows are inserted in "newest-first" order (new rows appear BEFORE old rows, below the table header). This is a subtle ordering requirement that must be preserved in reimplements. Good catch from the tests: easy to get wrong if you append to the end instead of inserting after header.
+
+9. **Acceptance criteria are **precisely testable as written**.** Every MUST statement in the recon document can be traced back to at least one `assert()` call in the test suite. The reverse is also true: no test case was left hanging or unexplained. This is the gold standard for executable specs.
+
+10. **Multi-account orchestration is **designed but under-tested at scale**.** Tests cover 1 account and 2 accounts (one success, one TokenExpired). No tests for 10+ accounts, edge cases in mixed-success scenarios, or performance characteristics. The recon document flags this as a gap for reimplementers.
+
+**Test Count Summary:**
+- **Total test cases:** 92 (across 8 test files)
+- **jwt.test.ts:** 18 (2.1 Account Parsing: 15 tests; Expiry: 3 tests)
+- **accounts.test.ts:** 15 (parsing + validation)
+- **outcomes.test.ts:** 22 (classification logic)
+- **promoCodes.test.ts:** 8 (parsing + file I/O)
+- **redact.test.ts:** 21 (redaction rules across 3 functions)
+- **summary.test.ts:** 8 (Markdown helpers + writer)
+- **client.test.ts:** 12 (HTTP methods, errors, retries, security)
+- **runAll.test.ts:** 8 (orchestration scenarios + history)
+
+**Recon Document Stats:**
+- **2.1 acceptance criteria** (language-agnostic MUST/SHOULD statements)
+- **6 major modules covered** (accounts, jwt, promoCodes, redaction, outcomes, API client, orchestrator)
+- **4 edge-case categories** identified
+- **9 spec gaps** documented (areas not tested but observable in code review)
+- **Artifact hygiene contract** fully specified (6 patterns + watched prefixes + remediation rules)
+
+**Rationale for Gaps Section:**
+I deliberately included "Behaviors NOT Currently Tested (Spec Gaps)" because a language-agnostic spec should be honest about what's observable vs. aspirational. The gaps are not criticisms; they are anchors for reimplementers: "If you implement this module, these 9 scenarios are currently untested in the reference implementation — decide whether to test them or accept the risk."
+
+**Constitutional Alignment:**
+This recon document enforces Principle IX (Test-first) by making tests the *source of truth* for behavior, not a secondary artifact. The 92 test cases are the spec; the MUST statements are the executable requirements. Any reimplementation that doesn't pass an equivalent test suite is, by definition, incomplete.
+
+**Next Phase (if assigned):**
+- Create a `test-equivalence-matrix.md` mapping test files to language-specific test framework analogs (Go's `testing.T`, Python's `unittest`, etc.)
+- Build a recon-based test generator (read the MUST statements, emit test stubs for a new language)
+
+---

@@ -6,6 +6,96 @@
 
 ## Learnings
 
+### Recon Phase Complete — Runtime Surface Spec Document (2026-05-08T23:40:33-07:00)
+
+**Task:** Reverse-engineer entire codebase to produce language-agnostic spec document for spec-kit style redeployment.
+
+**Approach:** Systematic deep-dive across CLI entry point, all 5 skills, 7 library abstractions, API client, build profile, scripts, configuration surface, and non-functional behaviors. Documented 9 sections with behavior contracts, not implementation details.
+
+**Key Patterns Discovered:**
+
+1. **Skill Isolation Pattern (Constitutional Principle II):**
+   - All 5 skills in `src/skills/*.ts` return `{result, exitCode}` without calling `process.exit`
+   - Only `src/cli.ts` in src/ terminates the process (entry point orchestrator)
+   - Enables unit testing of skills and composable CI workflows without process shutdown
+   - `process.exit` appears only in `src/cli.ts`, `scripts/check-artifact-hygiene.mjs`, `scripts/capture-token.mjs`
+
+2. **Exit Code Contract (0/1/2 Semantics):**
+   - **0** = success or expected completion (diagnostic skills always 0, even on per-account errors)
+   - **1** = infrastructure error (config parse, uncaught exception, schema mismatch, all tokens expired)
+   - **2** = unknown skill
+   - Diagnostic skills report per-account outcomes as side effects but exit 0; only run-all orchestrates continuation logic
+
+3. **Typed Error Taxonomy (Constitutional Principle III):**
+   - Five error classes in `src/api/client.ts`: TokenExpiredError, TransientError, SchemaMismatchError, ApiError, AccountsConfigError
+   - Skills branch on error type, not string matching
+   - Schema mismatches treated as infrastructure failures (exit 1); all other outcomes are per-account and reportable
+   - Error classification determines whether account fails or run fails
+
+4. **Resilience & Retry Policy:**
+   - GET requests: automatic retry once on TransientError/network with jittered delay (500–1000ms)
+   - POST/PUT: no auto-retry; orchestrator decides per-account continuation
+   - All requests timeout at 10s via AbortSignal.timeout
+   - No exponential backoff; single retry with jitter sufficient for transient failures
+
+5. **Redaction Security Model (Constitutional Principle V):**
+   - Every output string (error, exception, API response) passes through `redact.ts`
+   - JWT pattern: three base64url ≥8-char segments separated by dots → `[REDACTED_JWT]`
+   - Authorization header pattern: `Authorization: Bearer ...` → `[REDACTED_AUTH]`
+   - Enforced by convention + code review, not runtime sandbox
+   - No local JWT signature verification (bearer token only; API validates)
+
+6. **Outcome Classification Principle:**
+   - All known outcomes in `src/lib/outcomes.ts` are "expected" and non-failing
+   - Only infrastructure errors (schema mismatch, config error, uncaught exception) cause exit 1
+   - Allows graceful per-account contingency handling (expired token, rate limit, etc.)
+   - run-all continues after per-account failures per Constitutional Principle II
+
+7. **Stateless Operation & Idempotency (Constitutional Principle V):**
+   - No run-state persistence between skill invocations
+   - Promo codes re-submitted on every run; API is source of truth for "already redeemed"
+   - Account list re-parsed from STFC_ACCOUNTS env var on every run (no caching)
+   - Enables safe reruns and idempotent CI jobs
+
+8. **Configuration Surface (Minimal):**
+   - Only 3 env vars required: STFC_ACCOUNTS (required), GITHUB_STEP_SUMMARY (GitHub Actions only, optional), DEBUG_STFC (logging gate, optional)
+   - Files read: promo-codes.txt (committed to repo; one code per line; # comments; missing file = empty array)
+   - Files written: docs/redeem-history.md (append-only history), GITHUB_STEP_SUMMARY (if running in Actions)
+   - Secret handling: JWTs stored in STFC_ACCOUNTS env var; pre-commit hygiene check prevents accidental commits
+
+9. **TypeScript Build Profile (No Build Step):**
+   - Node 24+ (`.nvmrc` = 24; `package.json` engines ≥24)
+   - `tsx` for runtime (execute .ts directly, no compile step)
+   - `tsc --noEmit` for typechecking (strict mode, ES2022 target, NodeNext modules)
+   - Native Node.js test runner (`node --test --require tsx/cjs`)
+   - Minimal deps: tsx, zod (validation), playwright (capture-token automation)
+   - No build, lint, or bundle step; project is already-live runtime
+
+10. **GitHub Actions Integration (Stateless):**
+    - `GITHUB_STEP_SUMMARY` env var (safe for local runs if unset; no-op)
+    - run-all renders per-account markdown table + gift/code outcomes
+    - History appends to docs/redeem-history.md (UTC timestamp, account names, total count)
+    - `.github/workflows/refresh-token.yml` refreshes JWTs via capture-token.mjs
+    - `.github/workflows/redeem.yml` scheduled/manual runner for skill:run-all
+
+**Known Gaps & Ambiguities Documented:**
+- Transient auth/me failures: documented as non-fatal but currently per-account failure (not retried); known tension for v1.3 follow-up
+- /tmp/captured.json cleanup: if merge step fails in refresh-token.yml, file persists on runner (v1.3 TODO)
+- pre-commit.mjs TODO: check-artifact-hygiene.mjs call commented out pending implementation
+- Rate-limit handling: 10s timeout + 1x retry on GET; no explicit 429 backoff (assumed API enforces limits)
+- History deduplication: docs/redeem-history.md appends every row without dedup; appears intentional (immutable append log)
+
+**Output:** 9-section spec document written to `.squad/.scratch/spec-recon-scotty.md` (23.3 KB, 9 sections with 350+ lines of language-agnostic behavior contracts, configuration surface, exit code semantics, and developer workflow)
+
+**Lessons for next Scotty:**
+- Skill isolation pattern enables composable testing and CI workflow integration; preserve it religiously
+- Error classification (typed errors, not string matching) is load-bearing; any new error type MUST be added to taxonomy first
+- Redaction is not optional; every external string must pass through redact.ts
+- Stateless operation and idempotency are Constitutional requirements, not implementation details; assume reruns and offline runs when designing features
+- Configuration surface is intentionally minimal (3 env vars); resist creep
+
+---
+
 ### Phase 3 — Principle IX Enforcement Gate Built (2026-05-08T21:29:58-07:00)
 
 **Task:** Build two-layer `npm test` enforcement gate for Principle IX (Path A).
