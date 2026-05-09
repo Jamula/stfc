@@ -70,22 +70,33 @@ export function classifyHttpError(err: unknown): Outcome {
   return Outcomes.UNKNOWN_RESULT;
 }
 
-// Per-gift classification given API flags. Order matters — IS_SPECIAL and
-// HAS_COST take priority over AT_MAX so the summary shows the most specific
-// reason a gift was skipped.
+// Per-gift classification. The live API uses snake_case 0/1 numbers for
+// flags and includes "Cannot Collect More …" titles for at-max gifts.
+// We accept either booleans or numbers and treat 0/false the same.
 export interface GiftLike {
-  isClaimable?: boolean | undefined;
-  isClaimed?: boolean | undefined;
-  isSpecial?: boolean | undefined;
-  hasCost?: boolean | undefined;
-  isAtMax?: boolean | undefined;
+  isClaimable?: boolean | number | undefined;
+  isClaimed?: boolean | number | undefined;
+  isSpecial?: boolean | number | undefined;
+  hasCost?: boolean | number | undefined;
+  isAtMax?: boolean | number | undefined;
+  is_special?: boolean | number | undefined;
+  has_cost?: boolean | number | undefined;
+  is_at_max?: boolean | number | undefined;
+  is_claimable?: boolean | number | undefined;
+  is_claimed?: boolean | number | undefined;
+  title?: string | undefined;
+  name?: string | undefined;
 }
 
+const truthy = (v: unknown): boolean => (typeof v === "number" ? v !== 0 : v === true);
+
 export function classifyGiftSkip(gift: GiftLike): Outcome | null {
-  if (gift.isClaimed === true) return Outcomes.ALREADY_CLAIMED;
-  if (gift.isSpecial === true) return Outcomes.IS_SPECIAL;
-  if (gift.hasCost === true) return Outcomes.HAS_COST;
-  if (gift.isAtMax === true) return Outcomes.AT_MAX;
-  if (gift.isClaimable === false) return Outcomes.UNKNOWN_RESULT;
+  if (truthy(gift.isClaimed) || truthy(gift.is_claimed)) return Outcomes.ALREADY_CLAIMED;
+  if (truthy(gift.isSpecial) || truthy(gift.is_special)) return Outcomes.IS_SPECIAL;
+  if (truthy(gift.hasCost) || truthy(gift.has_cost)) return Outcomes.HAS_COST;
+  if (truthy(gift.isAtMax) || truthy(gift.is_at_max)) return Outcomes.AT_MAX;
+  const title = gift.title ?? gift.name ?? "";
+  if (/^\s*cannot collect more\b/i.test(title)) return Outcomes.AT_MAX;
+  if (gift.isClaimable === false || gift.is_claimable === false) return Outcomes.UNKNOWN_RESULT;
   return null; // null = the gift is claimable; orchestrator should attempt claim
 }

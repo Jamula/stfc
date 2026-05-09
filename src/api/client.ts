@@ -132,6 +132,14 @@ export class ApiClient {
   }
 
   async listGifts(): Promise<GiftsLike> {
+    // The list endpoint without ?available=true returns the entire bundle
+    // catalog (mostly bundles you can't claim). With ?available=true it
+    // returns the subset the player can act on right now.
+    return this.request({ path: "/offers/gifts?available=true", method: "GET", schema: GiftsResponseSchema });
+  }
+
+  /** List all gift bundles (catalog) — for the diagnostic `list-gifts` skill. */
+  async listAllGifts(): Promise<GiftsLike> {
     return this.request({ path: "/offers/gifts", method: "GET", schema: GiftsResponseSchema });
   }
 

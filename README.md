@@ -9,18 +9,28 @@ promotional codes are claimed without you ever opening the store in a browser.
 
 ## Quick start
 
-1. **Capture your store token.** Log in to
-   `https://home.startrekfleetcommand.com/store` in your browser, open DevTools,
-   and run the bookmarklet from [docs/BOOKMARKLET.md](docs/BOOKMARKLET.md). It
-   finds your JWT, validates it against the live API, and copies the working
-   token to your clipboard.
-2. **Set the `STFC_ACCOUNTS` GitHub secret.** In your fork of this repo, go to
-   *Settings → Secrets and variables → Actions* and add a new repository secret
-   named `STFC_ACCOUNTS`. The value is a JSON array — see
-   [docs/SETUP.md](docs/SETUP.md) for the exact format.
-3. **Enable the `Redeem gifts` workflow** under the Actions tab. It will run on
-   the cron schedule (every 4 hours) from then on. You can also trigger it
-   manually with the **Run workflow** button to verify everything works.
+1. **Capture your store token (recommended).** Run the Playwright-driven
+   capture script:
+
+   ```bash
+   npm install
+   npm run playwright:install   # one-time: download Chromium (~120 MB)
+   npm run capture-token        # opens browser, watches network, writes .env
+   ```
+
+   It opens a Chromium window pointing at the STFC store. Log in normally;
+   the script captures the JWT from the network traffic, validates it, and
+   writes it to your local `.env`. If `gh` is on your `PATH`, it also
+   offers to set the GitHub repo secret for you. See
+   [docs/SETUP.md](docs/SETUP.md) for multi-account, flags, and the
+   browser-only [bookmarklet](docs/BOOKMARKLET.md) fallback.
+2. **Confirm the `STFC_ACCOUNTS` GitHub secret is set.** If you let
+   `capture-token` use `gh`, it's already done. Otherwise, paste the JSON
+   `capture-token` wrote to `.env` into *Settings → Secrets and variables →
+   Actions → STFC_ACCOUNTS*.
+3. **Enable the `Redeem gifts` workflow** under the Actions tab. It will run
+   on the cron schedule (every 4 hours) from then on. You can also trigger
+   it manually with the **Run workflow** button to verify everything works.
 
 ---
 

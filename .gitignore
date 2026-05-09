@@ -9,8 +9,12 @@ node_modules
 dist
 
 # Local config
-.env
+
 .env.local
+
+# Playwright (capture-token script)
+playwright-diagnostics/
+.playwright-profiles/
 
 # Editor
 .vscode/*

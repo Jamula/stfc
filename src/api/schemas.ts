@@ -2,24 +2,39 @@
 // We only validate the shape of fields the rest of the code reads — every
 // schema uses .passthrough() so unknown fields never cause failures, and
 // gift fields are all optional because the API has surprised us before.
+//
+// Field-name notes (verified against the live API):
+// - The list endpoint returns items with `bundle_id` (snake_case).
+// - The claim endpoint expects `bundleId` (camelCase) in the request body.
+// - The list also has a flat string `title` and `name`. The boolean-ish
+//   flags `is_special`, `is_giftable`, etc. are 0/1 numbers, not booleans.
 
 import { z } from "zod";
 
 const numericOrString = z.union([z.number(), z.string()]);
+const truthyish = z.union([z.boolean(), z.number()]).optional();
 
 export const AuthMeResponseSchema = z.object({}).passthrough();
 export type AuthMeResponse = z.infer<typeof AuthMeResponseSchema>;
 
 export const GiftSchema = z
   .object({
+    bundle_id: numericOrString.optional(),
     bundleId: numericOrString.optional(),
     id: numericOrString.optional(),
     title: z.string().optional(),
-    isClaimable: z.boolean().optional(),
-    isClaimed: z.boolean().optional(),
-    isSpecial: z.boolean().optional(),
-    hasCost: z.boolean().optional(),
-    isAtMax: z.boolean().optional(),
+    name: z.string().optional(),
+    is_special: truthyish,
+    isSpecial: truthyish,
+    is_giftable: truthyish,
+    has_cost: truthyish,
+    hasCost: truthyish,
+    is_at_max: truthyish,
+    isAtMax: truthyish,
+    is_claimable: truthyish,
+    isClaimable: truthyish,
+    is_claimed: truthyish,
+    isClaimed: truthyish,
   })
   .passthrough();
 export type Gift = z.infer<typeof GiftSchema>;
@@ -44,3 +59,4 @@ export const RedeemResponseSchema = z
   })
   .passthrough();
 export type RedeemResponse = z.infer<typeof RedeemResponseSchema>;
+

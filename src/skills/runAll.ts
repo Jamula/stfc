@@ -33,7 +33,7 @@ import {
 import { PromoCodesFileError, readPromoCodes } from "../lib/promoCodes.ts";
 import { redactForLog } from "../lib/redact.ts";
 import { heading, table, type SummaryWriter } from "../lib/summary.ts";
-import { ApiClient, SchemaMismatchError, TokenExpiredError } from "../api/client.ts";
+import { ApiClient, ApiError, SchemaMismatchError, TokenExpiredError } from "../api/client.ts";
 import { claimGift, getMe, listGifts, redeemCode } from "../api/endpoints.ts";
 import type { Gift } from "../api/schemas.ts";
 
@@ -202,9 +202,9 @@ async function processOneGift(
     return { id, outcome: skip };
   }
 
-  const bundleId = gift.bundleId ?? gift.id;
+  const bundleId = gift.bundleId ?? gift.bundle_id ?? gift.id;
   if (bundleId === undefined) {
-    return { id, outcome: Outcomes.UNKNOWN_RESULT, detail: "no bundleId or id field" };
+    return { id, outcome: Outcomes.UNKNOWN_RESULT, detail: "no bundleId/bundle_id/id field" };
   }
 
   try {
@@ -215,13 +215,22 @@ async function processOneGift(
       report.errors.push({ account: accountName, message: `gifts/claim schema mismatch: ${redactForLog(err)}` });
       return { id, outcome: Outcomes.UNKNOWN_RESULT, detail: "schema mismatch" };
     }
+    // The API returns HTTP 404 with body "Bundle not available." for gifts
+    // that have already been claimed in the current cycle (or are otherwise
+    // no longer redeemable for this player). That's an expected outcome,
+    // not an error.
+    if (err instanceof ApiError && err.status === 404 && /not available/i.test(err.message)) {
+      return { id, outcome: Outcomes.ALREADY_CLAIMED };
+    }
     return { id, outcome: classifyHttpError(err), detail: redactForLog(err) };
   }
 }
 
 function describeGift(gift: Gift): string {
   if (gift.title && gift.title.length > 0) return gift.title;
+  if (gift.name && gift.name.length > 0) return gift.name;
   if (gift.bundleId !== undefined) return String(gift.bundleId);
+  if (gift.bundle_id !== undefined) return String(gift.bundle_id);
   if (gift.id !== undefined) return String(gift.id);
   return "(unnamed)";
 }
