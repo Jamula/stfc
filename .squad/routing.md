@@ -34,6 +34,45 @@ How to decide who handles what.
 3. Members can reassign by removing their label and adding another member's label.
 4. The `squad` label is the "inbox" — untriaged issues waiting for Picard's review.
 
+### How to Create Issues (mandatory convention)
+
+Every issue created by a squad member **must** carry at minimum two labels: `squad` (for team awareness/triage) and `squad:{author}` (for ownership attribution). Add content labels (`bug`, `enhancement`, `question`, etc.) where applicable.
+
+| Situation | Labels |
+|-----------|--------|
+| Agent opens any new issue | `squad`, `squad:{agent-name}` |
+| Bug found during testing | `squad`, `squad:bashir`, `bug` |
+| Enhancement idea from any member | `squad`, `squad:{agent-name}`, `enhancement` |
+| Uhura hands off work to Scotty | `squad`, `squad:uhura`, `squad:scotty` |
+| Cross-cutting concern | `squad`, all relevant `squad:{member}` labels |
+
+**Examples:**
+
+```bash
+# Bashir opens a test coverage issue
+gh issue create \
+  --title "Add unit tests for gift redemption error paths" \
+  --body "..." \
+  --label "squad,squad:bashir,enhancement"
+
+# Uhura raises an auth migration issue and hands off to Scotty
+gh issue create \
+  --title "Migrate from password auth to Scopely OAuth" \
+  --body "..." \
+  --label "squad,squad:uhura,squad:scotty,enhancement"
+
+# Picard opens a cross-cutting architecture question
+gh issue create \
+  --title "Should we add multi-account parallel redemption?" \
+  --body "..." \
+  --label "squad,squad:picard,question"
+```
+
+**Anti-patterns:**
+- ❌ Issues without any `squad:*` label — no ownership, no routing
+- ❌ Issues with only `squad` (base) but no author label — Picard must re-triage
+- ❌ Using freeform labels instead of `squad:{member}` convention
+
 ## Rules
 
 1. **Eager by default** — spawn all agents who could usefully start work, including anticipatory downstream work.
