@@ -212,3 +212,23 @@
 
 6. **Active game systems context (for the squad):** Starfleet Academy (Update 90) is the current arc — Remote Campus, Academy Space, Duo Wave Defense, Simulation Codes (note: in-game currency, not promo codes — naming collision worth flagging to avoid confusion in code/docs). G5 Scrapping, Sigma Refinery, Battle Pass refresh, Emerald Chain expansion all live.
 
+
+---
+
+### Merge: origin/copilot/joint-puffin + origin/main → main (2026-05-12)
+
+**Branches merged:** `origin/copilot/joint-puffin` (local) + `origin/main` (117974f: PR #2 "Enable worktrees, wire GitHub Issues, add STFC knowledge base and issue-creation skill") into `main`.
+
+**Conflict patterns observed:**
+
+- **Both-added knowledge docs (`game-flow.md`, `news.md`):** One side (ours, from a Picard research session) was the research-first superset with full detail. The other (theirs, from Uhura via PR #2) was a structured summary with different organization. Resolution: **take the superset (ours) as the base, append the Index section from theirs.** Both sides had unique value only in the Index — everything else was covered in the richer version.
+
+- **Both-added skill (`issue-creation/SKILL.md`):** Two different conventions for the same skill. Ours had a 3-case routing table (self-assign, handoff, triage-only). Theirs required `squad:{author}` on every issue including triage cases. Resolution: **kept ours' routing logic** (the 3-case model is more coherent — omitting agent label signals "needs triage") but incorporated theirs' `valid agent values` list, concrete named examples (Bug/Enhancement/Architecture patterns), and additional anti-patterns. The conventions are now consolidated in one place.
+
+- **Both-modified routing table (`routing.md`):** Conflict only in the "How to Create Issues" section — same divergence as SKILL.md. Resolution: **same merge strategy as SKILL.md** — ours' 3-case routing table + theirs' named examples + expanded anti-patterns list.
+
+- **Rebase introduced second routing.md conflict:** After `git pull --rebase`, the rebased local checkpoint commit re-introduced the same routing.md conflict. Resolved identically; rebased cleanly.
+
+**Key pattern to remember:** When merging "both added" knowledge docs, always check which side has more research depth. The richer side is the base; the other side contributes structure/organization/Index. Never just pick one side — extract unique value from each.
+
+**Routing convention decision:** The 3-case triage model (self-assign / handoff / triage-only-squad) is authoritative. The "always require squad:{author}" convention from PR #2 was merged in as examples but not adopted as the primary table.
