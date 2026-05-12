@@ -34,6 +34,36 @@ How to decide who handles what.
 3. Members can reassign by removing their label and adding another member's label.
 4. The `squad` label is the "inbox" — untriaged issues waiting for Picard's review.
 
+### How to Create Issues (mandatory convention)
+
+When ANY squad member files a new issue (`gh issue create`), it MUST carry routing labels. See `.copilot/skills/issue-creation/SKILL.md` for the full pattern. Quick reference:
+
+| Situation | Labels |
+|-----------|--------|
+| In my own domain (self-assign) | `squad,squad:{my-name},{content-label}` |
+| Clearly belongs to another agent | `squad,squad:{their-name},{content-label}` |
+| Cross-domain or unclear → Picard triages | `squad,{content-label}` |
+
+Where `{content-label}` is one of: `bug`, `enhancement`, `documentation`, `question`.
+
+**Examples:**
+
+```bash
+# Bashir self-assigns a coverage gap
+gh issue create -t "Fixture missing for Augments-faction ship" \
+  -l "squad,squad:bashir,enhancement" -b "..."
+
+# Uhura hands off a CLI flag tweak to Scotty
+gh issue create -t "Add --dry-run to redeem-codes" \
+  -l "squad,squad:scotty,enhancement" -b "..."
+
+# Anyone files a cross-cutting question for triage
+gh issue create -t "Should we cap parallel redemptions per account?" \
+  -l "squad,question" -b "..."
+```
+
+**Anti-patterns:** Filing without any `squad*` label (invisible to Ralph), self-assigning out-of-charter work, multiple `squad:{member}` labels on one issue.
+
 ## Rules
 
 1. **Eager by default** — spawn all agents who could usefully start work, including anticipatory downstream work.

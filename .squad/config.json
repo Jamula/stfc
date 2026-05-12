@@ -1,5 +1,6 @@
 {
   "version": 1,
+  "worktrees": true,
   "agentModelOverrides": {
     "picard": "claude-opus-4.7-1m-internal",
     "uhura": "claude-opus-4.7-1m-internal",

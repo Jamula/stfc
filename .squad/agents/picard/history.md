@@ -191,3 +191,24 @@
 5. **Schema permissiveness for API resilience.** The API client uses permissive schema validation (accepting unknown fields) while still enforcing required field shapes. This is a deliberate trade-off: strict enough to catch contract breakage, loose enough to survive upstream additions. Both field naming inconsistency (snake_case vs camelCase) and type flexibility (boolean vs 0/1) are accommodated.
 
 **Implications for future specs:** The 000-current-state spec is now the baseline. Any future feature spec should reference it and specify only the delta. The 13 NEEDS CLARIFICATION markers are the immediate backlog for user resolution — several (rate limiting, non-ENOENT file errors, concurrency semantics) could become FR additions once clarified.
+
+---
+
+### 2026-05-12T04:12:27Z — News Beat Recon (Picard)
+
+**What:** Captured the STFC news surface to `.squad/knowledge/stfc/news.md`. Pulled the WP REST feed (`/wp-json/wp/v2/posts`), enumerated the last 10 posts, and read four high-signal posts in full (Update 90.1 patch notes, Battle Pass/Leslie compensation, Quark's Halloween riddle, Login Security Improvements).
+
+**Learnings — implications for our redemption schedule:**
+
+1. **News cadence (~2–3 posts/week, 9 in last 24 days) does NOT drive promo-code cadence.** Most posts are patch notes / feature highlights / event schedules — not code drops. Codes appear in clusters tied to seasonal events (Halloween riddle was 5 daily hints assembled into one shared code; Anniversary windows in Nov/Dec produce more). Our 4-hour cron is comfortably faster than the news beat. **No need to tighten the schedule based on news rhythm alone.**
+
+2. **The redemption surface is confirmed and stable.** "Promo Code Redemption page on the official Star Trek Fleet Command Website" is the canonical channel. Codes are share-friendly, case-insensitive, no per-user limit on the campaigns I read. This validates our charter: a headless redeemer is a sensible automation.
+
+3. **MAJOR strategic flag — auth surface is on a deprecation timer.** The Feb 26, 2026 post announced Scopely is phasing out passwords in favor of passwordless email-verification-code login. If our redeemer relies on `username + password` auth, that flow is on borrowed time. This is the single most important finding of this recon. I'm dropping a decision-inbox note so the team triages auth posture before we ship more features on a shaky foundation.
+
+4. **Missing input upstream.** Scopely does not publish a list of valid codes — codes circulate via community channels (Discord, Reddit). Our pipeline needs an *input* source. The news beat is NOT that source. Worth raising with Brady whether we're scoped to "ingest a curated list and redeem" vs "discover codes ourselves."
+
+5. **Compensation is a different channel.** The May 1 compensation bundle is delivered to in-game inbox, not the web store. Our redeemer correctly does not need to touch this. Worth making the scope boundary explicit in the spec.
+
+6. **Active game systems context (for the squad):** Starfleet Academy (Update 90) is the current arc — Remote Campus, Academy Space, Duo Wave Defense, Simulation Codes (note: in-game currency, not promo codes — naming collision worth flagging to avoid confusion in code/docs). G5 Scrapping, Sigma Refinery, Battle Pass refresh, Emerald Chain expansion all live.
+
