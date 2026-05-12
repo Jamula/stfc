@@ -36,42 +36,40 @@ How to decide who handles what.
 
 ### How to Create Issues (mandatory convention)
 
-Every issue created by a squad member **must** carry at minimum two labels: `squad` (for team awareness/triage) and `squad:{author}` (for ownership attribution). Add content labels (`bug`, `enhancement`, `question`, etc.) where applicable.
+When ANY squad member files a new issue (`gh issue create`), it MUST carry routing labels. See `.copilot/skills/issue-creation/SKILL.md` for the full pattern. Quick reference:
 
 | Situation | Labels |
 |-----------|--------|
-| Agent opens any new issue | `squad`, `squad:{agent-name}` |
-| Bug found during testing | `squad`, `squad:bashir`, `bug` |
-| Enhancement idea from any member | `squad`, `squad:{agent-name}`, `enhancement` |
-| Uhura hands off work to Scotty | `squad`, `squad:uhura`, `squad:scotty` |
-| Cross-cutting concern | `squad`, all relevant `squad:{member}` labels |
+| In my own domain (self-assign) | `squad,squad:{my-name},{content-label}` |
+| Clearly belongs to another agent | `squad,squad:{their-name},{content-label}` |
+| Cross-domain or unclear → Picard triages | `squad,{content-label}` |
+
+Where `{content-label}` is one of: `bug`, `enhancement`, `documentation`, `question`.
 
 **Examples:**
 
 ```bash
-# Bashir opens a test coverage issue
-gh issue create \
-  --title "Add unit tests for gift redemption error paths" \
-  --body "..." \
-  --label "squad,squad:bashir,enhancement"
+# Bashir self-assigns a coverage gap
+gh issue create -t "Fixture missing for Augments-faction ship" \
+  -l "squad,squad:bashir,enhancement" -b "..."
 
-# Uhura raises an auth migration issue and hands off to Scotty
+# Uhura raises an auth migration and hands off to Scotty
 gh issue create \
   --title "Migrate from password auth to Scopely OAuth" \
   --body "..." \
   --label "squad,squad:uhura,squad:scotty,enhancement"
 
-# Picard opens a cross-cutting architecture question
-gh issue create \
-  --title "Should we add multi-account parallel redemption?" \
-  --body "..." \
-  --label "squad,squad:picard,question"
+# Anyone files a cross-cutting question for triage
+gh issue create -t "Should we cap parallel redemptions per account?" \
+  -l "squad,question" -b "..."
 ```
 
 **Anti-patterns:**
-- ❌ Issues without any `squad:*` label — no ownership, no routing
-- ❌ Issues with only `squad` (base) but no author label — Picard must re-triage
-- ❌ Using freeform labels instead of `squad:{member}` convention
+- ❌ Filing without any `squad*` label — invisible to Ralph and squad workflows
+- ❌ Self-assigning out-of-charter work — hand off explicitly instead
+- ❌ Multiple `squad:{member}` labels when routing is unclear — use `squad` only and let Picard triage
+- ❌ Using freeform labels (`picard`, `scotty`) instead of the `squad:{member}` convention
+
 
 ## Rules
 
