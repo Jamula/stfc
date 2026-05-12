@@ -384,6 +384,39 @@ Per-principle disposition:
 **Result**: v1.2.0 ratified with 3 documented tensions scheduled for v1.3.0 resolution. Prevents indefinite revision cycles while creating accountability for follow-ups.
 
 ---
+### 2026-05-12T05:28:08Z: Feature 001-discord-monitor — clarify decisions (5 product decisions + 1 deferred)
+
+**By:** cyrusj (via speckit.clarify workflow)
+
+**What**: Resolved 5 open technical questions on the 001-discord-monitor feature via structured Q&A. Decisions determined the Discord auth model, tip/trick/hack classifier architecture, channel allow-list initialization, promo-codes.txt mutation policy, and digest artifact storage. One decision (re-suppression cool-down default) was deferred to /speckit.plan with a suggested 30-day default.
+
+**The 5 decisions**:
+
+1. **Discord auth model** (affects FR-002): Dedicated Discord bot application with minimum scopes `READ_MESSAGE_HISTORY` and `VIEW_CHANNEL`. Bot token custodied as `DISCORD_BOT_TOKEN` per Principle V. User-token self-bots explicitly forbidden.
+   - *Rationale*: Discord ToS; bot model is sanctioned, scoped, and revocable.
+
+2. **Tip/trick/hack classifier** (affects FR-016, FR-017): Local small model on the runner; no remote API calls. Message text does not leave the runner.
+   - *Rationale*: Discord message content is third-party user data; sending to remote LLM is a privacy/ToS surface we avoid. Trade: larger CI image size and runtime for privacy.
+
+3. **Server/channel allow-list** (affects FR-001): TBD — system launches with an EMPTY allow-list. Implementation MUST support configuration-driven allow-list addition and graceful operation (no Discord ingestion, fallback to `promo-codes.txt` only) when list is empty. No hard-coded IDs.
+   - *Rationale*: Server access requires admin cooperation not yet arranged. System must be useful before bot has any servers.
+
+4. **promo-codes.txt mutation policy** (affects FR-014): Auto-commit successful new codes directly to `promo-codes.txt` on main. No PR/review gate. Speed prioritized over review.
+   - *Rationale*: Operator (cyrusj) prioritized turnaround. Mitigation (per-run code cap, attributed commits) deferred to /speckit.plan.
+
+5. **Daily digest artifact storage** (affects FR-022, FR-023): Committed Markdown file at `data/digests/YYYY-MM-DD.md` (UTC date), versioned in git, retained indefinitely. Runner is idempotent (re-run on same day updates in place).
+   - *Rationale*: Free, durable, greppable; aligns with existing repo-as-source-of-truth pattern (promo-codes.txt).
+
+**Deferred decision**:
+
+- **Re-suppression cool-down window** (affects FR-009): **Default: 30 days** (deferred to /speckit.plan for review during technical planning if needed).
+
+**Source**: specs/001-discord-monitor/spec.md ## Clarifications section (Q1–Q5 answers + Q-deferred).
+
+**Status**: Integrated into spec.md by specify-scribe; ready for /speckit.plan.
+
+---
+
 
 ## Governance
 
