@@ -82,7 +82,7 @@ jobs:
       # Post human-readable remediation guidance as a PR comment when blocked.
       - name: Post remediation guidance
         if: failure() && steps.scan.outcome == 'failure'
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b  # v7.1.0
         with:
           script: |
             const body = [
