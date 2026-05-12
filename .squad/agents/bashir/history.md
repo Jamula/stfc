@@ -287,3 +287,120 @@ This recon document enforces Principle IX (Test-first) by making tests the *sour
 - Build a recon-based test generator (read the MUST statements, emit test stubs for a new language)
 
 ---
+
+### 2026-05-12: Database Recon — Entity-Shape Patterns for Future Fixtures
+
+Pulled the STFC entity database for fixture-shape mapping. Captured to
+`.squad/knowledge/stfc/database.md`. Headline learnings (the ones that
+should drive every future STFC-data fixture in this repo):
+
+**1. The "official" database page is a thin portal — real data lives at
+stfc.space (community PWA, JS-rendered) backed by `data.stfc.space`
+translation JSONs.** Anonymous CLI access works for `/translations/en/<type>.json`
+but NOT for `/<type>/summary.json` (the stat-bearing files appear to need
+the SPA's bootstrap context). For fixture purposes the i18n files give us
+strings + IDs + a clean uniform schema; that's enough to drive 80% of
+realistic fixture work without scraping the SPA.
+
+**2. Universal i18n shape:** every translation row is
+`{id: int|null, key: string, text: string}`. `id` is the stable numeric
+entity key when non-null; `null` = pure UI string. Lock this shape with a
+JSON schema and reuse it across ships/officers/factions/etc. Multiple `key`
+values can share an `id` (officer 124 has both `officer_name` and
+`faction_character_name`).
+
+**3. IDs are integers, never slugs, and span three size classes:**
+small dense (0–1000) for legacy entities, 5-digit grouped (35xxx, 88xxx,
+90xxx) for content drops/factions, and 9–10-digit (1000162982) for
+procedurally-generated systems and missions. **Never use `range(1, N)` to
+populate fixture IDs** — production IDs are non-contiguous and a contiguous
+loop will hide off-by-one bugs that production data exposes immediately.
+
+**4. Names are NOT unique keys.** Confirmed duplicates: faction `Borg`
+(id=13 AND id=84003), `Maverick` (88001 / 88005), `Flashpoint` (80002 / 80003);
+ships `U.S.S. ENTERPRISE` (10 / 29 — original-cast vs Kelvin), `D'DERIDEX`
+(47 / 35013), `VOR'CHA` (35005 / 50), `NEGH'VAR` (54 / 60007). Synergy
+groups have `Galaxy Quest` (id 42, Title) AND `GALAXY QUEST` (id 54,
+SHOUT) as DIFFERENT groups. **Any test that keys on display name will
+silently merge distinct entities.**
+
+**5. Production ships data with typo'd keys.** Real keys observed in live
+data:
+  - `officer_tootltip_description_short` (extra "t") — 87 rows
+  - `factian_name_upper_plural` (should be "faction_*")
+  - `reserach_project_description` (should be "research_*") — 3 rows
+Loaders should accept BOTH the typo'd and canonical forms, OR fail loudly
+with the bad-key name in the error message. Silently dropping these rows
+loses real entities.
+
+**6. Inconsistent API entity-slug pluralisation.** Singular: `building`,
+`hostile`, `research`, `resource`. Plural: `ships`, `officers`, `missions`,
+`systems`, `consumables`, `factions`. Special: `forbidden_tech`, `chaos_tech`,
+`loyalty`, `starbase`. **Any URL builder MUST be tested against the actual
+slug for each entity type, not derived by pluralising.**
+
+**7. Multi-faction is real and encoded as icon concatenation.** JS bundle
+ships `${G.Federation}${G.Klingon}` and `${G.Romulan}${G.Federation}${G.Klingon}`
+templates; assets include `federation_klingon.png` and
+`federation_klingon_romulan.png`. A single ship/officer can belong to up
+to 3 factions. Fixtures with only single-faction entities will hide
+multi-faction bugs. **At least one multi-faction entry in every test
+fixture set.**
+
+**8. Rich-text and Unicode in display strings.** Real production strings
+include:
+  - Unity rich-text: `Frontier Raider <color=#FFEF40>HAZ</color>`
+  - Format placeholders: `<color=#{0}>Harry Mudd</color>`
+  - Greek: `Imperial Starfleet Ω-Annihilator`
+  - Stars: `★ FEDERATION SCOUT`, `Aggregation Extractor ★`
+  - Arrow variant discriminators: `Actian Chrysalis ⇀ / ⇁ / ⇂` (three
+    DIFFERENT hostiles)
+  - Synergy-group arrows: `⇦ RETALIATION SQUAD`, `⇧ RETALIATION SQUAD`,
+    `⇥ RETALIATION SQUAD` (three DIFFERENT groups)
+**Any normalize-to-ASCII or strip-non-printable step will collapse
+distinct entities. If we ever sanitize display strings, the test suite
+must include the arrow trio and assert post-normalize they remain
+distinguishable.**
+
+**9. Sentinel placeholder text.** `MISSING DESCRIPTION`, `[PH] …`,
+`DO NOT USE`, `????` (literal four question marks — synergy group id 15),
+single periods `"."` (resources 9056-9060 + thousands of procedural
+systems/missions). Display-rendering tests need at least one of each.
+
+**10. Codename ≠ display name.** `resource_duranium` key has display text
+`"PARSTEEL"`. Any code that joins on internal codenames must keep both
+the codename and the player-facing display name, not assume they match.
+
+**11. British spelling in production data.** Systems file uses `flavour`
+(not `flavor`) as a key. Don't normalize to US spelling — mirror exactly.
+
+**12. Whitespace quirks in real names.** `Academy Training Drone  ⇔` has
+a DOUBLE space before the arrow. Trim-on-load is dangerous; collapse-internal-whitespace is even more dangerous (would break the arrow-discriminated
+synergy groups too).
+
+**Edge cases I will defend against in any future STFC fixture set** (full
+table in `database.md`, summary here):
+apostrophes (`B'REL`), periods-in-name (`U.S.S. ENTERPRISE`), hyphens
+(`Xindi-Reptilian`), ampersand (`BLOOD & HONOR`), Greek (`Ω`), star (`★`),
+Unity rich-text (`<color=…>…</color>`), arrow-variant discriminators
+(`⇀ / ⇁ / ⇂`), period-only `text`, empty `text`, `MISSING DESCRIPTION`
+sentinel, multi-faction entity, duplicate display names with distinct IDs,
+non-contiguous integer IDs, mixed-case casing in same entity type, typo'd
+keys in production, codename ≠ display name, slug-inconsistent API URLs.
+
+**Charter alignment:** This is exactly the kind of "what shapes will fixtures
+need to mirror" reconnaissance that lets us write integration tests with
+realistic inputs (per my charter — "Prefer integration tests with realistic
+inputs over mocks-of-mocks"). Logged a team-relevant decision proposal in
+`.squad/decisions/inbox/bashir-database-recon.md` calling out the most
+defensible fixture-design rules to bake into our test culture before anyone
+actually writes the first STFC-data-shaped test.
+
+**Open question I flagged for the team:** the gift-redeemer codebase may
+not actually need any of this — its API surface is `redeem-code` flow,
+which probably never touches ship/officer/faction names. If so, this
+recon is forward-looking only. I have NOT proposed adding fixtures to
+the repo yet; that decision belongs to whoever actually owns the next
+feature spec.
+
+---
