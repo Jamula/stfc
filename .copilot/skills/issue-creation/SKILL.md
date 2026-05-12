@@ -1,6 +1,6 @@
 ---
 name: "issue-creation"
-description: "How squad members create GitHub issues with the correct routing labels"
+description: "GitHub issue creation conventions for the stfc-gift-redeemer squad"
 domain: "github-workflow"
 confidence: "high"
 source: "manual"
@@ -8,102 +8,96 @@ source: "manual"
 
 ## Context
 
-When a squad member needs to file a GitHub issue (capturing follow-up work, an idea, a bug they noticed but won't fix now, a question for triage), the issue MUST carry the right labels so Squad's routing automation works.
+Every issue created by a squad member in the Jamula/stfc repository must follow the label convention defined here. This ensures correct routing through the squad triage workflow and clear attribution of ownership.
 
-This applies to:
-- Agents creating issues from in-session work (`📌 Proactive: filed #N`)
-- Agents creating issues to hand off scope they don't own
-- The coordinator filing issues when a directive needs follow-up
-- Anyone using `gh issue create` from this repo
+## Label Convention
 
-## The convention
+| Label | Purpose | Required? |
+|-------|---------|-----------|
+| `squad` | Marks the issue for squad triage / awareness | ✅ Always |
+| `squad:{agent-name}` | Author attribution + ownership routing | ✅ Always (at least one) |
+| `bug` / `enhancement` / `question` | Content classification | ⬜ When applicable |
 
-Every squad-created issue MUST carry **at minimum** the `squad` label. The `squad` label is the team's inbox — it tells the workflows "this is squad work."
+Valid `squad:{agent-name}` values: `squad:picard`, `squad:scotty`, `squad:uhura`, `squad:bashir`, `squad:borg-queen`, `squad:tuvok`
 
-On top of `squad`, choose ONE of:
+## Patterns
 
-| Situation | Add label | What happens |
-|-----------|-----------|--------------|
-| Issue is in **my own** domain | `squad:{my-name}` | Self-assigned. I (or future-me in another session) pick it up. |
-| Issue clearly belongs to **another agent's** domain | `squad:{their-name}` | Direct hand-off. They pick it up next session. |
-| Issue spans multiple domains OR I'm not sure who should own it | (no sub-label — `squad` only) | Picard triages on next session start. |
+### Minimum viable issue
 
-Then add **content labels** as appropriate (these already exist on the repo):
-- `bug` — something is broken
-- `enhancement` — new feature or improvement
-- `documentation` — docs change only
-- `question` — needs human input before work can start
-
-## Required commands
-
-**From any agent — file with self-assignment:**
 ```bash
 gh issue create \
-  --title "{concise actionable title}" \
-  --body "{context, repro/intent, acceptance criteria}" \
-  --label "squad,squad:{my-name},{enhancement|bug|...}"
+  --title "<concise description>" \
+  --body "<detail>" \
+  --label "squad,squad:{your-name}"
 ```
 
-**From any agent — hand off to another member:**
+### Bug report (Bashir)
+
 ```bash
 gh issue create \
-  --title "..." \
-  --body "Originally surfaced by {my-name} during {work}. Handing off to {their-name} because {reason}." \
-  --label "squad,squad:{their-name},{enhancement|bug|...}"
+  --title "Bug: <short description>" \
+  --body "## Steps to Reproduce\n\n1. ...\n\n## Expected\n\n...\n\n## Actual\n\n..." \
+  --label "squad,squad:bashir,bug"
 ```
 
-**From any agent — needs triage:**
+### Enhancement with handoff (Uhura → Scotty)
+
 ```bash
 gh issue create \
-  --title "..." \
-  --body "Surfaced by {my-name}. Routing unclear — flagging for Picard's triage." \
-  --label "squad,{enhancement|bug|...}"
+  --title "Enhancement: <short description>" \
+  --body "## Context\n\n...\n\n## Proposed Approach\n\n..." \
+  --label "squad,squad:uhura,squad:scotty,enhancement"
 ```
 
-## Body template
+### Architecture / question (Picard)
 
-Every squad-created issue body should include:
+```bash
+gh issue create \
+  --title "Question: <decision needed>" \
+  --body "## Background\n\n...\n\n## Options\n\n1. ...\n2. ..." \
+  --label "squad,squad:picard,question"
+```
+
+## Issue Body Template
 
 ```markdown
-**Surfaced by:** {agent-name} during {brief context}
-**Why it matters:** {one line}
+## Summary
 
-## What
-{the specific change / behaviour wanted}
+<1-2 sentence description of the issue>
 
-## Why
-{user-facing or system-facing rationale}
+## Context
 
-## Acceptance
-- [ ] {checkable outcome 1}
-- [ ] {checkable outcome 2}
+<Why this matters; what triggered the discovery>
 
-## Notes
-{any relevant file paths, decisions, links}
+## Proposed Action
+
+<What should happen; who should act>
+
+## References
+
+- <links, file paths, or related issues>
 ```
 
-Keeps Picard's triage cheap and the next-session pickup unambiguous.
+## Anti-Patterns
 
-## Anti-patterns
-
-- ❌ Filing an issue without ANY `squad*` label — it disappears from Ralph's scan and from squad workflows.
-- ❌ Adding multiple `squad:{member}` labels — only one owner per issue. If it spans domains, leave just `squad` and let Picard triage.
-- ❌ Self-assigning when the work is clearly out of your charter — hand off explicitly instead.
-- ❌ Filing a "do everything" mega-issue. Decompose first; one issue = one ownable chunk of work.
-- ❌ Using arbitrary new labels without confirming they exist (`gh label list`). The sync-squad-labels workflow manages `squad*`, `go:*`, and `release:*` — extending those families requires updating `team.md` or the workflow.
+- ❌ Opening an issue without any `squad:*` label — no ownership, falls into triage limbo
+- ❌ Opening an issue with only `squad` (base) but no author label — Picard must re-triage blindly
+- ❌ Using freeform attribution labels (`picard`, `scotty`) instead of the `squad:{member}` convention
+- ❌ Cross-cutting issues with only one member's label when multiple members are involved
+- ❌ Omitting the `squad` base label — breaks the triage workflow trigger
 
 ## Verification
 
-After creating an issue, confirm the labels stuck:
+After creating an issue, confirm labels are correct:
+
 ```bash
-gh issue view {N} --json labels --jq '.labels[].name'
+gh issue view <issue-number> --json labels --jq '.labels[].name'
+# Must include "squad" and at least one "squad:*" label
 ```
 
-Expected output includes `squad` and exactly one of: nothing else from the squad family (untriaged), or one `squad:{member}` (assigned).
+## Related Files
 
-## Related
-
-- `.squad/routing.md` — full routing table and triage rules
-- `.github/workflows/sync-squad-labels.yml` — auto-creates `squad:{member}` labels from `team.md`
-- `.github/workflows/squad-triage.yml` — runs Picard's triage when `squad` label is added
-- `.github/workflows/squad-issue-assign.yml` — handles `squad:{member}` → assignment
+- `.squad/routing.md` — routing table and triage workflow description
+- `.squad/team.md` → `## Issue Source` — GitHub connection metadata
+- `.github/workflows/squad-triage.yml` — triggered by `squad` label
+- `.github/workflows/squad-issue-assign.yml` — triggered by `squad:*` labels

@@ -27,6 +27,15 @@
 
 <!-- @copilot is not on the roster yet. Ask cyrusj to add it if you want autonomous issue pickup. -->
 
+## Issue Source
+
+- **Repository:** Jamula/stfc
+- **Connected:** 2026-05-12
+- **Default branch:** main
+- **Labels:** `squad` (inbox/triage), `squad:picard`, `squad:scotty`, `squad:uhura`, `squad:bashir`, `squad:borg-queen`, `squad:tuvok`
+- **Worktrees:** enabled — each agent branch gets its own worktree
+- **Workflow:** New issues tagged `squad` → Picard triages → assigns `squad:{member}` → member picks up
+
 ## Project Context
 
 - **Owner:** cyrusj
