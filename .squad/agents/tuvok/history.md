@@ -14,6 +14,20 @@ Surgical editorial pass on `.squad/.scratch/constitution-v1.2.0-assembled.md` pe
 
 <!-- Append new learnings below. Each entry is something lasting about the project. -->
 
+### 2026-05-13 — Learnings from v1.3.0 amendment audit
+
+**Templates that depend on constitution principles:**
+- `.specify/templates/plan-template.md` — Constitution Check table (lines 38–49) references all nine principles by name and includes guidance text per principle. Principle V guidance (line 44) enumerates durable inputs and secret custody obligations verbatim. This template is the most amendment-sensitive: any change to a principle's scope, name, or enumerated lists will stale the guidance text.
+- `.specify/templates/spec-template.md` — API Contract section (lines 103–152) references Principles III, VII, and VIII by name. Less amendment-sensitive unless those principles are renamed or their obligations change.
+- `.specify/templates/tasks-template.md` — Header block (lines 11–17) references Principle IX by name and number. Stable unless Principle IX is amended.
+- `.specify/templates/constitution-template.md` — Structural only; no principle-specific content.
+- `.specify/templates/checklist-template.md` — No principle references.
+
+**Cross-reference patterns confirmed:**
+- The Sync Impact Report in the constitution's leading comment block is the canonical shape for amendment reports. Required fields: version change line, bump rationale, per-principle change summary (REVISED/KEPT/EXTENDED for each), templates needing re-sync (with status), open follow-ups, cross-check result.
+- Known Tensions entries in the Governance section carry a "Resolution scheduled: vX.Y.Z" field. When that version ships, the Sync Impact Report must either resolve the tension or explicitly re-target it. Omission is a governance gap.
+- `TODO(V1.3)` items in the v1.2.0 Sync Impact Report (helper-script redaction, SHA-pinning for squad-process workflows) are still open as of 2026-05-13.
+
 ### 2026-05-08T22:58:53-07:00 — Learnings from v1.2.0 editorial pass
 
 **Redaction surface (`src/`):**
