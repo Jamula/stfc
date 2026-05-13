@@ -1,128 +1,169 @@
 <!-- SYNC IMPACT REPORT -->
-Version change: 1.1.0 → 1.2.0 (MINOR)
-Bump rationale: MINOR — material expansion. Principles I–V are renamed and
-rewritten to match the actual CLI/API codebase; Principle V is extended with
-a new Token Capture Custody sub-section that imposes new obligations on
-`scripts/capture-token.mjs` and any future sanctioned writer. Security &
-Compliance Constraints and Development Workflow are fully revised to remove
-extension/browser-app fiction. Principles VI–IX and Governance are preserved
-verbatim. The Speckit Reviewer Gates sub-section is promoted to a standalone
-top-level section; content is verbatim from v1.1.0.
+Version change: 1.2.0 → 1.3.0 (MINOR)
+Bump rationale: MINOR — additive expansion only. No existing principle is removed,
+renamed, or contradicted. New sanctioned surfaces added: Discord monitor durable
+inputs (7 new committed paths), DISCORD_BOT_TOKEN custody rules, discord.com/api/v10
+and huggingface.co outbound scope, discord-monitor.yml SHA-pinning roster addition.
+The secret-definition broadening (§ V, edit 1) extends the prior closed list to an
+open-ended category ("any third-party API credential the orchestrator or its sibling
+skills carry") — this is a deliberate governance-model shift. Under v1.2.0, adding a
+new secret type to the enumerated list required a constitutional amendment; under
+v1.3.0, any future third-party credential is automatically covered without amendment.
+This is not MAJOR (no removal or backward-incompatible redefinition), but the shift is
+acknowledged here per Tuvok audit r1 P1-2 advisory and Picard r2 condition 8.
 
-Assembled: 2026-05-08T21:29:58-07:00 (Bashir — cross-lane assembly)
-Assembled from: Uhura's lane (Principles I, III, V, Security & Compliance)
-               + Scotty's lane (Principles II, IV, Development Workflow)
-               + v1.1.0 verbatim (Principles VI–IX, Speckit Reviewer Gates,
-                 Governance)
+Assembled: 2026-05-13T15:10:00Z (Tuvok — Process Auditor / Editorial Specialist)
+Feature context: 001-discord-monitor (specs/001-discord-monitor/)
+Reviewed by: Picard (APPROVE WITH CONDITIONS r1/r2/r3),
+             Tuvok (audit r1/r2/r3, SCOPE CORRECT MINOR),
+             Borg Queen (CLEAR r3)
 
 Per-principle change summary:
-  I.   REVISED   — "User Safety & Trust First" rewritten (Uhura): drops
-                    false universal-redactor / "tokens only in .env" framing;
-                    describes actual endpoints, auth paths, and redact surface.
-  II.  REVISED   — renamed "Dual-Platform Parity" → "Skill-Isolated CLI
-                    Architecture" (Scotty): describes actual skill dispatcher,
-                    exit-code contract, and run-all orchestration.
-  III. REVISED   — renamed "Resilient DOM Automation" → "Resilient
-                    Upstream-API Automation" (Uhura): drops DOM/selector text;
-                    describes ApiClient, typed errors, retry semantics.
-  IV.  REVISED   — renamed "Type-Safe, Component-First UI" → "Type-Safe
-                    Headless TypeScript CLI" (Scotty): drops React/Shadcn/
-                    Tailwind/build claims; describes actual tsconfig.json
-                    surface and tsx runtime.
-  V.   REVISED + EXTENDED — renamed "Transparent Local-Only Persistence" →
-                    "Stateless Operation & Secret Custody" (Uhura): drops
-                    Spark KV / chrome.storage claims; adds full durable-input
-                    list, sanctioned secret surfaces, and new Token Capture
-                    Custody sub-section (named writers, --ci channel rules,
-                    diagnostic shape-only obligation).
-  VI.  KEPT      — Specification-First Governance (verbatim from v1.1.0)
-  VII. KEPT      — Artifact Hygiene (verbatim from v1.1.0)
-  VIII.KEPT      — Wire-First Discovery (verbatim from v1.1.0)
-  IX.  KEPT      — Test-First Discipline (verbatim from v1.1.0)
+  I.   KEPT      — User Safety & Trust First: verbatim from v1.2.0.
+  II.  KEPT      — Skill-Isolated CLI Architecture: verbatim from v1.2.0.
+  III. KEPT      — Resilient Upstream-API Automation: verbatim from v1.2.0.
+                   Known Tension III auth/me overclaim: RE-TARGETED to v1.4.0
+                   (see Known Tensions disposition below).
+  IV.  KEPT      — Type-Safe Headless TypeScript CLI: verbatim from v1.2.0.
+  V.   EXTENDED  — Stateless Operation & Secret Custody: three additive edits:
+                   (a) Secret definition broadened to include third-party API
+                       credentials (open-ended category; deliberate governance-model
+                       shift — future credentials automatically covered, no
+                       per-credential amendment required).
+                   (b) Durable-inputs enumeration extended with 7 new committed
+                       paths for the discord-monitor skill.
+                   (c) Token Capture Custody sub-section extended with
+                       DISCORD_BOT_TOKEN isolation sentence.
+  VI.  KEPT      — Specification-First Governance: verbatim from v1.2.0.
+  VII. KEPT      — Artifact Hygiene: verbatim from v1.2.0.
+                   Known Tension VII .github/ scan-path overclaim: RE-TARGETED
+                   to v1.4.0 (see Known Tensions disposition below).
+  VIII.KEPT      — Wire-First Discovery: verbatim from v1.2.0.
+  IX.  KEPT      — Test-First Discipline: verbatim from v1.2.0.
 
-Speckit Reviewer Gates: KEPT — verbatim from v1.1.0; promoted to standalone
-  top-level section (## level) per assembly format. Content matches Scotty's
-  sub-section exactly.
+Speckit Reviewer Gates: KEPT — verbatim from v1.2.0.
 
-Security & Compliance Constraints: REVISED (Uhura) — drops Manifest V3,
-  extension permissions, CSP, and popup claims (none exist in this repo);
-  adds canonical credential store, sanctioned secret writers, workflow
-  permissions rule, scoped outbound-network rule, and SHA-pinning rule scoped
-  to token-handling workflows with squad-process follow-up documented.
+Security & Compliance Constraints: EXTENDED — two additive edits:
+  (a) Outbound network scope: discord.com/api/v10 (REST only, read-only scopes)
+      and huggingface.co (model weights download, integrity-checked against SHA-256
+      pinned in config/classifier-model.json) sanctioned for discord-monitor skill
+      only.
+  (b) SHA-pinning roster: discord-monitor.yml added alongside redeem.yml,
+      refresh-token.yml, test.yml, squad-test-gate.yml.
 
-Development Workflow: REVISED (Scotty) — drops npm run lint / npm run build /
-  npm run build:extension (none exist); adds npm run typecheck, npm test,
-  skill-specific smoke tests, and accurate CI gate descriptions; retargets
-  manual verification to skill:* commands and workflow_dispatch path.
+Development Workflow: KEPT — verbatim from v1.2.0.
 
-Governance: KEPT — verbatim from v1.1.0.
+Governance: KEPT — verbatim from v1.2.0. Known Tensions section updated below
+  with explicit disposition for all three v1.2.0 tensions (P0-3 requirement).
 
-Templates needing re-sync after ratification:
-  - .specify/templates/plan-template.md — Constitution Check table lists
-    principles by name; Principles I–V are renamed and must be updated.
-  - .specify/templates/spec-template.md — API Contract section references
-    Principle III by old name ("Resilient DOM Automation"); update to
-    "Resilient Upstream-API Automation".
-  - .specify/templates/tasks-template.md — principle name references; no
-    structural change needed.
-  - .github/copilot-instructions.md — still PENDING from v1.1.0 TODO; now
-    also needs Principle I–V name updates. Priority: before next ratification.
+Templates updated:
+  Template                                    | Change  | Notes
+  --------------------------------------------|---------|-------------------------------------------
+  .specify/templates/plan-template.md         | UPDATED | Principle V guidance (Constitution Check
+                                              |         | table): stale "durable inputs limited to
+                                              |         | STFC_ACCOUNTS / promo-codes.txt" replaced
+                                              |         | with 7-path enumeration per v1.3.0 edit.
+                                              |         | Secret definition updated to include
+                                              |         | third-party API credentials.
+  .specify/templates/spec-template.md         | NO-OP   | Principles III/VII/VIII not amended;
+                                              |         | names unchanged. v1.2.0 re-sync (Principle
+                                              |         | III name update) still pending as a
+                                              |         | separate TODO — not in v1.3.0 scope.
+  .specify/templates/tasks-template.md        | NO-OP   | Principle IX not amended.
+  .specify/templates/constitution-template.md | NO-OP   | Structural template; no principle content.
+  .specify/templates/checklist-template.md    | NO-OP   | No principle references.
+  .github/copilot-instructions.md             | NO-OP   | Pending from v1.1.0 TODO; not in scope
+                                              |         | for this MINOR amendment.
 
-Open follow-ups for v1.3.0:
-  - TODO(V1.3): Helper-script redaction — thread `redactString` (or
-    equivalent) through `scripts/capture-token.mjs` non-CI output paths and
-    `src/lib/logger.ts` so the `src/`-only redaction obligation can be widened
-    to cover helper-script surfaces. (Bashir adjudication: accept asymmetry
-    for v1.2.0; flag for v1.3.)
-  - TODO(V1.3): SHA-pinning for squad-process workflows — convert
-    sync-squad-labels.yml, squad-heartbeat.yml, squad-triage.yml,
-    squad-issue-assign.yml, and the `actions/github-script@v7` step in
-    squad-artifact-hygiene.yml from moving major-version tags to full commit
-    SHAs. (Bashir adjudication: accept narrow scope for v1.2.0.)
-  - TODO(POST-RATIFICATION, carried from v1.1.0): Create reusable
-    /speckit.checklist template encoding Bashir's test-quality checklist
-    (CHK001–CHK020).
+Known Tensions disposition (all three committed to v1.3.0 resolution in v1.2.0 Path D):
+
+  (a) Principle III — auth/me failure taxonomy overclaim
+      STATUS: RE-TARGETED to v1.4.0
+      Rationale: Resolving this tension requires auditing src/skills/runAll.ts
+      auth/me failure classification and either narrowing Principle III body text or
+      updating the classification logic. This amendment is strictly additive for the
+      discord-monitor feature and MUST NOT touch Principle III body text without a
+      dedicated verification pass. The overclaim originated in a prior editorial fix
+      (v1.2.0 schema-mismatch carve-out) and requires a principle-text precision
+      correction in v1.4.0.
+
+  (b) Principle VII / Security — .github/ scan-path overclaim
+      STATUS: RE-TARGETED to v1.4.0
+      Rationale: Resolving this tension requires either narrowing Principle VII text
+      to match the actual workflow trigger scope (.github/**/*.md only, per
+      .github/workflows/squad-artifact-hygiene.yml:12-21) or updating the workflow
+      to scan the full .github/ tree. Either fix requires a dedicated verification
+      pass against workflow trigger conditions — outside the scope of this additive
+      amendment.
+
+  (c) Redeem/refresh concurrency lock — un-principled
+      STATUS: RE-TARGETED to v1.4.0
+      Rationale: Principling the concurrency lock requires adding a dedicated
+      obligation (bullet or sub-section) to Principle II, Principle V, or Security &
+      Compliance Constraints, stating that any workflow sharing the
+      stfc-gift-redeemer concurrency group (including discord-monitor.yml) must
+      declare that group. This governance-text addition is outside the scope of
+      this narrowly scoped additive amendment. Implementers note: discord-monitor.yml
+      MUST share the stfc-gift-redeemer concurrency group (plan.md requirement);
+      constitutional principling deferred to v1.4.0.
+
+TODO(V1.3) items from v1.2.0 Sync Impact Report — disposition:
+
+  1. Helper-script redaction — thread redactString through scripts/capture-token.mjs
+     non-CI output paths and src/lib/logger.ts:
+     STATUS: DEFERRED to v1.4.0
+     Rationale: This is a code change, not a governance-text change, and is outside
+     the scope of a constitution amendment PR. The v1.2.0 Principle V text already
+     documents the known stderr surface and the remediation. No new principle text is
+     needed here. The implementation obligation should be tracked as a maintenance
+     task; principle re-sync (if obligations change after implementation) targets
+     v1.4.0.
+
+  2. SHA-pinning for squad-process workflows — sync-squad-labels.yml,
+     squad-heartbeat.yml, squad-triage.yml, squad-issue-assign.yml, and the
+     actions/github-script@v7 step in squad-artifact-hygiene.yml:
+     STATUS: DEFERRED to v1.4.0
+     Rationale: This requires verifying and updating live workflow files — an
+     implementation concern outside this governance amendment's scope. The
+     Security & Compliance Constraints SHA-pinning text remains accurate: it
+     correctly states that squad-process workflows currently use moving
+     major-version tags and tightening is a tracked follow-up. Deferred to v1.4.0.
+
+Open follow-ups for v1.4.0:
+  - Resolve Principle III auth/me failure taxonomy overclaim (see Known Tensions (a)).
+  - Resolve Principle VII / Security .github/ scan-path overclaim (see Known Tensions (b)).
+  - Principle the redeem/refresh/discord-monitor concurrency lock (see Known Tensions (c)).
+  - Implement helper-script redaction (TODO item 1 above); re-sync Principle V if
+    obligations change.
+  - Complete SHA-pinning for squad-process workflows (TODO item 2 above).
+  - TODO(POST-RATIFICATION, carried from v1.1.0): Create reusable /speckit.checklist
+    template encoding Bashir's test-quality checklist (CHK001-CHK020).
   - TODO(POST-RATIFICATION, carried from v1.1.0): Update
-    .github/copilot-instructions.md with Principle VI/VII awareness and
-    updated principle names.
+    .github/copilot-instructions.md with Principle VI/VII awareness and updated
+    principle names.
 
-Cross-check result: PASS — every concrete file path, npm script, and behavior
-  assertion in the assembled document was verified against the live repo by
-  Uhura (her lane) and Scotty (his lane) in this same revision pass. Bashir
-  spot-verified package.json scripts, CI workflow claims, and process.exit
-  scope against prior Borg Queen verification findings. No false claims found.
-  See cross-check table in .squad/decisions/inbox/bashir-v1.2.0-assembly.md.
+Cross-check result: Constitution edits are additive only. No principle body text
+  removed or contradicted. The 7 new durable-input paths are cross-referenced against
+  plan.md § Constitution Impact (lines 405-418) and tasks.md T000 P0-1 (lines 54-57).
+  discord-monitor.yml SHA-pinning roster addition is consistent with Security &
+  Compliance Constraints existing text. No false claims introduced.
+  plan-template.md Principle V guidance updated to match new durable-inputs scope.
+  Tuvok self-audit (amendment PR author, T000/T001 mandate).
 
-Editorial corrections: 2026-05-08T22:58:53-07:00 (Tuvok — deadlock-breaking
-  author per coordinator escalation). Five findings from Borg Queen's
-  verification (.squad/decisions/inbox/borg-queen-v1.2.0-verification.md)
-  applied as minimal pre-ratification edits. Version stays 1.2.0. No
-  principles added or removed. No cross-references broken. See change-summary
-  memo in .squad/decisions/inbox/tuvok-v1.2.0-edits.md.
-
-Path D acceptance: 2026-05-08T21:29:58-07:00 (Tuvok — transcription of Borg
-  Queen Pass 3 findings per cyrusj's Path D ratification decision). Borg Queen
-  Pass 3 returned 2 partially-resolved findings (Finding 2: Principle III
-  auth/me failure taxonomy overclaim; Finding 3: Principle VII / Security
-  .github/ scan-path overclaim). cyrusj chose Path D: ship v1.2.0 as-is with
-  both overclaims documented as accepted technical debt rather than continue
-  revision cycles. Version stays 1.2.0. No principle body text modified. Three
-  Known Tensions entries appended to the Governance section:
-    (a) Principle III — transient/unclassified auth/me failures overclaim
-        (Borg Queen Pass 3, Finding 2)
-    (b) Principle VII / Security — .github/ scan coverage overclaim
-        (Borg Queen Pass 3, Finding 3)
-    (c) No-principle gap — redeem/refresh concurrency lock not principled
-        (Borg Queen Pass 2, Section D item 3 — carryover)
-  Next version: v1.3.0 to address all three documented tensions.
-  See .squad/decisions/inbox/tuvok-v1.2.0-known-tensions.md.
+Editorial note: This amendment is authored by Tuvok (Process Auditor / Editorial
+  Specialist) under direct mandate from Cyrus Jamula, satisfying T000 and T001 of
+  specs/001-discord-monitor/tasks.md Phase 0. All six body edits copied verbatim from
+  plan.md § Constitution Impact (lines 396-444) per Tuvok charter discipline (no
+  improvisation). Deviations from verbatim copy are limited to formatting adaptations
+  for constitution prose style. Picard r2 conditions 6 and 7 addressed in this report.
+  Tuvok r3 P1 (templates-updated table) addressed in this report.
 <!-- /SYNC IMPACT REPORT -->
 
 # STFC Gift Redeemer Constitution
 
-**Version:** 1.2.0
+**Version:** 1.3.0
 **Ratified:** 2026-05-08
-**Last Amended:** 2026-05-08
+**Last Amended:** 2026-05-13
 
 ## Core Principles
 
@@ -265,6 +306,18 @@ sanctioned surfaces below; every other surface is treated as a leak.
   consumes the `STFC_EMAIL`, `STFC_PASSWORD` (or legacy `cj_pwd`), and
   `STFC_REFRESH_PAT` secrets, plus the optional `account_name` `workflow_dispatch`
   input. These are the *only* additional durable inputs the project recognizes.
+- The `discord-monitor` skill (`src/skills/discordMonitor.ts` +
+  `src/discord/**`) additionally consumes
+  `config/discord-allowlist.json` and
+  `config/classifier-model.json`, and reads/writes the
+  workflow-committed runtime files
+  `data/discord/cursors.json`, `data/discord/candidates.jsonl`,
+  `data/discord/tips-seen.jsonl`,
+  `data/discord/suppression.json`, and the artifact tree
+  `data/digests/YYYY-MM-DD.md`. The sole writer of these files is
+  the `discord-monitor` skill executed inside
+  `.github/workflows/discord-monitor.yml`. These are the only
+  additional durable inputs/outputs introduced by v1.3.0.
 - A rerun after a partial failure MUST be safe: per-account failure does not block
   other accounts, and re-claiming an already-claimed gift or re-submitting an
   already-used promo code MUST classify as an expected `ALREADY_*` / `CODE_ALREADY_USED`
@@ -272,8 +325,10 @@ sanctioned surfaces below; every other surface is treated as a leak.
 
 **Secret custody — sanctioned surfaces**
 
-A "secret" here means a Scopely password, an STFC store JWT, or the GitHub PAT used to
-write secrets. Secrets MAY live in:
+A "secret" here means a Scopely password, an STFC store JWT, the
+GitHub PAT used to write secrets, or any third-party API credential
+the orchestrator or its sibling skills carry (e.g.,
+`DISCORD_BOT_TOKEN`). Secrets MAY live in:
 
 1. The user's local `.env` file (gitignored).
 2. GitHub Actions encrypted secrets (`STFC_ACCOUNTS`, `STFC_EMAIL`, `STFC_PASSWORD` /
@@ -334,6 +389,10 @@ Obligations on `scripts/capture-token.mjs` (and any future replacement):
   flags, JWT-shape booleans, cookie metadata without `value`), never raw values.
 - Any new sanctioned writer of `STFC_ACCOUNTS` MUST be added to the list above by
   constitutional amendment, not by ad-hoc PR.
+
+`DISCORD_BOT_TOKEN` MUST NOT be merged into `STFC_ACCOUNTS`, MUST
+NOT be handled by `scripts/capture-token.mjs`, and is provisioned
+only via direct `gh secret set DISCORD_BOT_TOKEN` by the operator.
 
 Rationale: The previous wording claimed `STFC_ACCOUNTS` and `.env` were the only
 places a token could ever live and that `Refresh token` was the only writer of
@@ -535,6 +594,12 @@ cannot enforce on its own.
   `https://home.startrekfleetcommand.com/store` (Playwright-driven) and may shell out
   to the `gh` CLI to update the `STFC_ACCOUNTS` secret over the GitHub API. Any
   other outbound destination requires a constitutional amendment.
+  The `discord-monitor` skill additionally calls
+  `https://discord.com/api/v10/...` (REST only, read-only scopes)
+  and, on classifier-cache miss, `https://huggingface.co/...` (model
+  weights download, integrity-checked against the SHA-256 pinned in
+  `config/classifier-model.json`). Both destinations are
+  sanctioned for the `discord-monitor` skill only.
 - **Secret hygiene in artifacts.** Specs, plans, tasks, PR descriptions, and other
   committed artifacts MUST NOT contain real JWTs, real account names, real player IDs,
   or unsanitized API responses. Principle VII covers this obligation; automated
@@ -548,8 +613,8 @@ cannot enforce on its own.
 - **Third-party action pinning.** Workflows that handle the JWT or write the
   `STFC_ACCOUNTS` secret MUST pin every third-party action to a full commit SHA with
   the version in a trailing comment. This is verified today for `redeem.yml`,
-  `refresh-token.yml`, `test.yml`, `squad-test-gate.yml`, and the SHA-pinned uses
-  in `squad-artifact-hygiene.yml`. Auxiliary squad-process workflows
+  `refresh-token.yml`, `test.yml`, `squad-test-gate.yml`, `discord-monitor.yml`, and
+  the SHA-pinned uses in `squad-artifact-hygiene.yml`. Auxiliary squad-process workflows
   (`sync-squad-labels.yml`, `squad-heartbeat.yml`, `squad-triage.yml`,
   `squad-issue-assign.yml`, the `actions/github-script@v7` step in
   `squad-artifact-hygiene.yml`) currently use moving major-version tags; tightening
@@ -680,15 +745,12 @@ reality, or it must be updated — never left as a zombie.
 - **Principle affected:** III. Resilient Upstream-API Automation
 - **Tension:** The replacement sentence introduced a new overclaim: it says transient network errors and unclassified HTTP errors "MUST NOT fail the workflow" (`.squad/.scratch/constitution-v1.2.0-edited.md:198-201`). That is false for non-schema `auth/me` failures: `checkAuth()` pushes every non-`TokenExpiredError`, non-`SchemaMismatchError` failure into `report.errors` (`src/skills/runAll.ts:151-163`), and `finalize()` turns any such error into `exitCode = 1` (`src/skills/runAll.ts:276`). — Borg Queen, Pass 3 Finding 2
 - **Accepted in:** v1.2.0 (per cyrusj's Path D ratification decision, 2026-05-08)
-- **Resolution scheduled:** v1.3.0
-- **Tracking:** `.squad/decisions/inbox/v1.3.0-backlog.md`
-
-### Known Tension: Principle VII / Security .github/ scan path overclaim
+- **Resolution scheduled:** v1.4.0 (re-targeted from v1.3.0; see v1.3.0 Sync Impact Report Known Tensions disposition (a))
 
 - **Principle affected:** VII. Artifact Hygiene / Security & Compliance Constraints
 - **Tension:** The edited draft says changed files under `.github/` are scanned in PRs (`.squad/.scratch/constitution-v1.2.0-edited.md:399-403, 524-527`). That overstates the workflow trigger. The workflow only triggers on `.github/**/*.md`, not arbitrary `.github/` files (`.github/workflows/squad-artifact-hygiene.yml:12-21`). So the hard-gate claim is fixed, but the scoped-path claim is still not fully true. — Borg Queen, Pass 3 Finding 3
 - **Accepted in:** v1.2.0 (per cyrusj's Path D ratification decision, 2026-05-08)
-- **Resolution scheduled:** v1.3.0
+- **Resolution scheduled:** v1.4.0 (re-targeted from v1.3.0; see v1.3.0 Sync Impact Report Known Tensions disposition (b))
 - **Tracking:** `.squad/decisions/inbox/v1.3.0-backlog.md`
 
 ### Known Tension: Redeem/refresh concurrency lock un-principled
@@ -696,7 +758,7 @@ reality, or it must be updated — never left as a zombie.
 - **Principle affected:** None (governance gap — no existing principle covers this invariant)
 - **Tension:** The repo has a real safety invariant: `redeem.yml` and `refresh-token.yml` share the same `concurrency.group` (`stfc-gift-redeemer`) so secret reads/writes do not race (`.github/workflows/redeem.yml:20-23`; `.github/workflows/refresh-token.yml:36-39`). The assembled constitution mentions the workflows, but no principle/section states that this lock is required. — Borg Queen, Pass 2 Section D item 3
 - **Accepted in:** v1.2.0 (per cyrusj's Path D ratification decision, 2026-05-08)
-- **Resolution scheduled:** v1.3.0
+- **Resolution scheduled:** v1.4.0 (re-targeted from v1.3.0; see v1.3.0 Sync Impact Report Known Tensions disposition (c))
 - **Tracking:** `.squad/decisions/inbox/v1.3.0-backlog.md`
 
-**Version**: 1.2.0 | **Ratified**: 2026-05-08 | **Last Amended**: 2026-05-08
+**Version**: 1.3.0 | **Ratified**: 2026-05-08 | **Last Amended**: 2026-05-13
