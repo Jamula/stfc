@@ -47,3 +47,50 @@
 ## Session History (Current)
 
 *For detailed session logs, see `.squad/log/` and `.squad/orchestration-log/`.*
+
+---
+
+### Plan review gate ROUND 2 — 001-discord-monitor (2026-05-13)
+
+**What changed in round 2:**
+- Tuvok applied 13 surgical edits per Borg Queen's BLOCKING findings; verified all P0/P1 corrections landed cleanly across `plan.md`, `research.md`, `contracts/redeemer-integration.contract.md`. Round-2 verdict: APPROVE WITH CONDITIONS (8 conditions, 3 of them new from Tuvok's amendment audit).
+- The new amendment-audit P0s (Sync Impact Report missing per-principle summary; `plan-template.md` re-sync omitted; v1.3.0 inheriting unaddressed Known Tensions and TODO(V1.3) items from v1.2.0) reframe the amendment PR's scope — they don't change the LAND-AMENDMENT-FIRST decision, but they mean the amendment PR is *bigger* than just the six § V/security edits.
+- Original architecture verdict unchanged: corrections are factual / cosmetic / cross-reference, not structural.
+
+**Patterns about correction-verification I want to remember:**
+- **Verify by zero-grep.** Best signal that a numeric/string correction landed cleanly is a `grep -n` for the OLD value across the affected directory returning zero hits. Did this for `\b42\b`, `loadPromoCodes`, `six new`, `same.*cadence`. Cheap, exhaustive, catches stale cross-references the corrector might have missed.
+- **The "3 MB" residue case.** The corrected install-size sentence still contains the substring "3 MB" — but as "transitive deps ~3 MB" inside the new "7.2 MB" sentence. A naive grep flags it; reading the surrounding line clears it. Lesson: when the corrected value contains the old value as a substring, sanity-check the hit in context before declaring an UNRESOLVED.
+- **Corrections do not extinguish round-1 conditions.** Most r1 conditions (license verification, test-before-extractor, branch-protection callout in quickstart, rerun/cursor edge case) were forward obligations on different agents — Tuvok's correction pass was scoped to plan/research factual fixes. Carry conditions forward by default; only mark RESOLVED when the specific artifact change satisfies them.
+- **Adjacent-audit findings can attach to the same gate.** Tuvok's amendment audit ran in parallel to his correction pass and produced three P0s the plan does not yet reflect. These belong to the v1.3.0 amendment PR scope, not the feature plan — but they were surfaced in time to be made round-2 conditions, which keeps the amendment PR honest before it opens.
+- **Acknowledged-assumptions sections are powerful.** Borg Queen's five "unstated assumptions" became a named § "Acknowledged assumptions" in `plan.md` with explicit failure modes and an implementer obligation to revisit each. This converts informal hostile-review notes into permanent plan-document obligations — worth replicating on future gates.
+
+---
+
+### Plan review gate ROUND 3 — 001-discord-monitor (2026-05-13)
+
+**What changed in round 3:**
+- Tuvok's single-line cascade fix at plan.md:377 (test-strategy table now names TNG/GQ5/GQ7 as expected non-matches) verified clean.
+- Bashir's freshly-generated tasks.md absorbs r1/r2 carry-forward conditions into concrete task IDs (T000 governance gate with three Tuvok-audit P0s, T013 extractor test-first with TNG/GQ5/GQ7 expected failures, T037 quickstart branch-protection callout, T038 rerun/cursor edge-case doc, Phase-1 license verification task).
+- Five of eight r2 conditions transition from "forward obligation" to "tracked task with acceptance criteria"; three remain amendment-PR-only conditions exactly as r2 framed them.
+- Round-3 verdict: APPROVE WITH CONDITIONS — same shape as r2, narrower surface.
+
+## Learnings
+
+**Lightweight round-N re-verification pattern (when prior rounds did the heavy lifting):**
+
+When rounds 1 and 2 have already done the architecture review, hostile fact-check, correction verification, and condition enumeration, round-N collapses to three cheap checks — and trying to re-do the prior rounds' work is wasted effort and risks introducing new opinion drift. The pattern:
+
+1. **Targeted cascade-fix verification.** When the prior round identified a single cascade miss and a single-line fix was applied, verify just that one location with a literal-quote view + a zero-grep for the old wording. Do not re-verify all prior corrections — that was r2's job and re-verifying invites finding new things to "improve" that aren't actually broken.
+
+2. **Re-verify conditions as a status table, not as fresh analysis.** Walk the r2 conditions list in order. For each, ask only: "did a downstream artifact (typically tasks.md) absorb this, or does it remain open?" Three buckets: (a) ADDRESSED BY tasks.md (now a tracked task with acceptance criteria — close at the implementation-time gate); (b) OPEN as amendment-PR condition (unchanged from r2); (c) NEW SUB-CONDITION (rare — only when downstream artifact partially covers an r2 condition and a small gap is now visible). Resist the urge to re-derive conditions from scratch.
+
+3. **Delta-check, not re-review.** For artifacts not edited since r2 (research.md, contracts/, redeem.yml in this case), state "unchanged since r2 verification" and move on. Mtime + targeted grep on the load-bearing strings (concurrency group, cron expressions, function names) is sufficient. A full re-read is wrong-effort for a re-verification gate.
+
+**Anti-patterns to avoid in round-N:**
+- Re-running Borg Queen's hostile fact-check yourself. That's her job; if she didn't run again, the plan didn't change enough to require it.
+- Inventing new conditions from a fresh read. New conditions in round-N must point to a *new* artifact change or a *new* gap discovered while verifying an r2 condition. Random new opinions are scope creep and erode reviewer credibility round-over-round.
+- Deep-reviewing a sibling artifact (here: tasks.md) when another agent owns it. High-level sanity-check only; flag obvious problems for the owner; don't deep-review.
+
+**Tasks-absorption signal:** the strongest evidence an implementation-time condition is well-handled is when it shows up in tasks.md with (a) a stable task ID, (b) explicit acceptance criteria, and (c) a placement in the dependency graph that enforces the right ordering (test-first, governance-first, etc.). When all three hold, the condition can move from "carry forward as risk" to "tracked work item, will close on merge of that task."
+
+**One sub-condition I added in r3 (illustrating the legitimate case for new conditions):** while verifying r2 condition #7 (SIR explicit disposition of 3 Known Tensions + 2 TODO(V1.3) items), I noticed tasks.md T000 covers the three Known Tensions but not the two TODO(V1.3) items (helper-script redaction, SHA-pinning). This is a real downstream gap surfaced *by the verification* — added as a sub-condition on Picard's amendment-PR drafting, not as a new general condition. Legitimate scope.

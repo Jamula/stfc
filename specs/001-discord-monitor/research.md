@@ -22,7 +22,9 @@ calls via the bot token.
 - `@discordjs/rest` ships rate-limit handling (`Retry-After`, bucket queueing)
   out of the box, satisfying FR-005 with no glue code.
 - Install footprint is small: `@discordjs/rest` + `discord-api-types` is
-  roughly 3 MB on disk vs ~30 MB for the full `discord.js` umbrella package.
+  approximately 7.2 MB on disk including transitive dependencies
+  (`@discordjs/rest` 795 KB + `discord-api-types` 3.5 MB + transitive deps ~3 MB)
+  vs ~30 MB for the full `discord.js` umbrella package.
   CI install time impact is ≤ 2 s on `npm ci`.
 - Apache-2.0 licensed → Principle V / Security & Compliance "license-compatible"
   rule satisfied.
@@ -178,13 +180,14 @@ contract; existing repo concurrency contract in `.github/workflows/redeem.yml`.
 6. Emit `CandidateCode` only when normalized confidence ≥ 0.6.
 
 **Sample tokens from `promo-codes.txt` validated against the regex:**
-all 42 non-comment entries match (`MACHINATIONS`, `SFACPT1`, `FCP2`,
+27 of 30 non-comment entries match (`MACHINATIONS`, `SFACPT1`, `FCP2`,
 `CNTCT`, `FRACTURE`, `WARPSPEED`, `KIRK`, `SPOCK`, `CADET`, `COMMANDER`,
-`FRONTIER`, `TNG`, `WOKPT1`, `SECTION31`, `RENEGADE`, `ROGUE`, `ALTEREGO`,
-`REFLECTION`, …). The `GQ5` / `GQ7` 3-char outliers are flagged as a known
-recall gap accepted in v1 (precision > recall per FR-006).
+`FRONTIER`, `WOKPT1`, `SECTION31`, `RENEGADE`, `ROGUE`, `ALTEREGO`,
+`REFLECTION`, …). The `TNG`, `GQ5`, and `GQ7` 3-char outliers (3-char gap:
+TNG, GQ5, GQ7) are flagged as known recall gaps accepted in v1 (precision >
+recall per FR-006).
 
-**Source:** `promo-codes.txt` (42 codes catalogued); STFC code conventions
+**Source:** `promo-codes.txt` (30 non-comment entries; 27 matched, 3 short-code gap: TNG, GQ5, GQ7); STFC code conventions
 inferred from public seed lists cited in `promo-codes.txt` header comments.
 
 ---
@@ -213,7 +216,7 @@ inferred from public seed lists cited in `promo-codes.txt` header comments.
 - **Rollback:** git history is the rollback. A bad code can be removed by
   reverting the auto-commit; the suppression list (R6) prevents re-extraction.
 
-**Why 10:** `promo-codes.txt` has accumulated 42 codes over ~12 months;
+**Why 10:** `promo-codes.txt` has accumulated 30 codes over ~12 months;
 average organic add-rate is ~3.5/month. A 10/run cap is 4× a generous spike
 estimate. With a 4-hour cadence (6 runs/day), a runaway monitored channel
 could still inject 60 codes/day — but the suppression / dedup / per-account
@@ -262,7 +265,7 @@ require an amendment to the constitution (v1.3.0)?
 3. **Durable inputs list:** Constitution v1.2.0 § V enumerates
    `STFC_ACCOUNTS`, `promo-codes.txt`, plus the refresh-pipeline secrets,
    and says these *"are the only additional durable inputs the project
-   recognizes."* This feature introduces six new durable inputs (R6 table:
+   recognizes."* This feature introduces seven new durable inputs (R6 table:
    the four `data/discord/*` files, `data/digests/*`, and the two
    `config/*.json` files). That is a material expansion of what counts as
    "durable input to a redeem run".
