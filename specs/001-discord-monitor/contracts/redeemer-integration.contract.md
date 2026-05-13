@@ -27,21 +27,23 @@ Add ONE new function to `src/lib/promoCodes.ts`:
 ```ts
 /**
  * Returns the list of codes the redeemer should attempt this run.
- * Combines (a) the static promo-codes.txt contents and (b) any
+ * Combines (a) the static promo-codes.txt contents (read via the existing
+ * `readPromoCodes(path)` + `parsePromoCodes(content)` pipeline) and (b) any
  * caller-supplied additional candidates, deduplicated, in deterministic
  * order (file first, then candidates in insertion order, dedup by string
  * equality after trim+uppercase normalization).
  *
- * Existing callers that do not pass `extraCandidates` see no behavior
- * change.
+ * Existing callers that invoke `readPromoCodes(path)` directly continue to
+ * work unchanged.
  */
-export function loadPromoCodes(opts?: {
+export async function readCodesForRun(opts?: {
   extraCandidates?: string[];
-}): string[];
+}): Promise<string[]>;
 ```
 
-The current `loadPromoCodes()` (no args) keeps its signature; the optional
-parameter is additive. Redeemer tests for the no-arg path remain unchanged.
+The existing `readPromoCodes(path)` and `parsePromoCodes(content)` keep their
+signatures unchanged; `readCodesForRun` wraps them. Redeemer tests for the
+direct `readPromoCodes` path remain unchanged.
 
 ## Caller contract (the new `discord-monitor` skill)
 
@@ -80,7 +82,7 @@ Where `redeemCodes(opts)` is the callable export from
 `src/skills/redeemCodes.ts`, which today returns `{ result, exitCode }` per
 the Principle II skill contract. **Required minor refactor:** `redeemCodes`
 must accept an optional `{ extraCandidates?: string[] }` arg and pass it
-through to `loadPromoCodes(opts)`. That is the entire change to the
+through to `readCodesForRun(opts)`. That is the entire change to the
 existing skill — its return shape, exit code semantics, summary writing,
 and per-account error handling are unchanged.
 

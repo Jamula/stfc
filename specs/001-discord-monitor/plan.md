@@ -6,8 +6,10 @@
 ## Summary
 
 Add a scheduled, read-only Discord ingestion pipeline to the existing
-`stfc-gift-redeemer` CLI. On the same 4-hour cron cadence the redeemer
-already runs, the new `discord-monitor` skill (a) reads new messages from
+`stfc-gift-redeemer` CLI. The new `discord-monitor` skill runs every 4 hours
+(`cron: "15 */4 * * *"`) — an independent cadence from the redeemer's hourly
+schedule (`cron: "0 * * * *"`), sharing only the `stfc-gift-redeemer`
+concurrency group. It (a) reads new messages from
 operator-curated Discord channels via a dedicated bot token, (b) extracts
 candidate STFC promo codes with a precision-first regex, (c) classifies
 the rest of the messages locally (no remote LLM) into tip/trick/hack
@@ -86,7 +88,7 @@ existing `tsconfig.json` include set).
 | II | Skill-Isolated CLI Architecture | **PASS** | New `discord-monitor` skill registered in `src/cli.ts`, exposed as `npm run skill:discord-monitor`, returns `{ result, exitCode }`, never calls `process.exit` from `src/`. Discord-specific logic lives in `src/discord/` (a sibling to `src/api/`); shared additions to `src/lib/promoCodes.ts` are additive (optional `extraCandidates` arg). |
 | III | Resilient Upstream-API Automation | **PASS** | Discord client wraps `@discordjs/rest` and applies the same posture as `src/api/client.ts`: typed errors (`DiscordAuthError`, `DiscordRateLimitError`, `DiscordTransientError`, `DiscordApiError`, `SchemaMismatchError`), zod-validated responses, `AbortSignal` timeout, GET-only retry. STFC-API surface is unchanged. |
 | IV | Type-Safe Headless TypeScript CLI | **PASS** | New code is `.ts` under `src/`, inside the existing `tsconfig.json` include glob; `npm run typecheck` runs against it. No UI framework, no React, no extension build. Native `onnxruntime-node` is a runtime dep only (Node addon, not a TS-build artifact). |
-| V | Stateless Operation & Secret Custody | **CONDITIONAL PASS — amendment proposed** | Re-runs are safe (idempotent digest, append-only candidates with status updates, monotonic cursors). However: this feature adds a new third-party credential (`DISCORD_BOT_TOKEN`) AND six new committed durable-input files (R6 table) AND new outbound network destinations (`discord.com`, `huggingface.co`). The literal text of v1.2.0 § V does not currently cover these. **Recommendation: open a constitution v1.3.0 amendment (see § Constitution Impact below).** Until the amendment lands, this plan documents the new secret and durable inputs explicitly so reviewers can evaluate them. |
+| V | Stateless Operation & Secret Custody | **CONDITIONAL PASS — amendment proposed** | Re-runs are safe (idempotent digest, append-only candidates with status updates, monotonic cursors). However: this feature adds a new third-party credential (`DISCORD_BOT_TOKEN`) AND seven new committed durable-input files (R6 table) AND new outbound network destinations (`discord.com`, `huggingface.co`). The literal text of v1.2.0 § V does not currently cover these. **Recommendation: open a constitution v1.3.0 amendment (see § Constitution Impact below).** Until the amendment lands, this plan documents the new secret and durable inputs explicitly so reviewers can evaluate them. |
 | VI | Specification-First Governance | **PASS** | Speckit triggers cleanly met: new feature, multi-file, cross-skill, new external integration, new secret, new CI workflow. Spec → clarify → plan path followed. |
 | VII | Artifact Hygiene | **PASS** | All artifacts in this PR are placeholder-only (no real Discord IDs, no real codes from monitored channels, no JWTs). Plan extends `scripts/check-artifact-hygiene.mjs` path list to include `data/digests/**/*.md` so the digest is scanned on every PR (including auto-commit PRs). |
 | VIII | Wire-First Discovery | **PASS (with TODO in /tasks)** | `contracts/discord-bot.contract.md` cites the upstream Discord docs; captured request/response fixtures under `tests/fixtures/discord/` are scheduled in `/speckit.tasks` BEFORE the client implementation task per Principle IX ordering. |
@@ -311,6 +313,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add data/discord data/digests promo-codes.txt
           git diff --cached --quiet || git commit -m "chore(discord-monitor): run ${{ github.run_id }}"
+          git pull --rebase origin "$GITHUB_REF_NAME" || true
           git push
 ```
 
@@ -371,7 +374,7 @@ still picked up. Pruning of suppression entries beyond
 
 | Layer | Files | What it asserts |
 |-------|-------|-----------------|
-| Unit — extractor | `tests/discord/extractor.test.ts` | Every code in `promo-codes.txt` is matched; documented stop-list rejects every entry; the "format is `XXXXX-YYYYY`" example is NOT extracted; spoiler-tag / zero-width / Markdown decoration are stripped. |
+| Unit — extractor | `tests/discord/extractor.test.ts` | Every code in `promo-codes.txt` is matched except the 3 short-code gap (TNG, GQ5, GQ7); documented stop-list rejects every entry; the "format is `XXXXX-YYYYY`" example is NOT extracted; spoiler-tag / zero-width / Markdown decoration are stripped. |
 | Unit — classifier (heuristic only, model stubbed) | `tests/discord/classifier.test.ts` | Tier-1 chatter discard works; moderation filter excludes flagged content; `classify()` makes zero outbound `fetch` calls (privacy invariant). |
 | Unit — dedup | `tests/discord/dedup.test.ts` | Filters against `promo-codes.txt`, prior `candidates.jsonl`, and active suppression; `suppressed-cooldown` status transitions correctly. |
 | Unit — moderation | `tests/discord/moderation.test.ts` | Personal attack / NSFW / doxxing patterns excluded (FR-020). |
@@ -471,6 +474,25 @@ Per constitution § "Speckit Reviewer Gates":
 | Privacy: author display names appear in cursors / state | Explicit data-model rule: only message IDs and channel IDs persisted; no author IDs, no usernames in any persisted file. |
 | Discord ToS — "Message Content Intent" approval | For < 100 servers a bot can self-enable Message Content Intent without Discord review. v1 stays under that threshold (operator-curated allow-list). Documented in quickstart § 1. |
 
+## Acknowledged assumptions
+
+The following assumptions underpin this plan. Each was surfaced by Borg Queen's hostile fact-check (2026-05-13) and accepted as plan-stage risk. The implementer MUST revisit each during implementation.
+
+1. **Operator will configure the allow-list before the first meaningful run.** If they don't, the skill no-ops the Discord half indefinitely. The digest will say "0 channels configured" every run — but will anyone notice? There is no alerting surface in v1. The feature could ship, merge, run for months, and never actually monitor anything.
+   — **Failure mode:** Silent feature deadweight.
+
+2. **Concurrency group serializes `git push`, not just the workflow job.** This is true today — `cancel-in-progress: false` queues the second run. But if a future maintainer changes it to `true` (or adds a third workflow to the group), the pushed-but-not-pulled state files will silently regress cursors and duplicate candidates.
+   — **Failure mode:** Cursor regression → duplicate ingestion → duplicate codes submitted to STFC API (idempotent, but noisy).
+
+3. **GitHub-hosted runner has enough RAM and CPU budget for ONNX inference.** The plan estimates ~140 MB peak RAM and ~150 ms/inference. `ubuntu-latest` runners have 7 GB RAM — fine. But `timeout-minutes: 10` is the hard wall. If the model download takes 25 s (plan's claim) and inference is 150 ms × 5,000 messages = 750 s = 12.5 min, the run will timeout. The heuristic pre-filter ("≥ 70% discard") is load-bearing: if the filter passes more traffic than expected (new channel with different content profile), the run will silently fail on timeout.
+   — **Failure mode:** Timeout → no digest, no codes, no state update.
+
+4. **`promo-codes.txt` append is the only auto-commit path.** The workflow also commits `data/discord/*` and `data/digests/*`. If any of those files grows unexpectedly (e.g., `candidates.jsonl` under a flood), the commit size could trigger GitHub's push size limits or slow the checkout step for `redeem.yml`. The plan's "~1 MB/year" estimate for `candidates.jsonl` assumes ≤ 10 channels and low candidate volume; a misconfigured allow-list could change that.
+   — **Failure mode:** Gradual repo bloat → slow CI for all workflows.
+
+5. **`process.exit` is only in `src/cli.ts`.** The plan states the new skill MUST NOT call `process.exit`. This is true of the current code. But `@xenova/transformers` or `onnxruntime-node` could call `process.exit` on a fatal native error (segfault in the ONNX runtime). This would kill the entire workflow step with no cleanup.
+   — **Failure mode:** State files not flushed → cursor not advanced → next run re-ingests same messages.
+
 ## Out of scope (v1)
 
 - Posting any Discord message, reaction, DM, or webhook (per spec).
@@ -491,7 +513,7 @@ Per constitution § "Speckit Reviewer Gates":
 
 | Violation | Why Needed | Simpler Alternative Rejected Because |
 |-----------|------------|--------------------------------------|
-| Principle V — adds a new third-party credential (`DISCORD_BOT_TOKEN`) and 6 new committed durable inputs not enumerated in the v1.2.0 list | The feature CANNOT exist without a Discord credential and a way to remember what it has already seen. The literal v1.2.0 enumeration was written before this feature was contemplated. | (a) No persistence at all — rejected because cold-start re-ingestion of every monitored channel from epoch is impractical and gives Discord a reason to rate-limit us. (b) Use Actions cache for state — rejected because eviction is silent and would cause cyclic re-ingestion. (c) Fold under the existing `STFC_ACCOUNTS` umbrella — rejected because mixing a Discord token into the STFC credential blob expands blast radius and conflates two unrelated trust domains. The constitution v1.3.0 amendment is the right venue to widen the rule, not a private exception. |
+| Principle V — adds a new third-party credential (`DISCORD_BOT_TOKEN`) and 7 new committed durable inputs not enumerated in the v1.2.0 list | The feature CANNOT exist without a Discord credential and a way to remember what it has already seen. The literal v1.2.0 enumeration was written before this feature was contemplated. | (a) No persistence at all — rejected because cold-start re-ingestion of every monitored channel from epoch is impractical and gives Discord a reason to rate-limit us. (b) Use Actions cache for state — rejected because eviction is silent and would cause cyclic re-ingestion. (c) Fold under the existing `STFC_ACCOUNTS` umbrella — rejected because mixing a Discord token into the STFC credential blob expands blast radius and conflates two unrelated trust domains. The constitution v1.3.0 amendment is the right venue to widen the rule, not a private exception. |
 
 ## CHANGEREQUESTS surfaced during planning
 
