@@ -94,3 +94,19 @@ When rounds 1 and 2 have already done the architecture review, hostile fact-chec
 **Tasks-absorption signal:** the strongest evidence an implementation-time condition is well-handled is when it shows up in tasks.md with (a) a stable task ID, (b) explicit acceptance criteria, and (c) a placement in the dependency graph that enforces the right ordering (test-first, governance-first, etc.). When all three hold, the condition can move from "carry forward as risk" to "tracked work item, will close on merge of that task."
 
 **One sub-condition I added in r3 (illustrating the legitimate case for new conditions):** while verifying r2 condition #7 (SIR explicit disposition of 3 Known Tensions + 2 TODO(V1.3) items), I noticed tasks.md T000 covers the three Known Tensions but not the two TODO(V1.3) items (helper-script redaction, SHA-pinning). This is a real downstream gap surfaced *by the verification* — added as a sub-condition on Picard's amendment-PR drafting, not as a new general condition. Legitimate scope.
+
+---
+
+### Constitution v1.3.0 — Active & Unblocking 001-discord-monitor (2026-05-15)
+
+**Status:** v1.3.0 is now the active constitution (PR #6 merged). Principle V enumeration expanded for `DISCORD_BOT_TOKEN`, 6 new durable inputs (Discord monitor state/data files), `data/digests/**` artifact tree. Security & Compliance extended for `discord.com/api/v10`, `huggingface.co` outbound. No principles removed; no obligations narrowed. Amendment classified MINOR per correct precedent.
+
+**Key Learnings for Future Amendments:**
+
+- **Enumeration-expansion pattern for new credentials/durable-inputs/outbound destinations:** The v1.3.0 amendment is the template. Any future feature that adds a new third-party credential, new committed state files, or new external API call site MUST follow this same amendment-first-then-implement sequence. Do not try to bundle the amendment with the feature PR — the amendment needs its own review surface (Borg Queen for claim verification, Tuvok for process audit) and its own decision record.
+
+- **Governance model shifts are material and must be named:** The move from "enumerated closed list of secrets" → "enumerated list + open-ended category (any third-party API credential)" is a deliberate governance-model change in v1.3.0. It was acknowledged explicitly in the Sync Impact Report, not silently absorbed. Name the shift in the amendment document so future readers know what happened.
+
+- **Sync Impact Report is the delivery vehicle for amendment shape & dependencies:** The SIR (Sync Impact Report) must include (a) per-principle REVISED/KEPT/EXTENDED summary, (b) templates-affected enumeration with status, (c) follow-ups section for Known Tensions & TODO items, and (d) explicit acknowledgment of any governance-model shifts. Omitting any of these creates a "partial amendment" that looks complete to code review but is incomplete as a constitutional document.
+
+- **Amendment P0s (from Tuvok's process audit) become hard blockers on the amendment PR itself:** The three P0-level findings from Tuvok's amendment audit (SIR per-principle field, `plan-template.md` re-sync, Known-Tensions disposition) were addressed before the amendment PR opened — they were encoded as acceptance criteria in T000 governance task. This pattern will repeat: if Tuvok surfaces P0s in a future amendment audit, do not open the PR until they are resolved.
