@@ -194,7 +194,7 @@ zod schemas, state I/O, secret loader, artifact hygiene extension.
 **⚠️ CRITICAL**: No user story implementation may start until this phase is
 complete.
 
-- [ ] T008 [P] Write Discord REST fixtures in `tests/fixtures/discord/`
+- [X] T008 [P] Write Discord REST fixtures in `tests/fixtures/discord/`
   (Principle VIII wire-first, before any client implementation):
   `messages-codes.json` (sanitized 200 OK array with ≥ 3 code-bearing
   messages), `messages-tips.json` (~20 tip/trick/hack messages, varied
@@ -208,7 +208,7 @@ complete.
   committed to production state files. Runtime allow-list MUST default to
   empty per FR-001 / Q3 clarification.
 
-- [ ] T009 [P] Implement zod schemas in `src/discord/schemas.ts` for all
+- [X] T009 [P] Implement zod schemas in `src/discord/schemas.ts` for all
   entities in `contracts/state-files.contract.md` and `data-model.md`:
   - `DiscordAllowlist` (version 1 literal, entries array) — entity #7.
   - `IngestionCursorMap` (Record<channelId, cursor>) — entity #6.
@@ -229,7 +229,7 @@ complete.
   happy path and missing-required-field rejection for each schema. Run
   `npm test`.
 
-- [ ] T010 [P] Implement `src/discord/state.ts` — load/save for all state
+- [X] T010 [P] Implement `src/discord/state.ts` — load/save for all state
   files:
   - `config/discord-allowlist.json` (read-only; zod-validate on load, fail
     on malformed).
@@ -249,7 +249,7 @@ complete.
   round-trip, missing-file behavior for both suppression and cooldowns, and
   cooldowns eviction.
 
-- [ ] T011 Implement `DISCORD_BOT_TOKEN` secret loader in
+- [X] T011 Implement `DISCORD_BOT_TOKEN` secret loader in
   `src/discord/client.ts`: read from `process.env.DISCORD_BOT_TOKEN`;
   require non-empty (fail-fast on missing); on any error path the token
   MUST transit `src/lib/redact.ts` (`redactForLog`) before appearing in any
@@ -257,7 +257,7 @@ complete.
   (FR-029, Principle I). Token MUST NOT appear in any committed file.
   Depends on T009, T010.
 
-- [ ] T012 [P] Extend `scripts/check-artifact-hygiene.mjs` to scan
+- [X] T012 [P] Extend `scripts/check-artifact-hygiene.mjs` to scan
   `data/digests/**/*.md` AND `data/discord/**/*.json{,l}` for forbidden
   tokens: JWT-shaped strings, the literal `DISCORD_BOT_TOKEN`, raw upstream
   API response bodies (per digest-writer contract § Forbidden contents and

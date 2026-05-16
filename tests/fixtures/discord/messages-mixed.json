@@ -1,0 +1,452 @@
+[
+  {
+    "id": "411111111111111101",
+    "channel_id": "222222222222222222",
+    "content": "Heads up: code MIXEDREDEEM grants 100 latinum at the in-game store.",
+    "timestamp": "2026-05-13T13:00:00.000000+00:00",
+    "edited_timestamp": null,
+    "author": { "id": "311111111111111201", "username": "promoposter2", "bot": false },
+    "type": 0
+  },
+  {
+    "id": "411111111111111102",
+    "channel_id": "222222222222222222",
+    "content": "Use code `SPRINGGIFT` before May 20 — 7-day buff included.",
+    "timestamp": "2026-05-13T13:01:00.000000+00:00",
+    "edited_timestamp": null,
+    "author": { "id": "311111111111111202", "username": "promoposter3", "bot": false },
+    "type": 0
+  },
+  {
+    "id": "411111111111111103",
+    "channel_id": "222222222222222222",
+    "content": "||HIDDENDROP|| — spoiler so it doesn't get burnt by scrapers.",
+    "timestamp": "2026-05-13T13:02:00.000000+00:00",
+    "edited_timestamp": null,
+    "author": { "id": "311111111111111203", "username": "insider2", "bot": false },
+    "type": 0
+  },
+  {
+    "id": "411111111111111104",
+    "channel_id": "222222222222222222",
+    "content": "**PATCHBONUS** for the patch-day login window only.",
+    "timestamp": "2026-05-13T13:03:00.000000+00:00",
+    "edited_timestamp": null,
+    "author": { "id": "311111111111111204", "username": "promoposter4", "bot": false },
+    "type": 0
+  },
+  {
+    "id": "411111111111111105",
+    "channel_id": "222222222222222222",
+    "content": "lol",
+    "timestamp": "2026-05-13T13:04:00.000000+00:00",
+    "edited_timestamp": null,
+    "author": { "id": "311111111111111205", "username": "chatter1", "bot": false },
+    "type": 0
+  },
+  {
+    "id": "411111111111111106",
+    "channel_id": "222222222222222222",
+    "content": "😂😂😂",
+    "timestamp": "2026-05-13T13:05:00.000000+00:00",
+    "edited_timestamp": null,
+    "author": { "id": "311111111111111206", "username": "chatter2", "bot": false },
+    "type": 0
+  },
+  {
+    "id": "411111111111111107",
+    "channel_id": "222222222222222222",
+    "content": "gm",
+    "timestamp": "2026-05-13T13:06:00.000000+00:00",
+    "edited_timestamp": null,
+    "author": { "id": "311111111111111207", "username": "chatter3", "bot": false },
+    "type": 0
+  },
+  {
+    "id": "411111111111111108",
+    "channel_id": "222222222222222222",
+    "content": "hi all",
+    "timestamp": "2026-05-13T13:07:00.000000+00:00",
+    "edited_timestamp": null,
+    "author": { "id": "311111111111111208", "username": "chatter4", "bot": false },
+    "type": 0
+  },
+  {
+    "id": "411111111111111109",
+    "channel_id": "222222222222222222",
+    "content": "🚀",
+    "timestamp": "2026-05-13T13:08:00.000000+00:00",
+    "edited_timestamp": null,
+    "author": { "id": "311111111111111209", "username": "chatter5", "bot": false },
+    "type": 0
+  },
+  {
+    "id": "411111111111111110",
+    "channel_id": "222222222222222222",
+    "content": "Tip: keep your shipyard upgrades queued during the weekend event for the 2x build bonus.",
+    "timestamp": "2026-05-13T13:09:00.000000+00:00",
+    "edited_timestamp": null,
+    "author": { "id": "311111111111111210", "username": "tipster10", "bot": false },
+    "type": 0
+  },
+  {
+    "id": "411111111111111111",
+    "channel_id": "222222222222222222",
+    "content": "Tip: don't waste latinum re-rolling the daily — wait for the alliance store refresh at midnight UTC.",
+    "timestamp": "2026-05-13T13:10:00.000000+00:00",
+    "edited_timestamp": null,
+    "author": { "id": "311111111111111211", "username": "tipster11", "bot": false },
+    "type": 0
+  },
+  {
+    "id": "411111111111111112",
+    "channel_id": "222222222222222222",
+    "content": "Tip: keep one survey ship parked at a 4-star raw gas node before going offline overnight.",
+    "timestamp": "2026-05-13T13:11:00.000000+00:00",
+    "edited_timestamp": null,
+    "author": { "id": "311111111111111212", "username": "tipster12", "bot": false },
+    "type": 0
+  },
+  {
+    "id": "411111111111111113",
+    "channel_id": "222222222222222222",
+    "content": "Trick: queue a 15-minute research right before reset so you bank a free completion next day.",
+    "timestamp": "2026-05-13T13:12:00.000000+00:00",
+    "edited_timestamp": null,
+    "author": { "id": "311111111111111213", "username": "trickster10", "bot": false },
+    "type": 0
+  },
+  {
+    "id": "411111111111111114",
+    "channel_id": "222222222222222222",
+    "content": "Trick: armada loot scales with the lowest contributor — make sure everyone's ship power is within 10%.",
+    "timestamp": "2026-05-13T13:13:00.000000+00:00",
+    "edited_timestamp": null,
+    "author": { "id": "311111111111111214", "username": "trickster11", "bot": false },
+    "type": 0
+  },
+  {
+    "id": "411111111111111115",
+    "channel_id": "222222222222222222",
+    "content": "Hack: turn off territory auto-collect during a war declaration to preserve the cease-fire grace.",
+    "timestamp": "2026-05-13T13:14:00.000000+00:00",
+    "edited_timestamp": null,
+    "author": { "id": "311111111111111215", "username": "hacker10", "bot": false },
+    "type": 0
+  },
+  {
+    "id": "411111111111111116",
+    "channel_id": "222222222222222222",
+    "content": "Event info: PvP arena starts Friday 18:00 UTC, reward track features the new Reliant blueprint.",
+    "timestamp": "2026-05-13T13:15:00.000000+00:00",
+    "edited_timestamp": null,
+    "author": { "id": "311111111111111216", "username": "eventnews10", "bot": false },
+    "type": 0
+  },
+  {
+    "id": "411111111111111117",
+    "channel_id": "222222222222222222",
+    "content": "Event info: hostile spawn boost rotates to the Augment systems on Saturday.",
+    "timestamp": "2026-05-13T13:16:00.000000+00:00",
+    "edited_timestamp": null,
+    "author": { "id": "311111111111111217", "username": "eventnews11", "bot": false },
+    "type": 0
+  },
+  {
+    "id": "411111111111111118",
+    "channel_id": "222222222222222222",
+    "content": "Patch note: 1.732.11 — Vi'dar Talios hull HP +3%, Mantis evasion -2%.",
+    "timestamp": "2026-05-13T13:17:00.000000+00:00",
+    "edited_timestamp": null,
+    "author": { "id": "311111111111111218", "username": "patchwatch10", "bot": false },
+    "type": 0
+  },
+  {
+    "id": "411111111111111119",
+    "channel_id": "222222222222222222",
+    "content": "wen patch",
+    "timestamp": "2026-05-13T13:18:00.000000+00:00",
+    "edited_timestamp": null,
+    "author": { "id": "311111111111111219", "username": "chatter6", "bot": false },
+    "type": 0
+  },
+  {
+    "id": "411111111111111120",
+    "channel_id": "222222222222222222",
+    "content": "f",
+    "timestamp": "2026-05-13T13:19:00.000000+00:00",
+    "edited_timestamp": null,
+    "author": { "id": "311111111111111220", "username": "chatter7", "bot": false },
+    "type": 0
+  },
+  {
+    "id": "411111111111111121",
+    "channel_id": "222222222222222222",
+    "content": "ty",
+    "timestamp": "2026-05-13T13:20:00.000000+00:00",
+    "edited_timestamp": null,
+    "author": { "id": "311111111111111221", "username": "chatter8", "bot": false },
+    "type": 0
+  },
+  {
+    "id": "411111111111111122",
+    "channel_id": "222222222222222222",
+    "content": "rofl",
+    "timestamp": "2026-05-13T13:21:00.000000+00:00",
+    "edited_timestamp": null,
+    "author": { "id": "311111111111111222", "username": "chatter9", "bot": false },
+    "type": 0
+  },
+  {
+    "id": "411111111111111123",
+    "channel_id": "222222222222222222",
+    "content": "🖖",
+    "timestamp": "2026-05-13T13:22:00.000000+00:00",
+    "edited_timestamp": null,
+    "author": { "id": "311111111111111223", "username": "chatter10", "bot": false },
+    "type": 0
+  },
+  {
+    "id": "411111111111111124",
+    "channel_id": "222222222222222222",
+    "content": "thanks for sharing",
+    "timestamp": "2026-05-13T13:23:00.000000+00:00",
+    "edited_timestamp": null,
+    "author": { "id": "311111111111111224", "username": "chatter11", "bot": false },
+    "type": 0
+  },
+  {
+    "id": "411111111111111125",
+    "channel_id": "222222222222222222",
+    "content": "Code WEEKENDDROP active now for 25 gems — first-claim only.",
+    "timestamp": "2026-05-13T13:24:00.000000+00:00",
+    "edited_timestamp": null,
+    "author": { "id": "311111111111111225", "username": "promoposter5", "bot": false },
+    "type": 0
+  },
+  {
+    "id": "411111111111111126",
+    "channel_id": "222222222222222222",
+    "content": "Try `LOYALTYPACK` if you've been playing 30+ days, otherwise it bounces.",
+    "timestamp": "2026-05-13T13:25:00.000000+00:00",
+    "edited_timestamp": null,
+    "author": { "id": "311111111111111226", "username": "promoposter6", "bot": false },
+    "type": 0
+  },
+  {
+    "id": "411111111111111127",
+    "channel_id": "222222222222222222",
+    "content": "When is the next double event? asking for a friend",
+    "timestamp": "2026-05-13T13:26:00.000000+00:00",
+    "edited_timestamp": null,
+    "author": { "id": "311111111111111227", "username": "chatter12", "bot": false },
+    "type": 0
+  },
+  {
+    "id": "411111111111111128",
+    "channel_id": "222222222222222222",
+    "content": "this game lol",
+    "timestamp": "2026-05-13T13:27:00.000000+00:00",
+    "edited_timestamp": null,
+    "author": { "id": "311111111111111228", "username": "chatter13", "bot": false },
+    "type": 0
+  },
+  {
+    "id": "411111111111111129",
+    "channel_id": "222222222222222222",
+    "content": "@everyone free latinum here — click this sketchy link 👉👉👉",
+    "timestamp": "2026-05-13T13:28:00.000000+00:00",
+    "edited_timestamp": null,
+    "author": { "id": "311111111111111229", "username": "spammer1", "bot": false },
+    "type": 0
+  },
+  {
+    "id": "411111111111111130",
+    "channel_id": "222222222222222222",
+    "content": "Tip: research the navigation tree first if you're under ops 30 — it pays back inside a week.",
+    "timestamp": "2026-05-13T13:29:00.000000+00:00",
+    "edited_timestamp": null,
+    "author": { "id": "311111111111111230", "username": "tipster13", "bot": false },
+    "type": 0
+  },
+  {
+    "id": "411111111111111131",
+    "channel_id": "222222222222222222",
+    "content": "Tip: avoid armada tokens in the daily store, the alliance store version is half the cost.",
+    "timestamp": "2026-05-13T13:30:00.000000+00:00",
+    "edited_timestamp": null,
+    "author": { "id": "311111111111111231", "username": "tipster14", "bot": false },
+    "type": 0
+  },
+  {
+    "id": "411111111111111132",
+    "channel_id": "222222222222222222",
+    "content": "ok",
+    "timestamp": "2026-05-13T13:31:00.000000+00:00",
+    "edited_timestamp": null,
+    "author": { "id": "311111111111111232", "username": "chatter14", "bot": false },
+    "type": 0
+  },
+  {
+    "id": "411111111111111133",
+    "channel_id": "222222222222222222",
+    "content": "nice",
+    "timestamp": "2026-05-13T13:32:00.000000+00:00",
+    "edited_timestamp": null,
+    "author": { "id": "311111111111111233", "username": "chatter15", "bot": false },
+    "type": 0
+  },
+  {
+    "id": "411111111111111134",
+    "channel_id": "222222222222222222",
+    "content": "Trick: stagger your survey deploy times to avoid overlapping refinery cycles wasting the last few minutes.",
+    "timestamp": "2026-05-13T13:33:00.000000+00:00",
+    "edited_timestamp": null,
+    "author": { "id": "311111111111111234", "username": "trickster12", "bot": false },
+    "type": 0
+  },
+  {
+    "id": "411111111111111135",
+    "channel_id": "222222222222222222",
+    "content": "Hack: bind your favorite armada composition to slot 1 — switching presets is the slowest part of a wave.",
+    "timestamp": "2026-05-13T13:34:00.000000+00:00",
+    "edited_timestamp": null,
+    "author": { "id": "311111111111111235", "username": "hacker11", "bot": false },
+    "type": 0
+  },
+  {
+    "id": "411111111111111136",
+    "channel_id": "222222222222222222",
+    "content": "Event info: Borg Cube weekend goes live in 36 hours, prep your Mantis crews now.",
+    "timestamp": "2026-05-13T13:35:00.000000+00:00",
+    "edited_timestamp": null,
+    "author": { "id": "311111111111111236", "username": "eventnews12", "bot": false },
+    "type": 0
+  },
+  {
+    "id": "411111111111111137",
+    "channel_id": "222222222222222222",
+    "content": "Patch note: 1.732.12 — Khan officer ability cooldown reduced by 1s, Tilly +2% crit chance.",
+    "timestamp": "2026-05-13T13:36:00.000000+00:00",
+    "edited_timestamp": null,
+    "author": { "id": "311111111111111237", "username": "patchwatch11", "bot": false },
+    "type": 0
+  },
+  {
+    "id": "411111111111111138",
+    "channel_id": "222222222222222222",
+    "content": "anyone else lagging in beta quadrant?",
+    "timestamp": "2026-05-13T13:37:00.000000+00:00",
+    "edited_timestamp": null,
+    "author": { "id": "311111111111111238", "username": "chatter16", "bot": false },
+    "type": 0
+  },
+  {
+    "id": "411111111111111139",
+    "channel_id": "222222222222222222",
+    "content": "always",
+    "timestamp": "2026-05-13T13:38:00.000000+00:00",
+    "edited_timestamp": null,
+    "author": { "id": "311111111111111239", "username": "chatter17", "bot": false },
+    "type": 0
+  },
+  {
+    "id": "411111111111111140",
+    "channel_id": "222222222222222222",
+    "content": "Spoiler code coming: ||FLEETBLITZ||",
+    "timestamp": "2026-05-13T13:39:00.000000+00:00",
+    "edited_timestamp": null,
+    "author": { "id": "311111111111111240", "username": "promoposter7", "bot": false },
+    "type": 0
+  },
+  {
+    "id": "411111111111111141",
+    "channel_id": "222222222222222222",
+    "content": "Use **DAILYBOOST** for a 24-hour mining speed buff.",
+    "timestamp": "2026-05-13T13:40:00.000000+00:00",
+    "edited_timestamp": null,
+    "author": { "id": "311111111111111241", "username": "promoposter8", "bot": false },
+    "type": 0
+  },
+  {
+    "id": "411111111111111142",
+    "channel_id": "222222222222222222",
+    "content": "redeem code G5PROMO if you're on G5 ships only.",
+    "timestamp": "2026-05-13T13:41:00.000000+00:00",
+    "edited_timestamp": null,
+    "author": { "id": "311111111111111242", "username": "promoposter9", "bot": false },
+    "type": 0
+  },
+  {
+    "id": "411111111111111143",
+    "channel_id": "222222222222222222",
+    "content": "Tip: the new Defiant blueprint scales better with Romulan officers than Klingons — counter-intuitive but tested.",
+    "timestamp": "2026-05-13T13:42:00.000000+00:00",
+    "edited_timestamp": null,
+    "author": { "id": "311111111111111243", "username": "tipster15", "bot": false },
+    "type": 0
+  },
+  {
+    "id": "411111111111111144",
+    "channel_id": "222222222222222222",
+    "content": "Trick: park alts on the same node to share the bonus loot drop window.",
+    "timestamp": "2026-05-13T13:43:00.000000+00:00",
+    "edited_timestamp": null,
+    "author": { "id": "311111111111111244", "username": "trickster13", "bot": false },
+    "type": 0
+  },
+  {
+    "id": "411111111111111145",
+    "channel_id": "222222222222222222",
+    "content": "Hack: turn cloud sync off during a battle — it shaves ~80ms off ability latency on Android.",
+    "timestamp": "2026-05-13T13:44:00.000000+00:00",
+    "edited_timestamp": null,
+    "author": { "id": "311111111111111245", "username": "hacker12", "bot": false },
+    "type": 0
+  },
+  {
+    "id": "411111111111111146",
+    "channel_id": "222222222222222222",
+    "content": "Event info: outpost war rotates to Beta quadrant Saturday 00:00 UTC.",
+    "timestamp": "2026-05-13T13:45:00.000000+00:00",
+    "edited_timestamp": null,
+    "author": { "id": "311111111111111246", "username": "eventnews13", "bot": false },
+    "type": 0
+  },
+  {
+    "id": "411111111111111147",
+    "channel_id": "222222222222222222",
+    "content": "🔥",
+    "timestamp": "2026-05-13T13:46:00.000000+00:00",
+    "edited_timestamp": null,
+    "author": { "id": "311111111111111247", "username": "chatter18", "bot": false },
+    "type": 0
+  },
+  {
+    "id": "411111111111111148",
+    "channel_id": "222222222222222222",
+    "content": "gg",
+    "timestamp": "2026-05-13T13:47:00.000000+00:00",
+    "edited_timestamp": null,
+    "author": { "id": "311111111111111248", "username": "chatter19", "bot": false },
+    "type": 0
+  },
+  {
+    "id": "411111111111111149",
+    "channel_id": "222222222222222222",
+    "content": "this meme is gold",
+    "timestamp": "2026-05-13T13:48:00.000000+00:00",
+    "edited_timestamp": null,
+    "author": { "id": "311111111111111249", "username": "chatter20", "bot": false },
+    "type": 0
+  },
+  {
+    "id": "411111111111111150",
+    "channel_id": "222222222222222222",
+    "content": "Patch note: 1.732.13 — territory bonus cap raised from 8% to 10% per alliance.",
+    "timestamp": "2026-05-13T13:49:00.000000+00:00",
+    "edited_timestamp": null,
+    "author": { "id": "311111111111111250", "username": "patchwatch12", "bot": false },
+    "type": 0
+  }
+]
