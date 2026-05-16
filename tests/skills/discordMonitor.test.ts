@@ -487,9 +487,9 @@ describe("discordMonitor / workflow YAML assertions (T027)", () => {
     assert.match(yaml, /cron:\s*["']15 \*\/4 \* \* \*["']/);
   });
 
-  it("redeem.yml cron is `0 * * * *` (regression guard)", () => {
+  it("redeem.yml cron is `*/15 * * * *` (regression guard — bumped in #7)", () => {
     const yaml = fs.readFileSync(redeemYamlPath, "utf8");
-    assert.match(yaml, /cron:\s*["']0 \* \* \* \*["']/);
+    assert.match(yaml, /cron:\s*["']\*\/15 \* \* \* \*["']/);
   });
 
   it("concurrency group is `stfc-gift-redeemer` bit-for-bit (matches redeem.yml)", () => {
