@@ -2,8 +2,10 @@
 
 A headless TypeScript CLI that automatically redeems web-store gifts and promo
 codes from the **Star Trek Fleet Command** store. It is designed to run as a
-scheduled GitHub Action every hour, so daily login bonuses, free packs, and
-promotional codes are claimed without you ever opening the store in a browser.
+scheduled GitHub Action every 15 minutes (~96 runs/day), so daily login bonuses,
+free packs, and promotional codes are claimed without you ever opening the store
+in a browser. Optionally monitors configured Discord channels for new promo codes
+and player tips, harvesting both into a daily digest.
 
 ---
 
@@ -28,13 +30,19 @@ promotional codes are claimed without you ever opening the store in a browser.
    `capture-token` wrote to `.env` into *Settings → Secrets and variables →
    Actions → STFC_ACCOUNTS*.
 3. **Enable the `Redeem gifts` workflow** under the Actions tab. It will run
-   on the cron schedule (every hour) from then on. You can also trigger
+   on the cron schedule (every 15 minutes) from then on. You can also trigger
    it manually with the **Run workflow** button to verify everything works.
 
-> **Optional:** if you'd rather never re-capture your JWT by hand when it
+> **Optional 1:** if you'd rather never re-capture your JWT by hand when it
 > expires (~30 days), set up the **`Refresh token` workflow** that logs in
 > for you in CI. See [docs/SETUP.md](docs/SETUP.md#optional-fully-automated-token-refresh-in-ci)
 > for the (small) extra setup.
+
+> **Optional 2:** if you want to harvest promo codes and tips from the STFC
+> Discord community automatically, enable the **`Discord monitor` workflow**
+> and configure your allow-list. See
+> [specs/001-discord-monitor/quickstart.md](specs/001-discord-monitor/quickstart.md)
+> for setup instructions.
 
 ---
 
@@ -64,7 +72,35 @@ the JWT never goes stale — see
 
 ---
 
-## Available skills
+## Discord monitor (optional)
+
+When configured, a scheduled workflow (`discord-monitor.yml`) runs every 4 hours to:
+
+- Ingest messages from a curated list of STFC Discord channels
+- Extract candidate promo codes using pattern matching
+- De-duplicate codes against `promo-codes.txt` and prior run history
+- Feed new codes into the existing redeem orchestrator
+- Classify non-code messages as "tips/tricks/hacks" vs chatter
+- Produce a daily digest summarizing: codes attempted + outcomes, classified guidance, ingestion health
+
+**Currently shipped (Phases 0–3):**
+- Ingestion, extraction, deduplication, cool-down management
+- Auto-redeem integration (codes are attempted on the next scheduled redeem run)
+- Daily digest with code outcomes and classified tips
+
+**In development (Phase 4+):**
+- Tips classification refinement and daily digest roll-up
+
+To set up, see [specs/001-discord-monitor/quickstart.md](specs/001-discord-monitor/quickstart.md).
+This feature is entirely optional — the core redemption workflow works without it.
+
+---
+
+## Project structure
+
+Built with help from [the Squad](docs/squad.md) — an AI team that lives under `.squad/`, managing the roadmap, code review, testing, and documentation. Read the squad page to understand who does what and how to route work.
+
+---
 
 The CI workflow runs:
 
@@ -93,17 +129,25 @@ For local diagnostics you can run individual steps:
 .
 ├── .github/
 │   └── workflows/
-│       ├── redeem.yml          # scheduled gift redemption (every hour)
-│       ├── refresh-token.yml   # weekly JWT refresh via Playwright auto-login
-│       └── test.yml            # typecheck + tests on push/PR
+│       ├── redeem.yml              # scheduled gift redemption (every 15 min, ~96/day)
+│       ├── discord-monitor.yml     # optional: harvest codes & tips from Discord (every 4 hours)
+│       ├── refresh-token.yml       # weekly JWT refresh via Playwright auto-login
+│       └── test.yml                # typecheck + tests on push/PR
 ├── docs/
-│   ├── SETUP.md                # end-to-end setup guide
-│   └── redeem-history.md       # auto-appended log of every successful claim
+│   ├── SETUP.md                    # end-to-end setup guide
+│   ├── squad.md                    # AI team members, capabilities, and how they work
+│   ├── stfc-game-knowledge.md      # STFC game domain reference
+│   └── redeem-history.md           # auto-appended log of every successful claim
+├── specs/
+│   └── 001-discord-monitor/
+│       ├── spec.md                 # feature specification
+│       ├── plan.md                 # architecture and design
+│       └── quickstart.md           # operator setup for Discord monitor
 ├── scripts/
-│   └── capture-token.mjs       # Playwright-driven JWT capture
-├── src/                        # TypeScript source (api client, orchestrator, skills)
-├── tests/                      # node:test suite
-├── promo-codes.txt             # one promo code per line, # for comments
+│   └── capture-token.mjs           # Playwright-driven JWT capture
+├── src/                            # TypeScript source (api client, orchestrator, skills)
+├── tests/                          # node:test suite
+├── promo-codes.txt                 # one promo code per line, # for comments
 ├── package.json
 └── README.md
 ```

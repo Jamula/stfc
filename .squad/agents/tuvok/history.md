@@ -54,3 +54,30 @@ Surgical editorial pass on `.squad/.scratch/constitution-v1.2.0-assembled.md` pe
 ## Status
 
 **v1.2.0 Amendment Cycle:** COMPLETE. Ratified with 3 Known Tensions (Path D). v1.3.0 amendment PR (squad/governance-v1.3.0-amendment, PR #6) now in final review.
+
+## Latest Work (2026-05-16)
+
+**Documentation audit & squad page creation (cyrusj request):**
+- Audited README against main@caa2d14: redeem cadence was stale (hourly → every 15 min); Discord monitor feature not documented at all.
+- Updated README with accurate cadence, added Discord monitor section framing (Phases 0-3 shipped, Phase 4+ in-flight), added link to Discord monitor quickstart.
+- Created `docs/squad.md` listing all 8 team members (7 agents + Ralph work monitor) with role, capabilities, charter link, and how to address.
+- Updated `.github/workflows/` entries in project layout to include discord-monitor.yml; also linked new specs/ subdirectory.
+- Updated CONTRIBUTING.md to link to docs/squad.md + .squad/routing.md for reviewer context.
+- Updated SETUP.md: fixed stale "every hour" → "every 15 minutes"; added optional Discord monitor section linking to quickstart.md.
+- Audited docs/stfc-game-knowledge.md (read-only); confirmed current (last updated May 2026, covers Update 90 from May 4, 2026).
+
+**Documentation conventions observed (codebase patterns):**
+- README uses heading hierarchy (# → ##), section breaks with horizontal rules (---), inline code backticks, and markdown tables.
+- Link style: relative `[text](path)` for local docs, absolute `https://...` for external + `<https://...>` format for inline URLs.
+- Code blocks use language tags: ```bash, ```json, ```typescript, ```diff.
+- Numbered lists for procedural steps; bullet lists for feature enumerations.
+- Admonition callouts: `> **Note:**` or `> **Optional:**` for asides.
+- Cross-references use backticks for file/folder paths, preserve full paths for clarity (`.squad/`, `.github/workflows/`).
+
+**No edits to out-of-scope artifacts:**
+- Preserved all `.squad/` files (routing, decisions, team registry — coordinator-owned).
+- Preserved `.specify/memory/constitution.md` (governance; only changes via /speckit.constitution).
+- Preserved all `.squad/agents/*/charter.md` (charters are read-only).
+- Preserved `docs/redeem-history.md` (machine-appended log).
+- Preserved all source code and workflow files (not in this task's scope).
+

@@ -101,6 +101,9 @@ The cost of an unreviewed architectural decision can be weeks of rework.
 PRs go through the following gates. Named reviewers hold explicit veto powers
 granted by the constitution (Speckit Reviewer Gates, Development Workflow & Quality Gates).
 
+For a detailed explanation of who does what and why, see [the Squad](docs/squad.md).
+For issue routing conventions, see [.squad/routing.md](.squad/routing.md).
+
 ### Bashir (Tester) — four veto powers
 
 Bashir may issue `request-changes` or block merge at any of these four gates:
