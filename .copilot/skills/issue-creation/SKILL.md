@@ -26,7 +26,7 @@ On top of `squad`, choose ONE of:
 |-----------|-----------|--------------|
 | Issue is in **my own** domain | `squad:{my-name}` | Self-assigned. I (or future-me in another session) pick it up. |
 | Issue clearly belongs to **another agent's** domain | `squad:{their-name}` | Direct hand-off. They pick it up next session. |
-| Issue spans multiple domains OR I'm not sure who should own it | (no sub-label — `squad` only) | Picard triages on next session start. |
+| Issue spans multiple domains OR I'm not sure who should own it | (no sub-label — `squad` only) | Picard (M2/EM) triages on next session start. |
 
 Then add **content labels** as appropriate (these already exist on the repo):
 - `bug` — something is broken
@@ -60,6 +60,10 @@ gh issue create \
   --label "squad,{enhancement|bug|...}"
 ```
 
+Note: `squad` (no sub-label) routes to Picard (M2/EM) who triages. For
+technical-direction issues, Picard may sub-triage to Kirk (Lead) by adding
+`squad:kirk`.
+
 ## Body template
 
 Every squad-created issue body should include:
@@ -82,12 +86,12 @@ Every squad-created issue body should include:
 {any relevant file paths, decisions, links}
 ```
 
-Keeps Picard's triage cheap and the next-session pickup unambiguous.
+Keeps Picard's (M2/EM) triage cheap and the next-session pickup unambiguous.
 
 ## Anti-patterns
 
 - ❌ Filing an issue without ANY `squad*` label — it disappears from Ralph's scan and from squad workflows.
-- ❌ Adding multiple `squad:{member}` labels — only one owner per issue. If it spans domains, leave just `squad` and let Picard triage.
+- ❌ Adding multiple `squad:{member}` labels — only one owner per issue. If it spans domains, leave just `squad` and let Picard (M2/EM) triage.
 - ❌ Self-assigning when the work is clearly out of your charter — hand off explicitly instead.
 - ❌ Filing a "do everything" mega-issue. Decompose first; one issue = one ownable chunk of work.
 - ❌ Using arbitrary new labels without confirming they exist (`gh label list`). The sync-squad-labels workflow manages `squad*`, `go:*`, and `release:*` — extending those families requires updating `team.md` or the workflow.
@@ -105,5 +109,5 @@ Expected output includes `squad` and exactly one of: nothing else from the squad
 
 - `.squad/routing.md` — full routing table and triage rules
 - `.github/workflows/sync-squad-labels.yml` — auto-creates `squad:{member}` labels from `team.md`
-- `.github/workflows/squad-triage.yml` — runs Picard's triage when `squad` label is added
+- `.github/workflows/squad-triage.yml` — runs Picard's (M2/EM) triage when `squad` label is added
 - `.github/workflows/squad-issue-assign.yml` — handles `squad:{member}` → assignment

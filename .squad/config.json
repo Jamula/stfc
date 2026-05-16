@@ -3,6 +3,7 @@
   "worktrees": true,
   "agentModelOverrides": {
     "picard": "claude-opus-4.7-1m-internal",
+    "kirk": "claude-opus-4.7-1m-internal",
     "uhura": "claude-opus-4.7-1m-internal",
     "scotty": "gpt-5.5"
   }

@@ -14,6 +14,17 @@
       "expansion_type": "diegetic",
       "agent_added": "Tuvok",
       "reason": "Editorial specialist recruited to break constitutional revision deadlock"
+    },
+    {
+      "universe": "Star Trek",
+      "assigned_at": "2026-05-16T20:50:30-07:00",
+      "assignment_id": "stfc-gift-redeemer-initial-2026-05-08",
+      "expansion_type": "diegetic",
+      "agent_added": "Kirk",
+      "role_changes": [
+        { "agent": "Picard", "from": "Lead", "to": "M2 / Engineering Manager" }
+      ],
+      "reason": "User-requested role swap for consistency with other squads — EM (Picard) sits above Lead (Kirk)"
     }
   ],
   "assignment_cast_snapshots": {
@@ -29,7 +40,8 @@
         { "name": "Borg Queen", "role": "Critic" }
       ],
       "overflow_additions": [
-        { "name": "Tuvok", "role": "Process Auditor / Editorial Specialist", "added_at": "2026-05-08T21:29:58-07:00", "expansion_type": "diegetic" }
+        { "name": "Tuvok", "role": "Process Auditor / Editorial Specialist", "added_at": "2026-05-08T21:29:58-07:00", "expansion_type": "diegetic" },
+        { "name": "Kirk", "role": "Lead", "added_at": "2026-05-16T20:50:30-07:00", "expansion_type": "diegetic", "concurrent_role_change": { "agent": "Picard", "from": "Lead", "to": "M2 / Engineering Manager" } }
       ]
     }
   }

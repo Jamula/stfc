@@ -15,18 +15,31 @@ The squad is an AI team that lives in this repository under `.squad/`. Each memb
 
 ## Members
 
-### 🏗️ Picard — Lead
+### 🧭 Picard — M2 / Engineering Manager (boss)
 
 - **Charter:** `.squad/agents/picard/charter.md`
-- **Role:** Lead / Architect / Code Reviewer
+- **Role:** Engineering Manager — manages Kirk (Lead) and the contributors through him
 - **Capabilities:**
-  - Project scope and direction — decides what we build and what we defer
-  - Architectural decisions across the TypeScript CLI and GitHub Actions automation
-  - Code review for non-trivial changes — quality gate before merge
-  - Triage of incoming GitHub issues with the `squad` label
-  - Cross-cutting concerns and scope discipline
+  - Project scope and roadmap — what we build, what we defer, what ships in which release
+  - Priorities — when two valuable things compete, picks which goes first
+  - Issue triage — incoming `squad`-labelled issues, assignment to the right member
+  - Blocker removal — cross-team coordination, secret-custody escalations, environment fixes
+  - Governance — constitution amendments, speckit chain integrity, reviewer-gate enforcement on scope/process grounds
+  - External comms — issue framing, decision narrative, release messaging
 - **How to address:** "Picard, …" or assign issue label `squad:picard`
-- **Reviewer authority:** Can block merge on architectural violations or speckit bypass without justification. On rejection, names a different agent to revise (never the original author).
+- **Reviewer authority:** Can block merge on scope creep, governance violations, or speckit bypass without justification. On rejection, names a different agent to revise (never the original author).
+
+### 🏗️ Kirk — Lead (technical)
+
+- **Charter:** `.squad/agents/kirk/charter.md`
+- **Role:** Technical Lead — reports to Picard
+- **Capabilities:**
+  - Technical direction for the TypeScript CLI, redemption orchestrator, Discord monitor, and GitHub Actions workflows
+  - Architectural decisions — module boundaries, contract shapes, state file layout, dependency choices
+  - Code review for non-trivial changes — quality gate before merge, focused on technical correctness
+  - Cross-cutting technical concerns spanning multiple contributors' domains
+- **How to address:** "Kirk, …" or assign issue label `squad:kirk`
+- **Reviewer authority:** Can block merge on architectural violations or technical-correctness gaps. On rejection, names a different agent to revise (never the original author).
 
 ### 🔧 Scotty — Core Dev
 
@@ -77,7 +90,7 @@ The squad is an AI team that lives in this repository under `.squad/`. Each memb
   - Threat modelling and failure-mode analysis
   - Naming risks the team is implicitly accepting (without making veto calls)
 - **How to address:** "Borg Queen, …" or assign issue label `squad:borg-queen`
-- **Note:** Produces written findings; does not block merges directly (Picard calls the veto). But if a reviewer has hard-rejected work, the Coordinator routes the revision to a different agent.
+- **Note:** Produces written findings; does not block merges directly (Kirk calls the technical veto, Picard calls the scope/governance veto). But if a reviewer has hard-rejected work, the Coordinator routes the revision to a different agent.
 
 ### 📝 Tuvok — Process Auditor / Editorial Specialist
 
@@ -90,7 +103,7 @@ The squad is an AI team that lives in this repository under `.squad/`. Each memb
   - Documentation audits and targeted updates based on shipped functionality
   - Cross-reference discipline and consistency across docs
 - **How to address:** "Tuvok, …" or assign issue label `squad:tuvok`
-- **Constraint:** Does not author new principles or design processes — only edits per explicit findings. If a task requires those, escalates to the Lead or Critic.
+- **Constraint:** Does not author new principles or design processes — only edits per explicit findings. If a task requires those, escalates to Picard (M2/EM) or Borg Queen.
 
 ### 📋 Scribe — Session Logger
 
@@ -127,7 +140,7 @@ The squad is an AI team that lives in this repository under `.squad/`. Each memb
 - Decisions are shared via `.squad/decisions.md`; knowledge is personal (`.squad/agents/{name}/history.md`)
 
 **Reviewer gates (the lockout rule):**
-- When a Reviewer (Bashir, Borg Queen, Picard) **rejects** work, the original author is **locked out** of producing the revision
+- When a Reviewer (Bashir, Borg Queen, Kirk, Picard) **rejects** work, the original author is **locked out** of producing the revision
 - A different agent must own the revision (enforced by the Coordinator in the spawn prompt)
 - This breaks author-reviewer conflicts of interest and ensures fresh eyes
 

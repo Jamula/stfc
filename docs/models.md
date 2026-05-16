@@ -64,13 +64,20 @@ The squad's coordinator picks a model per spawn from a four-layer hierarchy: per
 
 ## Per-squad-member recommendations
 
-### 🏗️ Picard — Lead
+### 🧭 Picard — M2 / Engineering Manager (boss)
 
-- **Default:** auto (per-task)
+- **Default:** `claude-opus-4.7-1m-internal`
+- **For scope/governance reviews + speckit chain integrity:** `claude-opus-4.7` (or `-high`)
+- **For routine triage / planning:** `claude-haiku-4.5`
+- **Why:** governance work spans long constitution + spec + plan documents; 1M context window pays off. Downgrade only for cheap triage.
+
+### 🏗️ Kirk — Lead (technical)
+
+- **Default:** `claude-opus-4.7-1m-internal`
 - **For architecture proposals:** `claude-opus-4.7` (or `-high` if available)
-- **For code review (standard):** `claude-sonnet-4.6`
-- **For triage / planning:** `claude-haiku-4.5`
-- **Why:** mixed workload; bump up for high-stakes design decisions, down for mechanical triage
+- **For code review (standard technical correctness):** `claude-sonnet-4.6`
+- **For exploratory technical research:** `claude-haiku-4.5`
+- **Why:** architectural decisions and cross-cutting technical reviews benefit from premium reasoning + 1M context; downgrade only when scope is narrow.
 
 ### 🔧 Scotty — Core Dev
 

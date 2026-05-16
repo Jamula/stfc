@@ -124,11 +124,15 @@ Bashir may issue `request-changes` or block merge at any of these four gates:
    test, or where the PR description does not supply the failing-test commit SHA
    and failure output proving the test was written before the fix.
 
-### Picard (Lead) — veto powers
+### Picard (M2/EM) and Kirk (Lead) — veto powers
 
-Picard may block at spec review (scope creep, constitutional conflicts), plan
-review (architectural violations, missing Constitution Check section), and
-implementation review (speckit bypass without justification).
+**Picard (M2/EM)** may block at spec review (scope creep, constitutional
+conflicts) and at any review stage on governance grounds (speckit bypass
+without justification, scope expansion beyond the spec).
+
+**Kirk (Lead)** may block at plan review (architectural violations, missing
+Constitution Check section) and at implementation review on technical-
+correctness grounds (architectural integrity gaps, contract violations).
 
 ### Artifact hygiene scan
 
