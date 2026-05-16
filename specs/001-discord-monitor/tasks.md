@@ -68,7 +68,7 @@ criteria are satisfied and the amendment PR has landed.
 
 ### Governance check for Phase 0
 
-- [ ] T000 Verify the v1.3.0 amendment PR satisfies all three P0 findings from
+- [X] T000 Verify the v1.3.0 amendment PR satisfies all three P0 findings from
   `.squad/decisions/inbox/tuvok-001-discord-monitor-amendment-audit.md` before
   merging. Acceptance criteria (checklist — all three must be ✅ before merge):
   - **[P0-1]** `.specify/templates/plan-template.md` Principle V guidance text is
@@ -97,7 +97,7 @@ criteria are satisfied and the amendment PR has landed.
 
 ### Implementation for Phase 0
 
-- [ ] T001 Draft v1.3.0 amendment to `.specify/memory/constitution.md` applying
+- [X] T001 Draft v1.3.0 amendment to `.specify/memory/constitution.md` applying
   all six edits enumerated in `plan.md` § Constitution Impact:
   (1) broaden § V "secret" definition to include third-party API credentials;
   (2) append the 7-path durable-input enumeration listed in T000 P0-1, with
@@ -119,7 +119,7 @@ criteria are satisfied and the amendment PR has landed.
   Also update `.specify/templates/plan-template.md` for P0-1. Bump version
   string in constitution: `1.2.0 → 1.3.0, MINOR`.
 
-- [ ] T002 Open standalone PR for the v1.3.0 amendment
+- [X] T002 Open standalone PR for the v1.3.0 amendment
   (`.specify/memory/constitution.md` + `.specify/templates/plan-template.md`).
   Collect sign-offs: Tuvok (process audit), Borg Queen (claim verification),
   Bashir (cross-check), Picard (ratification). Merge to `main`. This PR
