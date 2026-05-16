@@ -16,6 +16,7 @@ custody surface and from `scripts/capture-token.mjs`.
 Refinement: split suppression.json into operator-written rules + skill-written cooldowns.json.
 
 Assembled: 2026-05-16T03:23:23Z
+Last corrected: 2026-05-16T18:12:40Z (retrospective SIR template re-sync note)
 Assembled by: Picard (Lead) — speckit.constitution for feature 001-discord-monitor
 Requested by: cyrusj
 
@@ -66,9 +67,19 @@ Security & Compliance Constraints: REVISED — outbound network scope
 Development Workflow: UNCHANGED.
 Governance: UNCHANGED.
 
-Templates needing re-sync after ratification: NONE — table structure of
-  `.specify/templates/{plan,spec,tasks}-template.md` is unchanged by this
-  amendment (no principle renamed, no principle added or removed).
+Templates re-sync (retrospective correction, 2026-05-16):
+  The original v1.3.0 ratification incorrectly recorded "Templates needing
+  re-sync: NONE" on the basis that no principles were renamed, added, or
+  removed. This overlooked that the Principle V guidance prose in
+  `.specify/templates/plan-template.md` made a factual claim about durable
+  inputs (then "limited to STFC_ACCOUNTS / promo-codes.txt") that was
+  superseded by the v1.3.0 enumeration expansion. Corrected in a follow-up
+  commit on branch 001-discord-monitor (no version bump — constitution
+  body unchanged; meta-report correction only).
+  Re-synced templates:
+    - .specify/templates/plan-template.md (Principle V row enumeration)
+  (spec-template.md and tasks-template.md contain no durable-inputs claim;
+  no changes required to those files.)
 
 Cross-artifact follow-ups (out of scope for this amendment, flagged):
   - `package.json`, `README.md`: do not currently reference the
