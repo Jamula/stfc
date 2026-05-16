@@ -35,10 +35,13 @@ import { evictExpired, recordFailure } from "../discord/cooldown.ts";
 import { ingestDiscord, type IngestClient } from "../discord/ingest.ts";
 import {
   appendCandidate,
+  appendTipSeen,
   loadAllowlist,
   loadCooldowns,
   loadCursors,
   loadSuppression,
+  readCandidates,
+  readTipsSeen,
   saveCooldowns,
   saveCursors,
   DEFAULT_PATHS,
@@ -49,9 +52,14 @@ import type {
   IngestedMessage,
   RunHealth,
   SourceRef,
+  Tip,
+  TipsSeenLine,
 } from "../discord/schemas.ts";
+import { createHeuristicClassifier, type Classifier } from "../discord/classifier.ts";
+import { isExcludedByModeration } from "../discord/moderation.ts";
 import { redeemCodes, type RedeemCodesOptions } from "./redeemCodes.ts";
 import { writeDigest, DEFAULT_DIGESTS_DIR } from "../digest/index.ts";
+import { createHash } from "node:crypto";
 
 const log = createLogger("discordMonitor");
 
@@ -77,6 +85,8 @@ export interface DiscordMonitorOptions {
     digestsDir?: string;
     promoCodes?: string;
   };
+  /** Override the classifier (test seam). Default: heuristic-only. */
+  classifierFactory?: () => Classifier;
   /** Injected clock for deterministic tests. */
   now?: () => Date;
   /** Stable run id for cursors / candidates / digest. */
@@ -105,6 +115,7 @@ export async function discordMonitor(
   const allowlistPath = opts.paths?.allowlist ?? DEFAULT_PATHS.allowlist;
   const cursorsPath = opts.paths?.cursors ?? DEFAULT_PATHS.cursors;
   const candidatesPath = opts.paths?.candidates ?? DEFAULT_PATHS.candidates;
+  const tipsSeenPath = opts.paths?.tipsSeen ?? DEFAULT_PATHS.tipsSeen;
   const suppressionPath = opts.paths?.suppression ?? DEFAULT_PATHS.suppression;
   const cooldownsPath = opts.paths?.cooldowns ?? DEFAULT_PATHS.cooldowns;
   const digestsDir = opts.paths?.digestsDir ?? DEFAULT_DIGESTS_DIR;
@@ -382,7 +393,7 @@ async function finalize(args: FinalizeArgs): Promise<DiscordMonitorOutput> {
 
   let digestPath: string | undefined;
   try {
-    digestPath = await writeDigest(digest, { digestsDir: args.digestsDir });
+    digestPath = (await writeDigest(digest, { outputDir: args.digestsDir })).filePath;
   } catch (err) {
     log.warn(`could not write digest: ${redactForLog(err)}`);
   }
