@@ -411,3 +411,34 @@ without blocking task generation.
 ---
 
 *End of analysis report. No artifacts modified.*
+
+---
+
+## Resolution Note (2026-05-16)
+
+**Resolved by:** Picard (Lead) via /speckit.implement preflight
+**Requested by:** cyrusj
+
+### BLOCKER #1 — `data/discord/suppression.json` writer mismatch
+
+**Resolution:** Option A (Constitution-led fix) — split into two files:
+- `data/discord/suppression.json` — operator-curated allow/deny rules. Writer: human operator (manual edit, reviewed PR).
+- `data/discord/cooldowns.json` — auto-written cool-down telemetry (FR-009). Writer: feature code at `src/discord/`.
+
+**Rationale:** Preserves Principle V's bright-line separation between policy (operator) and telemetry (skill). The cost (one additional constitution enumeration entry) is minimal and stays within the v1.3.0 amendment scope.
+
+**Files updated:** constitution.md (SYNC IMPACT REPORT + durable-inputs enumeration), plan.md (layout, sequence, test strategy, Constitution Impact), data-model.md (split entity), contracts/state-files.contract.md (schemas), research.md (R6 table).
+
+### BLOCKER #2 — Digest module path mismatch
+
+**Resolution:** Option A (Plan-led fix) — move digest writer from `src/discord/digest.ts` to `src/digest/index.ts`.
+
+**Rationale:** Matches constitution wording exactly; cleaner module boundary (digest is conceptually downstream of Discord, not part of it — it summarizes redemption activity too).
+
+**Files updated:** plan.md (layout, architecture diagram, test strategy), contracts/digest-writer.contract.md (file path).
+
+### Verdict Update
+
+**BLOCKED → READY** for /speckit.tasks regeneration.
+
+The existing `tasks.md` was generated against artifacts containing the two inconsistencies and MUST be regenerated before /speckit.implement runs.

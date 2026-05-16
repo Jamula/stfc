@@ -124,15 +124,15 @@ the amendment is the single open governance item, tracked in
    │     │     │      └─ tier 2: @xenova/transformers + DeBERTa-v3-xsmall (ONNX)  │
    │     │     │                                                                  │
    │     │     ├──► src/discord/dedup.ts  (vs promo-codes.txt + candidates.jsonl  │
-   │     │     │                            + suppression.json)                   │
+   │     │     │                            + suppression.json + cooldowns.json)  │
    │     │     │                                                                  │
    │     │     ├──► src/skills/redeemCodes.ts({ extraCandidates })                │
    │     │     │      └─ src/api/client.ts ──► STFC store API  (UNCHANGED)        │
    │     │     │                                                                  │
-   │     │     ├──► src/discord/digest.ts  (writes data/digests/YYYY-MM-DD.md)    │
+   │     │     ├──► src/digest/index.ts  (writes data/digests/YYYY-MM-DD.md)      │
    │     │     │                                                                  │
    │     │     └──► persists cursors.json, candidates.jsonl, tips-seen.jsonl,     │
-   │     │         suppression.json                                               │
+   │     │         cooldowns.json                                                 │
    │     │                                                                        │
    │     └─ git add data/ promo-codes.txt && git commit && git push               │
    │           (workflow-attributed; same concurrency group as redeem.yml)        │
@@ -175,7 +175,8 @@ data/
     ├── cursors.json                 NEW (created on first run)
     ├── candidates.jsonl             NEW (append-only)
     ├── tips-seen.jsonl              NEW (append-only)
-    ├── suppression.json             NEW
+    ├── suppression.json             NEW (operator-curated rules)
+    ├── cooldowns.json               NEW (skill-written cool-down telemetry)
     └── .gitkeep                     NEW
 
 src/
@@ -188,6 +189,8 @@ src/
 │   ├── discordMonitor.ts             NEW
 │   ├── redeemCodes.ts                MODIFIED (accept `{ extraCandidates }`, pass through)
 │   └── (others)                      UNCHANGED
+├── digest/                           NEW (sibling to src/api/, src/discord/)
+│   └── index.ts                      NEW (digest writer module)
 └── discord/                          NEW (sibling to src/api/)
     ├── ingest.ts                     NEW
     ├── client.ts                     NEW (thin wrapper over @discordjs/rest)
@@ -196,8 +199,7 @@ src/
     ├── classifier.ts                 NEW
     ├── moderation.ts                 NEW
     ├── dedup.ts                      NEW
-    ├── digest.ts                     NEW
-    ├── state.ts                      NEW (load/save cursors, suppression, etc.)
+    ├── state.ts                      NEW (load/save cursors, cooldowns, etc.)
     └── schemas.ts                    NEW (zod schemas for all state files)
 
 tests/
@@ -205,9 +207,10 @@ tests/
 │   ├── extractor.test.ts             NEW
 │   ├── classifier.test.ts            NEW
 │   ├── dedup.test.ts                 NEW
-│   ├── digest.test.ts                NEW
 │   ├── moderation.test.ts            NEW
 │   └── ingest.test.ts                NEW (with stubbed REST client)
+├── digest/                           NEW
+│   └── digest.test.ts                NEW
 ├── skills/
 │   ├── discordMonitor.test.ts        NEW
 │   ├── redeemCodes.test.ts           MODIFIED (extraCandidates path coverage)
@@ -252,16 +255,17 @@ easy to audit and to remove if the feature is ever rolled back.
    labels in {tip, trick, hack, event-info, patch-note} with
    confidence ≥ 0.55.
 6. **Dedup + redeem.** Filter candidates against `promo-codes.txt`,
-   `candidates.jsonl` history, and `suppression.json` cool-down. Call
+   `candidates.jsonl` history, `suppression.json` (operator rules), and
+   `cooldowns.json` (FR-009 cool-down entries). Call
    `redeemCodes({ extraCandidates: fresh.map(c => c.value) })` once.
    Update each candidate's `perAccountOutcome` from the result.
-   Update `suppression.json` for any new failures.
+   Update `cooldowns.json` for any new failures (skill-written, FR-009).
 7. **Auto-commit promo codes.** Take up to 10 newly-`REDEEMED`
    candidates and append them to `promo-codes.txt` (one per line, no
    inline comment). The workflow's post-step does `git add … && git
    commit … && git push`.
 8. **State write.** Persist `cursors.json`, append to `candidates.jsonl`
-   and `tips-seen.jsonl`, write `suppression.json`.
+   and `tips-seen.jsonl`, write `cooldowns.json`.
 9. **Digest.** Read existing `data/digests/YYYY-MM-DD.md` if present,
    union with this run's contributions, re-render, byte-compare,
    write only if changed (idempotent — see digest-writer contract).
@@ -376,9 +380,9 @@ still picked up. Pruning of suppression entries beyond
 |-------|-------|-----------------|
 | Unit — extractor | `tests/discord/extractor.test.ts` | Every code in `promo-codes.txt` is matched except the 3 short-code gap (TNG, GQ5, GQ7); documented stop-list rejects every entry; the "format is `XXXXX-YYYYY`" example is NOT extracted; spoiler-tag / zero-width / Markdown decoration are stripped. |
 | Unit — classifier (heuristic only, model stubbed) | `tests/discord/classifier.test.ts` | Tier-1 chatter discard works; moderation filter excludes flagged content; `classify()` makes zero outbound `fetch` calls (privacy invariant). |
-| Unit — dedup | `tests/discord/dedup.test.ts` | Filters against `promo-codes.txt`, prior `candidates.jsonl`, and active suppression; `suppressed-cooldown` status transitions correctly. |
+| Unit — dedup | `tests/discord/dedup.test.ts` | Filters against `promo-codes.txt`, prior `candidates.jsonl`, operator `suppression.json` rules, and `cooldowns.json` cool-down entries; `suppressed-cooldown` status transitions correctly. |
 | Unit — moderation | `tests/discord/moderation.test.ts` | Personal attack / NSFW / doxxing patterns excluded (FR-020). |
-| Unit — digest | `tests/discord/digest.test.ts` | Idempotent re-run produces byte-identical file; truncates excerpts > 600 chars; never emits forbidden tokens (Principle VII). |
+| Unit — digest | `tests/digest/digest.test.ts` | Idempotent re-run produces byte-identical file; truncates excerpts > 600 chars; never emits forbidden tokens (Principle VII). |
 | Unit — ingest (REST client stubbed) | `tests/discord/ingest.test.ts` | 401 path doesn't block redeemer (FR-012); 429 honors `Retry-After`; cursor advances monotonically; per-channel cap enforced. |
 | Integration — skill | `tests/skills/discordMonitor.test.ts` | Full run on fixture data: empty allow-list = no-op; mixed-channel fixture produces correct digest + cursor + auto-commit list; per-run cap truncates correctly. |
 | Regression | `tests/skills/redeemCodes.test.ts` | `extraCandidates` path is exercised; existing no-arg behavior unchanged (no regressions in current 5 skills). |
@@ -405,17 +409,25 @@ Required edits to `.specify/memory/constitution.md`:
 2. **§ V durable-inputs enumeration** — append:
 
    > The `discord-monitor` skill (`src/skills/discordMonitor.ts` +
-   > `src/discord/**`) additionally consumes
+   > `src/discord/**` + `src/digest/`) additionally consumes
    > `config/discord-allowlist.json` and
    > `config/classifier-model.json`, and reads/writes the
    > workflow-committed runtime files
    > `data/discord/cursors.json`, `data/discord/candidates.jsonl`,
    > `data/discord/tips-seen.jsonl`,
-   > `data/discord/suppression.json`, and the artifact tree
-   > `data/digests/YYYY-MM-DD.md`. The sole writer of these files is
-   > the `discord-monitor` skill executed inside
-   > `.github/workflows/discord-monitor.yml`. These are the only
-   > additional durable inputs/outputs introduced by v1.3.0.
+   > `data/discord/cooldowns.json`, and the artifact tree
+   > `data/digests/YYYY-MM-DD.md`. Operator-curated
+   > `data/discord/suppression.json` is read by the skill but ONLY
+   > written by human operators via reviewed PRs. The digest module
+   > lives at `src/digest/` (not under `src/discord/`). These are the
+   > only additional durable inputs/outputs introduced by v1.3.0.
+
+   **Rationale for suppression/cooldowns split:** Constitution Principle V
+   reserves `data/discord/suppression.json` as an operator-curated file
+   (writer: human operator). FR-009's 30-day cool-down telemetry is
+   auto-written by feature code and therefore belongs in a separate file
+   (`data/discord/cooldowns.json`) to preserve the bright-line separation
+   between policy (operator) and telemetry (skill).
 
 3. **§ V Token Capture Custody** — append a single sentence:
 

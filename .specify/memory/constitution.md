@@ -2,7 +2,7 @@
 Version change: 1.2.0 → 1.3.0 (MINOR)
 Bump rationale: MINOR — enumeration expansion only. Principle V's "secret"
 definition and durable-inputs enumeration are extended to cover the
-`DISCORD_BOT_TOKEN` GitHub Actions secret and six new committed durable
+`DISCORD_BOT_TOKEN` GitHub Actions secret and seven new committed durable
 inputs/outputs introduced by the `discord-monitor` skill, plus the
 `data/digests/**` artifact tree. Security & Compliance Constraints'
 outbound-network scope is extended to cover `discord.com/api` (REST reads)
@@ -13,7 +13,9 @@ triggered: this amendment adds NO new sanctioned writer of `STFC_ACCOUNTS`,
 and `DISCORD_BOT_TOKEN` is explicitly excluded from the `STFC_ACCOUNTS`
 custody surface and from `scripts/capture-token.mjs`.
 
-Assembled: 2026-05-15T00:48:55Z
+Refinement: split suppression.json into operator-written rules + skill-written cooldowns.json.
+
+Assembled: 2026-05-16T03:23:23Z
 Assembled by: Picard (Lead) — speckit.constitution for feature 001-discord-monitor
 Requested by: cyrusj
 
@@ -29,13 +31,14 @@ Per-principle change summary:
                         to disk by feature code; NOT a STFC_ACCOUNTS
                         writer);
                     (b) durable-inputs enumeration extended to include
-                        the six `discord-monitor` files
+                        the seven `discord-monitor` files
                         (`config/discord-allowlist.json`,
                         `config/classifier-model.json`,
                         `data/discord/cursors.json`,
                         `data/discord/candidates.jsonl`,
                         `data/discord/tips-seen.jsonl`,
-                        `data/discord/suppression.json`) and the
+                        `data/discord/suppression.json`,
+                        `data/discord/cooldowns.json`) and the
                         `data/digests/**` artifact tree;
                     (c) Token Capture Custody reaffirms that
                         `DISCORD_BOT_TOKEN` MUST NOT be merged into
@@ -258,10 +261,13 @@ sanctioned surfaces below; every other surface is treated as a leak.
     candidate hits with status updates. Writer: same. Purpose: audit trail.
   - `data/discord/tips-seen.jsonl` — append-only JSONL log of tip-class
     messages already surfaced. Writer: same. Purpose: de-duplication.
-  - `data/discord/suppression.json` — operator-curated suppression rules
-    for noisy patterns. Writer: human operator (manual edit, reviewed PR);
-    the skill MAY append machine-suggested entries that an operator MUST
-    confirm before they take effect. Purpose: noise control.
+  - `data/discord/suppression.json` — operator-curated allow/deny rules
+    for known code patterns. Writer: human operator (manual edit, reviewed
+    PR). Purpose: deny known-bad code patterns and allow exceptions.
+  - `data/discord/cooldowns.json` — auto-written cool-down telemetry.
+    Writer: feature code at `src/discord/` (the candidate-redemption
+    pipeline). Purpose: track failed candidates with `firstFailedAt` and
+    `suppressedUntil` fields per FR-009 (default 30-day window).
   None of these files contain secrets, JWTs, account material, or message
   text from monitored channels (only message IDs, timestamps, and
   classifier scores).
