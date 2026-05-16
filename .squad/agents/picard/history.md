@@ -1,4 +1,4 @@
-# Project Context
+# Picard — Lead / Code Review
 
 - **Owner:** cyrusj
 - **Project:** stfc-gift-redeemer — a headless TypeScript CLI that automatically redeems web-store gifts and promo codes from the Star Trek Fleet Command store. Runs on a GitHub Actions cron schedule (every 4 hours).
@@ -113,6 +113,7 @@ When rounds 1 and 2 have already done the architecture review, hostile fact-chec
 - **Amendment P0s (from Tuvok's process audit) become hard blockers on the amendment PR itself:** The three P0-level findings from Tuvok's amendment audit (SIR per-principle field, `plan-template.md` re-sync, Known-Tensions disposition) were addressed before the amendment PR opened — they were encoded as acceptance criteria in T000 governance task. This pattern will repeat: if Tuvok surfaces P0s in a future amendment audit, do not open the PR until they are resolved.
 
 ---
+> Older entries archived to history-archive.md on 2026-05-16.
 
 ### BLOCKER Resolution — 001-discord-monitor analyze (2026-05-16)
 
@@ -129,3 +130,13 @@ When /speckit.analyze surfaces a BLOCKER (artifact inconsistency), there are two
 2. **BLOCKER #2 (digest module path mismatch):** Chose **Option A** — moved digest writer from `src/discord/digest.ts` to `src/digest/index.ts`. Reasoning: Matches constitution exactly; the digest is conceptually downstream of Discord (it summarizes redemption activity too), so it belongs in its own module.
 
 **Heuristic for future BLOCKERs:** When the plan's design is logically sound but contradicts the constitution's literal text, prefer the constitution-led fix (Option A) unless the constitution's wording reflects a genuine oversight. This preserves the governance invariant that Principle VI ("Constitution wins") actually means something.
+
+---
+
+### Governance Template Re-sync — plan-template.md P0-1 fix (2026-05-16)
+
+## Learnings
+
+**SIR template re-sync claims must be verified against actual template content, not just structural change.**
+
+When a constitution amendment's Sync Impact Report (SIR) concludes "Templates needing re-sync: NONE" on the basis that no principles were renamed/added/removed, that structural argument does not cover *content drift* — a template row that made a factual claim about durable inputs was silently superseded by the very enumeration the amendment added. Takeaway: any SIR re-sync verdict must include a literal grep/search of template content for load-bearing claims, not just a structural diff of principle headings.

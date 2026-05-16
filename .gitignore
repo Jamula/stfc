@@ -34,3 +34,5 @@ playwright-diagnostics/
 
 # CLI runtime output
 summary.md
+# Digest writer output (runtime artifacts; only .gitkeep is tracked)
+data/digests/*.md

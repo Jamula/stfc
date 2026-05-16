@@ -63,3 +63,26 @@ prose. Examples applied here:
 ## Session History (Current)
 
 *For detailed session logs, see `.squad/log/` and `.squad/orchestration-log/`.*
+
+---
+
+### Phase 4 — US2 Tips Digest Test Fixes (2026-05-16)
+
+**Session:** cyrusj requested fix of 3 failing tests in Phase 4 WIP (T028–T034).
+
+**Root cause 1 — Digest idempotency (digest.test.ts lines 117 & 238):**
+`merge()` in `src/digest/index.ts` summed additive health counters (e.g. `channelsRead`) on every re-run, even when the same `runId` was re-submitted. This meant re-rendering with identical input produced different state-block JSON, so the downstream byte-compare never short-circuited.
+**Fix:** Added an idempotency fast-path at the top of `merge()`: if all `next.runIds` are already present in `prior.runIds`, return `prior` unchanged. The byte-compare then sees identical bytes and returns `bytesWritten: 0`.
+**Pattern to remember:** Digest merge fast-path must gate on runId coverage BEFORE summing counters. Otherwise any re-submit doubles the stats.
+
+**Root cause 2 — Empty-allowlist digest not written (discordMonitor.test.ts line 154):**
+`finalize()` called `writeDigest(digest, { digestsDir: args.digestsDir })` but the `WriteDigestOptions` interface uses `outputDir`, not `digestsDir`. The unknown key was silently ignored; `writeDigest` fell back to `DEFAULT_DIGESTS_DIR` (`data/digests/`). Two TypeScript errors confirmed this:
+- `Type 'DigestWriteResult' is not assignable to type 'string'`
+- `'digestsDir' does not exist in type 'WriteDigestOptions'`
+**Fix:** Corrected to `{ outputDir: args.digestsDir }` and extracted `.filePath` from the `DigestWriteResult`.
+**Side effect:** All prior test runs were writing to `data/digests/2026-05-16.md` (real dir) instead of the temp dir. That stray file was removed; `data/digests/*.md` added to `.gitignore`.
+
+**Temp-dir discipline:** The test suite correctly used `os.tmpdir()` + `mkdtempSync` for all paths — the real issue was purely in the production code passing the wrong option key.
+
+**Commit:** `9475937 feat(001-discord-monitor): Phase 4 — US2 tips digest (T028–T034)`
+**Test result:** 286 tests, 283 pass, 0 fail (3 pre-existing extractor.test.ts KNOWN GAP warnings unchanged).
