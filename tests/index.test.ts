@@ -10,6 +10,7 @@ import "./lib/summary.test.ts";
 import "./lib/redact.test.ts";
 import "./api/client.test.ts";
 import "./skills/runAll.test.ts";
+import "./skills/redeemCodes.test.ts";
 import "./discord/schemas.test.ts";
 import "./discord/state.test.ts";
 import "./discord/client.test.ts";

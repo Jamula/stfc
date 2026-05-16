@@ -290,7 +290,7 @@ duplicates suppressed, outcomes recorded, and any failures result in
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation.
 > Every Given/When/Then in spec.md § US1 Acceptance Scenarios MUST map to a test.**
 
-- [ ] T013 [P] [US1] Write extractor unit tests in
+- [X] T013 [P] [US1] Write extractor unit tests in
   `tests/discord/extractor.test.ts` **before** implementing
   `src/discord/extractor.ts`. Test suite MUST assert:
   - All 30 non-comment entries in `promo-codes.txt` are exercised against
@@ -308,7 +308,7 @@ duplicates suppressed, outcomes recorded, and any failures result in
   - Messages inside triple-backtick code fences are not extracted
     (documentation pattern edge case from spec § Edge Cases).
 
-- [ ] T014 [P] [US1] Write dedup unit tests in `tests/discord/dedup.test.ts`
+- [X] T014 [P] [US1] Write dedup unit tests in `tests/discord/dedup.test.ts`
   **before** implementing `src/discord/dedup.ts`. Test suite MUST assert
   (maps to spec § US1 Acceptance Scenarios 1–3):
   - Code present in `promo-codes.txt` → status `already-known`, NOT queued
@@ -329,7 +329,7 @@ duplicates suppressed, outcomes recorded, and any failures result in
   - Code absent from all four sources → status `pending`, added to fresh
     list (Scenario 1).
 
-- [ ] T015 [P] [US1] Write cooldown unit tests in
+- [X] T015 [P] [US1] Write cooldown unit tests in
   `tests/discord/cooldown.test.ts` **before** implementing
   `src/discord/cooldown.ts`. Assert (FR-009 30-day window math + write
   semantics, maps to state-files.contract.md § cooldowns):
@@ -351,7 +351,7 @@ duplicates suppressed, outcomes recorded, and any failures result in
   - Cooldown writes NEVER touch `data/discord/suppression.json` (operator
     file invariant #4) — verify by spying on `state.ts` writers.
 
-- [ ] T016 [P] [US1] Write redeemer-seam unit tests in
+- [X] T016 [P] [US1] Write redeemer-seam unit tests in
   `tests/skills/redeemCodes.test.ts` (modify existing file) **before**
   implementing seam changes. Assert:
   - `redeemCodes({ extraCandidates: ["CODE1", "CODE2"] })` merges
@@ -367,7 +367,7 @@ duplicates suppressed, outcomes recorded, and any failures result in
     exist; verify import at `src/skills/redeemCodes.ts:9` per Tuvok
     corrections memo P1-6).
 
-- [ ] T017 [P] [US1] Write ingest unit tests in
+- [X] T017 [P] [US1] Write ingest unit tests in
   `tests/discord/ingest.test.ts` **before** implementing
   `src/discord/ingest.ts`. Use fixture files from T008 as the stubbed REST
   client responses. Assert:
@@ -386,7 +386,7 @@ duplicates suppressed, outcomes recorded, and any failures result in
   - 403 / 404 → channel marked errored in `RunHealth`, remaining channels
     continue.
 
-- [ ] T018 [US1] Write integration test in
+- [X] T018 [US1] Write integration test in
   `tests/skills/discordMonitor.test.ts` **before** implementing
   `src/skills/discordMonitor.ts`. Assert (full-run with fixture data; no
   live Discord or STFC connections):
@@ -416,13 +416,13 @@ duplicates suppressed, outcomes recorded, and any failures result in
 
 ### Implementation for User Story 1
 
-- [ ] T019 [P] [US1] Implement `src/discord/stoplist.ts` — curated reject
+- [X] T019 [P] [US1] Implement `src/discord/stoplist.ts` — curated reject
   list for false-positive code-shaped strings (format-example patterns,
   common abbreviations, high-frequency non-code ALL-CAPS words). Export
   `isOnStoplist(candidate: string): boolean`. Populate with at least the
   patterns used in the extractor tests (T013).
 
-- [ ] T020 [P] [US1] Implement `src/discord/extractor.ts` —
+- [X] T020 [P] [US1] Implement `src/discord/extractor.ts` —
   precision-first regex extractor. Core pattern:
   `^[A-Z][A-Z0-9]{3,19}$`. Strip Markdown decoration, spoiler tags
   `||…||`, zero-width Unicode characters, and triple-backtick code fences
@@ -431,7 +431,7 @@ duplicates suppressed, outcomes recorded, and any failures result in
   `extractionConfidence` ≥ 0.6 threshold. Integrate `stoplist.ts`.
   Depends on T013 (must fail first), T019.
 
-- [ ] T021 [P] [US1] Implement `src/discord/cooldown.ts` — pure-function
+- [X] T021 [P] [US1] Implement `src/discord/cooldown.ts` — pure-function
   module owning FR-009 cool-down telemetry math. Export:
   - `const COOLDOWN_DEFAULT_DAYS = 30;` (FR-009 default constant).
   - `recordFailure(map: CooldownMap, code: string, outcome: string, now:
@@ -447,7 +447,7 @@ duplicates suppressed, outcomes recorded, and any failures result in
   for `data/discord/cooldowns.json` writes from the orchestration layer.
   Depends on T015, T009.
 
-- [ ] T022 [US1] Implement `src/discord/dedup.ts` — filter
+- [X] T022 [US1] Implement `src/discord/dedup.ts` — filter
   `CandidateCode[]` against (in priority order):
   (a) `promo-codes.txt` via `readPromoCodes(path)` +
   `parsePromoCodes(content)` (existing exports, unchanged) →
@@ -461,7 +461,7 @@ duplicates suppressed, outcomes recorded, and any failures result in
   Emit fresh list and status-annotated full list. Depends on T014, T021,
   T010.
 
-- [ ] T023 [US1] Implement redeemer seam changes:
+- [X] T023 [US1] Implement redeemer seam changes:
   - Add `export async function readCodesForRun(opts?: { extraCandidates?:
     string[] }): Promise<string[]>` to `src/lib/promoCodes.ts`. It wraps
     the existing `readPromoCodes(path)` + `parsePromoCodes(content)`
@@ -476,7 +476,7 @@ duplicates suppressed, outcomes recorded, and any failures result in
     MUST NOT be used).
   Depends on T016.
 
-- [ ] T024 [US1] Implement Discord REST client in `src/discord/client.ts`
+- [X] T024 [US1] Implement Discord REST client in `src/discord/client.ts`
   — thin wrapper over `@discordjs/rest`. Typed error classes:
   `DiscordAuthError` (401), `DiscordRateLimitError` (429),
   `DiscordTransientError` (5xx), `DiscordChannelAccessError` (403),
@@ -490,7 +490,7 @@ duplicates suppressed, outcomes recorded, and any failures result in
   `STFC-Discord-Monitor (https://github.com/Jamula/stfc, 0.1.0)`.
   Depends on T011, T017.
 
-- [ ] T025 [US1] Implement `src/discord/ingest.ts` — per-channel message
+- [X] T025 [US1] Implement `src/discord/ingest.ts` — per-channel message
   pager. Reads `config/discord-allowlist.json` (validated by T009 schema);
   for each enabled entry calls `src/discord/client.ts` to page
   `GET /api/v10/channels/{id}/messages?after=<cursor>&limit=100` up to 5
@@ -499,7 +499,7 @@ duplicates suppressed, outcomes recorded, and any failures result in
   marks `RunHealth.errors.auth_failed`, skips Discord half, does NOT
   block the redeemer (FR-012). Depends on T024, T010, T017.
 
-- [ ] T026 [US1] Implement main skill orchestration in
+- [X] T026 [US1] Implement main skill orchestration in
   `src/skills/discordMonitor.ts` following the 11-step sequence in
   `plan.md` § Sequence:
   (1) boot + allow-list load; (2) token check; (3) ingest; (4) extract;
@@ -516,7 +516,7 @@ duplicates suppressed, outcomes recorded, and any failures result in
   real implementation in `src/cli.ts` (replacing T007 stub). Depends on
   T018, T020, T021, T022, T023, T024, T025.
 
-- [ ] T027 [US1] Create `.github/workflows/discord-monitor.yml`. Key
+- [X] T027 [US1] Create `.github/workflows/discord-monitor.yml`. Key
   values (must match assertions in T018 bit-for-bit):
   - `cron: "15 */4 * * *"` (4-hourly, 15-min offset from redeemer's
     `0 * * * *`).

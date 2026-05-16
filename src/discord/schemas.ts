@@ -86,6 +86,7 @@ export const CandidateStatusSchema = z.enum([
   "duplicate",
   "deferred-cap",
   "suppressed-cooldown",
+  "suppressed-operator-deny",
 ]);
 export type CandidateStatus = z.infer<typeof CandidateStatusSchema>;
 
@@ -213,6 +214,39 @@ export const ClassifierModelSchema = z
   })
   .strict();
 export type ClassifierModel = z.infer<typeof ClassifierModelSchema>;
+
+// ── Discord REST response shape (Entity 1 source) ──────────────────────────
+
+export const DiscordMessageSchema = z
+  .object({
+    id: SnowflakeSchema,
+    channel_id: SnowflakeSchema,
+    content: z.string(),
+    timestamp: z.string(),
+    edited_timestamp: z.string().nullable().optional(),
+    author: z
+      .object({
+        id: SnowflakeSchema,
+        username: z.string(),
+        bot: z.boolean().optional(),
+      })
+      .passthrough(),
+    type: z.number().optional(),
+  })
+  .passthrough();
+
+export type DiscordMessage = z.infer<typeof DiscordMessageSchema>;
+
+export const DiscordMessageArraySchema = z.array(DiscordMessageSchema);
+
+export const DiscordUserMeSchema = z
+  .object({
+    id: SnowflakeSchema,
+    username: z.string(),
+    bot: z.boolean().optional(),
+  })
+  .passthrough();
+export type DiscordUserMe = z.infer<typeof DiscordUserMeSchema>;
 
 // ── Entity 1: IngestedMessage (transient, in-memory only) ───────────────────
 

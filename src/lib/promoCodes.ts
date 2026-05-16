@@ -36,3 +36,37 @@ export function parsePromoCodes(content: string): string[] {
   }
   return codes;
 }
+
+/**
+ * T023 [US1] — the redeemer-seam entry point. Returns the deduplicated list
+ * of codes the redeemer should attempt this run.
+ *
+ * Combines (a) the static `promo-codes.txt` contents (read via the existing
+ * `readPromoCodes` + `parsePromoCodes` pipeline) and (b) any caller-supplied
+ * additional candidates from the Discord monitor, in deterministic order
+ * (file first, then candidates in insertion order). Dedup key: the value
+ * after `trim().toUpperCase()` normalization (matches FR-007 + upstream's
+ * case-insensitive promo redeem endpoint).
+ *
+ * Existing callers that invoke `readPromoCodes(path)` directly continue to
+ * work unchanged.
+ */
+export async function readCodesForRun(opts?: {
+  promoCodesPath?: string;
+  extraCandidates?: string[];
+}): Promise<string[]> {
+  const file = opts?.promoCodesPath ? await readPromoCodes(opts.promoCodesPath) : [];
+  const extras = opts?.extraCandidates ?? [];
+
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const raw of [...file, ...extras]) {
+    const trimmed = raw.trim();
+    if (trimmed.length === 0) continue;
+    const key = trimmed.toUpperCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(key);
+  }
+  return out;
+}

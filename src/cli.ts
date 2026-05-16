@@ -37,7 +37,7 @@ const SKILL_FNS: Record<SkillName, SkillFn> = {
   "list-gifts": (o) => listGifts(o),
   "claim-gifts": (o) => claimGifts(o),
   "redeem-codes": (o) => redeemCodes(o),
-  "discord-monitor": (_o) => discordMonitor({}),
+  "discord-monitor": (o) => discordMonitor({ accounts: o.accounts, promoCodesPath: o.promoCodesPath }),
 };
 
 async function main(): Promise<number> {
