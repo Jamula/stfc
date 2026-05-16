@@ -1,0 +1,182 @@
+[
+  {
+    "id": "211111111111111101",
+    "channel_id": "222222222222222222",
+    "content": "Tip: always assign your highest-tier officer to the bridge before mining — it boosts cargo by 30%.",
+    "timestamp": "2026-05-13T11:00:00.000000+00:00",
+    "edited_timestamp": null,
+    "author": { "id": "311111111111111101", "username": "tipster1", "bot": false },
+    "type": 0
+  },
+  {
+    "id": "211111111111111102",
+    "channel_id": "222222222222222222",
+    "content": "Tip: store your speed-ups for the next Borg event — the rewards table is much better than the current arc.",
+    "timestamp": "2026-05-13T11:05:00.000000+00:00",
+    "edited_timestamp": null,
+    "author": { "id": "311111111111111102", "username": "tipster2", "bot": false },
+    "type": 0
+  },
+  {
+    "id": "211111111111111103",
+    "channel_id": "222222222222222222",
+    "content": "Pro tip: keep two survey ships built before a refinery upgrade so you can swap one out without losing a slot.",
+    "timestamp": "2026-05-13T11:10:00.000000+00:00",
+    "edited_timestamp": null,
+    "author": { "id": "311111111111111103", "username": "tipster3", "bot": false },
+    "type": 0
+  },
+  {
+    "id": "211111111111111104",
+    "channel_id": "222222222222222222",
+    "content": "Tip: the territory capture bonus stacks with the alliance research bonus — most players miss this.",
+    "timestamp": "2026-05-13T11:15:00.000000+00:00",
+    "edited_timestamp": null,
+    "author": { "id": "311111111111111104", "username": "tipster4", "bot": false },
+    "type": 0
+  },
+  {
+    "id": "211111111111111105",
+    "channel_id": "222222222222222222",
+    "content": "Trick: dock your ship just before the daily reset to avoid armada cooldown penalties carrying over.",
+    "timestamp": "2026-05-13T11:20:00.000000+00:00",
+    "edited_timestamp": null,
+    "author": { "id": "311111111111111105", "username": "trickster1", "bot": false },
+    "type": 0
+  },
+  {
+    "id": "211111111111111106",
+    "channel_id": "222222222222222222",
+    "content": "Trick: if you queue a research project and immediately speed-up under 5 minutes, it counts as free in the events tracker.",
+    "timestamp": "2026-05-13T11:25:00.000000+00:00",
+    "edited_timestamp": null,
+    "author": { "id": "311111111111111106", "username": "trickster2", "bot": false },
+    "type": 0
+  },
+  {
+    "id": "211111111111111107",
+    "channel_id": "222222222222222222",
+    "content": "Trick: officer xp scrolls scale with the lowest officer in the slot — fill empty slots before using a scroll.",
+    "timestamp": "2026-05-13T11:30:00.000000+00:00",
+    "edited_timestamp": null,
+    "author": { "id": "311111111111111107", "username": "trickster3", "bot": false },
+    "type": 0
+  },
+  {
+    "id": "211111111111111108",
+    "channel_id": "222222222222222222",
+    "content": "Trick: you can re-roll the daily goals by changing your client time zone once before the reset.",
+    "timestamp": "2026-05-13T11:35:00.000000+00:00",
+    "edited_timestamp": null,
+    "author": { "id": "311111111111111108", "username": "trickster4", "bot": false },
+    "type": 0
+  },
+  {
+    "id": "211111111111111109",
+    "channel_id": "222222222222222222",
+    "content": "Hack: rebind the survey ship recall to a hotkey — saves 20 clicks per refinery cycle.",
+    "timestamp": "2026-05-13T11:40:00.000000+00:00",
+    "edited_timestamp": null,
+    "author": { "id": "311111111111111109", "username": "hacker1", "bot": false },
+    "type": 0
+  },
+  {
+    "id": "211111111111111110",
+    "channel_id": "222222222222222222",
+    "content": "Hack: chain three short-build queues with the same speed-up to amortize the 15-minute floor.",
+    "timestamp": "2026-05-13T11:45:00.000000+00:00",
+    "edited_timestamp": null,
+    "author": { "id": "311111111111111110", "username": "hacker2", "bot": false },
+    "type": 0
+  },
+  {
+    "id": "211111111111111111",
+    "channel_id": "222222222222222222",
+    "content": "Hack: turn off auto-collect on resource nodes during a war — manual collect respects the cease-fire grace timer.",
+    "timestamp": "2026-05-13T11:50:00.000000+00:00",
+    "edited_timestamp": null,
+    "author": { "id": "311111111111111111", "username": "hacker3", "bot": false },
+    "type": 0
+  },
+  {
+    "id": "211111111111111112",
+    "channel_id": "222222222222222222",
+    "content": "Event info: Borg Cube Incursion starts 2026-05-15 14:00 UTC, lasts 72 hours. Bring at least one tier-9 battleship.",
+    "timestamp": "2026-05-13T12:00:00.000000+00:00",
+    "edited_timestamp": null,
+    "author": { "id": "311111111111111112", "username": "eventnews1", "bot": false },
+    "type": 0
+  },
+  {
+    "id": "211111111111111113",
+    "channel_id": "222222222222222222",
+    "content": "Event info: Galactic Strongholds week begins Monday — reward track now includes the Defiant blueprint.",
+    "timestamp": "2026-05-13T12:05:00.000000+00:00",
+    "edited_timestamp": null,
+    "author": { "id": "311111111111111113", "username": "eventnews2", "bot": false },
+    "type": 0
+  },
+  {
+    "id": "211111111111111114",
+    "channel_id": "222222222222222222",
+    "content": "Event info: outpost wars rotate to the Beta quadrant this weekend. Coordinate with alliance leadership before deploying.",
+    "timestamp": "2026-05-13T12:10:00.000000+00:00",
+    "edited_timestamp": null,
+    "author": { "id": "311111111111111114", "username": "eventnews3", "bot": false },
+    "type": 0
+  },
+  {
+    "id": "211111111111111115",
+    "channel_id": "222222222222222222",
+    "content": "Patch note: 1.732.10 — Enterprise-E hull HP increased by 4%, Vi'dar shield regen reduced by 3%.",
+    "timestamp": "2026-05-13T12:15:00.000000+00:00",
+    "edited_timestamp": null,
+    "author": { "id": "311111111111111115", "username": "patchwatch1", "bot": false },
+    "type": 0
+  },
+  {
+    "id": "211111111111111116",
+    "channel_id": "222222222222222222",
+    "content": "Patch note: hostile spawn rates in the Augment systems lowered to compensate for last week's 2x event.",
+    "timestamp": "2026-05-13T12:20:00.000000+00:00",
+    "edited_timestamp": null,
+    "author": { "id": "311111111111111116", "username": "patchwatch2", "bot": false },
+    "type": 0
+  },
+  {
+    "id": "211111111111111117",
+    "channel_id": "222222222222222222",
+    "content": "Tip: pair Kirk + Spock + Bones for hostile farming — the synergy bonus beats any 3-officer Khan combo at G3.",
+    "timestamp": "2026-05-13T12:25:00.000000+00:00",
+    "edited_timestamp": null,
+    "author": { "id": "311111111111111117", "username": "tipster5", "bot": false },
+    "type": 0
+  },
+  {
+    "id": "211111111111111118",
+    "channel_id": "222222222222222222",
+    "content": "Tip: don't dump latinum on the daily store — the weekly store has a 40% better ratio on tritanium.",
+    "timestamp": "2026-05-13T12:30:00.000000+00:00",
+    "edited_timestamp": null,
+    "author": { "id": "311111111111111118", "username": "tipster6", "bot": false },
+    "type": 0
+  },
+  {
+    "id": "211111111111111119",
+    "channel_id": "222222222222222222",
+    "content": "Trick: keep one G4 mining ship parked in your home system — it deters opportunistic ganks during shipyard upgrades.",
+    "timestamp": "2026-05-13T12:35:00.000000+00:00",
+    "edited_timestamp": null,
+    "author": { "id": "311111111111111119", "username": "trickster5", "bot": false },
+    "type": 0
+  },
+  {
+    "id": "211111111111111120",
+    "channel_id": "222222222222222222",
+    "content": "Hack: alliance store credit refresh aligns with your local midnight, not server reset — use it to double-dip.",
+    "timestamp": "2026-05-13T12:40:00.000000+00:00",
+    "edited_timestamp": null,
+    "author": { "id": "311111111111111120", "username": "hacker4", "bot": false },
+    "type": 0
+  }
+]

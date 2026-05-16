@@ -1,0 +1,38 @@
+[
+  {
+    "id": "111111111111111111",
+    "channel_id": "222222222222222222",
+    "content": "Use code REDEEM2026 for 50 gems while supplies last",
+    "timestamp": "2026-05-13T10:00:00.000000+00:00",
+    "edited_timestamp": null,
+    "author": { "id": "333333333333333333", "username": "promoposter", "bot": false },
+    "type": 0
+  },
+  {
+    "id": "111111111111111112",
+    "channel_id": "222222222222222222",
+    "content": "New gift incoming — ||SECRETCODE|| (spoiler so it stays fresh)",
+    "timestamp": "2026-05-13T10:05:00.000000+00:00",
+    "edited_timestamp": null,
+    "author": { "id": "333333333333333334", "username": "insider", "bot": false },
+    "type": 0
+  },
+  {
+    "id": "111111111111111113",
+    "channel_id": "222222222222222222",
+    "content": "Redeem **BONUSPACK** in your account for the weekend perk!",
+    "timestamp": "2026-05-13T10:10:00.000000+00:00",
+    "edited_timestamp": "2026-05-13T10:11:00.000000+00:00",
+    "author": { "id": "333333333333333335", "username": "communitymod", "bot": false },
+    "type": 0
+  },
+  {
+    "id": "111111111111111114",
+    "channel_id": "222222222222222222",
+    "content": "Don't forget to grab `FLEETBOOST` before reset tonight.",
+    "timestamp": "2026-05-13T10:15:00.000000+00:00",
+    "edited_timestamp": null,
+    "author": { "id": "333333333333333336", "username": "captainq", "bot": false },
+    "type": 0
+  }
+]

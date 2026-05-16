@@ -7,6 +7,36 @@ inserted at the top**, so the most recent run is always visible first.
 
 | Date (UTC) | Time (UTC) | Account | Gifts claimed |
 | --- | --- | --- | --- |
+| 2026-05-16 | 20:00 | main | 10 Min Free Chest |
+| 2026-05-16 | 18:56 | main | 10 Min Free Chest |
+| 2026-05-16 | 17:51 | main | 4 Hr Free Chest, 10 Min Free Chest |
+| 2026-05-16 | 16:52 | main | 10 Min Free Chest |
+| 2026-05-16 | 14:51 | main | 10 Min Free Chest |
+| 2026-05-16 | 13:09 | main | 4 Hr Free Chest, 10 Min Free Chest |
+| 2026-05-16 | 11:52 | main | Emerald Chain Tier 26+, 10 Min Free Chest, Nadion Supply |
+| 2026-05-16 | 10:57 | main | 10 Min Free Chest |
+| 2026-05-16 | 09:26 | main | Daily Mission Key Drop, 10 Min Free Chest |
+| 2026-05-16 | 07:55 | main | 4 Hr Free Chest, 10 Min Free Chest |
+| 2026-05-16 | 05:49 | main | 10 Min Free Chest |
+| 2026-05-16 | 02:42 | main | 4 Hr Free Chest, 10 Min Free Chest, UC Event Ticket Gift |
+| 2026-05-14 | 02:37 | main | Daily Mission Key Drop, 4 Hr Free Chest, 10 Min Free Chest |
+| 2026-05-13 | 23:01 | main | 10 Min Free Chest |
+| 2026-05-13 | 21:22 | main | 10 Min Free Chest |
+| 2026-05-13 | 19:46 | main | 4 Hr Free Chest, 10 Min Free Chest |
+| 2026-05-13 | 17:12 | main | 10 Min Free Chest |
+| 2026-05-13 | 14:45 | main | 10 Min Free Chest |
+| 2026-05-13 | 11:59 | main | 10 Min Free Chest |
+| 2026-05-13 | 09:39 | main | 4 Hr Free Chest, 10 Min Free Chest |
+| 2026-05-13 | 06:22 | main | 10 Min Free Chest |
+| 2026-05-13 | 02:38 | main | Daily Mission Key Drop, 10 Min Free Chest |
+| 2026-05-12 | 23:55 | main | 4 Hr Free Chest, 10 Min Free Chest |
+| 2026-05-12 | 22:55 | main | 10 Min Free Chest |
+| 2026-05-12 | 21:13 | main | 10 Min Free Chest |
+| 2026-05-12 | 19:42 | main | 4 Hr Free Chest, 10 Min Free Chest |
+| 2026-05-12 | 17:05 | main | 10 Min Free Chest |
+| 2026-05-12 | 14:07 | main | 10 Min Free Chest |
+| 2026-05-12 | 11:49 | main | 10 Min Free Chest |
+| 2026-05-12 | 09:32 | main | 30 Day Loyalty Chest, 4 Hr Free Chest, 10 Min Free Chest, 7 Day Loyalty Chest |
 | 2026-05-12 | 02:29 | main | Daily Mission Key Drop, 4 Hr Free Chest, 10 Min Free Chest |
 | 2026-05-11 | 23:53 | main | 10 Min Free Chest |
 | 2026-05-11 | 22:01 | main | 10 Min Free Chest |

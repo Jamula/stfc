@@ -49,6 +49,12 @@ When a factual claim is corrected (e.g., "42 codes" → "30 codes"), every *deri
 
 The takeaway for future rounds: after verifying each correction landed, run a second pass asking "what else in the document depends on the old value?" — not just the corrected line, but any prose, formula, test description, or cross-reference that consumed the old claim.
 
+### 001-discord-monitor Round-3 Fact-Check (2026-05-13)
+
+**Derivative artifact inheritance pattern:** When a new artifact (tasks.md) is generated from a corrected parent (plan.md), verify that (a) corrections propagated into the derivative, and (b) stale claims that survived in the parent did NOT propagate. In this round, the 3-char gap correction propagated cleanly into tasks.md T013 — the generator correctly picked up the corrected plan.md:377. However, the stale `~3.5/month` rate (plan.md:356) was harmlessly omitted from tasks.md because tasks.md doesn't reference the rate. The bare `git push` (plan.md:317, P1-NEW-3) DID propagate into tasks.md:373. Rule: after any derivative is generated, grep for every open P1 finding from the parent and check whether it was inherited, fixed, or omitted.
+
+**Line-number citations drift:** tasks.md cited `redeem.yml:31` for the concurrency group when the actual line is :28. File-line citations in generated artifacts should be treated as hints, not contracts — they drift as the source file is edited. Test assertions should match on VALUE, not on line number (tasks.md correctly does this).
+
 ### Post-Ratification Backlog (v1.3.0)
 
 - **Known Tension 1:** Principle III overstates which per-account `auth/me` failures stay non-fatal.

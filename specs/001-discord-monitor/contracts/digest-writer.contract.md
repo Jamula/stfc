@@ -5,7 +5,7 @@
 ## Function interface
 
 ```ts
-// src/discord/digest.ts (target location)
+// src/digest/index.ts (target location)
 
 export interface DigestInput {
   date: string;                    // YYYY-MM-DD UTC

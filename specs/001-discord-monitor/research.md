@@ -237,13 +237,20 @@ plan); `actions/checkout@v4` permissions docs.
 | `data/discord/cursors.json`              | Per-channel last-seen message ID (R3)         | runtime  | `discord-monitor` skill | permanent   | yes        |
 | `data/discord/candidates.jsonl`          | Append-only candidate-code log + statuses     | runtime  | `discord-monitor` skill | permanent   | yes        |
 | `data/discord/tips-seen.jsonl`           | Content-hash dedup log for tips (FR-018)      | runtime  | `discord-monitor` skill | permanent   | yes        |
-| `data/discord/suppression.json`          | Failed-code cool-down map (FR-009)            | runtime  | `discord-monitor` skill | permanent   | yes        |
+| `data/discord/suppression.json`          | Operator allow/deny rules for code patterns   | config   | human (PR)              | permanent   | yes        |
+| `data/discord/cooldowns.json`            | Failed-code cool-down map (FR-009)            | runtime  | `discord-monitor` skill | permanent   | yes        |
 | `data/digests/YYYY-MM-DD.md`             | Daily digest (FR-022)                         | artifact | `discord-monitor` skill | permanent   | yes        |
 | `~/.cache/huggingface/**`                | Classifier model weights                      | cache    | Transformers.js         | per-cache-key | no (Actions cache only) |
 | `DISCORD_BOT_TOKEN` (env / GH secret)    | Bot REST auth (FR-002)                        | secret   | human (gh secret set)   | until rotated | no       |
 
 No new credential file. The Discord token follows the existing sanctioned
 secret surfaces: `.env` locally, `secrets.DISCORD_BOT_TOKEN` in CI.
+
+**Note on suppression/cooldowns split:** Constitution Principle V reserves
+`data/discord/suppression.json` as an operator-curated file. FR-009's 30-day
+cool-down telemetry is auto-written by feature code and therefore belongs in
+a separate `data/discord/cooldowns.json` file to preserve the bright-line
+separation between policy (operator) and telemetry (skill).
 
 ---
 

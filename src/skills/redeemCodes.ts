@@ -6,7 +6,7 @@ import { ApiClient } from "../api/client.ts";
 import { redeemCode as apiRedeemCode } from "../api/endpoints.ts";
 import { createLogger } from "../lib/logger.ts";
 import { classifyRedeemResult, type Outcome } from "../lib/outcomes.ts";
-import { PromoCodesFileError, readPromoCodes } from "../lib/promoCodes.ts";
+import { PromoCodesFileError, readCodesForRun } from "../lib/promoCodes.ts";
 import { redactForLog } from "../lib/redact.ts";
 
 const log = createLogger("redeemCodes");
@@ -14,6 +14,8 @@ const log = createLogger("redeemCodes");
 export interface RedeemCodesOptions {
   accounts: Account[];
   promoCodesPath?: string;
+  /** T023: Discord-monitor candidates merged after the static file. */
+  extraCandidates?: string[];
   clientFactory?: (token: string) => ApiClient;
   fetchImpl?: typeof fetch;
 }
@@ -40,20 +42,21 @@ export async function redeemCodes(opts: RedeemCodesOptions): Promise<RedeemCodes
   const rows: RedeemCodesRow[] = [];
 
   let codes: string[] = [];
-  if (opts.promoCodesPath) {
-    try {
-      codes = await readPromoCodes(opts.promoCodesPath);
-    } catch (err) {
-      if (err instanceof PromoCodesFileError) {
-        const detail = redactForLog(err);
-        log.error(`could not read promo codes: ${detail}`);
-        for (const account of opts.accounts) {
-          rows.push({ accountName: account.name, attempts: [], error: detail });
-        }
-        return { result: { rows }, exitCode: 0 };
+  try {
+    codes = await readCodesForRun({
+      promoCodesPath: opts.promoCodesPath,
+      extraCandidates: opts.extraCandidates,
+    });
+  } catch (err) {
+    if (err instanceof PromoCodesFileError) {
+      const detail = redactForLog(err);
+      log.error(`could not read promo codes: ${detail}`);
+      for (const account of opts.accounts) {
+        rows.push({ accountName: account.name, attempts: [], error: detail });
       }
-      throw err;
+      return { result: { rows }, exitCode: 0 };
     }
+    throw err;
   }
 
   if (codes.length === 0) {

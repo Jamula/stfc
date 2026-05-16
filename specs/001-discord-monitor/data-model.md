@@ -235,12 +235,34 @@ interface DiscordAllowlist {
 
 ---
 
-## 8. `SuppressionEntry`
+## 8. `OperatorSuppressionRule`
 
-Tracks codes in cool-down (FR-009).
+Operator-curated allow/deny rules for known code patterns.
 
 ```ts
-interface SuppressionMap {
+interface OperatorSuppressionMap {
+  [normalizedCodeValue: string]: {
+    action: "deny" | "allow";       // deny = suppress; allow = override a cooldown
+    reason: string;                 // operator-provided explanation
+    addedAt: string;                // ISO UTC
+    addedBy: string;                // operator identifier (e.g., GitHub handle)
+  };
+}
+```
+
+**Storage:** `data/discord/suppression.json`.
+**Writer:** human operator (manual edit, reviewed PR). Feature code MUST NOT
+write to this file.
+**Schema:** see `contracts/state-files.contract.md` § suppression.
+
+---
+
+## 9. `CandidateCooldown`
+
+Tracks codes in cool-down after redemption failure (FR-009).
+
+```ts
+interface CooldownMap {
   [normalizedCodeValue: string]: {
     firstFailedAt: string;        // ISO UTC
     lastFailedAt: string;
@@ -250,13 +272,14 @@ interface SuppressionMap {
 }
 ```
 
-**Storage:** `data/discord/suppression.json`.
-**Schema:** see `contracts/state-files.contract.md` § suppression.
+**Storage:** `data/discord/cooldowns.json`.
+**Writer:** feature code at `src/discord/` (the candidate-redemption pipeline).
+**Schema:** see `contracts/state-files.contract.md` § cooldowns.
 **Cool-down value:** 30 days (FR-009 default confirmed in plan).
 
 ---
 
-## 9. `RunHealth`
+## 10. `RunHealth`
 
 Per-run counters surfaced in the digest health section AND the GitHub Job
 Summary (FR-027).

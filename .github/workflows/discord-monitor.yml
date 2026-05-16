@@ -1,0 +1,73 @@
+# Scheduled Discord-monitor run.
+#
+# Ingests new messages from operator-curated Discord channels, extracts
+# candidate STFC promo codes, classifies tips, and hands fresh codes off
+# to the existing redeem orchestrator. Read-only against Discord.
+#
+# Cron: 15 min past every 4th hour (15-min stagger from redeem.yml's
+# `0 * * * *`) so a redeemer run finishes before the monitor run starts
+# under the shared concurrency group. The shared group serializes all
+# repo-writing workflows (promo-codes.txt, data/, docs/redeem-history.md).
+#
+# Per-account redemption outcomes (used, expired, invalid) do NOT fail the
+# workflow — only infrastructure errors do. Same posture as redeem.yml.
+name: Discord monitor
+
+on:
+  schedule:
+    - cron: "15 */4 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  # `write` so the post-run step can commit any new state + digest + auto-
+  # appended promo codes back to the repo using the default GITHUB_TOKEN.
+  contents: write
+
+# Opt into the Node 24 runtime for actions/* internals (default June 2026).
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+# MUST match redeem.yml:28 bit-for-bit so cron + dispatch + redeem runs
+# serialize on a single push lock — preventing colliding git push attempts.
+concurrency:
+  group: stfc-gift-redeemer
+  cancel-in-progress: false
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.0
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4.4.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57  # v4.2.0
+        with:
+          path: ~/.cache/huggingface
+          key: hf-${{ hashFiles('config/classifier-model.json') }}
+
+      - run: npm ci
+
+      - run: npm run skill:discord-monitor
+        env:
+          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+          STFC_ACCOUNTS: ${{ secrets.STFC_ACCOUNTS }}
+
+      - name: Commit state + digest + promo-codes (if changed)
+        if: always()
+        run: |
+          set -euo pipefail
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/discord data/digests promo-codes.txt
+          if git diff --cached --quiet; then
+            echo "No state/digest/promo-codes changes to commit."
+            exit 0
+          fi
+          git commit -m "chore(discord-monitor): run ${{ github.run_id }}"
+          git pull --rebase origin "$GITHUB_REF_NAME" || true
+          git push origin "HEAD:$GITHUB_REF_NAME"

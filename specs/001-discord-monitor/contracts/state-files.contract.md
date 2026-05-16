@@ -124,6 +124,34 @@ data-model.md.
 
 ## § suppression — `data/discord/suppression.json`
 
+Operator-curated allow/deny rules for known code patterns.
+
+```ts
+Record<string /* normalized code value */, {
+  action: "deny" | "allow";      // deny = suppress; allow = override a cooldown
+  reason: string;                // operator-provided explanation
+  addedAt: string;               // ISO UTC
+  addedBy: string;               // operator identifier (e.g., GitHub handle)
+}>
+```
+
+**Writer:** human operator (manual edit, reviewed PR). Feature code MUST NOT
+write to this file.
+
+**Initial committed value (launch):**
+
+```json
+{}
+```
+
+An empty object is valid — no operator rules defined yet.
+
+---
+
+## § cooldowns — `data/discord/cooldowns.json`
+
+Auto-written cool-down telemetry for failed candidates (FR-009).
+
 ```ts
 Record<string /* normalized code value */, {
   firstFailedAt: string;       // ISO UTC
@@ -132,6 +160,8 @@ Record<string /* normalized code value */, {
   failureOutcomes: string[];   // most-recent-last, capped at 5
 }>
 ```
+
+**Writer:** feature code at `src/discord/` (the candidate-redemption pipeline).
 
 **Cool-down value:** 30 days from `firstFailedAt` (FR-009 confirmed in plan).
 
@@ -165,7 +195,8 @@ This file is read on every run. A change to `id`, `revision`, or
    on `main` after the run. (Auditable: `git grep` the value in both files.)
 2. Every channelId referenced in `cursors.json` MUST be present in
    `discord-allowlist.json` with `enabled: true`. (Auditable.)
-3. Every `value` in `suppression.json` MUST also appear at least once in
+3. Every `value` in `cooldowns.json` MUST also appear at least once in
    `candidates.jsonl` with a non-success outcome. (Auditable.)
-4. No state file MUST contain any token, password, JWT, PAT, or author
+4. Feature code MUST NOT write to `suppression.json` (operator-only file).
+5. No state file MUST contain any token, password, JWT, PAT, or author
    Discord ID (PII rule, Principle VII).

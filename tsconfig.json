@@ -22,6 +22,7 @@
   "include": [
     "src/cli.ts",
     "src/api/**/*.ts",
+    "src/discord/**/*.ts",
     "src/lib/**/*.ts",
     "src/skills/**/*.ts",
     "tests/**/*.ts"

@@ -75,7 +75,7 @@ Once the secret is set:
 - **Manual:** repo → **Actions** → **Redeem gifts** → **Run workflow**.
 - **CLI:** `gh workflow run "Redeem gifts"` (followed by `gh run watch` to
   tail it).
-- **Cron:** every hour automatically. The job summary on each run shows
+- **Cron:** every 15 minutes (~96 runs/day) automatically. The job summary on each run shows
   what was claimed, which codes were already used, and any tokens that have
   expired.
 
@@ -187,4 +187,26 @@ GitHub Actions disables scheduled workflows on forks after **60 days of
 repo inactivity**. Just push a commit (or click **Run workflow** manually)
 to wake it up.
 
+## Optional: harvest promo codes & tips from Discord
+
+The **`Discord monitor` workflow** (`.github/workflows/discord-monitor.yml`) is entirely
+optional. When enabled, it runs every 4 hours to:
+
+- Ingest messages from a curated list of STFC Discord channels
+- Extract candidate promo codes and feed them to the redeemer
+- Classify tips/tricks/hacks and produce a daily digest
+
+This feature requires two additional secrets:
+
+| Secret               | What it is                                                                           |
+|----------------------|--------------------------------------------------------------------------------------|
+| `DISCORD_BOT_TOKEN`  | OAuth token from a Discord bot your Discord server admin has invited to the server. |
+
+**Setup:**
+
+1. Read [specs/001-discord-monitor/quickstart.md](../specs/001-discord-monitor/quickstart.md)
+   for full operator instructions — this covers provisioning the bot, setting the token,
+   configuring the allow-list, and troubleshooting.
+2. The feature is dormant until the allow-list is populated and the `DISCORD_BOT_TOKEN`
+   secret is set. No danger of breakage by accident.
 
