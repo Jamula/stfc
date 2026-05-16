@@ -12,13 +12,14 @@ import { checkAuth } from "./skills/checkAuth.ts";
 import { listGifts } from "./skills/listGifts.ts";
 import { claimGifts } from "./skills/claimGifts.ts";
 import { redeemCodes } from "./skills/redeemCodes.ts";
+import { discordMonitor } from "./skills/discordMonitor.ts";
 
 const log = createLogger("cli");
 
 const PROMO_CODES_PATH = "promo-codes.txt";
 const HISTORY_PATH = "docs/redeem-history.md";
 
-const SKILLS = ["run-all", "check-auth", "list-gifts", "claim-gifts", "redeem-codes"] as const;
+const SKILLS = ["run-all", "check-auth", "list-gifts", "claim-gifts", "redeem-codes", "discord-monitor"] as const;
 type SkillName = (typeof SKILLS)[number];
 
 interface SkillOptions {
@@ -36,6 +37,7 @@ const SKILL_FNS: Record<SkillName, SkillFn> = {
   "list-gifts": (o) => listGifts(o),
   "claim-gifts": (o) => claimGifts(o),
   "redeem-codes": (o) => redeemCodes(o),
+  "discord-monitor": (_o) => discordMonitor({}),
 };
 
 async function main(): Promise<number> {

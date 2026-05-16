@@ -136,7 +136,7 @@ may begin.
 files, and `package.json` changes. No runtime logic yet. Run `npm test` —
 new test stubs must fail.
 
-- [ ] T003 [P] Create directory tree and committed placeholder files:
+- [X] T003 [P] Create directory tree and committed placeholder files:
   `config/discord-allowlist.json` (initial value:
   `{ "version": 1, "entries": [] }`), `config/classifier-model.json` (stub
   object with fields `id`, `revision`, `weightSha256`, `task`, `labels`,
@@ -146,7 +146,7 @@ new test stubs must fail.
   first use (suppression on first operator edit; cooldowns on first failure
   via T022). Verify tree matches `plan.md` § Project Structure exactly.
 
-- [ ] T004 [P] Add npm runtime dependencies to `package.json`:
+- [X] T004 [P] Add npm runtime dependencies to `package.json`:
   `@discordjs/rest` ^2.5.0, `discord-api-types` ^0.38.x, `@xenova/transformers`
   ^2.17.x. Add `"skill:discord-monitor": "tsx src/cli.ts discord-monitor"` to
   `scripts`. Run `npm install` to update `package-lock.json`. Verify
@@ -154,7 +154,7 @@ new test stubs must fail.
   (plan claimed Apache-2.0; Picard Condition 1 requires verification — MIT is
   also license-compatible per Security & Compliance Constraints).
 
-- [ ] T005 [P] Create empty stub source files (export stubs only — no logic):
+- [X] T005 [P] Create empty stub source files (export stubs only — no logic):
   `src/discord/client.ts`, `src/discord/ingest.ts`, `src/discord/extractor.ts`,
   `src/discord/stoplist.ts`, `src/discord/classifier.ts`,
   `src/discord/moderation.ts`, `src/discord/dedup.ts`,
@@ -164,7 +164,7 @@ new test stubs must fail.
   `src/digest/index.ts` per constitution v1.3.0 — NOT under `src/discord/`.)
   Confirm `npm run typecheck` passes with stubs in place.
 
-- [ ] T006 [P] Create empty test files with mandatory failing assertions
+- [X] T006 [P] Create empty test files with mandatory failing assertions
   (red phase — Principle IX): `tests/discord/extractor.test.ts`,
   `tests/discord/classifier.test.ts`, `tests/discord/dedup.test.ts`,
   `tests/discord/cooldown.test.ts`, `tests/digest/digest.test.ts`,
@@ -174,7 +174,7 @@ new test stubs must fail.
   test files fail (proves tests are live in the runner before any
   implementation).
 
-- [ ] T007 Register `discord-monitor` skill in `src/cli.ts` as a stub entry
+- [X] T007 Register `discord-monitor` skill in `src/cli.ts` as a stub entry
   that returns `{ result: "not-implemented", exitCode: 1 }`. Confirm
   `npm run typecheck` passes. (Unblocks workflow YAML task T027 later without
   requiring full implementation.)

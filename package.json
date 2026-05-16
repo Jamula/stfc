@@ -13,6 +13,7 @@
         "skill:list-gifts": "tsx src/cli.ts list-gifts",
         "skill:claim-gifts": "tsx src/cli.ts claim-gifts",
         "skill:redeem-codes": "tsx src/cli.ts redeem-codes",
+        "skill:discord-monitor": "tsx src/cli.ts discord-monitor",
         "test": "node --import tsx --test tests/index.test.ts",
         "test:watch": "node --import tsx --test --watch tests/index.test.ts",
         "typecheck": "tsc --noEmit",
@@ -24,6 +25,9 @@
         "pre-commit": "node scripts/pre-commit.mjs"
     },
     "dependencies": {
+        "@discordjs/rest": "^2.5.0",
+        "@xenova/transformers": "^2.17.2",
+        "discord-api-types": "^0.38.0",
         "tsx": "^4.19.2",
         "zod": "^3.25.76"
     },
