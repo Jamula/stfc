@@ -27,6 +27,33 @@ High urgency: CI token-scanner must be deployed before first speckit spec merge 
 
 ---
 
+### Workflow cron edits — operating reminders (2026-05-17)
+
+Captured while fixing Issue #14 (`refresh-token.yml` → Saturday 00:00 UTC,
+PR #20):
+
+- **GitHub Actions cron DOW field:** `MIN HOUR DOM MONTH DOW`, where DOW
+  uses `0=Sunday` and `6=Saturday`. So `0 0 * * 6` is every Saturday at
+  00:00 UTC. Easy to flip these by mistake — always state the cadence
+  in plain English in the PR body so reviewers don't have to look it up.
+- **Same-commit pinning-test rule (repo Rule 3):** *Before* committing
+  any `.github/workflows/*.yml` edit, run `grep -rn '<workflow-file>'
+  tests/`. If anything pins a literal cron / group / permission, it
+  MUST be updated in the same commit. For #14 the grep was empty, so
+  the PR is a one-file diff — call that out explicitly in the PR body
+  so reviewers know it wasn't an oversight.
+- **PR-without-draft norm for small workflow tweaks:** Single-file
+  workflow diffs with passing tests should ship as normal PRs (not
+  drafts). Cyrus prefers the lower-friction path when the blast radius
+  is one cron line.
+- **Concurrency-group awareness:** `refresh-token.yml`, `redeem.yml`,
+  and the incoming `discord-monitor.yml` all share
+  `concurrency.group: stfc-gift-redeemer`. Any cron move needs to call
+  out the queue/cancel interaction in a comment so future readers
+  understand why a scheduled-redeem run might be skipped that hour.
+
+---
+
 ## Session History (Current)
 
 *For detailed session logs, see `.squad/log/` and `.squad/orchestration-log/`.*

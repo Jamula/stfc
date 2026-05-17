@@ -1187,3 +1187,179 @@ Every code in `promo-codes.txt` is matched except the 3 short-code gap (TNG, GQ5
 4. **Gitignore discipline** — `data/digests/*.md` must be gitignored (runtime artifacts). Only `.gitkeep` tracked.
 
 **References:** src/digest/index.ts, src/skills/discordMonitor.ts, commit 9475937
+
+---
+
+### 2026-05-17T07:00:08Z: PR #20 approved and merged — refresh-token.yml Saturday 00 UTC cron
+
+**By:** Kirk (Lead)
+**Status:** Active — merged on `main` as commit `e053b9c` at 2026-05-17T07:03:36Z
+
+Approved and squash-merged PR #20 (`feat(workflows): #14 refresh-token.yml runs weekly Saturday 00 UTC`). Issue #14 auto-closed via the PR body's `Closes #14` reference.
+
+**Review passed all four criteria:**
+1. **Cron correctness** — `0 0 * * 6` decodes to Saturday 00:00 UTC (DOW=6=Saturday)
+2. **No pinning-test debt** — `grep -rn 'refresh-token' tests/` returns zero matches; Repo Rule 3 does not apply
+3. **Minimal permissions** — `permissions: contents: read`; secret writes via `STFC_REFRESH_PAT`; concurrency group `stfc-gift-redeemer` safely serializes all account-touching operations
+4. **Surgical scope** — single-file diff (+7/-1) on `.github/workflows/refresh-token.yml`; comments document Issue #13 alarm pairing in-file
+
+**Architectural intent:** Saturday-midnight weekly cadence keeps every token >20 days from the 30-day expiry wall. Issue #13's all-accounts-expired alarm fires only on real auth breakage, not stale-token false positives.
+
+**Links:** PR #20, Issue #14, Merge commit `e053b9c573cd5d6bff0d322a0f5c36f7a24e710f`
+
+---
+
+### 2026-05-16: Critic seat swap: Borg Queen retired, Garak takes the seat
+
+**By:** Picard (M2/EM)
+**Date:** 2026-05-16
+**Status:** Active (effective immediately)
+**Type:** Squad-roster change
+
+Borg Queen retired from the active roster. Garak takes the Critic seat to match cyrusj's other squad's roster and provide consistent frame of reference across projects.
+
+The Critic role's accumulated learnings (hostile-fact-check methodology, cascade-verification discipline, derivative-artifact inheritance patterns) are durable role-knowledge. Garak inherits them via the role-history files now living under `.squad/agents/garak/history.md`.
+
+**Files changed (this session via `git mv`):**
+- `.squad/agents/borg-queen/` → `.squad/agents/garak/`
+- `.squad/team.md`, `.squad/casting/registry.json`, `.squad/routing.md` (Garak references)
+- `.squad/skills/hostile-fact-check/SKILL.md` (owner updated)
+- `.squad/agents/{picard,kirk,tuvok}/charter.md` (relationship updates)
+- `docs/squad.md`, `docs/models.md` (public-facing updates)
+- New GitHub label: `squad:garak`; Deleted: `squad:borg-queen`
+
+**Historical record locked:** All prior commits, decisions, and shipped specs referencing Borg Queen by name remain unchanged. She did that work and the record is authoritative.
+
+**Action items:** Any new critique work routes to Garak via `squad:garak` label or direct address.
+
+---
+
+### 2026-05-16: Role swap: Kirk (Lead) ⇆ Picard (M2 / Engineering Manager)
+
+**By:** Picard (M2/EM)
+**Date:** 2026-05-16
+**Status:** Active (effective immediately)
+**Type:** Squad-roster change
+
+The squad now has an Engineering Manager layer above the technical Lead, to match cyrusj's other squad's hierarchy.
+
+**Before → After:**
+- M2 / Engineering Manager (boss): — → **Picard**
+- Lead (technical): Picard → **Kirk**
+
+Kirk reports to Picard. Scotty / Uhura / Bashir have technical reporting to Kirk and scope/priority reporting to Picard.
+
+**Responsibility split:**
+- **Picard (M2/EM):** Scope, priorities, roadmap; issue triage; blocker removal; governance; scope/governance review authority
+- **Kirk (Lead):** Technical direction & architecture; code review for correctness; architectural review authority
+
+**Files changed (this commit):**
+- `.squad/agents/kirk/charter.md` (new)
+- `.squad/agents/picard/charter.md` (rewritten for M2/EM role)
+- `.squad/team.md`, `.squad/casting/registry.json`, `.squad/config.json`, `.squad/routing.md`
+- `docs/squad.md`, `docs/models.md`, `CONTRIBUTING.md`
+- `.copilot/skills/issue-creation/SKILL.md` (Picard references annotated)
+- New GitHub label: `squad:kirk`
+
+**Historical record locked:** Picard's prior work referenced as "Picard (Lead)" predates 2026-05-16 and is locked.
+
+**Action items:** Re-evaluate the 12 open issues (#8–#19) for technical-direction vs scope routing.
+
+---
+
+### 2026-05-17: Picard — PR #6 (governance v1.3.0 amendment) — MERGED via owner bypass
+
+**By:** Picard (M2/EM)
+**Date:** 2026-05-17
+**PR:** https://github.com/Jamula/stfc/pull/6
+**Merge commit:** `7bcc04df80e29c0161ae6fbc8ac6da09c05d4bd3` (squash)
+**Merged by:** cyrusjamula (repo owner) at 2026-05-17T07:04:01Z
+**Verdict:** DOCUMENTED-IN-RETROSPECT — no Picard action required
+
+**What happened:** During review window, the repo owner (Cyrus) admin-merged PR #6 at 2026-05-17T07:04:01Z, bypassing the unsatisfied `npm test (required)` branch-protection check. Picard's review comment posted at https://github.com/Jamula/stfc/pull/6#issuecomment-4469676319 recommended CLOSE without merge on two grounds:
+
+1. **Superseded content:** The substantive v1.3.0 governance edits had already landed on `main` via commits `5e10bb0` and `a4a803d`. The PR diff against `origin/main` contained only two files (`.squad/agents/picard/history.md`, `.squad/agents/tuvok/history.md`).
+2. **Scribe-boundary violation:** Per `.github/copilot-instructions.md` §2, `.squad/agents/{name}/history.md` files are Scribe-owned commits.
+
+**Net effect:** Identical to what would have happened if Scribe had picked them up normally — the audit-trail looks slightly worse (governance label on a content-empty merge), but no governance damage.
+
+**Verified findings (NOT reversed):**
+- v1.3.0 constitution content on `main` is correct
+- `.specify/templates/plan-template.md:44` carries the full 7-path enumeration (in sync)
+- Repo pre-commit grep (`STFC_ACCOUNTS|promo-codes.txt|...|discord.com`) clean
+
+**Process recommendation for future amendment PRs:** If the autonomous-edit manual-approval gate trips, approve the workflow run via the "Approve and run" button rather than admin-merging past the failed required check. For governance amendments: verify PR diff vs. main is non-empty and substantively the amendment before approving. If already-on-main + Scribe-owned residue, close-without-merge is correct.
+
+**Follow-ups:**
+- [x] Governance content verified correct on `main`
+- [ ] **Skill registration:** new skill `.squad/skills/superseded-pr-detection/SKILL.md` covers the pre-review check for "is the PR diff vs. main empty of the claimed work?". Picard and Kirk should use it on every governance/amendment review.
+
+---
+
+### 2026-05-16: Session wrap-up — 2026-05-16
+
+**By:** Picard (M2/EM)
+**Type:** Session log / triage handoff
+**Status:** Ready
+
+Long multi-feature session executing the full `/speckit.*` chain for the Discord community monitor (feature `001-discord-monitor`), plus governance hardening, docs expansion, and friction-pattern fixes captured as 5 operating rules in `.github/copilot-instructions.md`.
+
+**Shipped to `main` (12 commits):**
+1. `5e10bb0` — Re-sync `plan-template.md` to constitution v1.3.0 + correct SIR
+2. `9a9adb9` — Phase 0 (governance gate, T000–T002)
+3. `91f2eea` — Phase 1 (setup & scaffolding, T003–T007)
+4. `e3dd538` — Phase 2 (foundational types & state I/O, T008–T012)
+5. `65b1849` — Phase 3 (US1 auto-redeem, T013–T027)
+6. `caa2d14` — Redeem cadence 1h → 15m + pinning test update (closed #7)
+7. `5492212` — `docs/squad.md` + README/SETUP/CONTRIBUTING updates
+8. `c5d7693` — Expanded `.github/copilot-instructions.md` (5 operating rules)
+9. `9475937` — Phase 4 (US2 tips digest, T028–T034) with Bashir's idempotency + allowlist fixes
+10. `30cdec1` — `.squad/` compaction (Scribe; decisions 124KB → 101KB)
+11. `451d037` — `docs/models.md` (18-model catalog + per-agent recs)
+
+Tests: 90+/283 passing on every commit.
+
+**Parked work — GitHub issues filed (all labeled `squad` for Picard triage):**
+- #8: Enforce constitution↔plan-template re-sync (operating rule 1 automation)
+- #9: Enforce `.squad/` write boundary (Scribe-only commits)
+- #10: Enforce workflow YAML pinning tests
+- #11: Rebase-before-push helper for main
+- #12: Wire speckit.implement phase-boundary commits
+- #13: `redeem.yml`: fail when ALL accounts return "Token expired"
+- #14: `refresh-token.yml`: schedule Saturday 00 UTC (cross-refs #13) ✅ **CLOSED THIS SESSION**
+- #15: Epic: Enhance Tuvok with token-usage telemetry
+- #16: Add `.devcontainer/devcontainer.json` (codespace idle auto-stop + cold-start)
+- #17: Triage 8 Dependabot alerts (1 critical, 4 high, 3 moderate)
+- #18: Decide on 3 KNOWN GAP extractor tests (GQ5/GQ7/TNG)
+- #19: Discord monitor Phases 5–6 (US3 operator health + polish, T035–T042)
+
+**Recommended priority next session:** #16 (devcontainer — quickest win), then #13+#14 pair, then #19 (Phases 5–6), then #17 (Dependabot), then #8–#12 (rule enforcement).
+
+**Known decisions this session worth keeping:**
+- Cool-down for re-redemption = 30 days
+- `suppression.json` vs `cooldowns.json` split — operator-written vs skill-written
+- Digest module path = `src/digest/index.ts` (NOT `src/discord/digest.ts`)
+- Cron cadence = `*/15 * * * *` (uniform spacing; `*/17` rejected)
+- SIR "Templates needing re-sync" line MUST be grep-derived, not argued-from-structure
+
+---
+
+### 2026-05-17: Decision: refresh-token.yml schedule → Saturday 00:00 UTC (weekly)
+
+**By:** Uhura (Integrations)
+**Date:** 2026-05-17
+**Issue / PR:** Issue #14 / PR #20
+**Status:** DECIDED ✅
+
+`refresh-token.yml` runs on `cron: "0 0 * * 6"` — every **Saturday at 00:00 UTC**, weekly. Previous schedule was `cron: "0 4 * * 0"` (Sunday 04:00 UTC).
+
+**Rationale:**
+- **Pairs with Issue #13's "all-accounts-expired" alarm.** A weekly refresh keeps every account's JWT well clear of the 30-day Scopely expiry wall, so when that alarm fires we know it's real auth breakage rather than stale-token false positive.
+- **Saturday-midnight UTC is a quiet slot.** Low overlap with operator attention and with every-4-hours `redeem.yml` runs.
+- **Concurrency interaction acceptable.** All three of `refresh-token.yml`, `redeem.yml`, and incoming `discord-monitor.yml` share `concurrency.group: stfc-gift-redeemer`. A Saturday-midnight refresh may briefly queue or cancel a redeem run; weekly cadence makes that negligible.
+
+**Implications:**
+- Any future change to `refresh-token.yml`'s schedule or concurrency group must keep this rationale intact (or supersede with a new decision).
+- The block comment above `schedule:` documents the intent in-place.
+- If a pinning test is later added, it must encode `"0 0 * * 6"` and the `stfc-gift-redeemer` concurrency group.
+

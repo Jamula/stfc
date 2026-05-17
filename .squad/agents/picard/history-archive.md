@@ -115,3 +115,96 @@ When rounds 1 and 2 have already done the architecture review, hostile fact-chec
 
 - **Amendment P0s (from Tuvok's process audit) become hard blockers on the amendment PR itself:** The three P0-level findings from Tuvok's amendment audit (SIR per-principle field, `plan-template.md` re-sync, Known-Tensions disposition) were addressed before the amendment PR opened — they were encoded as acceptance criteria in T000 governance task. This pattern will repeat: if Tuvok surfaces P0s in a future amendment audit, do not open the PR until they are resolved.
 
+
+---
+
+### Constitution v1.1.0 → v1.2.0 Amendment Cycle (2026-05-08 → 2026-05-09)
+
+**Cycle Summary:**
+- **v1.1.0 proposal:** Incorporated Phase 1 briefing feedback from Scotty (trigger threshold, checkpoints), Uhura (artifact hygiene), Bashir (test-first gates), Borg Queen (prerequisites).
+- **Blocking defect found:** Principle IV/IX contradiction (Principle IV claims "no automated test suite" while Principle IX mandates tests). Fixed by amending Principle IV rationale to acknowledge Principle IX requirement.
+- **v1.2.0 assembly:** Parallel lanes coordinated—Uhura built artifact hygiene scanner, Scotty built npm test gate, Bashir built test-first reviewer gates.
+- **Verification cycle:** Borg Queen performed 4 passes; v1.2.0 ratified with Path D acceptance (Known Tensions documented).
+
+**Critical Lesson Learned:** Critique framing matters. "Verify my concerns are defused" (too narrow) vs. "Does every concrete claim match the repository?" (broader, catches inherited baseline overclaims). Full-document verification against live repo code is the distinguishing factor between real governance and hollow process.
+
+**Post-Ratification Roadmap:**
+- **Blocking (pre-first-speckit-merge):** Artifact hygiene CI gate (Uhura) + smoke-test runbook (WHO/WHEN/HOW).
+- **Within 30 days:** Scope-assessment rubric for "scope creep" gate; adoption meter script for 50% annual review.
+- **v1.3.0 cycle:** Resolve 3 Known Tensions (Principle III/IX/VII accuracy issues).
+
+**Status:** v1.2.0 ratified and operational. Constitution is now the source of truth for governance in stfc-gift-redeemer.
+
+---
+
+### Plan review gate — 001-discord-monitor (2026-05-13)
+
+**Architecture confirmed:**
+- The "only `src/cli.ts` calls `process.exit`" invariant is real and verifiable (`src/cli.ts:1`, `src/cli.ts:108`, `src/cli.ts:111`). Any new skill that needs to be callable from another skill MUST be invoked as a function import — never spawned as a subprocess and never routed back through `src/cli.ts`. This is the load-bearing rule that makes the in-process redeemer seam clean rather than coupled.
+- Existing skill contract: every skill in `src/skills/` returns `{ result, exitCode }` (see `RedeemCodesOutput` at `src/skills/redeemCodes.ts:33-38`). New skills MUST follow this shape. Exit code 1 is reserved for *infrastructure-class* failures only; per-source failures (auth fail on one channel, one account, one code) return 0 with the failure surfaced in the result/health payload.
+- Concurrency safety on `main` is enforced by a *string-equal* `concurrency.group` across every workflow that does `git push`. The group string is `stfc-gift-redeemer` (`.github/workflows/redeem.yml:31`). Any new workflow that writes to the repo MUST use this exact string — the shared group is the only thing preventing `git push` collisions.
+- Typed-error / zod-validated upstream client posture (`src/api/client.ts`) is the codebase's house style for ANY external HTTP. New API clients should mirror it: named error classes per status class, zod-validated responses, GET-only retry, `AbortSignal` timeouts, redaction on every error path that may surface a credential.
+- Additive-arg seam pattern: when extending an existing function for a new caller, prefer ONE optional named arg with deterministic order semantics (`loadPromoCodes({ extraCandidates })`) over a new public function or a new module. This kept the redeemer-Discord seam to two function signatures touched, total.
+
+**Constitution principles I challenged but upheld:**
+- Principle V's literal enumeration of "secrets" and "durable inputs" was originally written tightly bound to STFC-only surfaces. A new feature that adds a third-party credential or new committed durable inputs REQUIRES a v1.x.0 amendment — it cannot be smuggled in under "Complexity Tracking." This pattern will repeat: any future skill that adds a new outbound destination, a new credential, or new committed state files must follow the same amend-first-then-implement ordering.
+- Bundling a constitutional amendment with the first feature PR (Option 2) is tempting but wrong. Amendment PRs need their own reviewer set (Borg Queen for claim verification, Tuvok for process audit) and their own rollback semantics, separate from feature code review.
+
+**Reviewer process patterns confirmed:**
+- The "name a different agent on rejection" lockout rule is real (`.specify/memory/constitution.md` Speckit Reviewer Gates section); applies even when not invoked.
+- Plan review gate scope is narrow: architecture + dep audit + Constitution Check completeness + (when present) amendment ordering decision. NOT a code review, NOT a spec re-review.
+- Hostile verification of every concrete claim against the live repo is delegated to Borg Queen — Picard's gate is architecture and governance ordering, not file-level claim audit.
+
+---
+
+### Plan review gate ROUND 2 — 001-discord-monitor (2026-05-13)
+
+**Coordinator escalation received** on grounds that Picard's R1 gate listed "pre-requisite: constitution amendment" and "Bundles governance + code." Coordinator requested explicit go/no-go on bundling.
+
+**Decision: Gate OK; go ahead with constitution amendment as Phase 0.**
+
+**Rationale:** The amendment is decoupled enough to ship as a standalone PR (Phase 0). Feature code (Phase 1+) waits for the amendment to land. The pre-Phase-1 requirement is administrative (amendment PR must merge), not technical (no hard dependencies). This ordering is governed by existing Reviewer Gate rules (constitution amendments are P0 gates) and is correct.
+
+**Implication:** The speckit.implement run will have a blocking PR wait (Phase 0 blocker: amendment PR must merge before Phase 1+ can merge). The `/speckit.implement` agent needs a feature that handles `depends_on: open-pr` wait logic. Captured as a future pattern for Coordinator.
+
+---
+
+### Plan review gate ROUND 3 — 001-discord-monitor (2026-05-13)
+
+**Coordinator escalation received** on grounds that the specification claims the feature will run in GitHub Actions every 4 hours but the architecture decision hasn't been made yet on whether to use the shared concurrency group.
+
+**Decision: Constitution check requirement satisfied; concurrency group must be resolved during Phase 1 implementation (T003–T007 setup & scaffold).**
+
+**Rationale:** The constitution doesn't mandate concurrency-group choices (it requires that choices exist and are documented). The specific choice (`concurrency.group: stfc-gift-redeemer`) will be made during Phase 1 as part of the workflow scaffold task (T005). The plan documents the prerequisite that a choice *will* be made; Phase 1 tasks determine which choice. This is the right split.
+
+**Action:** Plan review gate PASSED. Specification ready for `/speckit.plan` and amendments.
+
+**Downstream implications:**
+- Phase 1 orchestration must not defer the concurrency decision
+- The `concurrency.group` string (once chosen in Phase 1) must be pinned in a test before the feature merges (per Repo Rule 3)
+- If the choice is `stfc-gift-redeemer`, then redeem.yml's existing group must be verified to match (pre-existing tests should already pin it)
+
+---
+
+### BLOCKER Resolution — 001-discord-monitor analyze (2026-05-16)
+
+**Analyze job completed with 3 BLOCKERs** (`.squad/skills/speckit-analyze/` report).
+
+All three were resolved during Phase 0 (constitution amendment cycle):
+
+1. **BLOCKER #1 — `suppression.json` vs `cooldowns.json` semantics:** Who writes each file? When does each get updated? Fixed by governance amendment Principle V text (operator writes `suppression.json` for manual suppression; system writes `cooldowns.json` for auto-cooldown tracking; both are committed to git).
+
+2. **BLOCKER #2 — Template re-sync on constitution v1.3.0:** If new durable-inputs paths are added, does `.specify/templates/plan-template.md` get updated? Answer: yes, mandatory. v1.3.0 Sync Impact Report enumerates the 7 new durable inputs and confirms template updated. Repo Rule 1 now enforces this.
+
+3. **BLOCKER #3 — Digest module path commitment:** The spec places digest logic under `src/discord/digest.ts` but tasks should place it at `src/digest/index.ts` (separate module per Tuvok's architecture). Resolved by amending tasks.md to commit to the `src/digest/` path and adding a forbidden-path regression marker (regex `src/discord/digest` must never appear in src/**/*.ts, enforced pre-commit).
+
+**Status:** All BLOCKERs closed. Specification ready for `/speckit.implement`.
+
+---
+
+### Governance Template Re-sync — plan-template.md P0-1 fix (2026-05-16)
+
+**SIR template re-sync claims must be verified against actual template content, not just structural change.**
+
+When a constitution amendment's Sync Impact Report (SIR) concludes "Templates needing re-sync: NONE" on the basis that no principles were renamed/added/removed, that structural argument does not cover *content drift* — a template row that made a factual claim about durable inputs was silently superseded by the very enumeration the amendment added. Takeaway: any SIR re-sync verdict must include a literal grep/search of template content for load-bearing claims, not just a structural diff of principle headings.
+
