@@ -27,3 +27,6 @@ import "./scripts/pre-push.test.ts";
 import "./agents/picard.test.ts";
 import "./agents/kirk.test.ts";
 import "./agents/scotty.test.ts";
+import "./agents/uhura.test.ts";
+import "./agents/bashir.test.ts";
+import "./agents/garak.test.ts";
