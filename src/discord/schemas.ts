@@ -340,6 +340,10 @@ export interface DailyDigest {
   };
   tips: Tip[];
   health: RunHealth;
+  /** Feature 003 (T024 / US3): bot username from `getMe()` — rendered in
+   *  the digest health header so operators can confirm WHICH bot identity
+   *  produced this digest. Optional for backwards-compat. */
+  botUsername?: string;
 }
 
 // ── Entity 10: RunHealth ────────────────────────────────────────────────────
