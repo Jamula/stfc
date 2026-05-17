@@ -19,14 +19,68 @@
 
 import {
   DiscordAuthError,
+  DiscordChannelAccessError,
+  DiscordChannelNotFoundError,
+  DiscordRateLimitError,
+  DiscordTransientError,
+  SchemaMismatchError,
   type DiscordClient,
 } from "./client.ts";
 import type {
+  BotIdentity,
+  ChannelErrorReason,
   DiscordAllowlist,
   IngestedMessage,
   IngestionCursorMap,
   RunHealth,
 } from "./schemas.ts";
+
+/** Verbatim remediation strings — authoritative source is
+ *  specs/003-discord-oauth/data-model.md §RunHealth.channelsErrored[]. */
+const REMEDIATION: Record<ChannelErrorReason, string> = {
+  forbidden_guild:
+    "Invite the bot to the server with scope=bot and permissions=66560 (VIEW_CHANNEL + READ_MESSAGE_HISTORY). See docs/DISCORD-BOT-SETUP.md.",
+  forbidden_channel:
+    "Grant the bot VIEW_CHANNEL and READ_MESSAGE_HISTORY in this channel's permission overrides (or in a parent category).",
+  forbidden_other:
+    "Discord returned 403 with an unrecognised error code. Re-check the bot's server-level role assignments.",
+  not_found:
+    "Channel ID does not exist or is no longer visible. Remove it from config/discord-allowlist.json if the channel was deleted.",
+  rate_limited:
+    "Rate-limited after retry budget exhausted. Reduce channel count or increase scrape interval.",
+  transient:
+    "Discord upstream transient error; safe to ignore if it does not recur next run.",
+  schema_mismatch:
+    "Upstream response shape changed. Capture the response, open an issue, and update src/discord/schemas.ts.",
+  unknown: "Unclassified error; see logs.",
+};
+
+/** Map a caught per-channel error to its taxonomy reason + remediation
+ *  string. `DiscordAuthError` is intentionally NOT mapped — it propagates
+ *  upward (fail-fast, per Phase 3 / US3). */
+function classifyChannelError(err: unknown): {
+  reason: ChannelErrorReason;
+  discordErrorCode?: number;
+} {
+  if (err instanceof DiscordChannelAccessError) {
+    if (err.discordErrorCode === 50001) {
+      return { reason: "forbidden_guild", discordErrorCode: 50001 };
+    }
+    if (err.discordErrorCode === 50013) {
+      return { reason: "forbidden_channel", discordErrorCode: 50013 };
+    }
+    const out: { reason: ChannelErrorReason; discordErrorCode?: number } = {
+      reason: "forbidden_other",
+    };
+    if (err.discordErrorCode !== undefined) out.discordErrorCode = err.discordErrorCode;
+    return out;
+  }
+  if (err instanceof DiscordChannelNotFoundError) return { reason: "not_found" };
+  if (err instanceof DiscordRateLimitError) return { reason: "rate_limited" };
+  if (err instanceof DiscordTransientError) return { reason: "transient" };
+  if (err instanceof SchemaMismatchError) return { reason: "schema_mismatch" };
+  return { reason: "unknown" };
+}
 
 export const PER_CHANNEL_PAGE_CAP = 5;
 const PAGE_LIMIT = 100;
@@ -59,6 +113,10 @@ export interface IngestOutput {
   messages: IngestedMessage[];
   newCursors: IngestionCursorMap;
   health: Partial<RunHealth>;
+  /** Feature 003 (T014/T015): validated bot identity from GET /users/@me.
+   *  Consumed by `src/skills/discordMonitor.ts` to emit exactly one
+   *  `"discord bot authenticated"` log line on the success path. */
+  botIdentity: BotIdentity;
 }
 
 export async function ingestDiscord(
@@ -74,7 +132,11 @@ export async function ingestDiscord(
   // Step 0: token validation. Exactly once per run.
   // DiscordAuthError propagates to the caller — the orchestrator decides
   // whether to skip the Discord half and continue.
-  await client.getMe();
+  // The return value is structurally trusted: when `client` is a real
+  // `DiscordClient`, `getMe()` is already zod-validated against
+  // `BotIdentitySchema`; test stubs are responsible for supplying a
+  // BotIdentity-shaped value (or accept an unsafe cast in test scope).
+  const botIdentity = (await client.getMe()) as BotIdentity;
 
   const enabled = allowlist.entries.filter((e) => e.enabled);
 
@@ -108,15 +170,23 @@ export async function ingestDiscord(
       channelsRead++;
     } catch (err) {
       if (err instanceof DiscordAuthError) throw err;
-      channelsErrored.push({
+      const { reason, discordErrorCode } = classifyChannelError(err);
+      const channelEntry: RunHealth["channelsErrored"][number] = {
         channelId: entry.channelId,
         errorClass: (err as Error).name ?? "Error",
-      });
+        reason,
+        remediation: REMEDIATION[reason],
+      };
+      if (discordErrorCode !== undefined) {
+        channelEntry.discordErrorCode = discordErrorCode;
+      }
+      channelsErrored.push(channelEntry);
     }
   }
   return {
     messages,
     newCursors,
+    botIdentity,
     health: {
       channelsConfigured: allowlist.entries.length,
       channelsRead,

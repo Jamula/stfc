@@ -203,6 +203,11 @@ function merge(prior: DailyDigest, next: DailyDigest): DailyDigest {
     codes,
     tips,
     health,
+    ...(next.botUsername !== undefined
+      ? { botUsername: next.botUsername }
+      : prior.botUsername !== undefined
+        ? { botUsername: prior.botUsername }
+        : {}),
   };
 }
 
@@ -383,6 +388,9 @@ function render(d: DailyDigest): string {
   // Ingestion health.
   lines.push("## Ingestion health");
   lines.push("");
+  if (d.botUsername !== undefined && d.botUsername.length > 0) {
+    lines.push(`- Bot identity: ${d.botUsername}`);
+  }
   const h = d.health;
   if (h.channelsConfigured === 0) {
     lines.push("- 0 channels configured");
@@ -393,6 +401,14 @@ function render(d: DailyDigest): string {
         ? ` (${h.channelsErrored.length} errored: ${h.channelsErrored.map((e) => e.errorClass).join(", ")})`
         : ""),
     );
+  }
+  // Per-channel remediation lines (Feature 003 / T024 / FR-006).
+  for (const e of h.channelsErrored) {
+    const reason = e.reason ?? "unknown";
+    const remediation = e.remediation ?? "";
+    const codeFragment =
+      e.discordErrorCode !== undefined ? ` (Discord code ${e.discordErrorCode})` : "";
+    lines.push(`- ${e.channelId} — ${reason}${codeFragment}: ${remediation}`);
   }
   lines.push(`- Messages scanned: ${h.messagesScanned}`);
   lines.push(`- Candidates extracted: ${h.candidatesExtracted}`);

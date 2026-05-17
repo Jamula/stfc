@@ -14,10 +14,10 @@
 
 import { redactString } from "../lib/redact.ts";
 import {
+  BotIdentitySchema,
   DiscordMessageArraySchema,
-  DiscordUserMeSchema,
+  type BotIdentity,
   type DiscordMessage,
-  type DiscordUserMe,
 } from "./schemas.ts";
 
 const ENV_VAR = "DISCORD_BOT_TOKEN";
@@ -56,6 +56,15 @@ export class DiscordTransientError extends Error {
 
 export class DiscordChannelAccessError extends Error {
   override readonly name = "DiscordChannelAccessError";
+  /** Feature 003: the upstream Discord JSON-error `code` (e.g. 50001, 50013)
+   *  when the 403 body carried one. Undefined when absent or unparseable. */
+  readonly discordErrorCode?: number;
+  constructor(message: string, opts?: { discordErrorCode?: number }) {
+    super(message);
+    if (opts?.discordErrorCode !== undefined) {
+      this.discordErrorCode = opts.discordErrorCode;
+    }
+  }
 }
 
 export class DiscordChannelNotFoundError extends Error {
@@ -115,9 +124,21 @@ export class DiscordClient {
     this.timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   }
 
-  async getMe(): Promise<DiscordUserMe> {
+  async getMe(): Promise<BotIdentity> {
     const json = await this.requestJson("GET", "/users/@me");
-    const parsed = DiscordUserMeSchema.safeParse(json);
+    // Reject user-account tokens before zod parsing so the failure mode is
+    // the explicit auth error (per data-model.md §BotIdentity validation).
+    if (
+      json !== null &&
+      typeof json === "object" &&
+      "bot" in json &&
+      (json as { bot: unknown }).bot === false
+    ) {
+      throw new DiscordAuthError(
+        redactString("token is not a bot token (GET /users/@me returned bot: false)"),
+      );
+    }
+    const parsed = BotIdentitySchema.safeParse(json);
     if (!parsed.success) {
       throw new SchemaMismatchError(
         redactString(`GET /users/@me schema mismatch: ${parsed.error.message}`),
@@ -166,8 +187,20 @@ export class DiscordClient {
       }
 
       if (status === 403) {
+        // Pre-read the JSON envelope to extract Discord's numeric `code`
+        // (e.g. 50001 / 50013) so the orchestrator can produce a targeted
+        // remediation. A missing/non-JSON body is tolerated — the error
+        // surfaces with `discordErrorCode === undefined`.
+        const body = await safeReadJson(res);
+        const code = extractDiscordErrorCode(body);
+        const opts = code === undefined ? undefined : { discordErrorCode: code };
         throw new DiscordChannelAccessError(
-          redactString(`Access forbidden (403) on ${method} ${path}`),
+          redactString(
+            code === undefined
+              ? `Access forbidden (403) on ${method} ${path}`
+              : `Access forbidden (403, code ${code}) on ${method} ${path}`,
+          ),
+          opts,
         );
       }
 
@@ -280,6 +313,21 @@ async function readRetryAfterMs(res: Response): Promise<number> {
     /* fall through */
   }
   return 1000;
+}
+
+async function safeReadJson(res: Response): Promise<unknown> {
+  try {
+    return await res.clone().json();
+  } catch {
+    return undefined;
+  }
+}
+
+function extractDiscordErrorCode(body: unknown): number | undefined {
+  if (body === null || typeof body !== "object") return undefined;
+  const raw = (body as { code?: unknown }).code;
+  if (typeof raw !== "number" || !Number.isInteger(raw)) return undefined;
+  return raw;
 }
 
 async function safeReadText(res: Response): Promise<string> {

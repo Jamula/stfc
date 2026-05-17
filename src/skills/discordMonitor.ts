@@ -183,6 +183,7 @@ export async function discordMonitor(
   let classifiedTips: Tip[] = [];
   let newCursors = await loadCursors(cursorsPath);
   let cooldowns = await loadCooldowns(cooldownsPath);
+  let botUsername: string | undefined;
 
   if (token !== null) {
     const client: IngestClient = opts.clientFactory
@@ -193,7 +194,16 @@ export async function discordMonitor(
       const ingestOut = await ingestDiscord(allowlist, newCursors, client, runId, now);
       ingestedMessages = ingestOut.messages;
       newCursors = ingestOut.newCursors;
+      botUsername = ingestOut.botIdentity.username;
       mergeHealth(health, ingestOut.health);
+      // T015 [US3] — emit exactly one structured success-path auth log line
+      // per run, after ingestDiscord resolves. Tests in
+      // tests/skills/discordMonitor.test.ts pin the message text and count.
+      log.info({
+        msg: "discord bot authenticated",
+        botUsername: ingestOut.botIdentity.username,
+        botId: ingestOut.botIdentity.id,
+      });
     } catch (err) {
       if (err instanceof DiscordAuthError) {
         log.error(`Discord auth failed — skipping Discord half. ${redactForLog(err)}`);
@@ -427,6 +437,7 @@ export async function discordMonitor(
     tips: classifiedTips,
     redeemedCodes,
     deferredCodes,
+    botUsername,
   });
 }
 
@@ -443,6 +454,10 @@ interface FinalizeArgs {
   redeemedCodes?: string[];
   deferredCodes?: string[];
   reason?: "no-channels-configured" | "no-token";
+  /** Feature 003 (T024 / US3): bot username from `getMe()`, threaded into
+   *  the digest health header. Undefined when token was missing or
+   *  ingest never ran (e.g. allowlist empty). */
+  botUsername?: string;
 }
 
 async function finalize(args: FinalizeArgs): Promise<DiscordMonitorOutput> {
@@ -472,6 +487,7 @@ async function finalize(args: FinalizeArgs): Promise<DiscordMonitorOutput> {
     },
     tips: args.tips,
     health: args.health,
+    ...(args.botUsername !== undefined ? { botUsername: args.botUsername } : {}),
   };
 
   let digestPath: string | undefined;
