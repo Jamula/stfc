@@ -21,7 +21,7 @@
 | Garak | Critic | `.squad/agents/garak/charter.md` | ✅ Active |
 | Tuvok | Process Auditor / Editorial Specialist | `.squad/agents/tuvok/charter.md` | ✅ Active |
 | Scribe | Session Logger | `.squad/agents/scribe/charter.md` | 📋 Silent |
-| Ralph | Work Monitor | — | 🔄 Monitor |
+| Ralph | Work Monitor | `.squad/agents/ralph/charter.md` | 🔄 Monitor |
 
 ### Role hierarchy
 
