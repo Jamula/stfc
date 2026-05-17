@@ -130,10 +130,12 @@ description: "Task breakdown for Discord OAuth2 Bot Access for Private Channels"
 
 **Purpose**: Final validation gates. Nothing in this phase modifies feature logic.
 
-- [ ] T025 [P] Run `grep -nE 'STFC_ACCOUNTS|promo-codes\.txt|DISCORD_BOT_TOKEN|data/discord|data/digests|huggingface|discord\.com' .specify/templates/*.md` per repo Rule 1; confirm no template lags constitution v1.4.0 (expected: no diff needed, since no constitution amendment for this feature)
-- [ ] T026 [P] Run `grep -rE 'eyJ[A-Za-z0-9_-]+\.|Bot [A-Za-z0-9._-]{50,}' specs/003-discord-oauth/ tests/fixtures/discord/ docs/DISCORD-BOT-SETUP.md` per Principle VII Artifact Hygiene; must produce zero hits
-- [ ] T027 Run `npm run typecheck` and `npm test` together; both must be green. Pre-commit hook (`scripts/pre-commit.mjs`) will re-run `npm test` on each commit per Principle IX
+- [X] T025 [P] Run `grep -nE 'STFC_ACCOUNTS|promo-codes\.txt|DISCORD_BOT_TOKEN|data/discord|data/digests|huggingface|discord\.com' .specify/templates/*.md` per repo Rule 1; confirm no template lags constitution v1.4.0 (expected: no diff needed, since no constitution amendment for this feature)
+- [X] T026 [P] Run `grep -rE 'eyJ[A-Za-z0-9_-]+\.|Bot [A-Za-z0-9._-]{50,}' specs/003-discord-oauth/ tests/fixtures/discord/ docs/DISCORD-BOT-SETUP.md` per Principle VII Artifact Hygiene; must produce zero hits
+- [X] T027 Run `npm run typecheck` and `npm test` together; both must be green. Pre-commit hook (`scripts/pre-commit.mjs`) will re-run `npm test` on each commit per Principle IX
 - [ ] T028 Execute `specs/003-discord-oauth/quickstart.md` end-to-end against a sandbox Discord server (smoke test): verify bot-identity log line, verify a restricted-channel test message lands in `data/discord/candidates.jsonl`, verify the daily digest contains the expected health-section remediation lines. Document the smoke-test result in the PR description, not in this tasks.md
+  <!-- T028 DEFERRED to a human operator before PR merge: automated CLI session has no sandbox Discord server / bot token credentials. Do not tick without performing the smoke test. -->
+
 
 **Phase commit** (per repo Rule 5): `feat(003-discord-oauth): Phase 6 — polish & validation (T025–T028)`
 
@@ -225,11 +227,11 @@ Sequential by phase, with each phase auto-committed by the implementer at the ph
 ## Validation Checklist (run before opening PR)
 
 - [ ] All 28 tasks above follow strict format: `- [ ] T### [P?] [Story?] Description with file path`
-- [ ] Every user story (US1, US2, US3) has at least one test task that runs BEFORE its implementation task (Principle IX)
+- [X] Every user story (US1, US2, US3) has at least one test task that runs BEFORE its implementation task (Principle IX)
 - [ ] No task references a new dependency, new env var, new data file, or new outbound destination beyond those enumerated in constitution v1.4.0 Principle V (research §R5)
-- [ ] `tests/skills/discordMonitor.test.ts` modifications preserve the existing pinned cron-string and `concurrency.group: stfc-gift-redeemer` assertions (repo Rule 3)
-- [ ] No `--no-verify` use anywhere — pre-commit hook (`npm test`) gates every commit (repo Project quick reference)
-- [ ] Fixtures and the new runbook contain no real Discord tokens, client IDs, channel IDs, or guild IDs (Principle VII)
+- [X] `tests/skills/discordMonitor.test.ts` modifications preserve the existing pinned cron-string and `concurrency.group: stfc-gift-redeemer` assertions (repo Rule 3)
+- [X] No `--no-verify` use anywhere — pre-commit hook (`npm test`) gates every commit (repo Project quick reference)
+- [X] Fixtures and the new runbook contain no real Discord tokens, client IDs, channel IDs, or guild IDs (Principle VII)
 
 ---
 
