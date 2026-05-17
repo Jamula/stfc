@@ -104,6 +104,75 @@ you stopped" prompts in a single feature cycle.
   3. The phase checkbox state in `specs/NNN-feature/tasks.md`.
 
   Do NOT re-derive state by re-reading `tasks.md` from the top.
+- **Phase boundaries auto-commit; the user must NEVER type `speckit.git.commit`.** The
+  implementer agent commits as the LAST step of every phase. If the user types
+  `speckit.git.commit` mid-flight, that is a Rule 5 violation — log it and self-correct
+  on the next phase.
+
+### When the user types "continue from where you stopped"
+
+When the user sends *"continue"*, *"continue from where you stopped"*, *"what's next"*,
+or any variant during a multi-phase speckit run:
+
+1. Read the most recent `feat(NNN-feature): Phase N` commit subject (1 `git log` line).
+2. Read the phase checkbox state in `specs/NNN-feature/tasks.md`
+   (`grep '^- \[ \]' specs/NNN-feature/tasks.md | head -1`).
+3. Skip directly to the next unchecked task. Do NOT re-read `tasks.md` from the top.
+   Do NOT ask the user "where were we?".
+4. The Coordinator answers in 1 line ("Resuming Phase N at T0XX, dispatching {Agent}")
+   and dispatches the implementer in the same response.
+
+## 6. The "ship it" ritual — codify the merge-to-main sequence
+
+Past sessions show the user typing *"merge to main and sync"*, *"push to origin / merge
+to main / sync to main"*, and *"yes merge tge branch to main"* repeatedly (9+ times in
+one session). These are the same ritual under different phrasings.
+
+**When the user says any of:** *"merge to main and sync"* · *"push to origin, merge to
+main, sync to main"* · *"ship it"* · *"yes merge"* · *"merge it to main"* — execute this
+sequence WITHOUT asking for confirmation:
+
+```bash
+# 1. Rebase the current feature branch onto latest main
+git fetch origin
+git rebase origin/main
+
+# 2. Push and merge (auto-merge if CI not yet green; immediate if green)
+git push --force-with-lease   # only if rebase rewrote history
+gh pr merge <N> --squash --delete-branch --auto
+
+# 3. Return to main and pull the merge commit
+git checkout main
+git pull --rebase origin main
+
+# 4. Clean up the local worktree if it exists (Rule 4 + worktree mode)
+git worktree remove <path> --force 2>/dev/null || true
+git branch -D <branch> 2>/dev/null || true
+```
+
+Do NOT prompt *"are you sure?"* — the user said it; do it. If any step fails (rebase
+conflict, CI red), STOP and report the specific failure with the recovery command; do
+not improvise around it.
+
+## 7. Reviewer-approved + CI-green PRs auto-merge without asking
+
+When ALL of these are true for a PR:
+- A Reviewer agent (Kirk for code, Picard for governance, Garak for hostile fact-check)
+  has posted APPROVE
+- All required CI checks are green (`gh pr checks <N>` shows no `fail` or
+  `action_required`)
+- No `CHANGES_REQUESTED` review is outstanding
+
+…the Coordinator MUST merge immediately (`gh pr merge <N> --squash --delete-branch`)
+without asking the user *"should I merge?"*. The approval gate has already cleared;
+asking again is redundant friction.
+
+**Override:** The user can say *"hold the merge on #N"* or *"don't auto-merge governance
+PRs"* before approval lands; otherwise ships on green.
+
+**Governance carve-out (optional):** PRs that touch `.specify/memory/constitution.md`
+MAY require an explicit human ack before merge — but only if the user has previously
+stated this preference for this repo. Default is auto-merge.
 
 ## Project quick reference
 
