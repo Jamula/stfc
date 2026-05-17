@@ -24,3 +24,6 @@ import "./digest/digest.test.ts";
 import "./skills/discordMonitor.test.ts";
 import "./scripts/pre-commit.test.ts";
 import "./scripts/pre-push.test.ts";
+import "./agents/picard.test.ts";
+import "./agents/kirk.test.ts";
+import "./agents/scotty.test.ts";
