@@ -281,6 +281,10 @@ git branch -d squad/{issue-number}-{slug}
 **Worktree cleanup (future, #525):**
 ```bash
 cd {original-cwd}
+# Sweep .squad/ artifacts before removal (Rule 8 — prevents silent data loss)
+if [ -d "../worktrees/{issue-number}/.squad" ]; then
+  rsync -a --ignore-existing ../worktrees/{issue-number}/.squad/ .squad/
+fi
 git worktree remove ../worktrees/{issue-number}
 ```
 

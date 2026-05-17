@@ -145,7 +145,14 @@ gh pr merge <N> --squash --delete-branch --auto
 git checkout main
 git pull --rebase origin main
 
-# 4. Clean up the local worktree if it exists (Rule 4 + worktree mode)
+# 4. Sweep .squad/ artifacts from the worktree before removal (Rule 2 + Rule 8)
+#    Agents leave .squad/ files uncommitted per Rule 2 (Scribe-only commits).
+#    Copy them to the main checkout so Scribe can commit them later.
+if [ -d "<worktree>/.squad" ]; then
+  rsync -a --ignore-existing <worktree>/.squad/ .squad/
+fi
+
+# 5. Clean up the local worktree (Rule 4 + worktree mode)
 git worktree remove <path> --force 2>/dev/null || true
 git branch -D <branch> 2>/dev/null || true
 ```
@@ -173,6 +180,32 @@ PRs"* before approval lands; otherwise ships on green.
 **Governance carve-out (optional):** PRs that touch `.specify/memory/constitution.md`
 MAY require an explicit human ack before merge — but only if the user has previously
 stated this preference for this repo. Default is auto-merge.
+
+## 8. Worktree cleanup must sweep `.squad/` artifacts first
+
+Rule 2 forbids agents from committing `.squad/` paths — Scribe owns those commits.
+In worktree mode, agents write `.squad/` files (history.md, decisions/inbox/*, logs)
+inside the worktree. When `git worktree remove` runs, uncommitted files are silently
+destroyed.
+
+**Required before every `git worktree remove`:**
+
+```bash
+# From the main checkout — sweep uncommitted .squad/ artifacts before removal.
+# --ignore-existing preserves any newer content already in the main checkout.
+if [ -d "<worktree>/.squad" ]; then
+  rsync -a --ignore-existing <worktree>/.squad/ .squad/
+fi
+```
+
+This applies to:
+- The "ship it" ritual (Rule 6, step 4)
+- Manual worktree cleanup after PR merge
+- Ralph heartbeat–triggered cleanup
+- Any agent that removes a worktree for any reason
+
+After the sweep, Scribe commits the `.squad/` artifacts from the main checkout as
+usual. The sweep is idempotent — running it twice is harmless.
 
 ## Project quick reference
 
