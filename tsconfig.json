@@ -25,6 +25,7 @@
     "src/discord/**/*.ts",
     "src/lib/**/*.ts",
     "src/skills/**/*.ts",
+    "src/telemetry/**/*.ts",
     "tests/**/*.ts"
   ],
   "exclude": [

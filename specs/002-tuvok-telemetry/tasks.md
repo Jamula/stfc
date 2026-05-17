@@ -28,12 +28,12 @@ before the fix and passes after. Tests are NOT optional.
 
 **Purpose**: Project initialization — directory scaffolding, config files, npm script, and data directory creation.
 
-- [ ] T001 Create `data/telemetry/` directory with `.gitkeep` and `data/telemetry/reports/` subdirectory with `.gitkeep`
-- [ ] T002 Create model tier config at `config/model-tiers.json` with all known model → tier mappings from research.md R-002
-- [ ] T003 Add `"skill:telemetry": "tsx src/cli.ts telemetry"` npm script to `package.json`
-- [ ] T004 [P] Create empty module files: `src/telemetry/schemas.ts`, `src/telemetry/collector.ts`, `src/telemetry/reporter.ts`, `src/telemetry/recommender.ts`, `src/telemetry/tiers.ts`
-- [ ] T005 [P] Create empty test files: `tests/telemetry/schemas.test.ts`, `tests/telemetry/collector.test.ts`, `tests/telemetry/reporter.test.ts`, `tests/telemetry/recommender.test.ts`, `tests/telemetry/tiers.test.ts`, `tests/skills/telemetry.test.ts`
-- [ ] T006 Register new test imports in `tests/index.test.ts` (append telemetry test suite imports)
+- [x] T001 Create `data/telemetry/` directory with `.gitkeep` and `data/telemetry/reports/` subdirectory with `.gitkeep`
+- [x] T002 Create model tier config at `config/model-tiers.json` with all known model → tier mappings from research.md R-002
+- [x] T003 Add `"skill:telemetry": "tsx src/cli.ts telemetry"` npm script to `package.json`
+- [x] T004 [P] Create empty module files: `src/telemetry/schemas.ts`, `src/telemetry/collector.ts`, `src/telemetry/reporter.ts`, `src/telemetry/recommender.ts`, `src/telemetry/tiers.ts`
+- [x] T005 [P] Create empty test files: `tests/telemetry/schemas.test.ts`, `tests/telemetry/collector.test.ts`, `tests/telemetry/reporter.test.ts`, `tests/telemetry/recommender.test.ts`, `tests/telemetry/tiers.test.ts`, `tests/skills/telemetry.test.ts`
+- [x] T006 Register new test imports in `tests/index.test.ts` (append telemetry test suite imports)
 
 ---
 
