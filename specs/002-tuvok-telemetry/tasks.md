@@ -71,17 +71,17 @@ before the fix and passes after. Tests are NOT optional.
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation.
 > Every Given/When/Then in the spec MUST map to at least one test task.**
 
-- [ ] T014 [P] [US1] Schema validation tests in `tests/telemetry/schemas.test.ts` — valid TelemetryRecord passes, invalid sessionHash/timestamps/negative tokens rejected, ModelUsage array must be non-empty
-- [ ] T015 [P] [US1] Tier resolution tests in `tests/telemetry/tiers.test.ts` — known model returns correct tier, unknown model returns `defaultTier`, invalid config rejected, missing file handled gracefully
-- [ ] T016 [P] [US1] Collector tests in `tests/telemetry/collector.test.ts` — US1-S1: extracts correct fields from mock session data; US1-S2: missing optional fields recorded as null/unknown; US1-S3: interrupted session marked `partial`; US1-S4: idempotent collection skips already-collected sessionHash (FR-004); session ID hashed with SHA-256 truncated to 16 hex chars (FR-010); collection-log.jsonl entry written (FR-012)
+- [x] T014 [P] [US1] Schema validation tests in `tests/telemetry/schemas.test.ts` — valid TelemetryRecord passes, invalid sessionHash/timestamps/negative tokens rejected, ModelUsage array must be non-empty
+- [x] T015 [P] [US1] Tier resolution tests in `tests/telemetry/tiers.test.ts` — known model returns correct tier, unknown model returns `defaultTier`, invalid config rejected, missing file handled gracefully
+- [x] T016 [P] [US1] Collector tests in `tests/telemetry/collector.test.ts` — US1-S1: extracts correct fields from mock session data; US1-S2: missing optional fields recorded as null/unknown; US1-S3: interrupted session marked `partial`; US1-S4: idempotent collection skips already-collected sessionHash (FR-004); session ID hashed with SHA-256 truncated to 16 hex chars (FR-010); collection-log.jsonl entry written (FR-012)
 
 ### Implementation for User Story 1
 
-- [ ] T017 [US1] Implement `collectTelemetry()` in `src/telemetry/collector.ts` — query `session_store_sql` for sessions in lookback window, extract usage events, hash session IDs (SHA-256 truncated 16 hex), derive `taskCategory` via keyword matching (research.md R-005), derive `outcome` heuristically from `session_refs` (research.md R-006), resolve model tiers via `src/telemetry/tiers.ts`
-- [ ] T018 [US1] Implement JSONL append logic in `src/telemetry/collector.ts` — read existing `data/telemetry/sessions.jsonl` for dedup check by `sessionHash`, append new records, validate each record against Zod schema before write
-- [ ] T019 [US1] Implement collection audit logging in `src/telemetry/collector.ts` — append `CollectionLog` entry to `data/telemetry/collection-log.jsonl` with `runAt`, `sessionsProcessed`, `sessionsSkipped`, `errors`, `durationMs` (FR-012)
-- [ ] T020 [US1] Create CLI skill entry point at `src/skills/telemetry.ts` — implement `telemetry()` function returning `{ result: TelemetryResult; exitCode: number }`, route `collect` subcommand to `collectTelemetry()`, handle infrastructure errors with exit code 1 (per telemetry-skill.contract.md)
-- [ ] T021 [US1] Register `telemetry` skill in `src/cli.ts` — add to `SKILLS` tuple, `SKILL_FNS` record, and `isSkillName()` type guard; telemetry skill does NOT require `accounts` (per contract)
+- [x] T017 [US1] Implement `collectTelemetry()` in `src/telemetry/collector.ts` — query `session_store_sql` for sessions in lookback window, extract usage events, hash session IDs (SHA-256 truncated 16 hex), derive `taskCategory` via keyword matching (research.md R-005), derive `outcome` heuristically from `session_refs` (research.md R-006), resolve model tiers via `src/telemetry/tiers.ts`
+- [x] T018 [US1] Implement JSONL append logic in `src/telemetry/collector.ts` — read existing `data/telemetry/sessions.jsonl` for dedup check by `sessionHash`, append new records, validate each record against Zod schema before write
+- [x] T019 [US1] Implement collection audit logging in `src/telemetry/collector.ts` — append `CollectionLog` entry to `data/telemetry/collection-log.jsonl` with `runAt`, `sessionsProcessed`, `sessionsSkipped`, `errors`, `durationMs` (FR-012)
+- [x] T020 [US1] Create CLI skill entry point at `src/skills/telemetry.ts` — implement `telemetry()` function returning `{ result: TelemetryResult; exitCode: number }`, route `collect` subcommand to `collectTelemetry()`, handle infrastructure errors with exit code 1 (per telemetry-skill.contract.md)
+- [x] T021 [US1] Register `telemetry` skill in `src/cli.ts` — add to `SKILLS` tuple, `SKILL_FNS` record, and `isSkillName()` type guard; telemetry skill does NOT require `accounts` (per contract)
 
 **Checkpoint**: At this point, `npm run skill:telemetry collect` works end-to-end. US1 is fully functional and testable independently.
 
