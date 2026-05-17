@@ -23,3 +23,4 @@ import "./discord/ingest.test.ts";
 import "./digest/digest.test.ts";
 import "./skills/discordMonitor.test.ts";
 import "./scripts/pre-commit.test.ts";
+import "./scripts/pre-push.test.ts";

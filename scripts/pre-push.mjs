@@ -93,4 +93,7 @@ function main() {
   console.log("[pre-push] ✅ Rebased successfully. Continuing push.");
 }
 
-main();
+import { fileURLToPath } from "url";
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  main();
+}
