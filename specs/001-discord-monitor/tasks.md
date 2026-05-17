@@ -690,7 +690,7 @@ candidates (FR-012 / US3 Scenario 2).
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation.
 > Every Given/When/Then in spec.md § US3 Acceptance Scenarios MUST map to a test.**
 
-- [ ] T035 [P] [US3] Write `RunHealth` unit tests (extend
+- [x] T035 [P] [US3] Write `RunHealth` unit tests (extend
   `tests/skills/discordMonitor.test.ts`) **before** wiring health
   counters. Assert (US3 Scenarios 1–2):
   - After a 401 auth failure: `RunHealth.errorsByClass["DiscordAuthError"]
@@ -710,7 +710,7 @@ candidates (FR-012 / US3 Scenario 2).
     `cooldowns.json` (verifies cool-down counter is wired through
     `dedup.ts` from T022).
 
-- [ ] T036 [P] [US3] Write Job Summary unit test (add to
+- [x] T036 [P] [US3] Write Job Summary unit test (add to
   `tests/skills/discordMonitor.test.ts`) **before** implementing summary
   emission. Assert (FR-027):
   - A `RunHealth` block is written to `process.env.GITHUB_STEP_SUMMARY`
@@ -721,7 +721,7 @@ candidates (FR-012 / US3 Scenario 2).
 
 ### Implementation for User Story 3
 
-- [ ] T037 [P] [US3] Wire `RunHealth` counters through the full
+- [x] T037 [P] [US3] Wire `RunHealth` counters through the full
   orchestration in `src/skills/discordMonitor.ts`: populate all fields of
   the `RunHealth` interface from `data-model.md` § 10 as each pipeline
   stage completes — ingest stage populates channel/message counters;
@@ -731,7 +731,7 @@ candidates (FR-012 / US3 Scenario 2).
   classify stage populates `tipsClassified` and `dropped`; state write
   records model load metrics. Depends on T035, T026.
 
-- [ ] T038 [P] [US3] Implement GitHub Actions Job Summary emission
+- [x] T038 [P] [US3] Implement GitHub Actions Job Summary emission
   (FR-027): after digest write, format `RunHealth` as a Markdown summary
   block and write to the file at `process.env.GITHUB_STEP_SUMMARY` (if
   set; no-op if not set, for local runs). Emit even if the digest write
@@ -748,7 +748,7 @@ testable. `npm test` green. Run `workflow_dispatch` on
 **Purpose**: Operator documentation verification, state-files contract
 hardening, and final hygiene gate validation.
 
-- [ ] T039 [P] Validate `specs/001-discord-monitor/quickstart.md`
+- [x] T039 [P] Validate `specs/001-discord-monitor/quickstart.md`
   operator walkthrough: trace through all steps and confirm § 8 (or
   equivalent operational-dependencies section) contains a clearly-titled
   advisory "Branch protection on `main` will break this feature" with
@@ -760,7 +760,7 @@ hardening, and final hygiene gate validation.
   `data/discord/cooldowns.json` should be documented as skill-managed
   (operators should not hand-edit).
 
-- [ ] T040 [P] Add rerun/cursor edge-case documented behavior to
+- [x] T040 [P] Add rerun/cursor edge-case documented behavior to
   `specs/001-discord-monitor/contracts/state-files.contract.md` under a
   new § "Rerun behavior after partial failure": a workflow rerun after
   partial failure (where `cursors.json` was not flushed) will re-extract
@@ -769,12 +769,12 @@ hardening, and final hygiene gate validation.
   STFC API. Behavior is bounded and intentional, not a bug — Picard
   Condition 7.
 
-- [ ] T041 [P] Run `npm run typecheck` and `npm test` — confirm all 43
+- [x] T041 [P] Run `npm run typecheck` and `npm test` — confirm all 43
   tasks' deliverables compile and all tests pass. Address any type
   errors or test failures before considering the feature branch ready
   for implementation review.
 
-- [ ] T042 [P] Validate artifact hygiene gate end-to-end: inject a
+- [x] T042 [P] Validate artifact hygiene gate end-to-end: inject a
   synthetic forbidden token (JWT-shaped string) into a test file at
   `data/digests/test-hygiene.md`, run
   `scripts/check-artifact-hygiene.mjs`, confirm scanner returns

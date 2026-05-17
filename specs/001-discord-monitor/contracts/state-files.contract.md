@@ -200,3 +200,29 @@ This file is read on every run. A change to `id`, `revision`, or
 4. Feature code MUST NOT write to `suppression.json` (operator-only file).
 5. No state file MUST contain any token, password, JWT, PAT, or author
    Discord ID (PII rule, Principle VII).
+
+---
+
+## § Rerun behavior after partial failure
+
+A workflow rerun after partial failure (where `cursors.json` was not
+flushed because the run terminated before step 8) will re-extract
+messages between the last successful cursor position and the current
+channel head. This is bounded and intentional, not a bug:
+
+- **Candidates:** `candidates.jsonl` membership dedup (step 6, via
+  `dedup.ts`) prevents re-submission to the STFC API. A candidate that
+  was already appended to `candidates.jsonl` in a prior run will be
+  annotated `duplicate` and never reaches the redeemer.
+- **Tips:** `tips-seen.jsonl` contentHash dedup prevents duplicate tip
+  entries in the daily digest.
+- **Promo codes:** `promo-codes.txt` membership check in step 7
+  prevents duplicate appends.
+- **Cooldowns:** `cooldowns.json` entries are idempotent —
+  `recordFailure` updates `lastFailedAt` but does not create a
+  duplicate entry.
+
+The maximum re-extraction window is bounded by the 5-page-per-channel
+cap in the ingest pager (plan § Sequence, step 3). At 100 messages per
+page, a rerun re-scans at most 500 messages per channel — a trivial
+cost compared to the rate-limit budget.
