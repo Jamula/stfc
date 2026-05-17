@@ -1,0 +1,26 @@
+{
+  "name": "stfc",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:24",
+  "idleTimeoutInMinutes": 180,
+  "features": {
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
+  "postCreateCommand": "npm ci",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "GitHub.copilot",
+        "GitHub.copilot-chat"
+      ]
+    },
+    "codespaces": {
+      "repositories": {
+        "Jamula/stfc": {
+          "permissions": {
+            "security_events": "read"
+          }
+        }
+      }
+    }
+  }
+}
