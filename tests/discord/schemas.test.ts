@@ -140,7 +140,7 @@ describe("CandidateCodeSchema", () => {
     assert.equal(CandidateCodeSchema.safeParse(bad).success, false);
   });
 
-  it("rejects when value does not match ^[A-Z][A-Z0-9]{3,19}$", () => {
+  it("rejects when value does not match ^[A-Z][A-Z0-9]{2,19}$", () => {
     const bad = { ...okCandidate, value: "lowercase" };
     assert.equal(CandidateCodeSchema.safeParse(bad).success, false);
   });

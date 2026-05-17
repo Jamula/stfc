@@ -113,7 +113,7 @@ export const CandidateCodeSchema = z
   .object({
     value: z
       .string()
-      .regex(/^[A-Z][A-Z0-9]{3,19}$/, "must match ^[A-Z][A-Z0-9]{3,19}$"),
+      .regex(/^[A-Z][A-Z0-9]{2,19}$/, "must match ^[A-Z][A-Z0-9]{2,19}$"),
     firstSeen: IsoUtcSchema,
     lastAttempted: IsoUtcSchema.nullable(),
     suppressedUntil: IsoUtcSchema.nullable(),

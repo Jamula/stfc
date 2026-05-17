@@ -27,8 +27,8 @@ function readPromoCodesTxtEntries(): string[] {
 }
 
 describe("extractor regex constant", () => {
-  it("CORE_CODE_REGEX is anchored ^[A-Z][A-Z0-9]{3,19}$", () => {
-    assert.equal(CORE_CODE_REGEX.source, "^[A-Z][A-Z0-9]{3,19}$");
+  it("CORE_CODE_REGEX is anchored ^[A-Z][A-Z0-9]{2,19}$", () => {
+    assert.equal(CORE_CODE_REGEX.source, "^[A-Z][A-Z0-9]{2,19}$");
   });
 });
 
@@ -39,19 +39,12 @@ describe("extractor / promo-codes.txt coverage", () => {
     assert.equal(entries.length, 30, `entries:\n${entries.join("\n")}`);
   });
 
-  // 27 entries that DO match the core regex MUST extract under the regex.
-  // The 3 short-code gaps (TNG / GQ5 / GQ7) are KNOWN GAPS — they're real
-  // codes but their length sits below the precision floor. Per the Tuvok
-  // plan-corrections memo these are accepted precision trade-offs (not bugs)
-  // and are flagged as `t.todo()` so the runner records them without
-  // failing the build.
-  const KNOWN_GAPS = new Set(["TNG", "GQ5", "GQ7"]);
+  // All 30 entries — including 3-char codes TNG, GQ5, GQ7 — are now
+  // extractable after relaxing the regex floor from 4 to 3 chars (#18).
 
-  describe("each promo-codes.txt entry is extractable (27 match, 3 known gaps)", () => {
+  describe("each promo-codes.txt entry is extractable (all 30 match)", () => {
     for (const entry of entries) {
-      const isGap = KNOWN_GAPS.has(entry);
-      test(`promo-codes.txt entry: ${entry}${isGap ? " — KNOWN GAP" : ""}`,
-        isGap ? { todo: "accepted precision gap — code shorter than 4 chars" } : {},
+      test(`promo-codes.txt entry: ${entry}`,
         () => {
           const got = extractCodesFromMessage(`Use code ${entry} for a bonus`, {
             channelLabel: "promos",
