@@ -81,6 +81,20 @@ PR #20):
 
 ---
 
+### PR #37 review fix — classifiedTips variable shadowing (2026-05-17T17:53:01.345+00:00)
+
+**Context:** Kirk reviewed Scotty's PR #37 (Discord monitor Phases 5–6) and found a variable shadowing bug. Scotty locked out per reviewer rejection protocol; Uhura picked up the revision.
+
+**Bug:** `const classifiedTips: Tip[] = []` on line 231 of `src/skills/discordMonitor.ts` (inside the `if (token)` block) shadowed the outer `let classifiedTips` declared at line 183. This caused all classified tips to be silently discarded — they were pushed into the inner array, which went out of scope, so the digest and `tips-seen.jsonl` always received an empty tips array. Health counters were wired correctly because they read from the classifier output directly, not from `classifiedTips`.
+
+**Fix:** Removed the `const` declaration, changing `const classifiedTips: Tip[] = []` to `classifiedTips = []` (plain reassignment to the outer variable).
+
+**Test added:** `classified tips appear in digest output and tips-seen.jsonl (tip-flow integration)` — sends a message with "tip:" prefix through the full pipeline, asserts: (1) digest file contains tip content, (2) `tipsClassified.tip >= 1`, (3) `tips-seen.jsonl` has an entry, (4) entry parses with correct `category` and `contentHash` fields.
+
+**Lesson:** Variable shadowing with `const`/`let` in nested blocks is silent in TypeScript — no compiler warning by default. In long pipeline functions, prefer initializing mutable accumulators at the top and resetting via assignment rather than re-declaring.
+
+---
+
 ## Session History (Current)
 
 *For detailed session logs, see `.squad/log/` and `.squad/orchestration-log/`.*

@@ -86,3 +86,22 @@ prose. Examples applied here:
 
 **Commit:** `9475937 feat(001-discord-monitor): Phase 4 — US2 tips digest (T028–T034)`
 **Test result:** 286 tests, 283 pass, 0 fail (3 pre-existing extractor.test.ts KNOWN GAP warnings unchanged).
+
+---
+
+### Issue #18 — Fix extractor short-code gaps (2026-05-17T17:53:01.345+00:00)
+
+**Decision:** Option B — relax regex floor + expand stoplist.
+
+**What changed:**
+- `CORE_CODE_REGEX` in `src/discord/extractor.ts` changed from `{3,19}` to `{2,19}` (min total length 4→3).
+- `src/discord/schemas.ts` Zod regex synced to `{2,19}`.
+- `src/discord/stoplist.ts` gained 38 common 3-char English words (FOR, ARE, BUT, NOT, HIS, HER, ALL, CAN, etc.) to maintain precision at the lower floor.
+- `tests/discord/extractor.test.ts` — removed `KNOWN_GAPS` set and `t.todo()` wrappers; all 30 promo-codes.txt entries now pass as real assertions (287 pass, 0 todo).
+- `specs/001-discord-monitor/contracts/state-files.contract.md` regex comment updated.
+
+**Key files:** `src/discord/extractor.ts`, `src/discord/stoplist.ts`, `src/discord/schemas.ts`, `tests/discord/extractor.test.ts`.
+
+**Pattern:** When lowering a regex precision floor, always expand the stoplist in the same commit. The stoplist is the precision guardrail — the regex is just the recall gate.
+
+**PR:** #38 on branch `squad/18-fix-extractor-short-codes`.

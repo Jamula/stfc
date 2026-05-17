@@ -34,3 +34,48 @@ Files inherited from Picard's Lead-era work that I now own going forward:
 - `gh pr merge --delete-branch` fails the local-branch cleanup step when another worktree has the target branch checked out (`fatal: 'main' is already used by worktree at '/workspaces/stfc'`). **Remote branch deletion still succeeds before that error** — verified via `git ls-remote`. Non-blocking for the merge itself, but worth knowing: in worktree mode, local branch cleanup is your problem, not gh's.
 
 **Architectural note:** The Saturday-midnight cadence is the right call. Pairs cleanly with Issue #13's all-accounts-expired alarm — weekly refresh keeps tokens >20 days clear of the 30-day expiry wall, so the alarm only fires on real breakage rather than scheduler lag.
+
+## 2026-05-17T17:53:01.345+00:00 — Batch PR review: #35, #36, #37
+
+### PR #35 — `fix(squad): add Rule 8 — .squad/ artifact sweep` (Picard)
+
+**Verdict:** APPROVE. Clean governance-only change. `rsync --ignore-existing` sweep
+before `git worktree remove` is idempotent and non-breaking. All four cleanup locations
+updated consistently (ship-it ritual, manual cleanup, Ralph heartbeat, issue lifecycle).
+Template mirrors live doc. 284 tests pass.
+
+### PR #36 — `fix(deps): @xenova/transformers → @huggingface/transformers` (Uhura)
+
+**Verdict:** APPROVE. Resolves 8 security advisories (1 critical, 4 high, 3 moderate)
+via clean package swap. Dynamic import updated. `pipeline()` API compatible. Tier-2
+still gated behind placeholder SHA — no runtime behavior change. 283 pass / 0 fail / 3
+todo. Minor: `quickstart.md` line 84 still references `@xenova/transformers` — non-blocking.
+
+### PR #37 — `feat(001-discord-monitor): Phases 5–6` (Scotty)
+
+**Verdict:** CHANGES_REQUESTED. Found a variable shadowing bug:
+
+- `let classifiedTips: Tip[] = []` at function scope (line ~183)
+- `const classifiedTips: Tip[] = []` inside `if (token !== null)` (line ~231)
+
+The inner `const` shadows the outer `let`. After the if-block exits, tip-seen
+persistence and the finalize() call both reference the outer (empty) array. Classified
+tips are silently discarded — `tips-seen.jsonl` never gets entries, digest always has
+`tips: []`. Tests pass because they only check RunHealth counters (wired via `health`),
+not the data output.
+
+**Fix:** Remove inner `const` declaration, push into outer `let`. Add a test asserting
+`result.tips.length > 0` when classifier produces non-chatter.
+
+## Learnings
+
+- **Variable shadowing in block scopes is a silent killer.** TypeScript's `--noEmit`
+  typecheck doesn't flag `const` shadowing an outer `let` in a nested block. This is
+  legal JS/TS but produces wrong runtime behavior. Consider adding a lint rule
+  (`no-shadow`) to catch this class of bug at CI time.
+- **Test coverage gap pattern:** When a module has both counter-based health metrics
+  and data-output paths, tests that only check counters can pass even when the data
+  pipeline is completely broken. Need at least one end-to-end assertion per output path.
+- **Self-review blocked by GitHub.** `gh pr review --approve` fails when the `gh` token
+  belongs to the PR author. Workaround: post as `gh pr comment` with the verdict header.
+  This is the same pattern discovered during the PR #20 review cycle.
