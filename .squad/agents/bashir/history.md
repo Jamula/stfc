@@ -105,3 +105,8 @@ prose. Examples applied here:
 **Pattern:** When lowering a regex precision floor, always expand the stoplist in the same commit. The stoplist is the precision guardrail — the regex is just the recall gate.
 
 **PR:** #38 on branch `squad/18-fix-extractor-short-codes`.
+
+### Phase 3 Test Completion — Commit 39ad92f (2026-05-17T20:42:03Z)
+
+US3 token validation tests integrated. 3 new test files added (ingest.test.ts, tokenDecoder.test.ts, tokenValidator.test.ts). All Phase 3 assertions passing.
+
