@@ -17,7 +17,8 @@
 | Scotty | Core Dev | `.squad/agents/scotty/charter.md` | ✅ Active |
 | Uhura | Integrations Dev | `.squad/agents/uhura/charter.md` | ✅ Active |
 | Bashir | Tester | `.squad/agents/bashir/charter.md` | ✅ Active |
-| Borg Queen | Critic | `.squad/agents/borg-queen/charter.md` | ✅ Active |
+| Borg Queen | Critic | `.squad/agents/garak/charter.md` (history archive only) | 🗄️ Retired (2026-05-16 — seat transferred to Garak) |
+| Garak | Critic | `.squad/agents/garak/charter.md` | ✅ Active |
 | Tuvok | Process Auditor / Editorial Specialist | `.squad/agents/tuvok/charter.md` | ✅ Active |
 | Scribe | Session Logger | `.squad/agents/scribe/charter.md` | 📋 Silent |
 | Ralph | Work Monitor | — | 🔄 Monitor |
@@ -27,7 +28,15 @@
 - **Picard (M2/EM)** — manages the squad. Owns scope, priorities, triage, blocker removal, governance.
 - **Kirk (Lead)** — reports to Picard. Owns architecture, technical direction, code review on correctness.
 - **Scotty / Uhura / Bashir** — contributors; technical reporting line is Kirk, scope/priority line is Picard.
-- **Borg Queen / Tuvok / Scribe / Ralph** — specialists with direct relationships to both Picard (governance) and Kirk (technical).
+- **Garak / Tuvok / Scribe / Ralph** — specialists with direct relationships to both Picard (governance) and Kirk (technical).
+
+> **Note on the Critic seat:** Borg Queen previously held this seat through the
+> v1.1.0 / v1.2.0 constitution cycles and the 001-discord-monitor plan reviews.
+> She retired on 2026-05-16 and the seat transferred to **Garak**, who inherits
+> the hostile-fact-check methodology and historical learnings (preserved under
+> `.squad/agents/garak/`). The previous occupant's name appears in shipped
+> specs, decisions ledger, and other agents' history files as historical record;
+> no rewrite of those artifacts.
 
 ## Coding Agent
 
@@ -40,7 +49,7 @@
 - **Repository:** Jamula/stfc
 - **Connected:** 2026-05-12
 - **Default branch:** main
-- **Labels:** `squad` (inbox/triage), `squad:picard`, `squad:kirk`, `squad:scotty`, `squad:uhura`, `squad:bashir`, `squad:borg-queen`, `squad:tuvok`
+- **Labels:** `squad` (inbox/triage), `squad:picard`, `squad:kirk`, `squad:scotty`, `squad:uhura`, `squad:bashir`, `squad:garak`, `squad:tuvok`
 - **Worktrees:** enabled — each agent branch gets its own worktree
 - **Workflow:** New issues tagged `squad` → Picard triages → assigns `squad:{member}` → member picks up (Picard may route technical-direction issues to Kirk for sub-triage)
 

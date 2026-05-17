@@ -11,9 +11,9 @@ How to decide who handles what.
 | TypeScript / CLI / build | Scotty | Refactor `src/`, fix CLI flag, update `tsconfig.json`, dependency bumps |
 | STFC API, auth, secrets | Uhura | JWT capture, redemption requests, response parsing, bookmarklet, `STFC_ACCOUNTS` format |
 | Tests, fixtures, coverage | Bashir | Add unit tests, write integration tests, debug flaky CI tests, fix test fixtures |
-| Critique, risk, assumptions | Borg Queen | Pre-mortem a plan, audit a proposal, surface blind spots, devil's-advocate review |
-| Editorial passes on governance docs per explicit reviewer findings | Tuvok | Apply Borg Queen's findings as surgical edits to constitution drafts, change-impact accounting, cross-reference fixes |
-| Code review (technical correctness) | Kirk (with Borg Queen on request) | Non-trivial PR review, architectural sign-off |
+| Critique, risk, assumptions | Garak | Pre-mortem a plan, audit a proposal, surface blind spots, devil's-advocate review, hostile fact-check claims against the live repo |
+| Editorial passes on governance docs per explicit reviewer findings | Tuvok | Apply Garak's findings as surgical edits to constitution drafts, change-impact accounting, cross-reference fixes |
+| Code review (technical correctness) | Kirk (with Garak on request) | Non-trivial PR review, architectural sign-off |
 | Code review (scope / governance) | Picard | Sign-off that PR matches spec, no scope creep, constitution honoured |
 | GitHub Actions workflows | Scotty (build/test) / Uhura (cron + secrets) | `.github/workflows/*.yml` changes |
 | Session logging | Scribe | Automatic — never needs routing |
@@ -29,7 +29,7 @@ How to decide who handles what.
 | `squad:scotty` | TypeScript / CLI / build work | Scotty |
 | `squad:uhura` | STFC API / auth / secrets work | Uhura |
 | `squad:bashir` | Test work | Bashir |
-| `squad:borg-queen` | Critique / risk audit | Borg Queen |
+| `squad:garak` | Critique / risk audit / hostile fact-check | Garak |
 
 ### How Issue Assignment Works
 
@@ -84,4 +84,4 @@ gh issue create -t "Should we cap parallel redemptions per account?" \
 5. **"Team, ..." → fan-out.** Spawn all relevant agents in parallel as `mode: "background"`.
 6. **Anticipate downstream work.** If Uhura is changing an API contract, spawn Bashir to update fixtures simultaneously.
 7. **Issue-labeled work** — when a `squad:{member}` label is applied to an issue, route to that member. Picard (M2/EM) handles all `squad` (base label) triage; he may delegate technical sub-triage to Kirk.
-8. **Borg Queen as default critique** — for non-trivial proposals, spawn Borg Queen alongside the implementer to challenge assumptions in parallel. The team decides; she informs.
+8. **Garak as default critique** — for non-trivial proposals, spawn Garak alongside the implementer to challenge assumptions in parallel. The team decides; she informs. (Seat previously held by Borg Queen through 2026-05-16.)

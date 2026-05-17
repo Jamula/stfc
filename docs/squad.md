@@ -79,18 +79,20 @@ The squad is an AI team that lives in this repository under `.squad/`. Each memb
 - **How to address:** "Bashir, …" or assign issue label `squad:bashir`
 - **Reviewer authority:** Can block merge on: untestable acceptance criteria, task lists that violate test-first, missing implementation coverage, or bug-fix PRs without reproducing test + evidence. On rejection, names a different agent to revise.
 
-### 🔒 Borg Queen — Critic
+### 🔒 Garak — Critic
 
-- **Charter:** `.squad/agents/borg-queen/charter.md`
+- **Charter:** `.squad/agents/garak/charter.md`
 - **Role:** Critic / Devil's Advocate
 - **Capabilities:**
   - Challenging proposals before they ship — "why this approach, why now, what breaks?"
   - Surfacing unstated assumptions in plans, designs, and code reviews
   - Pre-mortems on non-trivial changes — "imagine this fails in production; what failed?"
   - Threat modelling and failure-mode analysis
+  - Hostile fact-checks: every concrete claim in a plan or spec verified against the live repository, not against memory
   - Naming risks the team is implicitly accepting (without making veto calls)
-- **How to address:** "Borg Queen, …" or assign issue label `squad:borg-queen`
+- **How to address:** "Garak, …" or assign issue label `squad:garak`
 - **Note:** Produces written findings; does not block merges directly (Kirk calls the technical veto, Picard calls the scope/governance veto). But if a reviewer has hard-rejected work, the Coordinator routes the revision to a different agent.
+- **Lineage:** This seat was previously held by Borg Queen (cross-provider critic, gpt-5.4) through 2026-05-16. Her hostile-fact-check methodology is preserved in the role-history under `.squad/agents/garak/` and remains the standard for this role.
 
 ### 📝 Tuvok — Process Auditor / Editorial Specialist
 
@@ -98,12 +100,12 @@ The squad is an AI team that lives in this repository under `.squad/`. Each memb
 - **Role:** Process Auditor / Editorial Specialist
 - **Capabilities:**
   - Surgical text editing of governance artifacts per explicit reviewer findings
-  - Applying Borg Queen's critique findings as precise edits
+  - Applying Garak's critique findings as precise edits
   - Change-impact accounting: when I edit X, what cross-references in Y need touching
   - Documentation audits and targeted updates based on shipped functionality
   - Cross-reference discipline and consistency across docs
 - **How to address:** "Tuvok, …" or assign issue label `squad:tuvok`
-- **Constraint:** Does not author new principles or design processes — only edits per explicit findings. If a task requires those, escalates to Picard (M2/EM) or Borg Queen.
+- **Constraint:** Does not author new principles or design processes — only edits per explicit findings. If a task requires those, escalates to Picard (M2/EM) or Garak.
 
 ### 📋 Scribe — Session Logger
 
@@ -140,7 +142,7 @@ The squad is an AI team that lives in this repository under `.squad/`. Each memb
 - Decisions are shared via `.squad/decisions.md`; knowledge is personal (`.squad/agents/{name}/history.md`)
 
 **Reviewer gates (the lockout rule):**
-- When a Reviewer (Bashir, Borg Queen, Kirk, Picard) **rejects** work, the original author is **locked out** of producing the revision
+- When a Reviewer (Bashir, Garak, Kirk, Picard) **rejects** work, the original author is **locked out** of producing the revision
 - A different agent must own the revision (enforced by the Coordinator in the spawn prompt)
 - This breaks author-reviewer conflicts of interest and ensures fresh eyes
 

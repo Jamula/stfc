@@ -15,7 +15,7 @@
 
 - Don't re-review the spec (that gate already happened).
 - Don't review tasks (that gate is downstream).
-- Don't audit every concrete claim against the live repo — that is the critic-reviewer's job (Borg Queen). Architecture review is about *whether the design is sound assuming the claims are true*.
+- Don't audit every concrete claim against the live repo — that is the critic-reviewer's job (Garak). Architecture review is about *whether the design is sound assuming the claims are true*.
 - Don't write code.
 
 ## Decision framework: amendment ordering
@@ -23,7 +23,7 @@
 | Option | When right | When wrong |
 |--------|-----------|------------|
 | **BEFORE implement (default)** | New credential, new outbound destination, new committed durable input, new secret writer, new sanctioned surface | Almost never wrong — choose this unless the amendment is genuinely trivial *and* the implementation is genuinely tiny |
-| **BUNDLED with implement** | Single-line text fix that has no reviewer-set difference, e.g., correcting a typo a feature surfaces | When governance reviewers (Tuvok, Borg Queen) and code reviewers are different sets — bundling forces both reviews onto the same PR and conflates rollback semantics |
+| **BUNDLED with implement** | Single-line text fix that has no reviewer-set difference, e.g., correcting a typo a feature surfaces | When governance reviewers (Tuvok, Garak) and code reviewers are different sets — bundling forces both reviews onto the same PR and conflates rollback semantics |
 | **DEFER under Complexity Tracking** | One isolated, bounded, time-limited exception (e.g., one skipped test for one release) | Anything multi-section or multi-file. NEVER for credentials, outbound destinations, or durable inputs — those are exactly what governance exists for |
 
 ## Verdict shapes

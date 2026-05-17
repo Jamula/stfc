@@ -1,3 +1,22 @@
+## 2026-05-16 — Critic seat transferred from Borg Queen to Garak
+
+User-requested swap for consistency with cyrusj's other squad (where Garak
+holds the Critic seat). Borg Queen retired from this roster. I (Garak)
+inherit the Critic-seat learnings preserved in the entries below — the
+hostile-fact-check methodology, cascade-verification patterns, and the
+"verify every concrete claim against the live repo" discipline all carry
+forward unchanged.
+
+Files affected by the transfer are listed in
+`.squad/decisions/inbox/picard-borg-queen-garak-swap-2026-05-16.md`
+(pending Scribe merge).
+
+Going forward all Critic work is published under `garak/`; the entries
+beneath this one are the seat's prior occupant's record and remain
+authoritative for the methodology.
+
+---
+
 # Project Context
 
 - **Owner:** cyrusj

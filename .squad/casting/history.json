@@ -25,6 +25,16 @@
         { "agent": "Picard", "from": "Lead", "to": "M2 / Engineering Manager" }
       ],
       "reason": "User-requested role swap for consistency with other squads — EM (Picard) sits above Lead (Kirk)"
+    },
+    {
+      "universe": "Star Trek",
+      "assigned_at": "2026-05-16T20:55:00-07:00",
+      "assignment_id": "stfc-gift-redeemer-initial-2026-05-08",
+      "expansion_type": "diegetic",
+      "agent_added": "Garak",
+      "agent_retired": "Borg Queen",
+      "seat_inherited": "Critic",
+      "reason": "User-requested Critic-seat swap for consistency with cyrusj's other squad where Garak holds the Critic role"
     }
   ],
   "assignment_cast_snapshots": {
@@ -41,7 +51,8 @@
       ],
       "overflow_additions": [
         { "name": "Tuvok", "role": "Process Auditor / Editorial Specialist", "added_at": "2026-05-08T21:29:58-07:00", "expansion_type": "diegetic" },
-        { "name": "Kirk", "role": "Lead", "added_at": "2026-05-16T20:50:30-07:00", "expansion_type": "diegetic", "concurrent_role_change": { "agent": "Picard", "from": "Lead", "to": "M2 / Engineering Manager" } }
+        { "name": "Kirk", "role": "Lead", "added_at": "2026-05-16T20:50:30-07:00", "expansion_type": "diegetic", "concurrent_role_change": { "agent": "Picard", "from": "Lead", "to": "M2 / Engineering Manager" } },
+        { "name": "Garak", "role": "Critic", "added_at": "2026-05-16T20:55:00-07:00", "expansion_type": "diegetic", "concurrent_retirement": { "agent": "Borg Queen", "seat_inherited": "Critic" } }
       ]
     }
   }

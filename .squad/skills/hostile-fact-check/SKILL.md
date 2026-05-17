@@ -1,6 +1,6 @@
 # Skill: Hostile Fact-Check
 
-**Owner:** Borg Queen (Critic)
+**Owner:** Garak (Critic) — inherited from Borg Queen (2026-05-16)
 **Trigger:** Any plan review gate that makes concrete claims about the live repo.
 
 ## Purpose

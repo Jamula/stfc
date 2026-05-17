@@ -100,13 +100,14 @@ The squad's coordinator picks a model per spawn from a four-layer hierarchy: per
 - **For complex edge-case coverage:** `claude-sonnet-4.6` (stay here; tests are executable specs)
 - **Why:** writes test code under Principle IX (test-first); quality matters because tests define behavior
 
-### 🔒 Borg Queen — Critic
+### 🔒 Garak — Critic
 
 - **Default:** auto (per-task)
 - **For standard code review:** `claude-sonnet-4.6`
 - **For high-stakes security/governance reviews:** `claude-opus-4.7-high` (deep reasoning)
 - **For architectural review after rejection:** `claude-opus-4.5` (analytical diversity; vision bonus)
-- **Why:** reviewer authority; quality on rejection cases warrants premium; high reasoning helps surface risks
+- **For cross-provider perspective on reviews where in-family bias is a risk:** `gpt-5.5` or `gemini-3-pro-preview` (when available)
+- **Why:** reviewer authority; quality on rejection cases warrants premium; high reasoning helps surface risks. Garak inherited the Critic seat from Borg Queen on 2026-05-16 — the cross-provider critique pattern she pioneered (on `gpt-5.4`) remains the gold standard for consequential reviews.
 
 ### 📝 Tuvok — Process Auditor / Editorial Specialist
 
