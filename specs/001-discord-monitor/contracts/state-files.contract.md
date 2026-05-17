@@ -73,7 +73,7 @@ Append-only log. Each line:
 
 ```ts
 {
-  value: string;               // ^[A-Z][A-Z0-9]{3,19}$
+  value: string;               // ^[A-Z][A-Z0-9]{2,19}$
   firstSeen: string;           // ISO UTC
   lastAttempted: string | null;
   suppressedUntil: string | null;

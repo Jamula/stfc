@@ -13,7 +13,7 @@
 //   3. Hyphenated tokens (`XXXXX-YYYYY`) split on the hyphen during
 //      tokenization — neither half passes (both halves are on the stoplist).
 //   4. Each surviving token is upper-cased and tested against
-//      `^[A-Z][A-Z0-9]{3,19}$` (the core regex from the contracts).
+//      `^[A-Z][A-Z0-9]{2,19}$` (the core regex from the contracts).
 //   5. Stoplist members are dropped (T019).
 //   6. Base confidence is the floor (0.6). Channels whose label contains
 //      "code" or "promo" earn a +0.2 context bonus (capped at 1.0).
@@ -21,7 +21,7 @@
 
 import { isOnStoplist } from "./stoplist.ts";
 
-export const CORE_CODE_REGEX = /^[A-Z][A-Z0-9]{3,19}$/;
+export const CORE_CODE_REGEX = /^[A-Z][A-Z0-9]{2,19}$/;
 
 const CONFIDENCE_FLOOR = 0.6;
 const CONTEXT_BONUS = 0.2;

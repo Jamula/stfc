@@ -1,6 +1,6 @@
 // T019 [US1] — curated stoplist for the precision-first code extractor.
 //
-// Every entry is a string that matches the core regex `^[A-Z][A-Z0-9]{3,19}$`
+// Every entry is a string that matches the core regex `^[A-Z][A-Z0-9]{2,19}$`
 // but is NOT a real STFC promo code. Three categories:
 //
 //   1. Format-example placeholders that appear in documentation
@@ -8,8 +8,8 @@
 //   2. Common ALL-CAPS abbreviations players use conversationally
 //      (HTTP/JSON, gaming acronyms like LFG/WTB, chat shorthand like LOL).
 //   3. Frequent ALL-CAPS English words that occasionally appear in shouty
-//      chat (THE/AND/YOU) — kept short on purpose because anything 4+ chars
-//      that's a real English word is rare.
+//      chat — includes common 3-letter words (THE/AND/FOR/ARE/etc.) now
+//      that the regex floor is 3 chars.
 //
 // Membership is checked AFTER normalization (uppercase, decoration stripped).
 // Adding an entry costs O(1) lookup; the table is exported so tests can
@@ -108,10 +108,49 @@ export const STOPLIST: ReadonlySet<string> = new Set<string>([
   "OKAY",
   "YEAH",
 
-  // (3) High-frequency ALL-CAPS English words
+  // (3) High-frequency ALL-CAPS English words (3-letter)
   "THE",
   "AND",
+  "FOR",
+  "ARE",
+  "BUT",
+  "NOT",
   "YOU",
+  "ALL",
+  "ANY",
+  "CAN",
+  "HER",
+  "HIS",
+  "HOW",
+  "ITS",
+  "MAY",
+  "NEW",
+  "NOW",
+  "OLD",
+  "OUR",
+  "OUT",
+  "OWN",
+  "SAY",
+  "TOO",
+  "USE",
+  "WAY",
+  "WHO",
+  "DAY",
+  "DID",
+  "GET",
+  "GOT",
+  "HAS",
+  "HAD",
+  "LET",
+  "MAN",
+  "RAN",
+  "RUN",
+  "SET",
+  "TRY",
+  "TWO",
+  "WON",
+  "YET",
+  // (3 cont.) High-frequency ALL-CAPS English words (4+ letter)
   "WHAT",
   "WHEN",
   "WHERE",
