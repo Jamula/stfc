@@ -30,3 +30,6 @@ import "./agents/scotty.test.ts";
 import "./agents/uhura.test.ts";
 import "./agents/bashir.test.ts";
 import "./agents/garak.test.ts";
+import "./agents/tuvok.test.ts";
+import "./agents/scribe.test.ts";
+import "./agents/ralph.test.ts";
