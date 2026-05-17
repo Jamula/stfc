@@ -15,6 +15,7 @@ import {
   loadExistingHashes,
   appendTelemetryRecord,
   appendCollectionLog,
+  collectTelemetry,
 } from "../../src/telemetry/collector.ts";
 import type { ModelTierMap } from "../../src/telemetry/schemas.ts";
 
@@ -275,6 +276,75 @@ describe("appendTelemetryRecord", () => {
   });
 });
 
+describe("buildTelemetryRecord — edge cases (T034)", () => {
+  it("records zero-token sessions with zero values", () => {
+    const events = [
+      {
+        usage_model: "claude-opus-4.6",
+        usage_input_tokens: 0,
+        usage_output_tokens: 0,
+        usage_cache_read_tokens: 0,
+      },
+    ];
+    const record = buildTelemetryRecord(mockSession(), events, mockRefs(), TIER_MAP);
+    assert.ok(TelemetryRecordSchema.safeParse(record).success);
+    assert.equal(record.inputTokens, 0);
+    assert.equal(record.outputTokens, 0);
+    assert.equal(record.cacheReadTokens, 0);
+  });
+
+  it("handles null token values gracefully", () => {
+    const events = [
+      {
+        usage_model: "claude-opus-4.6",
+        usage_input_tokens: null,
+        usage_output_tokens: null,
+        usage_cache_read_tokens: null,
+      },
+    ];
+    const record = buildTelemetryRecord(mockSession(), events, [], TIER_MAP);
+    assert.ok(TelemetryRecordSchema.safeParse(record).success);
+    assert.equal(record.inputTokens, 0);
+    assert.equal(record.outputTokens, 0);
+  });
+});
+
+describe("collectTelemetry — batch and dedup (T034)", () => {
+  it("deduplicates sessions by sessionHash (FR-004, US1-S4)", async () => {
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "dedup-coll-"));
+
+    const sessions = [
+      {
+        session: mockSession(),
+        usageEvents: mockUsageEvents(),
+        refs: mockRefs(),
+      },
+      {
+        // Same session ID → same hash → should be skipped
+        session: mockSession(),
+        usageEvents: mockUsageEvents(),
+        refs: mockRefs(),
+      },
+    ];
+
+    const result = await collectTelemetry({
+      dataDir: tmpDir,
+      tierMap: TIER_MAP,
+      sessions,
+    });
+
+    assert.equal(result.sessionsCollected, 1);
+    assert.equal(result.sessionsSkipped, 1);
+
+    // Verify only 1 line in sessions.jsonl
+    const content = await fs.readFile(`${tmpDir}/sessions.jsonl`, "utf-8");
+    const lines = content.trim().split("\n").filter(Boolean);
+    assert.equal(lines.length, 1);
+
+    await fs.rm(tmpDir, { recursive: true });
+  });
+});
+
 describe("appendCollectionLog", () => {
   it("writes a valid collection log entry (FR-012)", async () => {
     const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "log-"));
@@ -295,5 +365,39 @@ describe("appendCollectionLog", () => {
     assert.ok(CollectionLogSchema.safeParse(parsed).success);
 
     await fs.rm(tmpDir, { recursive: true });
+  });
+});
+
+// ── Privacy validation (T035, FR-009, FR-010) ───────────────────────────────
+
+describe("privacy constraints (T035)", () => {
+  it("no raw session ID appears in TelemetryRecord (FR-010)", () => {
+    const session = mockSession();
+    const record = buildTelemetryRecord(session, mockUsageEvents(), mockRefs(), TIER_MAP);
+
+    const json = JSON.stringify(record);
+    assert.ok(!json.includes(session.id), "raw session ID must not appear in output");
+  });
+
+  it("no summary/user content appears in TelemetryRecord (FR-009)", () => {
+    const session = { ...mockSession(), summary: "secret internal prompt content" };
+    const record = buildTelemetryRecord(session, mockUsageEvents(), mockRefs(), TIER_MAP);
+
+    const json = JSON.stringify(record);
+    assert.ok(!json.includes("secret internal prompt content"), "summary must not appear in output");
+    assert.ok(!json.includes("user_content"), "user_content must not appear");
+    assert.ok(!json.includes("assistant_content"), "assistant_content must not appear");
+  });
+
+  it("collector never queries user_content or assistant_content columns in code", async () => {
+    // Verify by checking source code does not reference these columns outside comments
+    const collectorSource = await fs.readFile("src/telemetry/collector.ts", "utf-8");
+    // Remove comment lines before checking
+    const codeOnly = collectorSource
+      .split("\n")
+      .filter((line) => !line.trim().startsWith("//"))
+      .join("\n");
+    assert.ok(!codeOnly.includes("user_content"), "collector must not reference user_content in code");
+    assert.ok(!codeOnly.includes("assistant_content"), "collector must not reference assistant_content in code");
   });
 });

@@ -151,11 +151,11 @@ before the fix and passes after. Tests are NOT optional.
 
 **Purpose**: Improvements that affect multiple user stories — edge cases, hardening, documentation.
 
-- [ ] T034 [P] Add edge-case handling across all modules: batch processing for large backlogs (≤ 200 sessions per batch, oldest first), zero-token sessions recorded with zero values, graceful handling of session store unreachability with retry on next cycle
-- [ ] T035 [P] Add privacy validation assertions across all modules: verify no `user_content`/`assistant_content` columns are ever queried (FR-009), verify raw session IDs never appear in output files (FR-010), verify no secrets in any output
-- [ ] T036 Run `npm test` full suite — confirm all new telemetry tests pass alongside existing 90+ tests, verify no regressions
-- [ ] T037 Run `npm run typecheck` — confirm zero type errors with strict TypeScript
-- [ ] T038 Run quickstart.md validation — execute `npm run skill:telemetry` and verify all output paths exist and match documented formats
+- [x] T034 [P] Add edge-case handling across all modules: batch processing for large backlogs (≤ 200 sessions per batch, oldest first), zero-token sessions recorded with zero values, graceful handling of session store unreachability with retry on next cycle
+- [x] T035 [P] Add privacy validation assertions across all modules: verify no `user_content`/`assistant_content` columns are ever queried (FR-009), verify raw session IDs never appear in output files (FR-010), verify no secrets in any output
+- [x] T036 Run `npm test` full suite — confirm all new telemetry tests pass alongside existing 90+ tests, verify no regressions
+- [x] T037 Run `npm run typecheck` — confirm zero type errors with strict TypeScript
+- [x] T038 Run quickstart.md validation — execute `npm run skill:telemetry` and verify all output paths exist and match documented formats
 
 ---
 
