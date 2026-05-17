@@ -95,13 +95,13 @@ before the fix and passes after. Tests are NOT optional.
 
 ### Tests for User Story 2 (REQUIRED — Principle IX) ⚠️
 
-- [ ] T022 [P] [US2] Reporter tests in `tests/telemetry/reporter.test.ts` — US2-S1: per-model totals correct for input/output tokens and session count; US2-S2: per-agent breakdowns with avg tokens/session and avg duration; US2-S3: success/failure rates per model and per agent; US2-S4: empty data produces "No data collected" message (not empty/misleading output); report is valid Markdown (FR-011)
+- [x] T022 [P] [US2] Reporter tests in `tests/telemetry/reporter.test.ts` — US2-S1: per-model totals correct for input/output tokens and session count; US2-S2: per-agent breakdowns with avg tokens/session and avg duration; US2-S3: success/failure rates per model and per agent; US2-S4: empty data produces "No data collected" message (not empty/misleading output); report is valid Markdown (FR-011)
 
 ### Implementation for User Story 2
 
-- [ ] T023 [US2] Implement `generateReport()` in `src/telemetry/reporter.ts` — read `data/telemetry/sessions.jsonl`, parse and validate records with Zod, aggregate into `TelemetrySummary` (by model, agent, category, outcome), compute totals/averages/success rates
-- [ ] T024 [US2] Implement Markdown rendering in `src/telemetry/reporter.ts` — render `TelemetrySummary` to `data/telemetry/reports/YYYY-MM-DD.md` following the report template in state-files.contract.md §3; handle empty-data case with "No data collected" message; overwrite existing report for same date (idempotent)
-- [ ] T025 [US2] Wire `report` subcommand in `src/skills/telemetry.ts` — route to `generateReport()`, return report path in `TelemetryResult.reportPath`
+- [x] T023 [US2] Implement `generateReport()` in `src/telemetry/reporter.ts` — read `data/telemetry/sessions.jsonl`, parse and validate records with Zod, aggregate into `TelemetrySummary` (by model, agent, category, outcome), compute totals/averages/success rates
+- [x] T024 [US2] Implement Markdown rendering in `src/telemetry/reporter.ts` — render `TelemetrySummary` to `data/telemetry/reports/YYYY-MM-DD.md` following the report template in state-files.contract.md §3; handle empty-data case with "No data collected" message; overwrite existing report for same date (idempotent)
+- [x] T025 [US2] Wire `report` subcommand in `src/skills/telemetry.ts` — route to `generateReport()`, return report path in `TelemetryResult.reportPath`
 
 **Checkpoint**: At this point, `npm run skill:telemetry report` generates a complete summary report. US1 + US2 both work independently.
 
