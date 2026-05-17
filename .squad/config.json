@@ -4,7 +4,8 @@
   "agentModelOverrides": {
     "picard": "claude-opus-4.7-1m-internal",
     "kirk": "claude-opus-4.7-1m-internal",
-    "uhura": "claude-opus-4.7-1m-internal",
-    "scotty": "gpt-5.5"
+    "uhura": "claude-sonnet-4.6",
+    "scotty": "gpt-5.3-codex",
+    "garak": "gpt-5.5"
   }
 }
