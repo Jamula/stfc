@@ -110,3 +110,5 @@ prose. Examples applied here:
 
 US3 token validation tests integrated. 3 new test files added (ingest.test.ts, tokenDecoder.test.ts, tokenValidator.test.ts). All Phase 3 assertions passing.
 
+
+2026-05-17T21:39Z: Feature 003-discord-oauth shipped (Phase 5–6); all 457 tests green; T028 smoke test deferred.

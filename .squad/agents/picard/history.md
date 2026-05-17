@@ -126,3 +126,5 @@ self-test surface taxonomy + cross-cutting check list + harness-shape
 decision points. Reusable for every future agent added to the squad.
 
 **Decision memo:** `.squad/decisions/inbox/picard-self-test-epic-2026-05-17.md`.
+
+2026-05-17T21:39Z: Feature 003-discord-oauth shipped; governance PR #6 (v1.3.0 amendment) already merged.

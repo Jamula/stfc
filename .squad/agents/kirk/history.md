@@ -79,3 +79,5 @@ not the data output.
 - **Self-review blocked by GitHub.** `gh pr review --approve` fails when the `gh` token
   belongs to the PR author. Workaround: post as `gh pr comment` with the verdict header.
   This is the same pattern discovered during the PR #20 review cycle.
+
+2026-05-17T21:39Z: Feature 003-discord-oauth shipped; code review approved and merged via PR #59.
