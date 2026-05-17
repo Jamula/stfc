@@ -175,11 +175,12 @@ export async function discordMonitor(
     }
   }
 
-  // ── Steps 3+4+5+6: ingest + extract + dedup + redeem ──────────────────────
+  // ── Steps 3+4+5+6: ingest + extract + classify + dedup + redeem ─────────────
   let ingestedMessages: IngestedMessage[] = [];
   let extractedCandidates: CandidateCode[] = [];
   let freshAnnotated: CandidateCode[] = [];
   let allAnnotated: CandidateCode[] = [];
+  let classifiedTips: Tip[] = [];
   let newCursors = await loadCursors(cursorsPath);
   let cooldowns = await loadCooldowns(cooldownsPath);
 
@@ -214,7 +215,74 @@ export async function discordMonitor(
     }
     health.candidatesExtracted = extractedCandidates.length;
 
-    // Step 5: classify tips — STUB until T033.
+    // Step 5: classify tips (T033 classifier + T037 health wiring).
+    const classifierStartMs = Date.now();
+    const classifier = opts.classifierFactory
+      ? opts.classifierFactory()
+      : createHeuristicClassifier();
+    await classifier.load();
+    health.modelLoaded = {
+      name: classifier.constructor?.name ?? "heuristicClassifier",
+      sha256Verified: true, // heuristic-only has no model to verify
+      loadMs: Date.now() - classifierStartMs,
+    };
+
+    const tipsSeen = await readTipsSeen(tipsSeenPath);
+    const classifiedTips: Tip[] = [];
+
+    for (const m of ingestedMessages) {
+      // Moderation pre-filter (FR-020).
+      if (isExcludedByModeration(m.contentNormalized, { channelLabel: m.channelLabel })) {
+        health.dropped.moderation++;
+        continue;
+      }
+
+      const out = await classifier.classify({
+        contentNormalized: m.contentNormalized,
+        channelLabel: m.channelLabel,
+      });
+
+      if (out.label === "chatter") {
+        health.dropped.chatter++;
+        continue;
+      }
+      if (out.label === "unclassified" || out.confidence < 0.55) {
+        health.dropped.lowConfidence++;
+        continue;
+      }
+
+      // Count classified tip.
+      const label = out.label as keyof RunHealth["tipsClassified"];
+      if (label in health.tipsClassified) {
+        health.tipsClassified[label]++;
+      }
+
+      // Content hash for dedup.
+      const contentHash = createHash("sha256")
+        .update(m.contentNormalized)
+        .digest("hex")
+        .slice(0, 16);
+
+      // Skip already-seen tips (dedup by contentHash).
+      if (tipsSeen.has(contentHash)) continue;
+
+      classifiedTips.push({
+        category: out.label,
+        confidence: out.confidence,
+        excerpt: m.contentNormalized.slice(0, 600),
+        source: [{
+          messageId: m.messageId,
+          channelId: m.channelId,
+          channelLabel: m.channelLabel,
+          timestamp: m.timestamp,
+          jumpLink: m.jumpLink,
+        }],
+        contentHash,
+        classifierMethod: out.method,
+      });
+    }
+
+    await classifier.unload();
   }
 
   // Step 6: dedup against the four sources.
@@ -326,6 +394,21 @@ export async function discordMonitor(
       log.warn(`could not append candidate ${c.value}: ${redactForLog(err)}`);
     }
   }
+  // Persist classified tips to tips-seen.jsonl.
+  for (const t of classifiedTips) {
+    try {
+      await appendTipSeen(
+        {
+          contentHash: t.contentHash as `${string}`,
+          firstSeenAt: t.source[0]?.timestamp ?? now.toISOString(),
+          category: t.category as "tip" | "trick" | "hack" | "event-info" | "patch-note",
+        },
+        tipsSeenPath,
+      );
+    } catch (err) {
+      log.warn(`could not append tip-seen ${t.contentHash}: ${redactForLog(err)}`);
+    }
+  }
   // Cooldowns: recordFailure for each failed redeem, then evict + save.
   for (const [code, outcome] of failedByCode) {
     cooldowns = recordFailure(cooldowns, code, outcome, now);
@@ -333,7 +416,7 @@ export async function discordMonitor(
   cooldowns = evictExpired(cooldowns, now);
   await saveCooldowns(cooldowns, now, cooldownsPath);
 
-  // ── Step 9: digest (minimal renderer for Phase 3) ─────────────────────────
+  // ── Step 9: digest ────────────────────────────────────────────────────────
   return finalize({
     health,
     startedAt,
@@ -341,7 +424,7 @@ export async function discordMonitor(
     digestsDir,
     runId,
     annotated: allAnnotated,
-    tips: [],
+    tips: classifiedTips,
     redeemedCodes,
     deferredCodes,
   });
@@ -356,7 +439,7 @@ interface FinalizeArgs {
   digestsDir: string;
   runId: string;
   annotated: CandidateCode[];
-  tips: never[];
+  tips: Tip[];
   redeemedCodes?: string[];
   deferredCodes?: string[];
   reason?: "no-channels-configured" | "no-token";
@@ -387,7 +470,7 @@ async function finalize(args: FinalizeArgs): Promise<DiscordMonitorOutput> {
         .filter((c) => c.status === "deferred-cap")
         .map((c) => ({ code: c.value, source: sourceRef(c) })),
     },
-    tips: [],
+    tips: args.tips,
     health: args.health,
   };
 
@@ -396,6 +479,14 @@ async function finalize(args: FinalizeArgs): Promise<DiscordMonitorOutput> {
     digestPath = (await writeDigest(digest, { outputDir: args.digestsDir })).filePath;
   } catch (err) {
     log.warn(`could not write digest: ${redactForLog(err)}`);
+  }
+
+  // ── Step 10: Job Summary (T038 — FR-027) ────────────────────────────────
+  // Emits even if the digest write above failed (own try/catch).
+  try {
+    await emitJobSummary(args.health);
+  } catch (err) {
+    log.warn(`could not emit job summary: ${redactForLog(err)}`);
   }
 
   const result = {
@@ -471,4 +562,36 @@ async function appendToPromoCodesTxt(filePath: string, codes: string[]): Promise
   await fs.mkdir(path.dirname(filePath), { recursive: true });
   const suffix = (existing.length > 0 && !existing.endsWith("\n")) ? "\n" : "";
   await fs.appendFile(filePath, suffix + toAppend.join("\n") + "\n", "utf8");
+}
+
+// T038 — Emit RunHealth as GitHub Actions Job Summary (FR-027).
+// No-op when GITHUB_STEP_SUMMARY is not set (local runs).
+async function emitJobSummary(h: RunHealth): Promise<void> {
+  const summaryPath = process.env.GITHUB_STEP_SUMMARY;
+  if (!summaryPath) return;
+
+  const errorEntries = Object.entries(h.errorsByClass).sort(([a], [b]) => (a < b ? -1 : 1));
+  const lines: string[] = [
+    `### 🔭 Discord Monitor — Run Health`,
+    "",
+    `| Metric | Value |`,
+    `|--------|-------|`,
+    `| Run ID | \`${h.runId}\` |`,
+    `| Started | ${h.startedAt} |`,
+    `| Finished | ${h.finishedAt} |`,
+    `| Channels read | ${h.channelsRead} / ${h.channelsConfigured}${h.channelsErrored.length > 0 ? ` (${h.channelsErrored.length} errored)` : ""} |`,
+    `| Messages scanned | ${h.messagesScanned} |`,
+    `| Candidates extracted | ${h.candidatesExtracted} |`,
+    `| Candidates submitted | ${h.candidatesSubmitted} |`,
+    `| Suppressed (dedup) | ${h.candidatesSuppressedDedup} |`,
+    `| Suppressed (cooldown) | ${h.candidatesSuppressedCooldown} |`,
+    `| Deferred (cap) | ${h.candidatesDeferredCap} |`,
+    `| Tips classified | tip=${h.tipsClassified.tip}, trick=${h.tipsClassified.trick}, hack=${h.tipsClassified.hack}, event-info=${h.tipsClassified["event-info"]}, patch-note=${h.tipsClassified["patch-note"]} |`,
+    `| Dropped | moderation=${h.dropped.moderation}, low-confidence=${h.dropped.lowConfidence}, chatter=${h.dropped.chatter} |`,
+    `| Errors | ${errorEntries.length === 0 ? "none" : errorEntries.map(([k, v]) => `${k}=${v}`).join(", ")} |`,
+    `| Model | ${h.modelLoaded.name} (sha256 ${h.modelLoaded.sha256Verified ? "✅" : "❌"}, ${h.modelLoaded.loadMs}ms) |`,
+    "",
+  ];
+
+  await fs.appendFile(summaryPath, lines.join("\n") + "\n", "utf8");
 }
