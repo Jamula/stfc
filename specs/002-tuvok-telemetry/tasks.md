@@ -136,12 +136,12 @@ before the fix and passes after. Tests are NOT optional.
 
 ### Tests for User Story 4 (REQUIRED — Principle IX) ⚠️
 
-- [ ] T031 [P] [US4] Skill integration tests in `tests/skills/telemetry.test.ts` — US4-S1: full cycle (collect → report → recommend) runs successfully and returns expected `TelemetryResult` shape; default (no subcommand) runs all three steps in sequence; exit code 0 for zero sessions; exit code 1 for infrastructure errors; US4-S2: `TelemetryResult` contains all fields needed for audit trail reference (sessionsCollected, reportPath, recommendations count)
+- [x] T031 [P] [US4] Skill integration tests in `tests/skills/telemetry.test.ts` — US4-S1: full cycle (collect → report → recommend) runs successfully and returns expected `TelemetryResult` shape; default (no subcommand) runs all three steps in sequence; exit code 0 for zero sessions; exit code 1 for infrastructure errors; US4-S2: `TelemetryResult` contains all fields needed for audit trail reference (sessionsCollected, reportPath, recommendations count)
 
 ### Implementation for User Story 4
 
-- [ ] T032 [US4] Implement default subcommand flow in `src/skills/telemetry.ts` — when no subcommand is provided, run `collect` → `report` → `recommend` in sequence, aggregate results into single `TelemetryResult`
-- [ ] T033 [US4] Add structured logging to `src/skills/telemetry.ts` and `src/telemetry/collector.ts` — use `createLogger("telemetry")` for collection events, report generation, and recommendation output so audit trail is traceable in Tuvok's session history
+- [x] T032 [US4] Implement default subcommand flow in `src/skills/telemetry.ts` — when no subcommand is provided, run `collect` → `report` → `recommend` in sequence, aggregate results into single `TelemetryResult`
+- [x] T033 [US4] Add structured logging to `src/skills/telemetry.ts` and `src/telemetry/collector.ts` — use `createLogger("telemetry")` for collection events, report generation, and recommendation output so audit trail is traceable in Tuvok's session history
 
 **Checkpoint**: Full telemetry lifecycle works end-to-end. All user stories complete and independently testable.
 
