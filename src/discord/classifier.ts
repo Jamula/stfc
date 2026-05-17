@@ -15,7 +15,7 @@
 //   huggingface fetch entirely and the classifier runs in heuristic-only
 //   mode (tier-1 only; any tier-1 fall-through returns `unclassified`).
 //   To enable tier-2:
-//     1. Operator downloads the model locally: `npx @xenova/transformers`
+//     1. Operator downloads the model locally: `npx @huggingface/transformers`
 //        or runs the skill once in a sandboxed environment with network.
 //     2. Operator computes `sha256sum ~/.cache/huggingface/.../model.onnx`.
 //     3. Operator updates `config/classifier-model.json#weightSha256`.
@@ -220,7 +220,7 @@ function scoreVocabulary(text: string): number {
 // ── Tier-2 zero-shot wrapper (Xenova/nli-deberta-v3-xsmall) ────────────────
 //
 // Imported lazily inside `load()` so the heuristic-only path never pulls
-// `@xenova/transformers` into memory.
+// `@huggingface/transformers` into memory.
 
 export interface Tier2Options {
   modelConfigPath?: string;
@@ -266,9 +266,9 @@ export async function createTier2Classifier(
         // gate above (placeholder SHA → skip) prevents this branch from
         // executing in CI; when an operator populates a real SHA, the first
         // boot in a network-enabled environment will lazy-load the model
-        // via the @xenova/transformers pipeline call below.
+        // via the @huggingface/transformers pipeline call below.
         try {
-          const transformers = await import("@xenova/transformers");
+          const transformers = await import("@huggingface/transformers");
           const p = await transformers.pipeline(
             "zero-shot-classification",
             model.id,
