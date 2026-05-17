@@ -41,7 +41,7 @@
 ## Model
 
 - **Preferred:** auto (typically `claude-sonnet-4.6`; bumped to premium for high-stakes critiques)
-- **Rationale:** Critique quality matters; cost is secondary on consequential decisions. Cross-provider diversity is itself a critique technique — consider `gpt-5.5` or `gemini-3-pro-preview` (when available) on reviews where in-family bias is a real risk.
+- **Rationale:** Critique quality matters; cost is secondary on consequential decisions. Cross-provider diversity is itself a critique technique — consider `gpt-5.5` on reviews where in-family bias is a real risk.
 - **Fallback:** `claude-sonnet-4.6` for routine critiques; `claude-opus-4.7-high` for architectural reviews after rejection.
 
 ## Collaboration
