@@ -1,195 +1,266 @@
-# Copilot CLI Model Catalog
+# Squad model selection — catalog & recommendations
 
-> Last refreshed: 2026-05-16 by Tuvok via `/chronicle` request.
-> Source: GitHub Copilot CLI `task` tool model parameter catalog.
-> Recommendations derive from the coordinator's per-agent model
-> selection rules (see `.github/agents/squad.agent.md`).
+> Last refreshed: 2026-05-17 by Tuvok (request from Cyrus).
+> Catalog source: Copilot CLI `task` tool model enum, 2026-05-17.
+> Configuration source: `.squad/config.json` (per-agent overrides).
+> Governance source: `.github/agents/squad.agent.md` § Per-Agent Model Selection (selection algorithm).
 
 ## Why this doc exists
 
-The squad's coordinator picks a model per spawn from a four-layer hierarchy: persistent config (`.squad/config.json`) → session directive → charter preference → task-aware auto-select. This page is the human-readable reference for what's available, what each specializes in, and what fits whom.
+The coordinator picks a model per spawn from a four-layer hierarchy. This page is the human-readable reference: what's available, what each model specializes in, and which squad member should use which model. Keep it current when the CLI catalog rotates.
 
 ---
 
-## Model catalog — by tier
+## 1. Selection algorithm (4 layers — first match wins)
 
-### Premium tier (best reasoning, most capable)
+Per `.github/agents/squad.agent.md` § Per-Agent Model Selection:
 
-| Model ID | Provider | Context | Speciality | Pros | Cons |
-|----------|----------|---------|------------|------|------|
-| `claude-opus-4.7` | Anthropic | standard | Advanced reasoning & analysis | Top-tier reasoning for complex problems; handles nuanced trade-offs | Highest cost |
-| `claude-opus-4.7-1m-internal` | Anthropic | 1M (internal) | Advanced reasoning + long context | Can process entire large codebases in one pass; internal-only | Highest cost; availability limited |
-| `claude-opus-4.7-high` | Anthropic | standard, high reasoning (internal) | Extended reasoning mode | Extra thinking cycles; improves on hard problems | High cost; internal-only; slower |
-| `claude-opus-4.7-xhigh` | Anthropic | standard, extra-high reasoning (internal) | Maximum reasoning depth | Deepest analysis available for hardest problems | Highest cost; internal-only; slowest |
-| `claude-opus-4.6` | Anthropic | standard | General-purpose premium | Reliable, well-tested; good fallback from newer versions | Older generation; retiring soon |
-| `claude-opus-4.6-1m` | Anthropic | 1M (internal) | Long-context premium | Handles massive input without summarization | Highest cost; internal-only; availability limited |
-| `claude-opus-4.5` | Anthropic | standard, vision-capable | **Vision + reasoning** (only vision model in rotation) | Only model that can analyze images/diagrams; strong reasoning | Vision is non-negotiable; never downgrade |
+| Layer | Source | Scope | How to set |
+|-------|--------|-------|------------|
+| **0** | `.squad/config.json` (`agentModelOverrides.{agent}` or `defaultModel`) | Persists across sessions | Write to config; survives restarts |
+| **1** | Session directive | Current session only | User says "use opus this session" |
+| **2** | Charter preference | Agent-specific | `## Model` section in agent's charter |
+| **3** | Task-aware auto-select | Per-spawn | Coordinator applies cost-first principle |
+| **4** | Default | Fallback | `claude-haiku-4.5` — cost wins when in doubt |
 
-### Standard tier (quality code + general-purpose)
+**Cost-first principle (Layer 3):** Non-code work → Haiku. Code generation → Sonnet. Heavy multi-file refactors → Codex specialist. Architecture / governance review → Premium. Vision work → `claude-opus-4.5` (only vision-capable model in catalog; non-negotiable).
 
-| Model ID | Provider | Speciality | Pros | Cons |
-|----------|----------|------------|------|------|
-| `claude-sonnet-4.6` | Anthropic | Platform default, code quality | Excellent balance of cost & quality; reliable for all code work | Slightly slower than GPT-5.x |
-| `claude-sonnet-4.5` | Anthropic | Code quality | Proven track record; fallback choice | Older generation; being phased out |
-| `gpt-5.5` | OpenAI | General-purpose | Latest OpenAI model; strong all-rounder | Context window context: standard; verify with platform docs |
-| `gpt-5.4` | OpenAI | General-purpose | Solid code + analysis quality | Mature release; reliable | Older than 5.5 |
-| `gpt-5.3-codex` | OpenAI | **Heavy code generation specialist** | 500+ LOC refactors, multi-file impl, complex algorithms | Designed for code generation; excellent for large changes | Narrower domain; not ideal for non-code tasks |
-| `gpt-5.2-codex` | OpenAI | Code specialist (older) | Multi-file code work | Proven for code; lower cost than 5.3 | Older generation; 5.3-codex preferred |
-| `gpt-5.2` | OpenAI | General-purpose (older) | Code + planning + triage | Cost-effective general-purpose | Older; use GPT-5.4 if possible |
+**Fallback chains** (silent; max 3 retries before nuclear fallback):
 
-### Fast / cheap tier (docs, mechanics, triage)
-
-| Model ID | Provider | Speciality | Pros | Cons |
-|----------|----------|------------|------|------|
-| `claude-haiku-4.5` | Anthropic | Mechanical ops, docs, triage | Cheapest Claude; fast turnaround; ideal for non-code | Limited reasoning depth; not for complex design |
-| `gpt-5.4-mini` | OpenAI | Fast general-purpose | Quick, cheap alternative to full models | Reduced context window; limited capability |
-| `gpt-5-mini` | OpenAI | Fast general (older) | Cost-efficient option | Older; use gpt-5.4-mini | if possible |
-| `gpt-4.1` | OpenAI | Nuclear fallback | Used only when everything else is unavailable | Slow; outdated; last resort only |
-
----
-
-## Selection rules (TL;DR)
-
-**Cost-first principle** — with exceptions for code quality:
-
-- **Writing code** (implementation, refactoring, test code, bug fixes) → `claude-sonnet-4.6` (quality first)
-- **Heavy multi-file refactors** (500+ LOC) → `gpt-5.3-codex` (specialist)
-- **Vision/design work** → `claude-opus-4.5` only (non-negotiable; only model with vision)
-- **Non-code** (docs, planning, triage, logs, changelogs, mechanical ops) → `claude-haiku-4.5` (cost first)
-- **Architecture proposals** → bump to premium (`claude-opus-4.7` or `-high`)
-- **Security/reviewer gates** → bump to premium or analytical diversity
-- **Never bump Scribe or git/release roles** — mechanical ops stay cheap
-
----
-
-## Per-squad-member recommendations
-
-### 🧭 Picard — M2 / Engineering Manager (boss)
-
-- **Default:** `claude-opus-4.7-1m-internal`
-- **For scope/governance reviews + speckit chain integrity:** `claude-opus-4.7` (or `-high`)
-- **For routine triage / planning:** `claude-haiku-4.5`
-- **Why:** governance work spans long constitution + spec + plan documents; 1M context window pays off. Downgrade only for cheap triage.
-
-### 🏗️ Kirk — Lead (technical)
-
-- **Default:** `claude-opus-4.7-1m-internal`
-- **For architecture proposals:** `claude-opus-4.7` (or `-high` if available)
-- **For code review (standard technical correctness):** `claude-sonnet-4.6`
-- **For exploratory technical research:** `claude-haiku-4.5`
-- **Why:** architectural decisions and cross-cutting technical reviews benefit from premium reasoning + 1M context; downgrade only when scope is narrow.
-
-### 🔧 Scotty — Core Dev
-
-- **Default:** `claude-sonnet-4.6`
-- **For heavy multi-file refactors:** `gpt-5.3-codex`
-- **For exploratory work (no code yet):** `claude-haiku-4.5`
-- **Why:** writes TypeScript CLI code; quality first; downgrade only when not yet writing code
-
-### 🔧 Uhura — Integrations Dev
-
-- **Default:** `claude-sonnet-4.6`
-- **For exploratory API research (reading specs, no implementation):** `claude-haiku-4.5`
-- **For heavy integration refactors:** `gpt-5.3-codex`
-- **Why:** writes Discord & STFC API code; quality first; downgrade only when pure research
-
-### 🧪 Bashir — Tester
-
-- **Default:** `claude-sonnet-4.6`
-- **For simple test scaffolding:** `claude-haiku-4.5`
-- **For complex edge-case coverage:** `claude-sonnet-4.6` (stay here; tests are executable specs)
-- **Why:** writes test code under Principle IX (test-first); quality matters because tests define behavior
-
-### 🔒 Garak — Critic
-
-- **Default:** auto (per-task)
-- **For standard code review:** `claude-sonnet-4.6`
-- **For high-stakes security/governance reviews:** `claude-opus-4.7-high` (deep reasoning)
-- **For architectural review after rejection:** `claude-opus-4.5` (analytical diversity; vision bonus)
-- **For cross-provider perspective on reviews where in-family bias is a risk:** `gpt-5.5` or `gemini-3-pro-preview` (when available)
-- **Why:** reviewer authority; quality on rejection cases warrants premium; high reasoning helps surface risks. Garak inherited the Critic seat from Borg Queen on 2026-05-16 — the cross-provider critique pattern she pioneered (on `gpt-5.4`) remains the gold standard for consequential reviews.
-
-### 📝 Tuvok — Process Auditor / Editorial Specialist
-
-- **Default:** `claude-haiku-4.5`
-- **Override:** never
-- **Why:** docs + audit + cross-artifact consistency checks; pattern-matching is cheap; reasoning budget better spent elsewhere
-
-### 📋 Scribe — Session Logger
-
-- **Default:** `claude-haiku-4.5`
-- **Override:** NEVER — mechanical file ops stay cheap; cost is non-negotiable
-- **Why:** file merging, deduplication, JSON manipulation, git plumbing, history-keeping — pattern recognition over reasoning
-
-### 🔄 Ralph — Work Monitor
-
-- **Default:** `claude-haiku-4.5`
-- **For deeper PR review synthesis (rare):** `claude-sonnet-4.6`
-- **Why:** mostly issue/PR list scanning, label routing, brief comments — fast/cheap fits the workload
-
-### 🤖 @copilot (GitHub Copilot platform, not `task` dispatch)
-
-- **Note:** Not dispatched via `task` tool. Uses GitHub Copilot platform default. Out of scope here.
-
----
-
-## How the coordinator picks (4-layer hierarchy)
-
-The model selection follows a waterfall of sources; the first match wins:
-
-1. **Layer 0 — Persistent Config** (`.squad/config.json`): Highest priority. User has set `defaultModel` or `agentModelOverrides.{agent}` to survive across sessions.
-2. **Layer 1 — Session Directive:** User specified a model for this session ("use opus this session", "save costs").
-3. **Layer 2 — Charter Preference:** Agent's charter has a `## Model` section naming a specific model (not `auto`).
-4. **Layer 3 — Task-Aware Auto-Select:** Cost-first principle applied: non-code → Haiku, code → Sonnet, vision → Opus-4.5, heavy code gen → Codex.
-5. **Layer 4 — Default:** `claude-haiku-4.5` (cost wins when in doubt).
-
-If a model is unavailable (deprecation, org policy, rate limit), the coordinator retries up the fallback chain:
-- **Premium chain:** `claude-opus-4.6` → `claude-opus-4.5` → `claude-sonnet-4.6` → `claude-sonnet-4.5` → (omit-model)
-- **Standard chain:** `claude-sonnet-4.6` → `claude-sonnet-4.5` → `gpt-5.4` → `gpt-5.3-codex` → (omit-model)
-- **Fast chain:** `claude-haiku-4.5` → `gpt-5.4-mini` → (omit-model)
-- **(omit-model)** = use platform default (nuclear fallback; always works)
-
----
-
-## Saving a preference
-
-Users can adjust model selection three ways:
-
-### "Always use X for everything"
-Coordinator writes `defaultModel: "model-id"` to `.squad/config.json`. Persists across all sessions.
-
-```bash
-✅ Model preference saved: claude-opus-4.7 — all future sessions will use this until changed.
+```
+Premium:  claude-opus-4.6 → claude-opus-4.5 → claude-sonnet-4.6 → claude-sonnet-4.5 → (omit model)
+Standard: claude-sonnet-4.6 → claude-sonnet-4.5 → gpt-5.4 → gpt-5.3-codex → (omit model)
+Fast:     claude-haiku-4.5 → gpt-5.4-mini → (omit model)
 ```
 
-### "Always use X for {agent}"
-Coordinator writes `agentModelOverrides.{agent}: "model-id"` to `.squad/config.json`. That agent always uses the override; others use default.
+`(omit model)` = call `task` without the `model` parameter — platform default; always works.
 
-```bash
-✅ Scotty will always use gpt-5.3-codex — saved to config.
+---
+
+## 2. Model catalog
+
+> ⚠️ **Catalog vs. governance gap:** `.github/agents/squad.agent.md` lines 451–453 list an older catalog: `claude-opus-4.6` as the top Premium tier, plus `gpt-5.1-codex-max`, `gpt-5.1-codex`, `gpt-5.1`, `gpt-5.1-codex-mini`, and `gemini-3-pro-preview`. None of these appear in the `task` tool's current `model` enum; the opus-4.7 family is absent entirely. The tables below reflect the **CLI tool's actual enum** as ground truth. The squad.agent.md catalog is out of date — flag for maintainer on next governance pass. **Do not change squad.agent.md here; it is maintainer-authored.**
+
+### Premium tier
+
+| Model | Window | Best for | Pros | Cons | Cost |
+|-------|--------|----------|------|------|------|
+| `claude-opus-4.7` | Standard | Advanced reasoning; architecture proposals | Top-tier reasoning; nuanced trade-offs | Highest cost | 💰💰💰 |
+| `claude-opus-4.7-1m-internal` | **1M** (internal-only) | Long-context governance; multi-file artifact review | Entire codebase + artifact tree in one pass; no chunking | Highest cost; internal-only | 💰💰💰 |
+| `claude-opus-4.7-high` | Standard (internal-only) | Hard problems needing extended reasoning | Extra thinking cycles; better on adversarial prompts | Internal-only; slower | 💰💰💰 |
+| `claude-opus-4.7-xhigh` | Standard (internal-only) | Maximum reasoning depth | Deepest analysis in catalog | Internal-only; slowest | 💰💰💰 |
+| `claude-opus-4.6` | Standard | General-purpose premium (fallback) | Reliable; well-tested | Older gen; prefer 4.7 variants | 💰💰💰 |
+| `claude-opus-4.6-1m` | 1M (internal-only) | Long-context (older gen) | Handles massive input | Older gen; prefer 4.7-1m | 💰💰💰 |
+| `claude-opus-4.5` | Standard | Vision + reasoning | Only model in enum capable of image/diagram analysis | Vision is the sole reason to choose over 4.7; non-negotiable for visual tasks | 💰💰💰 |
+
+**Call-outs:**
+
+- **`claude-opus-4.7-1m-internal`** — The 1M window is the specific value-add. Picard's 105-turn session `06e05633` is the canonical evidence: full constitution + plan + spec tree loaded in one pass without chunking; cross-document coherence preserved throughout. Standard-window models require chunking that loses that coherence on governance reviews. That use case alone justifies the override for Picard and Kirk.
+- **`claude-opus-4.7-high` / `claude-opus-4.7-xhigh`** — Untested in this repo. Documented strengths: extended reasoning for hard problems. Not yet measured locally. Reserve for adversarial security reviews or architecture decisions where reasoning depth matters more than speed.
+
+### Standard tier
+
+| Model | Window | Best for | Pros | Cons | Cost |
+|-------|--------|----------|------|------|------|
+| `claude-sonnet-4.6` | Standard | **Platform default** · code review · general agent work | Excellent cost/quality balance; reliable for all code work | Slightly slower than GPT-5.x | 💰💰 |
+| `claude-sonnet-4.5` | Standard | Code quality (older gen fallback) | Proven; stable | Older gen; prefer 4.6 | 💰💰 |
+| `gpt-5.5` | Standard | General-purpose · current Scotty override | Latest OpenAI general model; strong code + prose | Context window unverified locally; no local benchmark yet | 💰💰 |
+| `gpt-5.4` | Standard | General-purpose (mature release) | Reliable; solid code + analysis | Older than 5.5 | 💰💰 |
+| `gpt-5.3-codex` | Standard | **Heavy code generation specialist** | 500+ LOC multi-file refactors; complex algorithms; purpose-built for code gen | Weaker on architectural framing and prose; not ideal for non-code tasks | 💰💰 |
+| `gpt-5.2-codex` | Standard | Code generation (older gen) | Multi-file code work; lower cost than 5.3 | Older; prefer 5.3-codex | 💰💰 |
+| `gpt-5.2` | Standard | General-purpose (older gen) | Cost-effective | Older; prefer 5.4 or 5.5 | 💰💰 |
+
+**Call-outs:**
+
+- **`gpt-5.5` (current Scotty override)** — Set in `.squad/config.json` directly; no decisions.md entry documents the rationale for switching from `gpt-5.3-codex`. The prior doc (2026-05-16) recommended codex for heavy refactors. `gpt-5.5` is a reasonable broader choice if Scotty's workload has shifted toward mixed code + prose tasks, but no local benchmark confirms the improvement. See Open Questions §3.
+- **`gpt-5.3-codex` / `gpt-5.2-codex`** — Code-gen specialists. Great at producing large, syntactically correct TypeScript. Trade-off: weaker at the architectural framing narrative that reviewers (Kirk, Garak) expect in PRs. Best paired with a reasoning-capable review pass.
+
+### Fast / cheap tier
+
+| Model | Window | Best for | Pros | Cons | Cost |
+|-------|--------|----------|------|------|------|
+| `claude-haiku-4.5` | Standard | **Scribe's permanent home** · mechanical ops · docs · git plumbing | Cheapest Claude; fast; adequate for all pattern-matching work | Limited reasoning depth; not for design or review | 💰 |
+| `gpt-5.4-mini` | Standard | Fast general-purpose | Quick, cheap alternative to full models | Reduced capability vs full models | 💰 |
+| `gpt-5-mini` | Standard | Fast general (older gen) | Cost-efficient | Older; prefer 5.4-mini | 💰 |
+| `gpt-4.1` | Standard | Nuclear fallback only | Always available | Slow; outdated | 💰 |
+
+**Call-outs:**
+
+- **`claude-haiku-4.5`** — Scribe's permanent model. Mechanical file ops, append-only writes, JSON manipulation, git commits. **Never bump.** Cost constraint is non-negotiable: Scribe runs on every session boundary; accumulating sonnet-class cost here compounds rapidly.
+- **`gemini-3-pro-preview`** — Listed in `.github/agents/squad.agent.md` line 452 as a Standard-tier model for "analytical diversity for code reviews after a rejection." **NOT present in the current `task` tool enum. Cannot be dispatched.** Recommend removing this reference from squad.agent.md on the next maintainer governance pass, replacing with available cross-provider options (`gpt-5.5`, `gpt-5.4`). Out of scope for this doc to fix.
+
+---
+
+## 3. Per-squad-member recommendations
+
+### Picard — M2 / Engineering Manager
+
+**Current model:** `claude-opus-4.7-1m-internal` (Layer 0 config override)
+**Workload mix:** Scope and governance reviews; speckit chain integrity; constitution review; triage; long multi-file artifact reads.
+**Recommendation:** `claude-opus-4.7-1m-internal` — **unchanged**
+**Why:**
+- Session `06e05633` (105 turns) is the evidence base: full constitution + plan + spec tree read in a single pass. The 1M window is what makes that coherent. Standard-window models require chunking; chunked governance reviews lose cross-document consistency.
+- Governance and scope reviews require premium reasoning depth. No cheaper substitute without measurable quality loss.
+
+**Override when:** Routine triage with no multi-document reads → `claude-haiku-4.5` is safe for that spawn. Reinstate 1m-internal for any constitution or multi-artifact review session.
+
+---
+
+### Kirk — Lead (technical)
+
+**Current model:** `claude-opus-4.7-1m-internal` (Layer 0 config override)
+**Workload mix:** Architecture proposals; technical code reviews; cross-cutting design decisions; PR approvals.
+**Recommendation:** `claude-opus-4.7-1m-internal` — **unchanged** (see override condition)
+**Why:**
+- Kirk's APPROVE/CHANGES_REQUESTED carries merge authority under Rule 7. A cheaper model on a consequential review is a governance risk.
+- Architecture reviews that span multiple files, diffs, and contracts benefit from the 1M window for the same reasons as Picard's governance work.
+
+**Override when:** Single-file code reviews with narrow scope → `claude-sonnet-4.6` is sufficient and cheaper. Reserve 1m-internal for architecture reviews, multi-file diffs, or post-rejection re-reviews.
+
+---
+
+### Scotty — Core Dev
+
+**Current model:** `gpt-5.5` (Layer 0 config override)
+**Workload mix:** TypeScript CLI implementation; multi-file refactors; workflow YAML; test scaffolding.
+**Recommendation:** `gpt-5.5` — **unchanged pending Cyrus confirmation** (see Open Questions §3)
+**Why:**
+- `gpt-5.5` is the latest general-purpose OpenAI model and a plausible upgrade from `gpt-5.3-codex`.
+- No decisions.md entry documents why the switch was made. No local benchmark confirms `gpt-5.5` outperforms `gpt-5.3-codex` on heavy TypeScript refactors — the core of Scotty's workload.
+
+**Override when:** 500+ LOC single-purpose code-gen tasks → `gpt-5.3-codex` may still outperform on pure code volume. Recommended: compare on the next large Scotty task before treating gpt-5.5 as permanent.
+
+---
+
+### Uhura — Integrations Dev
+
+**Current model:** `claude-opus-4.7-1m-internal` (Layer 0 config override)
+**Workload mix:** Discord API integration; STFC store API; webhook handling; multi-file integration code.
+**Recommendation:** Downgrade to `claude-sonnet-4.6` for standard tasks; reinstate 1m-internal via session directive for explicit cross-API multi-file reads.
+**Why:**
+- Most of Uhura's work is targeted integration code — writing adapters, handling HTTP responses, wiring webhooks. `claude-sonnet-4.6` is the code-quality standard and costs significantly less.
+- The 1M window justification for Picard and Kirk is specific: loading entire governance artifact trees. Uhura's tasks rarely require ingesting the full artifact tree simultaneously. Applying the same override by default is cost without proportionate value.
+
+**Override when:** A session explicitly requires reading discord.com API docs + STFC API specs + integration contracts together → reinstate 1m-internal for that session via directive.
+
+---
+
+### Bashir — Tester
+
+**Current model:** Auto (no Layer 0 override) → task-aware auto → `claude-sonnet-4.6` for code tasks
+**Workload mix:** Test authorship under Principle IX (test-first); edge-case coverage; integration test scaffolding.
+**Recommendation:** No override; leave at task-aware auto
+**Why:**
+- Tests are executable specifications under Principle IX. Quality matters as much as for production code; `claude-sonnet-4.6` is the right default.
+- No evidence Bashir's workload needs premium reasoning or specialist code-gen volume. Adding a codex override would help LOC output but not behavioral-coverage reasoning.
+
+**Override when:** A session produces 500+ LOC of boilerplate test scaffolding → `gpt-5.3-codex` for that spawn only, then back to auto.
+
+---
+
+### Garak — Critic
+
+**Current model:** Auto (no Layer 0 override)
+**Workload mix:** Hostile code reviews; security reviews; governance reviews; post-rejection architecture critiques.
+**Recommendation:** No fixed override; task-aware per-spawn selection
+**Why:**
+- Garak's authority derives partly from analytical independence. A fixed override to the same model family as Kirk reduces cross-family diversity on joint reviews — exactly the kind of diversity the squad.agent.md `gemini-3-pro-preview` recommendation was trying to preserve (that model is now unavailable).
+- Standard code reviews → `claude-sonnet-4.6`. High-stakes security/governance → `claude-opus-4.7-high`. Cross-provider diversity passes → `gpt-5.5` or `gpt-5.4` (dispatch Garak on an OpenAI model when Kirk has already reviewed on Anthropic).
+
+**Override when:** Any review where Kirk has already approved → dispatch Garak on `gpt-5.5` or `gpt-5.4` via session directive for family diversity. Never add a permanent override — this must stay flexible.
+
+---
+
+### Tuvok — Process Auditor / Editorial Specialist
+
+**Current model:** Auto (no Layer 0 override)
+**Workload mix:** (a) Surgical governance edits, cross-reference checks, table updates — mechanical; (b) Agent prompt authorship, amendment audit memos, doc refreshes — require coherent prose and editorial judgment.
+**Recommendation:** Task-aware split — no single override
+**Why:**
+- Mechanical work (cross-ref grepping, table updates, surgical line edits) → `claude-haiku-4.5`. Adequate; cheapest.
+- Editorial work (agent prompts, amendment audit memos, this doc) → `claude-sonnet-4.6`. Agent prompts are executable text; sub-sonnet quality risks behavioral regression. Amendment audits require reasoning through cross-artifact consistency.
+- A fixed sonnet override wastes cost on mechanical sessions. A fixed haiku override produces lower-quality agent prompts and audit memos.
+
+**Override when:** Task is unambiguously mechanical → explicit `claude-haiku-4.5` session directive. Task involves authoring executable text or governance artifacts → explicit `claude-sonnet-4.6` directive.
+
+---
+
+### Scribe — Session Logger
+
+**Current model:** Auto → `claude-haiku-4.5` (Layer 3 default / charter preference)
+**Workload mix:** history.md appends; decisions/inbox writes; JSON manipulation; git commits; log compaction.
+**Recommendation:** `claude-haiku-4.5` — **permanent; never bump**
+**Why:**
+- Scribe runs on every session boundary. Accumulating sonnet or opus cost here compounds rapidly with no quality benefit.
+- Scribe's entire workload is pattern-matching and file manipulation — no judgment calls, no reasoning required. Haiku is not a compromise; it is the correct tool for this work.
+
+**Override when:** Never. If a Scribe session seems to require more reasoning, the task has been mis-routed. Re-route to the appropriate agent.
+
+---
+
+### Ralph — Work Monitor
+
+**Current model:** N/A (Ralph is not dispatched via `task` tool — work-monitor pattern)
+**Workload mix:** Issue/PR list scanning; label routing; triage comments; digest summaries.
+**Recommendation:** N/A for current pattern. If Ralph ever becomes spawnable for batch ops → `claude-haiku-4.5` (cost-first; workload is mechanical scanning).
+**Why:** Ralph's current pattern does not use the `task` tool dispatch path. Model selection is not applicable. If spawnable batch ops are added, the workload profile is identical to Scribe — haiku is the right default, sonnet only for rare synthesis tasks.
+
+---
+
+## 4. Accepted changes to `.squad/config.json`
+
+Cyrus reviewed § 5 open questions on 2026-05-17. Applied changes:
+
+```json
+{
+  "version": 1,
+  "worktrees": true,
+  "agentModelOverrides": {
+    "picard": "claude-opus-4.7-1m-internal",  // unchanged — long-context governance work
+    "kirk":   "claude-opus-4.7-1m-internal",  // unchanged in config; scoping rule deferred to issue #21
+    "uhura":  "claude-sonnet-4.6",             // CHANGED from 1m-internal — standard integration work
+    "scotty": "gpt-5.3-codex",                 // CHANGED from gpt-5.5 — code specialist for code role
+    "garak":  "gpt-5.5"                        // NEW — cross-provider diversity for hostile fact-check
+  }
+}
 ```
 
-### "Switch back to automatic"
-Coordinator removes `defaultModel` and `agentModelOverrides` from `.squad/config.json`. Returns to Layer 1–4 (task-aware auto-select).
+**Per-decision rationale:**
+- **Uhura → sonnet-4.6:** Integration code rarely needs 1M context. Reinstate per-session when explicitly required.
+- **Kirk:** Config unchanged. Scoping rule (opus-1m for architecture / sonnet-4.6 for narrow review) tracked in issue #21 — codifies behavior at the coordinator level.
+- **Scotty → gpt-5.3-codex:** Code-specialist model for code-writing role. Replaces the unanchored gpt-5.5 override; rationale now captured in decisions ledger.
+- **Garak → gpt-5.5:** New override. Cross-provider diversity from Claude-heavy reviewers. Replaces the `gemini-3-pro-preview` recommendation that's no longer in the CLI catalog.
 
-```bash
-✅ Model preference cleared — returning to automatic selection.
-```
+---
+
+## 5. Open questions for Cyrus — RESOLVED 2026-05-17
+
+| # | Question | Decision |
+|---|---|---|
+| 1 | Accept Uhura downgrade? | **Accept** — sonnet-4.6 |
+| 2 | Kirk always-on vs scoped? | **Scoped** — tracked in issue #21 |
+| 3 | Scotty gpt-5.5 rationale? | **Switch to gpt-5.3-codex** (code specialist) |
+| 4 | Garak diversity model? | **gpt-5.5** (Claude-family alternative) |
+| 5 | squad.agent.md drift? | **File issue** — tracked as #21 |
+
+All resolutions captured in `.squad/decisions.md` (via inbox → Scribe merge).
 
 ---
 
 ## Maintenance
 
-This catalog drifts as Copilot rotates models. To refresh:
+Refresh when the `task` tool's model enum changes. Checklist:
 
-1. Compare table entries against the current `task` tool documentation (model parameter values)
-2. Confirm `internal-only` markers are still accurate (periodically promoted to general availability)
-3. Update the "Last refreshed" date at the top
-4. Note in the commit message any new/removed/promoted models and context changes
+1. Compare table entries against the current `task` tool model parameter values.
+2. Confirm `internal-only` markers (periodically promoted to general availability).
+3. Update per-member recommendations if workload mix has shifted.
+4. Update "Last refreshed" date at the top.
+5. Drop a decisions/inbox entry for the session.
 
 ---
 
 ## See also
 
 - [docs/squad.md](squad.md) — Squad roster and roles
-- [.github/agents/squad.agent.md](../.github/agents/squad.agent.md) — Coordinator rules and model-selection implementation details
+- [.github/agents/squad.agent.md](../.github/agents/squad.agent.md) — Coordinator rules and model-selection implementation
+- [.squad/config.json](../.squad/config.json) — Active per-agent overrides
