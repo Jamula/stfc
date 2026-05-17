@@ -13,8 +13,25 @@
  */
 
 import { execSync } from 'child_process';
+import {
+  checkConstitutionSync,
+  checkSquadBoundary,
+  checkWorkflowPinningTests,
+} from './pre-commit-checks.mjs';
 
 // TODO(Uhura): Add hygiene check here once scripts/check-artifact-hygiene.* lands:
 // execSync('node scripts/check-artifact-hygiene.mjs', { stdio: 'inherit' });
+
+// --- Enforcement checks (fail fast before running the full test suite) ---
+
+const staged = execSync('git diff --cached --name-only', { encoding: 'utf8' })
+  .split('\n')
+  .filter(Boolean);
+
+checkConstitutionSync(staged);
+checkSquadBoundary(staged);
+checkWorkflowPinningTests(staged);
+
+// --- Test suite ---
 
 execSync('npm test', { stdio: 'inherit' });

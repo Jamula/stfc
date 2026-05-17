@@ -1,0 +1,160 @@
+/**
+ * Pre-commit enforcement checks, extracted for testability.
+ *
+ * Each function receives the list of staged file paths and throws
+ * (via process.exit) when a policy violation is detected.
+ */
+
+import { execSync } from 'child_process';
+import * as fs from 'fs';
+import * as path from 'path';
+
+// ── Helpers ──────────────────────────────────────────────────────────
+
+function fail(msg) {
+  console.error(`\n❌  pre-commit: ${msg}\n`);
+  process.exit(1);
+}
+
+const CONSTITUTION_PATH = '.specify/memory/constitution.md';
+const PLAN_TEMPLATE_PATH = '.specify/templates/plan-template.md';
+
+const SYNC_KEYWORDS_RE =
+  /STFC_ACCOUNTS|promo-codes\.txt|DISCORD_BOT_TOKEN|data\/discord|data\/digests|huggingface|discord\.com/;
+
+function defaultReadFile(p) {
+  return fs.readFileSync(p, 'utf8');
+}
+
+function defaultExists(p) {
+  return fs.existsSync(p);
+}
+
+// ── Check #8 — Constitution amendments must re-sync templates ────────
+
+/**
+ * If `constitution.md` is staged but `plan-template.md` is NOT staged,
+ * verify the two files agree on every sanctioned keyword. If they drift,
+ * abort.
+ *
+ * @param staged  List of staged file paths.
+ * @param readFile Optional file reader (for testing). Defaults to fs.readFileSync.
+ * @param exists   Optional existence check (for testing). Defaults to fs.existsSync.
+ */
+export function checkConstitutionSync(staged, readFile = defaultReadFile, exists = defaultExists) {
+  if (!staged.includes(CONSTITUTION_PATH)) return;
+  if (staged.includes(PLAN_TEMPLATE_PATH)) return; // already staged — OK
+
+  if (!exists(CONSTITUTION_PATH) || !exists(PLAN_TEMPLATE_PATH)) return;
+
+  const constitutionLines = readFile(CONSTITUTION_PATH).split('\n');
+  const templateLines = readFile(PLAN_TEMPLATE_PATH).split('\n');
+
+  const inConstitution = new Set();
+  const inTemplate = new Set();
+
+  for (const line of constitutionLines) {
+    const m = line.match(SYNC_KEYWORDS_RE);
+    if (m) inConstitution.add(m[0]);
+  }
+  for (const line of templateLines) {
+    const m = line.match(SYNC_KEYWORDS_RE);
+    if (m) inTemplate.add(m[0]);
+  }
+
+  const missing = [...inConstitution].filter((k) => !inTemplate.has(k));
+  const extra = [...inTemplate].filter((k) => !inConstitution.has(k));
+
+  if (missing.length > 0 || extra.length > 0) {
+    const details = [];
+    if (missing.length) details.push(`missing from template: ${missing.join(', ')}`);
+    if (extra.length) details.push(`extra in template: ${extra.join(', ')}`);
+    fail(
+      `Constitution amended but plan-template.md has drifted (${details.join('; ')}). ` +
+        `Update ${PLAN_TEMPLATE_PATH} and stage it.`,
+    );
+  }
+}
+
+// ── Check #9 — Only Scribe stages .squad/ paths ─────────────────────
+
+const SCRIBE_OWNED_PATTERNS = [
+  /^\.squad\/agents\/[^/]+\/history\.md$/,
+  /^\.squad\/decisions\.md$/,
+  /^\.squad\/decisions\/inbox\//,
+  /^\.squad\/log\//,
+  /^\.squad\/orchestration-log\//,
+];
+
+/**
+ * Non-Scribe commits must not stage Scribe-owned `.squad/` paths.
+ * Bypass: set SQUAD_SCRIBE=1 env var.
+ */
+export function checkSquadBoundary(staged) {
+  if (process.env.SQUAD_SCRIBE === '1') return;
+
+  const violations = staged.filter((f) => SCRIBE_OWNED_PATTERNS.some((re) => re.test(f)));
+  if (violations.length === 0) return;
+
+  fail(
+    'Only Scribe can commit .squad/{agents,decisions,log,orchestration-log}. ' +
+      'Use [scribe] in commit message or set SQUAD_SCRIBE=1 to bypass.\n' +
+      `  Offending files:\n${violations.map((f) => `    - ${f}`).join('\n')}`,
+  );
+}
+
+// ── Check #10 — Workflow YAML edits must include pinning tests ───────
+
+/**
+ * Find test files referencing a workflow filename via grep.
+ * Returns an array of relative file paths (may be empty).
+ */
+export function grepTestsForWorkflow(basename) {
+  try {
+    const out = execSync(`grep -rl "${basename}" tests/`, {
+      encoding: 'utf8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+    }).trim();
+    return out ? out.split('\n').filter(Boolean) : [];
+  } catch {
+    // grep returns exit 1 when no matches — that's fine
+    return [];
+  }
+}
+
+/**
+ * When a `.github/workflows/*.yml` file is staged, any test file that
+ * references it by name must also be staged.
+ *
+ * @param staged  List of staged file paths.
+ * @param grep    Optional grep function (for testing). Defaults to grepTestsForWorkflow.
+ */
+export function checkWorkflowPinningTests(staged, grep = grepTestsForWorkflow) {
+  const workflowFiles = staged.filter((f) =>
+    /^\.github\/workflows\/[^/]+\.ya?ml$/.test(f),
+  );
+  if (workflowFiles.length === 0) return;
+
+  const errors = [];
+
+  for (const wf of workflowFiles) {
+    const basename = path.basename(wf);
+    const referencingTests = grep(basename);
+
+    const unstagedTests = referencingTests.filter((t) => {
+      const rel = t.replace(/\\/g, '/').replace(/^\.\//, '');
+      return !staged.includes(rel);
+    });
+
+    for (const t of unstagedTests) {
+      const rel = t.replace(/\\/g, '/').replace(/^\.\//, '');
+      errors.push(
+        `Edit to ${wf} found, but ${rel} references ${basename} and is not staged. Update pinning tests.`,
+      );
+    }
+  }
+
+  if (errors.length > 0) {
+    fail(errors.join('\n'));
+  }
+}
