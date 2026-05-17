@@ -1363,3 +1363,145 @@ Tests: 90+/283 passing on every commit.
 - The block comment above `schedule:` documents the intent in-place.
 - If a pinning test is later added, it must encode `"0 0 * * 6"` and the `stfc-gift-redeemer` concurrency group.
 
+
+---
+
+### 2026-05-17T07:00:00Z: Issue re-triage — Picard manual correction (11 open squad-labeled issues)
+
+**By:** Picard (M2 / Engineering Manager)
+**What:** Manual re-triage of 11 open `squad`-labeled issues, auto-routed to Bashir by `squad-triage.yml`. Triage bot default-fallback has collapsed; only 1 of 11 was actually tester scope. Issues re-routed by artifact type (workflow code → Scotty/Uhura, process → Tuvok, infra → Uhura, feature → Scotty, tests → Bashir when actual). 
+
+**Key routing changes:**
+- #19 (Discord Phases 5–6 feature) → Scotty
+- #18 (extractor test gaps) → Bashir (unchanged; legitimate tester)
+- #17 (Dependabot alerts) → Uhura
+- #16 (devcontainer idle-stop) → Uhura
+- #15 (token-usage telemetry epic) → Tuvok
+- #13 (redeem.yml exit-code workflow) → Scotty
+- #12 (speckit.implement phase commits) → Tuvok
+- #11 (rebase-before-push automation) → Tuvok
+- #10 (workflow pinning-test enforcement) → Tuvok
+- #9 (Scribe `.squad/` write boundary) → Tuvok
+- #8 (constitution↔plan-template re-sync) → Tuvok
+
+**Triage heuristic recorded:** route by **artifact being changed**, not keywords. Workflow YAML → Scotty/Uhura; `.specify/` / speckit → Tuvok; `.devcontainer/` / deps → Uhura; architecture → Kirk; scope/priority → Picard.
+
+**Side observation:** `squad-triage.yml` routes on Acceptance-section keyword bleed ("test", "verify", "check" appear in every acceptance criterion). Default-to-Bashir fallback is broken. Separate inbox file filed; fix deferred to Kirk routing-rules decision.
+
+---
+
+### 2026-05-17T07:00:00Z: Squad self-test epic batch — 9 capability tests filed
+
+**By:** Picard (filed); Cyrus Jamula (approved)
+**What:** Filed 9 self-test issues (#24–#32) as regression guards for each team member's core capability:
+
+| # | Agent  | Test focus | Accept criteria |
+|---|--------|-----------|------------------|
+| #24 | Picard | Triage + governance verdict | Synthetic 10-issue board, 8 misrouted to Bashir; re-triage correct; Rule-7 gate preservation |
+| #25 | Kirk | Code review + architecture | Workflow YAML without Rule-3 test update → REQUEST_CHANGES; clean refactor → APPROVE; architecture memo on "which" questions |
+| #26 | Scotty | Scope + test-first | No files outside spec target; test file is first commit; phase-boundary commit shape; `--no-verify` refusal |
+| #27 | Uhura | Secret handling + API contract | Tokens never logged; API-field drops surface errors; outbound-host enumeration triggers constitution proposal + re-sync (Rule 1) |
+| #28 | Bashir | Acceptance coverage + edge cases | Right-count tests from acceptance criteria; hostile set (empty/redeemed/expired/rate-limited/network-fail); behavior-only; uses node:test/tsx |
+| #29 | Garak | Fact-check signal-to-noise | Plant 3 claims (true/outdated/fabricated); assert surfaces outdated+fabricated; no style nits; reviewer-rejection lockout |
+| #30 | Tuvok | Mirror-fidelity edit + SIR re-sync | Edit applies ONLY the finding; SIR template-sync from real grep (Rule 1); cross-artifact consistency; respects Scribe write boundary |
+| #31 | Scribe | Idempotent merge + write boundary | Inbox merge is idempotent; per-file `git add -- <path>`; refuses writes outside `.squad/` |
+| #32 | Ralph | Scan-cycle correctness + loop termination | Not LLM-output testing. Loop categorizes N+M+K correctly; terminates on idle; exact surface coverage; bounded iteration |
+
+All labeled `squad,squad:{member},priority:p2,type:epic`. Hub comment on #24 links all 9. #15 / #30 relationship: file separately (different acceptance, consumers, cadence); share driver design if both land.
+
+**Reusable framework:** Taxonomy of self-test meanings (reviewer verdict semantics / implementer scope / tester right-coverage / editorial mirror-fidelity / mechanical idempotency / loop correctness / M2 triage). Captured as `.squad/skills/agent-self-test/SKILL.md`.
+
+---
+
+### 2026-05-17T07:00:00Z: `squad-triage.yml` over-routes to Bashir — decision pending
+
+**By:** Picard (M2 / Engineering Manager)
+**What:** Triage bot (`.github/workflows/squad-triage.yml`) auto-assigns effectively every new `squad`-labeled issue to Bashir, even issues that are clearly feature work, workflow code, infra, deps, or process governance. As of 2026-05-17 snapshot: 11 open squad-labeled issues, 10 mis-routed to Bashir (only #18 is actual tester scope).
+
+**Root cause:** Bot matches on weak keyword signals in Acceptance sections ("test", "verify", "check" appear in every well-written acceptance criterion) and falls back to `squad:bashir` as default when no stronger signal fires.
+
+**Impact:** Signal-to-noise ~1-in-11. Bashir's queue looks artificially overloaded. Manual Picard re-triage is now a recurring tax.
+
+**Recommended fix (not done, pending Kirk decision):** 
+1. Remove Bashir default-fallback; leave bare `squad` label + post comment tagging Picard for manual triage.
+2. Tighten keyword rules (require explicit "add test", "regression test", "known gap", or `type:test` label; not mere "test" keyword).
+3. Add routing-confidence comment (rule name + matched phrase).
+
+**Owner decision:** Kirk decides routing-rules redesign scope; Scotty or Uhura implements. Bashir keeps #18. All others have been re-routed as of 2026-05-17T07:00Z (see picard-retriage-2026-05-17).
+
+---
+
+### 2026-05-17T07:12:40Z: /chronicle tips — synthesis for team reference
+
+**By:** Tuvok (Process Auditor / Editorial Specialist)
+**Type:** Operational knowledge distilled from `.squad/skills/`, `.copilot/skills/`, governance, and Ralph learnings. Every tip cites a concrete artifact.
+
+**Core working patterns:**
+- **PR review:** Run `gh pr diff <N> --name-only` first for empty-diff (superseded) detection; `gh pr review --comment` + `gh pr merge` workaround for self-authored PRs; admin-bypass requires a decision.md note.
+- **Workflows/CI:** Decode cron explicitly (`MIN HOUR DOM MONTH DOW`, DOW=0 is Sunday); grep tests for pinned literals before committing (Rule 3); new mutable-state workflows join `concurrency.group: stfc-gift-redeemer`.
+- **Governance:** SIR template-sync check from real grep (Rule 1), not structural shortcuts; known Tensions need "Resolution scheduled: vX.Y.Z." target.
+- **`.squad/` state:** Never use `git add .squad/` (Rule 2); Bashir auto-assignment unverified until Picard re-triages (bot keyword bleed); merge `both added` conflicts by extracting unique sections, not raw concatenation.
+- **Recent gotchas:** `origin/main` moves every 15 min (rebase always conflict-free); empty-diff PR detection catches superseded work; triage-bot keyword bleed turns correct acceptance criteria into misprediction; worktree `--delete-branch` remote-succeeds-local-fails pattern.
+
+Knowledge codified and reusable.
+
+---
+
+### 2026-05-17T16:58:02Z: Governance-doc model catalog drift — issue #21 filed
+
+**By:** Tuvok (flagged); Cyrus (decision)
+**What:** `.github/agents/squad.agent.md` model references have drifted from current CLI `task` tool enum. Six model IDs no longer present (`gemini-3-pro-preview`, `gpt-5.1-codex-max`, `gpt-5.1-codex`, `gpt-5.1`, `gpt-5.1-codex-mini`, `claude-opus-4.6`); opus-4.7 family missing. Filed issue #21 (squad:tuvok, priority:p2, type:docs) for maintainer governance PR.
+
+**Why:** Surfaced during docs/models.md refresh 2026-05-17. Choice: create issue (chosen by Cyrus).
+
+**Status:** Tracked on #21; fix lands via normal PR review.
+
+---
+
+### 2026-05-17T16:58:02Z: Per-agent model overrides — 4 decisions applied
+
+**By:** Cyrus Jamula (user); Tuvok (execution)
+**What:** Applied user answers to docs/models.md § 5 (5 open questions). Config changes:
+- **Uhura:** opus-4.7-1m-internal → sonnet-4.6 (integration work rarely needs 1M).
+- **Kirk:** opus-4.7-1m-internal unchanged; rule "scope to architecture/multi-file; sonnet-4.6 for narrow review" codified in #21.
+- **Scotty:** gpt-5.5 → gpt-5.3-codex (code-writing specialist, TypeScript/CLI beat).
+- **Garak:** new gpt-5.5 (cross-provider diversity from Claude-heavy reviewers).
+
+**Rationale:** Workload mismatches for Uhura/Kirk; unanchored Scotty override had no decisions.md anchor; Garak needs diversity post-gemini-removal.
+
+**Files changed:** .squad/config.json (3 changes); GitHub issue #21 (governance doc drift).
+
+---
+
+### 2026-05-17T07:19:38Z: Rules 6 & 7 + Rule 5 extension — `.github/copilot-instructions.md` shipped
+
+**By:** Tuvok (Process Auditor / Editorial Specialist)
+**What:** Three surgical edits to `.github/copilot-instructions.md` (+69 lines, 124 → 193 lines):
+
+1. **Rule 5 extended:** Added phase-boundary auto-commit + resume protocol. Implementer commits at phase end; Coordinator 1-line dispatch on resume ("Resuming Phase N at T0XX, dispatching Agent"). Skips "where were we?" friction (5+ instances in one feature cycle).
+
+2. **Rule 6 added (ship it ritual):** Maps user phrasings (*"merge to main and sync"* / *"ship it"* / *"yes merge"* / etc.) to no-confirmation sequence: fetch + rebase → `gh pr merge --squash --delete-branch --auto` → checkout main + pull → cleanup. Evidence: 9+ phrasing variants in one session.
+
+3. **Rule 7 added (auto-merge gate):** Reviewer-approved (Kirk/Picard/Garak APPROVE) + CI-green + no CHANGES_REQUESTED = immediate merge without asking. Override + governance carve-out included.
+
+**In effect as of commit** (per Cyrus approval of `/chronicle improve` findings A/B/C/D).
+
+---
+
+### 2026-05-17T17:00:00Z: Issue #16 expanded — devcontainer scope + security_events permission
+
+**By:** Uhura (Integrations Dev)
+**What:** Original #16 scope (add `.devcontainer/devcontainer.json` with `idleTimeoutInMinutes: 180`) expanded during #17 Dependabot triage attempt. Codespace's `GITHUB_TOKEN` lacks `security_events` scope, causing `403 Resource not accessible by integration` on Dependabot alerts endpoint. Since `gh auth refresh` cannot add scopes to Codespace-managed tokens, only fix is declaring permission at container-creation time.
+
+**PR #33 delivers both fixes in single file:**
+- Image: `mcr.microsoft.com/devcontainers/javascript-node:24` (matches `.nvmrc`)
+- Idle timeout: `180` minutes
+- Features: github-cli enabled
+- Post-create: `npm ci`
+- Extensions: Copilot + Copilot Chat
+- Permissions: `security_events: read` declared
+
+**Tests:** 365 passing. Typecheck clean. Ready to merge.
+
+**Required follow-up:** Cyrus must rebuild Codespace after PR #33 merges (token scope issued at container-creation time; existing sessions unaffected). Then #17 Dependabot triage can proceed with 200-OK instead of 403.
+
