@@ -1,23 +1,16 @@
 <!-- SYNC IMPACT REPORT -->
-Version change: 1.2.0 → 1.3.0 (MINOR)
-Bump rationale: MINOR — enumeration expansion only. Principle V's "secret"
-definition and durable-inputs enumeration are extended to cover the
-`DISCORD_BOT_TOKEN` GitHub Actions secret and seven new committed durable
-inputs/outputs introduced by the `discord-monitor` skill, plus the
-`data/digests/**` artifact tree. Security & Compliance Constraints'
-outbound-network scope is extended to cover `discord.com/api` (REST reads)
-and `huggingface.co` (one-time SHA-256-pinned classifier model fetch).
-No principle is removed, no obligation narrowed, no existing safeguard
-weakened. Critically, the strict Token Capture Custody writer gate is NOT
-triggered: this amendment adds NO new sanctioned writer of `STFC_ACCOUNTS`,
-and `DISCORD_BOT_TOKEN` is explicitly excluded from the `STFC_ACCOUNTS`
-custody surface and from `scripts/capture-token.mjs`.
+Version change: 1.3.0 → 1.4.0 (MINOR)
+Bump rationale: MINOR — Principle V durable-inputs enumeration expanded
+to cover four new committed paths introduced by the Tuvok token-usage
+telemetry feature (issue #15, specs/002-tuvok-telemetry/). No principle
+is removed, no obligation narrowed, no existing safeguard weakened. No
+new secrets introduced. No new outbound network destinations. No new
+sanctioned writer of `STFC_ACCOUNTS`. Privacy by design: only token
+counts and metadata are stored — no prompt content or assistant responses
+(per FR-009 in the feature spec).
 
-Refinement: split suppression.json into operator-written rules + skill-written cooldowns.json.
-
-Assembled: 2026-05-16T03:23:23Z
-Last corrected: 2026-05-16T18:12:40Z (retrospective SIR template re-sync note)
-Assembled by: Picard (Lead) — speckit.constitution for feature 001-discord-monitor
+Assembled: 2026-05-17
+Assembled by: speckit.constitution for feature 002-tuvok-telemetry
 Requested by: cyrusj
 
 Per-principle change summary:
@@ -26,92 +19,57 @@ Per-principle change summary:
   III.  UNCHANGED — Resilient Upstream-API Automation
   IV.   UNCHANGED — Type-Safe Headless TypeScript CLI
   V.    REVISED   — Stateless Operation & Secret Custody:
-                    (a) sanctioned-secret definition extended to include
-                        `DISCORD_BOT_TOKEN` (read-only Discord bot auth;
-                        provided by GitHub Actions secrets; never written
-                        to disk by feature code; NOT a STFC_ACCOUNTS
-                        writer);
-                    (b) durable-inputs enumeration extended to include
-                        the seven `discord-monitor` files
-                        (`config/discord-allowlist.json`,
-                        `config/classifier-model.json`,
-                        `data/discord/cursors.json`,
-                        `data/discord/candidates.jsonl`,
-                        `data/discord/tips-seen.jsonl`,
-                        `data/discord/suppression.json`,
-                        `data/discord/cooldowns.json`) and the
-                        `data/digests/**` artifact tree;
-                    (c) Token Capture Custody reaffirms that
-                        `DISCORD_BOT_TOKEN` MUST NOT be merged into
-                        `STFC_ACCOUNTS` and MUST NOT be handled by
-                        `scripts/capture-token.mjs`.
+                    Durable-inputs enumeration extended to include:
+                    (a) `config/model-tiers.json` (operator-maintained
+                        model tier classification);
+                    (b) `data/telemetry/sessions.jsonl` (append-only
+                        session telemetry records);
+                    (c) `data/telemetry/collection-log.jsonl` (append-only
+                        collection audit log);
+                    (d) `data/telemetry/reports/*.md` (generated summary
+                        reports).
+                    No new secrets. No new sanctioned writers of
+                    `STFC_ACCOUNTS`. Token Capture Custody unchanged.
   VI.   UNCHANGED — Specification-First Governance
   VII.  UNCHANGED — Artifact Hygiene
   VIII. UNCHANGED — Wire-First Discovery
   IX.   UNCHANGED — Test-First Discipline
 
-Speckit Reviewer Gates: UNCHANGED — verbatim from v1.2.0.
-
-Security & Compliance Constraints: REVISED — outbound network scope
-  extended to add (a) `https://discord.com/api/v10/...` (REST reads only,
-  read-only bot scopes; called by feature code under `src/discord/`) and
-  (b) `https://huggingface.co/...` (one-time classifier-weights download
-  on Actions cache miss, integrity-checked against the SHA-256 pinned in
-  `config/classifier-model.json`; never sends Discord message content or
-  game data). New binding constraint: NO Discord message content from any
-  monitored channel ever leaves the runner — all classification is
-  performed on-runner by the local model. Third-party action pinning is
-  extended to include `.github/workflows/discord-monitor.yml` alongside
-  `redeem.yml`, `refresh-token.yml`, `test.yml`, and `squad-test-gate.yml`.
-
+Speckit Reviewer Gates: UNCHANGED.
+Security & Compliance Constraints: UNCHANGED — no new outbound network
+  destinations, no new workflow permissions, no new third-party actions.
 Development Workflow: UNCHANGED.
 Governance: UNCHANGED.
 
-Templates re-sync (retrospective correction, 2026-05-16):
-  The original v1.3.0 ratification incorrectly recorded "Templates needing
-  re-sync: NONE" on the basis that no principles were renamed, added, or
-  removed. This overlooked that the Principle V guidance prose in
-  `.specify/templates/plan-template.md` made a factual claim about durable
-  inputs (then "limited to STFC_ACCOUNTS / promo-codes.txt") that was
-  superseded by the v1.3.0 enumeration expansion. Corrected in a follow-up
-  commit on branch 001-discord-monitor (no version bump — constitution
-  body unchanged; meta-report correction only).
-  Re-synced templates:
-    - .specify/templates/plan-template.md (Principle V row enumeration)
-  (spec-template.md and tasks-template.md contain no durable-inputs claim;
-  no changes required to those files.)
+Templates re-synced:
+  - .specify/templates/plan-template.md ✅ (Principle V row updated to
+    include `config/model-tiers.json`, `data/telemetry/` paths)
+  (spec-template.md and tasks-template.md contain no durable-inputs
+  claim; no changes required.)
 
-Cross-artifact follow-ups (out of scope for this amendment, flagged):
-  - `package.json`, `README.md`: do not currently reference the
-    constitution version; no update required.
-  - `.specify/memory/reviewer-runbook.md`: contains no version
-    reference; no update required.
-  - The three v1.3.0-targeted Known Tensions appended in v1.2.0
-    (Principle III auth/me failure taxonomy overclaim; Principle VII /
-    Security `.github/` scan-path overclaim; redeem/refresh concurrency
-    lock un-principled) are NOT resolved by this amendment — they are
-    deferred to a subsequent v1.3.x or v1.4.0 revision. The Known
-    Tensions section is preserved verbatim.
+Cross-artifact follow-ups:
+  - `package.json`, `README.md`: do not reference constitution version;
+    no update required.
+  - The three Known Tensions carried from v1.2.0 (Principle III auth/me
+    overclaim; Principle VII scan-path overclaim; redeem/refresh
+    concurrency lock un-principled) remain unresolved and are preserved
+    verbatim. They are deferred to a subsequent revision.
 
-Cross-check: Principles I, II, III, IV, VI, VII, VIII, IX are
-  byte-identical to v1.2.0 (verified by visual diff before commit).
-  Only Principle V, the Security & Compliance Constraints section, and
-  the version footer were modified by this amendment.
+Cross-check: Principles I, II, III, IV, VI, VII, VIII, IX, Speckit
+  Reviewer Gates, Security & Compliance Constraints, Development
+  Workflow, and Governance sections are byte-identical to v1.3.0.
+  Only Principle V and the version footer were modified.
 
-Carryover from v1.2.0 SYNC IMPACT REPORT:
-  Earlier history (v1.1.0 → v1.2.0 cross-lane assembly notes, Borg Queen
-  verification passes, Tuvok editorial corrections, cyrusj's Path D
-  acceptance) is retained in the v1.2.0 amendment record at
-  `.squad/decisions/inbox/bashir-v1.2.0-assembly.md` and related files;
-  not duplicated here to keep the v1.3.0 report scoped to v1.3.0 changes.
+Prior SIR history: v1.2.0 → v1.3.0 report is retained in the v1.3.0
+  amendment record; not duplicated here.
 <!-- /SYNC IMPACT REPORT -->
 
 
 # STFC Gift Redeemer Constitution
 
-**Version:** 1.3.0
+**Version:** 1.4.0
 **Ratified:** 2026-05-08
-**Last Amended:** 2026-05-15
+**Last Amended:** 2026-05-17
 
 ## Core Principles
 
@@ -287,6 +245,27 @@ sanctioned surfaces below; every other surface is treated as a leak.
   (`src/digest/`), executed inside `.github/workflows/discord-monitor.yml`.
   Purpose: human-readable daily summary; idempotent re-render (re-running
   the same UTC day overwrites that day's digest deterministically).
+- The `tuvok-telemetry` feature (`src/telemetry/**`, issue #15,
+  specs/002-tuvok-telemetry/) additionally produces the following
+  committed durable inputs/outputs (none of which contain secrets,
+  prompt content, or assistant responses — token counts and metadata
+  only, per FR-009 privacy-by-design):
+  - `config/model-tiers.json` — operator-maintained model tier
+    classification. Writer: human operator (manual edit, reviewed PR).
+    Purpose: map model identifiers to cost/capability tiers for
+    reporting.
+  - `data/telemetry/sessions.jsonl` — append-only session telemetry
+    records. Writer: the `tuvok-telemetry` feature code. Purpose:
+    durable per-session token-usage log.
+  - `data/telemetry/collection-log.jsonl` — append-only collection
+    audit log. Writer: same. Purpose: audit trail of telemetry
+    collection runs (timestamps, record counts, errors).
+  - `data/telemetry/reports/*.md` — generated summary reports.
+    Writer: the `tuvok-telemetry` feature code. Purpose:
+    human-readable aggregated usage summaries.
+  None of these files contain secrets, JWTs, account material,
+  prompt content, or assistant responses (only model identifiers,
+  token counts, timestamps, and aggregated metadata).
 - These are the *only* additional durable inputs and outputs the project
   recognizes.
 - A rerun after a partial failure MUST be safe: per-account failure does not block
@@ -760,4 +739,4 @@ reality, or it must be updated — never left as a zombie.
 - **Resolution scheduled:** v1.3.0
 - **Tracking:** `.squad/decisions/inbox/v1.3.0-backlog.md`
 
-**Version**: 1.3.0 | **Ratified**: 2026-05-08 | **Last Amended**: 2026-05-15
+**Version**: 1.4.0 | **Ratified**: 2026-05-08 | **Last Amended**: 2026-05-17
