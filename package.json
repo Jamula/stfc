@@ -22,7 +22,8 @@
         "prepare": "simple-git-hooks"
     },
     "simple-git-hooks": {
-        "pre-commit": "node scripts/pre-commit.mjs"
+        "pre-commit": "node scripts/pre-commit.mjs",
+        "pre-push": "node scripts/pre-push.mjs"
     },
     "dependencies": {
         "@discordjs/rest": "^2.5.0",
