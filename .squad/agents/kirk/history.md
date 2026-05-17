@@ -55,8 +55,8 @@ todo. Minor: `quickstart.md` line 84 still references `@xenova/transformers` —
 
 **Verdict:** CHANGES_REQUESTED. Found a variable shadowing bug:
 
-- `let classifiedTips: Tip[] = []` at function scope (line ~183)
-- `const classifiedTips: Tip[] = []` inside `if (token !== null)` (line ~231)
+- `let classifiedTips: Tip[] = []` at function scope (line ~183; line number may vary)
+- `const classifiedTips: Tip[] = []` inside `if (token !== null)` (line ~231; line number may vary)
 
 The inner `const` shadows the outer `let`. After the if-block exits, tip-seen
 persistence and the finalize() call both reference the outer (empty) array. Classified

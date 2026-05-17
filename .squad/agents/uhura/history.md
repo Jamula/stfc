@@ -29,7 +29,7 @@ High urgency: CI token-scanner must be deployed before first speckit spec merge 
 
 ### Workflow cron edits — operating reminders (2026-05-17)
 
-Captured while fixing Issue #14 (`refresh-token.yml` → Saturday 00:00 UTC,
+Captured while fixing Issue #14 (`refresh-token.yml` -> Saturday 00:00 UTC,
 PR #20):
 
 - **GitHub Actions cron DOW field:** `MIN HOUR DOM MONTH DOW`, where DOW
