@@ -28,9 +28,9 @@ Per `.github/agents/squad.agent.md` § Per-Agent Model Selection:
 **Fallback chains** (silent; max 3 retries before nuclear fallback):
 
 ```
-Premium:  claude-opus-4.6 → claude-opus-4.5 → claude-sonnet-4.6 → claude-sonnet-4.5 → (omit model)
-Standard: claude-sonnet-4.6 → claude-sonnet-4.5 → gpt-5.4 → gpt-5.3-codex → (omit model)
-Fast:     claude-haiku-4.5 → gpt-5.4-mini → (omit model)
+Premium:  claude-opus-4.7 → claude-opus-4.6 → claude-opus-4.5 → claude-sonnet-4.6 → claude-sonnet-4.5 → (omit model)
+Standard: claude-sonnet-4.6 → claude-sonnet-4.5 → gpt-5.5 → gpt-5.4 → gpt-5.3-codex → (omit model)
+Fast:     claude-haiku-4.5 → gpt-5.4-mini → gpt-5-mini → gpt-4.1 → (omit model)
 ```
 
 `(omit model)` = call `task` without the `model` parameter — platform default; always works.
@@ -39,7 +39,7 @@ Fast:     claude-haiku-4.5 → gpt-5.4-mini → (omit model)
 
 ## 2. Model catalog
 
-> ⚠️ **Catalog vs. governance gap:** `.github/agents/squad.agent.md` lines 451–453 list an older catalog: `claude-opus-4.6` as the top Premium tier, plus `gpt-5.1-codex-max`, `gpt-5.1-codex`, `gpt-5.1`, `gpt-5.1-codex-mini`, and `gemini-3-pro-preview`. None of these appear in the `task` tool's current `model` enum; the opus-4.7 family is absent entirely. The tables below reflect the **CLI tool's actual enum** as ground truth. The squad.agent.md catalog is out of date — flag for maintainer on next governance pass. **Do not change squad.agent.md here; it is maintainer-authored.**
+> ✅ **Catalog aligned:** As of PR #39, `.github/agents/squad.agent.md` lists the same model catalog as the CLI `task` tool enum. The tables below match both sources.
 
 ### Premium tier
 
@@ -64,7 +64,7 @@ Fast:     claude-haiku-4.5 → gpt-5.4-mini → (omit model)
 |-------|--------|----------|------|------|------|
 | `claude-sonnet-4.6` | Standard | **Platform default** · code review · general agent work | Excellent cost/quality balance; reliable for all code work | Slightly slower than GPT-5.x | 💰💰 |
 | `claude-sonnet-4.5` | Standard | Code quality (older gen fallback) | Proven; stable | Older gen; prefer 4.6 | 💰💰 |
-| `gpt-5.5` | Standard | General-purpose · current Scotty override | Latest OpenAI general model; strong code + prose | Context window unverified locally; no local benchmark yet | 💰💰 |
+| `gpt-5.5` | Standard | General-purpose · current Garak override | Latest OpenAI general model; strong code + prose | Context window unverified locally; no local benchmark yet | 💰💰 |
 | `gpt-5.4` | Standard | General-purpose (mature release) | Reliable; solid code + analysis | Older than 5.5 | 💰💰 |
 | `gpt-5.3-codex` | Standard | **Heavy code generation specialist** | 500+ LOC multi-file refactors; complex algorithms; purpose-built for code gen | Weaker on architectural framing and prose; not ideal for non-code tasks | 💰💰 |
 | `gpt-5.2-codex` | Standard | Code generation (older gen) | Multi-file code work; lower cost than 5.3 | Older; prefer 5.3-codex | 💰💰 |
@@ -72,7 +72,7 @@ Fast:     claude-haiku-4.5 → gpt-5.4-mini → (omit model)
 
 **Call-outs:**
 
-- **`gpt-5.5` (current Scotty override)** — Set in `.squad/config.json` directly; no decisions.md entry documents the rationale for switching from `gpt-5.3-codex`. The prior doc (2026-05-16) recommended codex for heavy refactors. `gpt-5.5` is a reasonable broader choice if Scotty's workload has shifted toward mixed code + prose tasks, but no local benchmark confirms the improvement. See Open Questions §3.
+- **`gpt-5.3-codex` (current Scotty override)** — Set in `.squad/config.json` per Cyrus decision (2026-05-17). Code-specialist model for Scotty's code-writing role; replaces the earlier `gpt-5.5` override. See §4 for rationale.
 - **`gpt-5.3-codex` / `gpt-5.2-codex`** — Code-gen specialists. Great at producing large, syntactically correct TypeScript. Trade-off: weaker at the architectural framing narrative that reviewers (Kirk, Garak) expect in PRs. Best paired with a reasoning-capable review pass.
 
 ### Fast / cheap tier
@@ -87,7 +87,6 @@ Fast:     claude-haiku-4.5 → gpt-5.4-mini → (omit model)
 **Call-outs:**
 
 - **`claude-haiku-4.5`** — Scribe's permanent model. Mechanical file ops, append-only writes, JSON manipulation, git commits. **Never bump.** Cost constraint is non-negotiable: Scribe runs on every session boundary; accumulating sonnet-class cost here compounds rapidly.
-- **`gemini-3-pro-preview`** — Listed in `.github/agents/squad.agent.md` line 452 as a Standard-tier model for "analytical diversity for code reviews after a rejection." **NOT present in the current `task` tool enum. Cannot be dispatched.** Recommend removing this reference from squad.agent.md on the next maintainer governance pass, replacing with available cross-provider options (`gpt-5.5`, `gpt-5.4`). Out of scope for this doc to fix.
 
 ---
 
@@ -121,12 +120,12 @@ Fast:     claude-haiku-4.5 → gpt-5.4-mini → (omit model)
 
 ### Scotty — Core Dev
 
-**Current model:** `gpt-5.5` (Layer 0 config override)
+**Current model:** `gpt-5.3-codex` (Layer 0 config override)
 **Workload mix:** TypeScript CLI implementation; multi-file refactors; workflow YAML; test scaffolding.
-**Recommendation:** `gpt-5.5` — **unchanged pending Cyrus confirmation** (see Open Questions §3)
+**Recommendation:** `gpt-5.3-codex` — **confirmed by Cyrus** (Open Questions §3 resolved 2026-05-17)
 **Why:**
-- `gpt-5.5` is the latest general-purpose OpenAI model and a plausible upgrade from `gpt-5.3-codex`.
-- No decisions.md entry documents why the switch was made. No local benchmark confirms `gpt-5.5` outperforms `gpt-5.3-codex` on heavy TypeScript refactors — the core of Scotty's workload.
+- Code-specialist model for a code-writing role. Purpose-built for heavy TypeScript refactors — the core of Scotty's workload.
+- Replaces the earlier `gpt-5.5` override; rationale captured in decisions ledger.
 
 **Override when:** 500+ LOC single-purpose code-gen tasks → `gpt-5.3-codex` may still outperform on pure code volume. Recommended: compare on the next large Scotty task before treating gpt-5.5 as permanent.
 
@@ -134,9 +133,9 @@ Fast:     claude-haiku-4.5 → gpt-5.4-mini → (omit model)
 
 ### Uhura — Integrations Dev
 
-**Current model:** `claude-opus-4.7-1m-internal` (Layer 0 config override)
+**Current model:** `claude-sonnet-4.6` (Layer 0 config override)
 **Workload mix:** Discord API integration; STFC store API; webhook handling; multi-file integration code.
-**Recommendation:** Downgrade to `claude-sonnet-4.6` for standard tasks; reinstate 1m-internal via session directive for explicit cross-API multi-file reads.
+**Recommendation:** `claude-sonnet-4.6` — **confirmed by Cyrus** (Open Questions §1 resolved 2026-05-17)
 **Why:**
 - Most of Uhura's work is targeted integration code — writing adapters, handling HTTP responses, wiring webhooks. `claude-sonnet-4.6` is the code-quality standard and costs significantly less.
 - The 1M window justification for Picard and Kirk is specific: loading entire governance artifact trees. Uhura's tasks rarely require ingesting the full artifact tree simultaneously. Applying the same override by default is cost without proportionate value.
