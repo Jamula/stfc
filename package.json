@@ -1,41 +1,42 @@
 {
-    "name": "stfc-gift-redeemer",
-    "private": true,
-    "version": "1.0.0",
-    "description": "Headless redemption of Star Trek Fleet Command web-store gifts and promo codes, runnable as a scheduled GitHub Action.",
-    "type": "module",
-    "engines": {
-        "node": ">=24"
-    },
-    "scripts": {
-        "skill:run-all": "tsx src/cli.ts run-all",
-        "skill:check-auth": "tsx src/cli.ts check-auth",
-        "skill:list-gifts": "tsx src/cli.ts list-gifts",
-        "skill:claim-gifts": "tsx src/cli.ts claim-gifts",
-        "skill:redeem-codes": "tsx src/cli.ts redeem-codes",
-        "skill:discord-monitor": "tsx src/cli.ts discord-monitor",
-        "test": "node --import tsx --test tests/index.test.ts",
-        "test:watch": "node --import tsx --test --watch tests/index.test.ts",
-        "typecheck": "tsc --noEmit",
-        "capture-token": "node scripts/capture-token.mjs",
-        "playwright:install": "npx playwright install chromium",
-        "prepare": "simple-git-hooks"
-    },
-    "simple-git-hooks": {
-        "pre-commit": "node scripts/pre-commit.mjs",
-        "pre-push": "node scripts/pre-push.mjs"
-    },
-    "dependencies": {
-        "@discordjs/rest": "^2.5.0",
-        "@huggingface/transformers": "^4.2.0",
-        "discord-api-types": "^0.38.0",
-        "tsx": "^4.19.2",
-        "zod": "^3.25.76"
-    },
-    "devDependencies": {
-        "@types/node": "^24.0.0",
-        "playwright": "^1.49.1",
-        "simple-git-hooks": "^2.13.1",
-        "typescript": "~5.7.2"
-    }
+	"name": "stfc-gift-redeemer",
+	"private": true,
+	"version": "1.0.0",
+	"description": "Headless redemption of Star Trek Fleet Command web-store gifts and promo codes, runnable as a scheduled GitHub Action.",
+	"type": "module",
+	"engines": {
+		"node": ">=24"
+	},
+	"scripts": {
+		"skill:run-all": "tsx src/cli.ts run-all",
+		"skill:check-auth": "tsx src/cli.ts check-auth",
+		"skill:list-gifts": "tsx src/cli.ts list-gifts",
+		"skill:claim-gifts": "tsx src/cli.ts claim-gifts",
+		"skill:redeem-codes": "tsx src/cli.ts redeem-codes",
+		"skill:discord-monitor": "tsx src/cli.ts discord-monitor",
+		"test": "node --import tsx --test tests/index.test.ts",
+		"test:watch": "node --import tsx --test --watch tests/index.test.ts",
+		"typecheck": "tsc --noEmit",
+		"capture-token": "node scripts/capture-token.mjs",
+		"playwright:install": "npx playwright install chromium",
+		"prepare": "simple-git-hooks",
+		"skill:telemetry": "tsx src/cli.ts telemetry"
+	},
+	"simple-git-hooks": {
+		"pre-commit": "node scripts/pre-commit.mjs",
+		"pre-push": "node scripts/pre-push.mjs"
+	},
+	"dependencies": {
+		"@discordjs/rest": "^2.5.0",
+		"@huggingface/transformers": "^4.2.0",
+		"discord-api-types": "^0.38.0",
+		"tsx": "^4.19.2",
+		"zod": "^3.25.76"
+	},
+	"devDependencies": {
+		"@types/node": "^24.0.0",
+		"playwright": "^1.49.1",
+		"simple-git-hooks": "^2.13.1",
+		"typescript": "~5.7.2"
+	}
 }

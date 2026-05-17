@@ -13,13 +13,14 @@ import { listGifts } from "./skills/listGifts.ts";
 import { claimGifts } from "./skills/claimGifts.ts";
 import { redeemCodes } from "./skills/redeemCodes.ts";
 import { discordMonitor } from "./skills/discordMonitor.ts";
+import { telemetry } from "./skills/telemetry.ts";
 
 const log = createLogger("cli");
 
 const PROMO_CODES_PATH = "promo-codes.txt";
 const HISTORY_PATH = "docs/redeem-history.md";
 
-const SKILLS = ["run-all", "check-auth", "list-gifts", "claim-gifts", "redeem-codes", "discord-monitor"] as const;
+const SKILLS = ["run-all", "check-auth", "list-gifts", "claim-gifts", "redeem-codes", "discord-monitor", "telemetry"] as const;
 type SkillName = (typeof SKILLS)[number];
 
 interface SkillOptions {
@@ -38,7 +39,13 @@ const SKILL_FNS: Record<SkillName, SkillFn> = {
   "claim-gifts": (o) => claimGifts(o),
   "redeem-codes": (o) => redeemCodes(o),
   "discord-monitor": (o) => discordMonitor({ accounts: o.accounts, promoCodesPath: o.promoCodesPath }),
+  "telemetry": () => telemetry({
+    subcommand: (process.argv[3] as "collect" | "report" | "recommend") ?? undefined,
+  }),
 };
+
+// Skills that do NOT require accounts (operate on session store, not STFC API).
+const ACCOUNT_FREE_SKILLS: ReadonlySet<SkillName> = new Set(["telemetry"]);
 
 async function main(): Promise<number> {
   const skillName = (process.argv[2] ?? "").trim();
@@ -49,16 +56,18 @@ async function main(): Promise<number> {
 
   const summary = createSummaryWriter();
 
-  let accounts: Account[];
-  try {
-    accounts = loadAccounts();
-  } catch (err) {
-    if (err instanceof AccountsConfigError) {
-      log.error(err.message);
-      await safeAppendSummary(summary, renderInfraError("Account configuration error", err.message));
-      return 1;
+  let accounts: Account[] = [];
+  if (!ACCOUNT_FREE_SKILLS.has(skillName)) {
+    try {
+      accounts = loadAccounts();
+    } catch (err) {
+      if (err instanceof AccountsConfigError) {
+        log.error(err.message);
+        await safeAppendSummary(summary, renderInfraError("Account configuration error", err.message));
+        return 1;
+      }
+      throw err;
     }
-    throw err;
   }
 
   try {
