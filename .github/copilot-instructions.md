@@ -1,7 +1,7 @@
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan
-at `specs/001-discord-monitor/plan.md`.
+at `specs/003-discord-oauth/plan.md`.
 <!-- SPECKIT END -->
 
 # Repo-specific operating rules
