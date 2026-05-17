@@ -45,16 +45,16 @@ before the fix and passes after. Tests are NOT optional.
 
 ### Constitution Amendment (Blocking Gate — plan.md Principle V)
 
-- [ ] T007 Amend `.specify/memory/constitution.md` from v1.3.0 → v1.4.0: add `config/model-tiers.json` (operator-written), `data/telemetry/sessions.jsonl` (skill-written), `data/telemetry/collection-log.jsonl` (skill-written), and `data/telemetry/reports/*.md` (skill-written) to Principle V durable-inputs enumeration
-- [ ] T008 Re-sync `.specify/templates/plan-template.md` with updated constitution per copilot-instructions.md Rule 1 (grep and cross-check durable inputs)
+- [x] T007 Amend `.specify/memory/constitution.md` from v1.3.0 → v1.4.0: add `config/model-tiers.json` (operator-written), `data/telemetry/sessions.jsonl` (skill-written), `data/telemetry/collection-log.jsonl` (skill-written), and `data/telemetry/reports/*.md` (skill-written) to Principle V durable-inputs enumeration
+- [x] T008 Re-sync `.specify/templates/plan-template.md` with updated constitution per copilot-instructions.md Rule 1 (grep and cross-check durable inputs)
 
 ### Core Schemas (shared by all user stories)
 
-- [ ] T009 [P] Implement Zod schemas for `TelemetryRecord`, `ModelUsage`, and `CollectionLog` entities in `src/telemetry/schemas.ts` (per data-model.md Entity 1 + Entity 4)
-- [ ] T010 [P] Implement Zod schemas for `TelemetrySummary`, `ModelSummary`, `AgentSummary`, `CategorySummary`, `OutcomeSummary` in `src/telemetry/schemas.ts` (per data-model.md Entity 2)
-- [ ] T011 [P] Implement Zod schemas for `ModelRecommendation`, `RecommendationEvidence` in `src/telemetry/schemas.ts` (per data-model.md Entity 3)
-- [ ] T012 [P] Implement Zod schema for `ModelTierMap` config in `src/telemetry/schemas.ts` (per data-model.md Entity 5)
-- [ ] T013 Implement model tier resolution module in `src/telemetry/tiers.ts` — load `config/model-tiers.json`, validate with Zod, resolve model → tier with `defaultTier` fallback, log warning for unmapped models
+- [x] T009 [P] Implement Zod schemas for `TelemetryRecord`, `ModelUsage`, and `CollectionLog` entities in `src/telemetry/schemas.ts` (per data-model.md Entity 1 + Entity 4)
+- [x] T010 [P] Implement Zod schemas for `TelemetrySummary`, `ModelSummary`, `AgentSummary`, `CategorySummary`, `OutcomeSummary` in `src/telemetry/schemas.ts` (per data-model.md Entity 2)
+- [x] T011 [P] Implement Zod schemas for `ModelRecommendation`, `RecommendationEvidence` in `src/telemetry/schemas.ts` (per data-model.md Entity 3)
+- [x] T012 [P] Implement Zod schema for `ModelTierMap` config in `src/telemetry/schemas.ts` (per data-model.md Entity 5)
+- [x] T013 Implement model tier resolution module in `src/telemetry/tiers.ts` — load `config/model-tiers.json`, validate with Zod, resolve model → tier with `defaultTier` fallback, log warning for unmapped models
 
 **Checkpoint**: Constitution amended, all schemas defined, tier resolution working — user story implementation can now begin.
 
