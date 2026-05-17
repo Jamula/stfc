@@ -34,7 +34,9 @@ import {
 //   RunReport.errors: Array<{ account?: string, message: string }>
 //
 //   exitCode is 0 unless an infrastructure-class error was raised (schema
-//   mismatch, malformed accounts, uncaught crash) — in which case 1.
+//   mismatch, malformed accounts, uncaught crash) — in which case 1. If every
+//   configured account returns TOKEN_EXPIRED and there are no infra errors, it
+//   returns 2 so the workflow loudly signals secret rotation is needed.
 //
 // The fake client below is treated as ApiClient-shaped via a cast. The real
 // ApiClient just needs methods that look like these (the orchestrator should
@@ -172,6 +174,34 @@ describe("runAll", () => {
       "good account should have CLAIMED",
     );
     assert.equal(bad.tokenStatus, Outcomes.TOKEN_EXPIRED);
+  });
+
+  it("multi-account: all TokenExpired → exitCode 2 and summary flags secret rotation", async () => {
+    const expiredFake = makeFakeClient({
+      getMe: async () => {
+        throw new TokenExpiredError("expired");
+      },
+    });
+    const summaryFile = path.join(dir, "summary-all-expired.md");
+
+    const { result, exitCode } = await runAll({
+      accounts: [
+        { name: "main", token: makeJwt({ exp: 9999999999 }) },
+        { name: "alt", token: makeJwt({ exp: 9999999999 }) },
+      ],
+      clientFactory: () => expiredFake as unknown as ApiClient,
+      summary: createSummaryWriter(summaryFile),
+      promoCodesPath: emptyPromoFile(),
+    });
+
+    assert.equal(exitCode, 2);
+    assert.equal(result.errors.length, 0);
+    assert.ok(result.accounts.every((a) => a.tokenStatus === Outcomes.TOKEN_EXPIRED));
+
+    const summary = fs.readFileSync(summaryFile, "utf8");
+    assert.match(summary, /all accounts/i);
+    assert.match(summary, /TOKEN_EXPIRED/);
+    assert.match(summary, /secret rotation/i);
   });
 
   it("promo codes mix: success / used / invalid / unknown classified correctly", async () => {

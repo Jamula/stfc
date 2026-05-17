@@ -16,7 +16,7 @@
 //       }>,
 //       errors: Array<{ account?: string, message: string }>,
 //     },
-//     exitCode: number,  // 0 unless an infrastructure-class error occurred
+//     exitCode: number,  // 0 ok/partial account success, 1 infra error, 2 all tokens expired
 //   }
 
 import type { Account } from "../lib/accounts.ts";
@@ -285,7 +285,7 @@ async function finalize(
   historyPath: string | undefined,
   now: (() => Date) | undefined,
 ): Promise<RunAllOutput> {
-  const exitCode = report.errors.length > 0 ? 1 : 0;
+  const exitCode = determineExitCode(report);
   if (summary) {
     try {
       await summary.append(renderSummary(report, exitCode));
@@ -362,6 +362,11 @@ function renderSummary(report: RunAllReport, exitCode: number): string {
   const parts: string[] = [];
   parts.push(heading(1, `${status} STFC Gift Redeemer`));
 
+  if (exitCode === 2) {
+    parts.push(heading(2, "Secret rotation needed"));
+    parts.push("All accounts returned TOKEN_EXPIRED. Re-capture tokens and update STFC_ACCOUNTS.\n");
+  }
+
   if (report.errors.length > 0) {
     parts.push(heading(2, "Infrastructure errors"));
     for (const e of report.errors) {
@@ -389,6 +394,16 @@ function renderSummary(report: RunAllReport, exitCode: number): string {
   }
 
   return parts.join("\n");
+}
+
+function determineExitCode(report: RunAllReport): number {
+  if (report.errors.length > 0) return 1;
+
+  const hasAccounts = report.accounts.length > 0;
+  const allAccountsExpired =
+    hasAccounts && report.accounts.every((account) => account.tokenStatus === Outcomes.TOKEN_EXPIRED);
+
+  return allAccountsExpired ? 2 : 0;
 }
 
 function escapeMd(s: string): string {
