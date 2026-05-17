@@ -27,8 +27,6 @@
 
 ---
 
-## Learnings
-
 ### 001-discord-monitor — tasks.md generation (2026-05-13)
 
 **tasks-template.md shape:** Template enforces Format `[ID] [P?] [Story] Description`;

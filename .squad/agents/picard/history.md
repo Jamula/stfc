@@ -9,8 +9,6 @@
 
 ### Governance Template Re-sync — plan-template.md P0-1 fix (2026-05-16)
 
-## Learnings
-
 **SIR template re-sync claims must be verified against actual template content, not just structural change.**
 
 When a constitution amendment's Sync Impact Report (SIR) concludes "Templates needing re-sync: NONE" on the basis that no principles were renamed/added/removed, that structural argument does not cover *content drift* — a template row that made a factual claim about durable inputs was silently superseded by the very enumeration the amendment added. Takeaway: any SIR re-sync verdict must include a literal grep/search of template content for load-bearing claims, not just a structural diff of principle headings.
