@@ -228,7 +228,7 @@ export async function discordMonitor(
     };
 
     const tipsSeen = await readTipsSeen(tipsSeenPath);
-    const classifiedTips: Tip[] = [];
+    classifiedTips = [];
 
     for (const m of ingestedMessages) {
       // Moderation pre-filter (FR-020).

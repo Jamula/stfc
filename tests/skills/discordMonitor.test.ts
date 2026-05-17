@@ -769,6 +769,62 @@ describe("discordMonitor / RunHealth counters (T035 — US3)", () => {
     assert.ok(result.candidatesSuppressedCooldown >= 1,
       `candidatesSuppressedCooldown should be >= 1, got ${result.candidatesSuppressedCooldown}`);
   });
+
+  it("classified tips appear in digest output and tips-seen.jsonl (tip-flow integration)", async () => {
+    writeAllowlist(ds.allowlist, [{ id: "222222222222222222", label: "tips" }]);
+    const tipMessage = [{
+      id: "511111111111111111",
+      channel_id: "222222222222222222",
+      content: "tip: upgrade your ops building before starbase level 30",
+      timestamp: "2026-05-16T07:00:00.000000+00:00",
+      edited_timestamp: null,
+      author: { id: "999999999999999999", username: "tipster", bot: false },
+      type: 0,
+    }];
+    const client: IngestClient = {
+      getMe: async () => ({ id: "bot", username: "stfc-monitor" }),
+      getChannelMessages: async (_id, opts) => (opts.after !== undefined ? [] : tipMessage),
+    };
+
+    const tipsSeenPath = path.join(ds.dir, "tips-seen.jsonl");
+    const { result } = await discordMonitor({
+      accounts: [{ name: "main", token: makeJwt() }],
+      paths: {
+        allowlist: ds.allowlist,
+        cursors: ds.cursors,
+        candidates: ds.candidates,
+        suppression: ds.suppression,
+        cooldowns: ds.cooldowns,
+        digestsDir: ds.digestsDir,
+        promoCodes: ds.promoCodes,
+        tipsSeen: tipsSeenPath,
+      },
+      clientFactory: () => client,
+      now: () => NOW,
+      runId: "run-tip-flow",
+      redeemFn: async () => ({ result: { rows: [] }, exitCode: 0 }),
+    });
+
+    // 1. The digest must contain at least one classified tip.
+    assert.ok(result.digestPath, "digest file should be written");
+    const digestContent = fs.readFileSync(result.digestPath!, "utf8");
+    assert.match(digestContent, /tip/i, "digest should contain tip content");
+
+    // 2. tipsClassified.tip counter must be >= 1.
+    assert.ok(result.tipsClassified.tip >= 1,
+      `tipsClassified.tip should be >= 1, got ${result.tipsClassified.tip}`);
+
+    // 3. tips-seen.jsonl must have at least one entry.
+    assert.ok(fs.existsSync(tipsSeenPath), "tips-seen.jsonl should exist");
+    const tipsSeenLines = fs.readFileSync(tipsSeenPath, "utf8").trim().split("\n").filter(Boolean);
+    assert.ok(tipsSeenLines.length >= 1,
+      `tips-seen.jsonl should have >= 1 line, got ${tipsSeenLines.length}`);
+
+    // 4. The persisted tip entry should parse as valid JSON with expected fields.
+    const entry = JSON.parse(tipsSeenLines[0]!);
+    assert.ok(entry.contentHash, "tip-seen entry must have contentHash");
+    assert.ok(entry.category === "tip", `tip-seen category should be 'tip', got '${entry.category}'`);
+  });
 });
 
 // ── T036 [US3] — Job Summary unit test ──────────────────────────────────────
