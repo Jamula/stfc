@@ -54,6 +54,33 @@ PR #20):
 
 ---
 
+### Codespace token-scope discovery + devcontainer permissions fix (2026-05-17)
+
+**Context:** Issue #17 (Dependabot triage) blocked on `403 Resource not accessible by integration` from `/repos/Jamula/stfc/dependabot/alerts`. Root cause: Codespace-managed `GITHUB_TOKEN` does not include `security_events` scope by default.
+
+**Key finding:** `gh auth refresh` cannot add scopes to Codespace-managed tokens. The token is issued at container-creation time and is immutable for the session. The only durable fix is declaring the permission in `.devcontainer/devcontainer.json` under `customizations.codespaces.repositories.{owner/repo}.permissions.security_events: read`. After Codespace rebuild, the token is re-issued with the declared scope.
+
+**Pattern: expand existing issue rather than file a new one.** When a discovery during a session reveals a second acceptance criterion that belongs naturally with an existing issue (same file, same container-creation event), append the criterion to the existing issue via `gh issue comment` rather than opening a new issue. This keeps the scope coherent for reviewers and avoids a redundant PR. PR #33 covers both the original #16 idle-stop ask and the new security_events scope in a single-file diff.
+
+**devcontainer.json permissions block structure:**
+```json
+"customizations": {
+  "codespaces": {
+    "repositories": {
+      "Jamula/stfc": {
+        "permissions": {
+          "security_events": "read"
+        }
+      }
+    }
+  }
+}
+```
+
+**Follow-up required:** Cyrus must rebuild the Codespace after PR #33 merges for the new token scope to take effect. #17 can then proceed in a fresh session.
+
+---
+
 ## Session History (Current)
 
 *For detailed session logs, see `.squad/log/` and `.squad/orchestration-log/`.*

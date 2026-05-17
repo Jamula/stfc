@@ -73,3 +73,56 @@ When a constitution amendment's Sync Impact Report (SIR) concludes "Templates ne
    single chained bash invocation (~10 issues in ~30s). Faster than
    one-tool-call-per-issue and avoids 10× the round-trip cost. Pattern
    to reuse for future bulk-triage tasks.
+
+## Learnings — 2026-05-17 (squad self-test epic batch, #24–#32)
+
+**Filed 9 self-test epics** covering every active member. Motivating
+frame from @cyrusj: *"as we enhance their capability, we don't regress
+functionality."* Issues: Picard #24, Kirk #25, Scotty #26, Uhura #27,
+Bashir #28, Garak #29, Tuvok #30, Scribe #31, Ralph #32. Hub comment on
+#24, cross-link on #15.
+
+7. **"Self-test" is not a uniform surface across roles — it's a
+   taxonomy.** Designing one test shape and applying it to all 9 members
+   would have produced 9 reviewer-style harnesses, 6 of which would be
+   wrong (Scotty/Uhura are implementers, Bashir is a test-writer, Tuvok
+   is editorial, Scribe is mechanical, Ralph is a loop). The per-role
+   surface analysis (captured in `.squad/skills/agent-self-test/SKILL.md`)
+   is the reusable artifact — the 9 issue bodies are downstream of it.
+   For any new agent added to the roster, hit the skill first; don't
+   re-derive.
+
+8. **Ralph is the load-bearing exception.** He is not LLM-driven in the
+   usual sense — his "outputs" are state transitions of a scan loop, not
+   generated text. Assertions against prompt-output for Ralph would
+   silently pass on a broken loop. Always carve Ralph (and any future
+   pure-monitor role) out of the reviewer/implementer test pattern.
+
+9. **#15 disposition — link, don't merge, don't supersede.** Asked
+   whether to extend #15 to cover Tuvok's self-test (Option B) or
+   supersede #15 with the new issue (Option C). Picked Option A — file
+   separately, link both. Rationale: #15 is data-collection for
+   evidence-based model selection; #30 is regression-detection on
+   editorial outputs. Different acceptance, different consumers,
+   different cadence. They share a substrate (a scriptable `task`-tool
+   driver) — coordination note on #24 says whichever lands first owns
+   the driver design. General heuristic: if two issues share a
+   *substrate* but differ in *consumer / cadence / acceptance*, file
+   separately and cross-link.
+
+10. **Filing 9 issues in one bash invocation via a helper function is
+    much faster than 9 separate `gh issue create` tool calls.** Same
+    parallel-bulk-ops pattern as Learning #6, scaled up. Used a scratch
+    shell script for the duration of the task, then cleaned it up.
+
+11. **Missing `squad:scribe` label was a silent gap.** The roster lists
+    Scribe as Silent but the routing label was never created. Filing #31
+    forced the creation. Whenever a new member joins the roster,
+    `gh label list | grep "squad:{name}"` should be the first
+    verification step before any issue is filed against them.
+
+**Skill registered:** `.squad/skills/agent-self-test/SKILL.md` — per-role
+self-test surface taxonomy + cross-cutting check list + harness-shape
+decision points. Reusable for every future agent added to the squad.
+
+**Decision memo:** `.squad/decisions/inbox/picard-self-test-epic-2026-05-17.md`.
