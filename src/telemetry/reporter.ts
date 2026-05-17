@@ -79,44 +79,51 @@ export function aggregateRecords(records: TelemetryRecord[]): TelemetrySummary {
   const totalOutput = records.reduce((s, r) => s + r.outputTokens, 0);
 
   // By model
-  const modelMap = new Map<string, { tier: string; sessions: TelemetryRecord[] }>();
+  const modelMap = new Map<
+    string,
+    {
+      tier: string;
+      sessionCount: number;
+      inputTokens: number;
+      outputTokens: number;
+      totalDurationSeconds: number;
+      successCount: number;
+    }
+  >();
   for (const r of records) {
     for (const mb of r.modelBreakdown) {
       const key = mb.model;
       const existing = modelMap.get(key);
       if (existing) {
-        existing.sessions.push(r);
+        existing.sessionCount += 1;
+        existing.inputTokens += mb.inputTokens;
+        existing.outputTokens += mb.outputTokens;
+        existing.totalDurationSeconds += r.durationSeconds;
+        if (r.outcome === "success") existing.successCount += 1;
       } else {
-        modelMap.set(key, { tier: mb.tier, sessions: [r] });
+        modelMap.set(key, {
+          tier: mb.tier,
+          sessionCount: 1,
+          inputTokens: mb.inputTokens,
+          outputTokens: mb.outputTokens,
+          totalDurationSeconds: r.durationSeconds,
+          successCount: r.outcome === "success" ? 1 : 0,
+        });
       }
     }
   }
 
   const byModel: ModelSummary[] = Array.from(modelMap.entries()).map(([model, data]) => {
-    // Deduplicate sessions for this model
-    const uniqueSessions = [...new Set(data.sessions.map((s) => s.sessionHash))];
-    const sessionRecords = uniqueSessions.map(
-      (hash) => records.find((r) => r.sessionHash === hash)!,
-    );
-    const modelInput = sessionRecords.reduce((s, r) => {
-      const mb = r.modelBreakdown.find((m) => m.model === model);
-      return s + (mb?.inputTokens ?? 0);
-    }, 0);
-    const modelOutput = sessionRecords.reduce((s, r) => {
-      const mb = r.modelBreakdown.find((m) => m.model === model);
-      return s + (mb?.outputTokens ?? 0);
-    }, 0);
-    const avgDuration = sessionRecords.reduce((s, r) => s + r.durationSeconds, 0) / sessionRecords.length;
-    const successCount = sessionRecords.filter((r) => r.outcome === "success").length;
+    const avgDuration = data.totalDurationSeconds / data.sessionCount;
 
     return {
       model,
       tier: data.tier,
-      sessionCount: uniqueSessions.length,
-      inputTokens: modelInput,
-      outputTokens: modelOutput,
+      sessionCount: data.sessionCount,
+      inputTokens: data.inputTokens,
+      outputTokens: data.outputTokens,
       avgDurationSeconds: Math.round(avgDuration),
-      successRate: uniqueSessions.length > 0 ? successCount / uniqueSessions.length : 0,
+      successRate: data.sessionCount > 0 ? data.successCount / data.sessionCount : 0,
     };
   });
 
@@ -181,7 +188,11 @@ export function aggregateRecords(records: TelemetryRecord[]): TelemetrySummary {
   return {
     generatedAt: now,
     periodStart: sorted[0]!.sessionStartedAt,
-    periodEnd: sorted[sorted.length - 1]!.sessionStartedAt,
+    periodEnd: sorted.reduce((latest, record) => {
+      return new Date(record.sessionEndedAt).getTime() > new Date(latest).getTime()
+        ? record.sessionEndedAt
+        : latest;
+    }, sorted[0]!.sessionEndedAt),
     totalSessions: records.length,
     totalInputTokens: totalInput,
     totalOutputTokens: totalOutput,

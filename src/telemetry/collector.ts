@@ -218,6 +218,8 @@ export interface CollectOptions {
   tierMap: ModelTierMap;
   /** How many days back to look for sessions (default: 7). */
   lookbackDays?: number;
+  /** Optional JSONL file path containing session/usage/ref tuples. */
+  sessionsFile?: string;
   /** Supply session data directly (for testing / offline mode). */
   sessions?: Array<{
     session: RawSession;
@@ -231,6 +233,8 @@ export interface CollectResult {
   sessionsSkipped: number;
   errors: string[];
 }
+
+type CollectSessionInput = NonNullable<CollectOptions["sessions"]>[number];
 
 /**
  * Collect telemetry from provided session data, write to sessions.jsonl.
@@ -248,7 +252,16 @@ export async function collectTelemetry(opts: CollectOptions): Promise<CollectRes
   let skipped = 0;
   const errors: string[] = [];
 
-  const sessions = opts.sessions ?? [];
+  const fileSessions = opts.sessionsFile
+    ? await loadSessionsFromFile(opts.sessionsFile)
+    : [];
+  const sessions = [...(opts.sessions ?? []), ...fileSessions];
+
+  if (sessions.length === 0) {
+    log.warn(
+      "no session input provided; export session-store rows to JSONL and pass --sessions-file <path> (or TELEMETRY_SESSIONS_FILE), or provide sessions directly in collectTelemetry()",
+    );
+  }
 
   for (const { session, usageEvents, refs } of sessions) {
     try {
@@ -287,6 +300,35 @@ export async function collectTelemetry(opts: CollectOptions): Promise<CollectRes
 }
 
 // ── Internal helpers ────────────────────────────────────────────────────────
+
+async function loadSessionsFromFile(filePath: string): Promise<CollectSessionInput[]> {
+  const content = await fs.readFile(filePath, "utf-8");
+  const out: CollectSessionInput[] = [];
+  for (const [i, line] of content.split("\n").entries()) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(trimmed);
+    } catch {
+      throw new Error(`invalid JSONL in ${filePath} at line ${i + 1}`);
+    }
+    const row = parsed as Partial<CollectSessionInput>;
+    if (
+      !row ||
+      typeof row !== "object" ||
+      !row.session ||
+      !Array.isArray(row.usageEvents) ||
+      !Array.isArray(row.refs)
+    ) {
+      throw new Error(
+        `invalid session input shape in ${filePath} at line ${i + 1}; expected {session,usageEvents,refs}`,
+      );
+    }
+    out.push(row as CollectSessionInput);
+  }
+  return out;
+}
 
 function normalizeTimestamp(ts: string): string {
   // Ensure ISO 8601 UTC format

@@ -139,6 +139,24 @@ describe("aggregateRecords — success/failure rates (US2-S3)", () => {
     assert.equal(success.percentage, 0.5);
     assert.equal(partial.percentage, 0.5);
   });
+
+  it("uses latest session end time for periodEnd", () => {
+    const records: TelemetryRecord[] = [
+      makeRecord({
+        sessionHash: "aaaa111122223333",
+        sessionStartedAt: "2026-05-17T10:00:00Z",
+        sessionEndedAt: "2026-05-17T10:05:00Z",
+      }),
+      makeRecord({
+        sessionHash: "bbbb444455556666",
+        sessionStartedAt: "2026-05-17T11:00:00Z",
+        sessionEndedAt: "2026-05-17T12:30:00Z",
+      }),
+    ];
+
+    const summary = aggregateRecords(records);
+    assert.equal(summary.periodEnd, "2026-05-17T12:30:00Z");
+  });
 });
 
 // ── US2-S4: Empty data ──────────────────────────────────────────────────────

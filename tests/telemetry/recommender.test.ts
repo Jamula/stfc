@@ -159,4 +159,22 @@ describe("computeRecommendations — insufficient data (US3-S3)", () => {
       assert.equal(rec.confidence, "medium");
     }
   });
+
+  it("treats unknown tier as more expensive than known tiers", () => {
+    const unknownTierMap: ModelTierMap = {
+      ...TIER_MAP,
+      tiers: {
+        "gpt-5.4-mini": "standard",
+      },
+      defaultTier: "unknown",
+    };
+    const records = [
+      ...makeRecords("mystery-model", 12, "success", 200000),
+      ...makeRecords("gpt-5.4-mini", 12, "success", 100000),
+    ];
+
+    const result = computeRecommendations(records, unknownTierMap, 10);
+    const costSaving = result.recommendations.filter((r) => r.type === "cost-saving");
+    assert.ok(costSaving.some((r) => r.currentModel === "mystery-model"));
+  });
 });

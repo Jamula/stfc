@@ -21,6 +21,7 @@ export interface TelemetryOptions {
   dataDir?: string;
   minSessionsForRecommendation?: number;
   lookbackDays?: number;
+  sessionsFile?: string;
   subcommand?: "collect" | "report" | "recommend";
 }
 
@@ -40,6 +41,10 @@ export async function telemetry(opts: TelemetryOptions = {}): Promise<TelemetryO
   const minSessions = opts.minSessionsForRecommendation ?? DEFAULT_MIN_SESSIONS;
   const lookbackDays = opts.lookbackDays ?? DEFAULT_LOOKBACK_DAYS;
   const sub = opts.subcommand;
+  const sessionsFile =
+    opts.sessionsFile ??
+    parseSessionsFileFlag(process.argv.slice(3)) ??
+    process.env.TELEMETRY_SESSIONS_FILE;
 
   const result: TelemetryResult = {
     sessionsCollected: 0,
@@ -58,6 +63,7 @@ export async function telemetry(opts: TelemetryOptions = {}): Promise<TelemetryO
         dataDir,
         tierMap,
         lookbackDays,
+        sessionsFile,
       });
       result.sessionsCollected = collectResult.sessionsCollected;
       result.sessionsSkipped = collectResult.sessionsSkipped;
@@ -94,4 +100,15 @@ export async function telemetry(opts: TelemetryOptions = {}): Promise<TelemetryO
     result.errors.push(msg);
     return { result, exitCode: 1 };
   }
+}
+
+function parseSessionsFileFlag(args: string[]): string | undefined {
+  const direct = args.find((a) => a.startsWith("--sessions-file="));
+  if (direct) return direct.slice("--sessions-file=".length).trim() || undefined;
+
+  const idx = args.indexOf("--sessions-file");
+  if (idx === -1) return undefined;
+  const next = args[idx + 1];
+  if (!next || next.startsWith("-")) return undefined;
+  return next;
 }

@@ -22,14 +22,24 @@ const TIER_MAP: ModelTierMap = {
 };
 
 let tmpDir: string;
+let originalArgv: string[];
+let originalSessionsEnv: string | undefined;
 
 beforeEach(async () => {
   tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "telemetry-skill-"));
   await fs.mkdir(`${tmpDir}/reports`, { recursive: true });
   _resetTierCache();
+  originalArgv = [...process.argv];
+  originalSessionsEnv = process.env.TELEMETRY_SESSIONS_FILE;
 });
 
 afterEach(async () => {
+  process.argv = originalArgv;
+  if (originalSessionsEnv === undefined) {
+    delete process.env.TELEMETRY_SESSIONS_FILE;
+  } else {
+    process.env.TELEMETRY_SESSIONS_FILE = originalSessionsEnv;
+  }
   await fs.rm(tmpDir, { recursive: true, force: true });
   _resetTierCache();
 });
@@ -107,6 +117,45 @@ describe("telemetry skill — result shape (US4-S2)", () => {
 // ── Individual subcommands ──────────────────────────────────────────────────
 
 describe("telemetry skill — subcommands", () => {
+  it("collect subcommand ingests sessions from --sessions-file JSONL", async () => {
+    const sessionsFile = path.join(tmpDir, "sessions-input.jsonl");
+    await fs.writeFile(
+      sessionsFile,
+      `${JSON.stringify({
+        session: {
+          id: "input-session-1",
+          agent_name: "Copilot CLI",
+          summary: "implement feature",
+          created_at: "2026-05-17T10:00:00Z",
+          updated_at: "2026-05-17T10:10:00Z",
+        },
+        usageEvents: [
+          {
+            usage_model: "claude-opus-4.6",
+            usage_input_tokens: 1000,
+            usage_output_tokens: 100,
+            usage_cache_read_tokens: 0,
+          },
+        ],
+        refs: [{ ref_type: "commit", ref_value: "abc123" }],
+      })}\n`,
+      "utf-8",
+    );
+
+    process.argv = ["node", "src/cli.ts", "telemetry", "collect", "--sessions-file", sessionsFile];
+
+    const { result, exitCode } = await telemetry({
+      dataDir: tmpDir,
+      modelTiersPath: "config/model-tiers.json",
+      subcommand: "collect",
+    });
+
+    assert.equal(exitCode, 0);
+    assert.equal(result.sessionsCollected, 1);
+    const collected = await fs.readFile(path.join(tmpDir, "sessions.jsonl"), "utf-8");
+    assert.ok(collected.includes("\"sessionHash\""));
+  });
+
   it("collect subcommand runs only collection", async () => {
     const { result, exitCode } = await telemetry({
       dataDir: tmpDir,
@@ -141,5 +190,41 @@ describe("telemetry skill — subcommands", () => {
     assert.equal(exitCode, 0);
     assert.equal(typeof result.recommendations, "number");
     assert.equal(result.reportPath, null);
+  });
+
+  it("collect subcommand accepts TELEMETRY_SESSIONS_FILE env var", async () => {
+    const sessionsFile = path.join(tmpDir, "sessions-env-input.jsonl");
+    await fs.writeFile(
+      sessionsFile,
+      `${JSON.stringify({
+        session: {
+          id: "input-session-env-1",
+          agent_name: "Copilot CLI",
+          summary: "implement feature",
+          created_at: "2026-05-17T10:00:00Z",
+          updated_at: "2026-05-17T10:10:00Z",
+        },
+        usageEvents: [
+          {
+            usage_model: "gpt-5.4-mini",
+            usage_input_tokens: 500,
+            usage_output_tokens: 50,
+            usage_cache_read_tokens: 0,
+          },
+        ],
+        refs: [{ ref_type: "commit", ref_value: "def456" }],
+      })}\n`,
+      "utf-8",
+    );
+    process.env.TELEMETRY_SESSIONS_FILE = sessionsFile;
+
+    const { result, exitCode } = await telemetry({
+      dataDir: tmpDir,
+      modelTiersPath: "config/model-tiers.json",
+      subcommand: "collect",
+    });
+
+    assert.equal(exitCode, 0);
+    assert.equal(result.sessionsCollected, 1);
   });
 });

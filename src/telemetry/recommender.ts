@@ -20,11 +20,11 @@ const TIER_ORDER: Record<string, number> = {
   standard: 0,
   high: 1,
   "extra-high": 2,
-  unknown: 1, // treat unknown as mid-tier
+  unknown: 999,
 };
 
 function tierRank(tier: string): number {
-  return TIER_ORDER[tier] ?? 1;
+  return TIER_ORDER[tier] ?? 999;
 }
 
 export interface RecommendOptions {
@@ -147,7 +147,9 @@ export function computeRecommendations(
         // Quality-improving: high failure rate on current, better candidate
         if (
           current.successRate < 0.5 &&
-          candidate.successRate > current.successRate + 0.2
+          candidate.successRate >= 0.7 &&
+          candidate.successRate > current.successRate + 0.2 &&
+          candidate.tierRank >= current.tierRank
         ) {
           const tokenSavings =
             current.avgTokens > 0
