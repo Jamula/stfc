@@ -194,6 +194,14 @@ export async function discordMonitor(
       ingestedMessages = ingestOut.messages;
       newCursors = ingestOut.newCursors;
       mergeHealth(health, ingestOut.health);
+      // T015 [US3] — emit exactly one structured success-path auth log line
+      // per run, after ingestDiscord resolves. Tests in
+      // tests/skills/discordMonitor.test.ts pin the message text and count.
+      log.info({
+        msg: "discord bot authenticated",
+        botUsername: ingestOut.botIdentity.username,
+        botId: ingestOut.botIdentity.id,
+      });
     } catch (err) {
       if (err instanceof DiscordAuthError) {
         log.error(`Discord auth failed — skipping Discord half. ${redactForLog(err)}`);

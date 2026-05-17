@@ -22,6 +22,7 @@ import {
   type DiscordClient,
 } from "./client.ts";
 import type {
+  BotIdentity,
   DiscordAllowlist,
   IngestedMessage,
   IngestionCursorMap,
@@ -59,6 +60,10 @@ export interface IngestOutput {
   messages: IngestedMessage[];
   newCursors: IngestionCursorMap;
   health: Partial<RunHealth>;
+  /** Feature 003 (T014/T015): validated bot identity from GET /users/@me.
+   *  Consumed by `src/skills/discordMonitor.ts` to emit exactly one
+   *  `"discord bot authenticated"` log line on the success path. */
+  botIdentity: BotIdentity;
 }
 
 export async function ingestDiscord(
@@ -74,7 +79,11 @@ export async function ingestDiscord(
   // Step 0: token validation. Exactly once per run.
   // DiscordAuthError propagates to the caller — the orchestrator decides
   // whether to skip the Discord half and continue.
-  await client.getMe();
+  // The return value is structurally trusted: when `client` is a real
+  // `DiscordClient`, `getMe()` is already zod-validated against
+  // `BotIdentitySchema`; test stubs are responsible for supplying a
+  // BotIdentity-shaped value (or accept an unsafe cast in test scope).
+  const botIdentity = (await client.getMe()) as BotIdentity;
 
   const enabled = allowlist.entries.filter((e) => e.enabled);
 
@@ -117,6 +126,7 @@ export async function ingestDiscord(
   return {
     messages,
     newCursors,
+    botIdentity,
     health: {
       channelsConfigured: allowlist.entries.length,
       channelsRead,

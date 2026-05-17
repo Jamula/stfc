@@ -649,6 +649,116 @@ describe("discordMonitor / RunHealth counters (T035 — US3)", () => {
     assert.ok(result.messagesScanned > 0);
   });
 
+  it("logs exactly one `discord bot authenticated` line on the success path (T012 / T015 — US3 AS#1)", async () => {
+    writeAllowlist(ds.allowlist, [{ id: "222222222222222222", label: "promos" }]);
+    const client: IngestClient = {
+      getMe: async () => ({
+        id: "100000000000000001",
+        username: "stfc-monitor-bot",
+        discriminator: "0",
+        bot: true,
+      }),
+      getChannelMessages: async () => [],
+    };
+
+    // node:test buffers `console.*`, so we capture at the lower
+    // `process.stdout.write` / `process.stderr.write` level instead.
+    const captured: string[] = [];
+    const origOut = process.stdout.write.bind(process.stdout);
+    const origErr = process.stderr.write.bind(process.stderr);
+    process.stdout.write = ((chunk: string | Uint8Array, ...rest: unknown[]) => {
+      captured.push(typeof chunk === "string" ? chunk : Buffer.from(chunk).toString("utf8"));
+      return origOut(chunk as never, ...(rest as []));
+    }) as typeof process.stdout.write;
+    process.stderr.write = ((chunk: string | Uint8Array, ...rest: unknown[]) => {
+      captured.push(typeof chunk === "string" ? chunk : Buffer.from(chunk).toString("utf8"));
+      return origErr(chunk as never, ...(rest as []));
+    }) as typeof process.stderr.write;
+    try {
+      await discordMonitor({
+        accounts: [],
+        paths: {
+          allowlist: ds.allowlist,
+          cursors: ds.cursors,
+          candidates: ds.candidates,
+          suppression: ds.suppression,
+          cooldowns: ds.cooldowns,
+          digestsDir: ds.digestsDir,
+          promoCodes: ds.promoCodes,
+          tipsSeen: path.join(ds.dir, "tips-seen.jsonl"),
+        },
+        clientFactory: () => client,
+        now: () => NOW,
+        runId: "run-auth-log-ok",
+      });
+    } finally {
+      process.stdout.write = origOut as typeof process.stdout.write;
+      process.stderr.write = origErr as typeof process.stderr.write;
+    }
+
+    const joined = captured.join("");
+    const matches = joined.split("\n").filter((l) => l.includes("discord bot authenticated"));
+    assert.equal(
+      matches.length,
+      1,
+      `expected exactly one 'discord bot authenticated' log line, got ${matches.length}: ${JSON.stringify(matches)}`,
+    );
+    // Bot identity fields are present in the log payload (object may pretty-print across lines).
+    assert.match(joined, /stfc-monitor-bot/);
+    assert.match(joined, /100000000000000001/);
+  });
+
+  it("logs ZERO `discord bot authenticated` lines on the 401 auth-failure path (T012 / T015 — US3 AS#2)", async () => {
+    writeAllowlist(ds.allowlist, [{ id: "222222222222222222", label: "promos" }]);
+    const { DiscordAuthError } = await import("../../src/discord/client.ts");
+    const client: IngestClient = {
+      getMe: async () => { throw new DiscordAuthError("401"); },
+      getChannelMessages: async () => [],
+    };
+
+    const captured: string[] = [];
+    const origOut = process.stdout.write.bind(process.stdout);
+    const origErr = process.stderr.write.bind(process.stderr);
+    process.stdout.write = ((chunk: string | Uint8Array, ...rest: unknown[]) => {
+      captured.push(typeof chunk === "string" ? chunk : Buffer.from(chunk).toString("utf8"));
+      return origOut(chunk as never, ...(rest as []));
+    }) as typeof process.stdout.write;
+    process.stderr.write = ((chunk: string | Uint8Array, ...rest: unknown[]) => {
+      captured.push(typeof chunk === "string" ? chunk : Buffer.from(chunk).toString("utf8"));
+      return origErr(chunk as never, ...(rest as []));
+    }) as typeof process.stderr.write;
+    try {
+      await discordMonitor({
+        accounts: [{ name: "main", token: makeJwt() }],
+        paths: {
+          allowlist: ds.allowlist,
+          cursors: ds.cursors,
+          candidates: ds.candidates,
+          suppression: ds.suppression,
+          cooldowns: ds.cooldowns,
+          digestsDir: ds.digestsDir,
+          promoCodes: ds.promoCodes,
+          tipsSeen: path.join(ds.dir, "tips-seen.jsonl"),
+        },
+        clientFactory: () => client,
+        now: () => NOW,
+        runId: "run-auth-log-fail",
+        redeemFn: async () => ({ result: { rows: [] }, exitCode: 0 }),
+      });
+    } finally {
+      process.stdout.write = origOut as typeof process.stdout.write;
+      process.stderr.write = origErr as typeof process.stderr.write;
+    }
+
+    const joined = captured.join("");
+    const matches = joined.split("\n").filter((l) => l.includes("discord bot authenticated"));
+    assert.equal(
+      matches.length,
+      0,
+      `expected zero 'discord bot authenticated' lines on auth failure, got ${matches.length}`,
+    );
+  });
+
   it("modelLoaded.sha256Verified is true when model SHA-256 passes (placeholder → heuristic-only treated as verified)", async () => {
     writeAllowlist(ds.allowlist, [{ id: "222222222222222222", label: "promos" }]);
     const client: IngestClient = {
