@@ -89,12 +89,12 @@ description: "Task breakdown for Discord OAuth2 Bot Access for Private Channels"
 
 > No new ingestion code path is added for US1 — restricted channels traverse the existing public-channel pipeline (FR-007). Coverage is therefore a regression-guard test that proves the existing pipeline is unmodified plus the operator-facing runbook documenting the required Developer-Portal toggles.
 
-- [ ] T016 [P] [US1] Verify by running the full suite (`npm test`) that all pre-existing public-channel tests in `tests/discord/` still pass unchanged after Phase 2/3 schema and ingest changes (SC-006: zero regression on public-channel monitoring)
+- [X] T016 [P] [US1] Verify by running the full suite (`npm test`) that all pre-existing public-channel tests in `tests/discord/` still pass unchanged after Phase 2/3 schema and ingest changes (SC-006: zero regression on public-channel monitoring)
 
 ### Implementation for User Story 1
 
-- [ ] T017 [US1] Create operator runbook `docs/DISCORD-BOT-SETUP.md` covering: (1) Developer Portal bot creation, (2) **Message Content Privileged Intent toggle ON** (research §R1 — REST `content` field is empty without it), (3) Server Members Intent (if needed), (4) OAuth2 install URL template `https://discord.com/api/oauth2/authorize?client_id=<APPLICATION_ID>&scope=bot&permissions=66560` (research §R3), (5) least-privilege rationale (`66560 = VIEW_CHANNEL 1024 + READ_MESSAGE_HISTORY 65536`), (6) how to rotate `DISCORD_BOT_TOKEN` via `gh secret set DISCORD_BOT_TOKEN`. No real client IDs, no real tokens (Principle VII)
-- [ ] T018 [US1] Cross-link the new runbook from `specs/003-discord-oauth/quickstart.md` §1 and §2 (already references `docs/DISCORD-BOT-SETUP.md` — verify the path resolves) and from `README.md` Discord-monitor section if one exists
+- [X] T017 [US1] Create operator runbook `docs/DISCORD-BOT-SETUP.md` covering: (1) Developer Portal bot creation, (2) **Message Content Privileged Intent toggle ON** (research §R1 — REST `content` field is empty without it), (3) Server Members Intent (if needed), (4) OAuth2 install URL template `https://discord.com/api/oauth2/authorize?client_id=<APPLICATION_ID>&scope=bot&permissions=66560` (research §R3), (5) least-privilege rationale (`66560 = VIEW_CHANNEL 1024 + READ_MESSAGE_HISTORY 65536`), (6) how to rotate `DISCORD_BOT_TOKEN` via `gh secret set DISCORD_BOT_TOKEN`. No real client IDs, no real tokens (Principle VII)
+- [X] T018 [US1] Cross-link the new runbook from `specs/003-discord-oauth/quickstart.md` §1 and §2 (already references `docs/DISCORD-BOT-SETUP.md` — verify the path resolves) and from `README.md` Discord-monitor section if one exists
 
 **Checkpoint**: US1 deliverable complete — restricted channels are now ingestable as soon as the operator follows the runbook. No code path change to ingestion (FR-007 honoured). `npm test` green; `npm run typecheck` green.
 

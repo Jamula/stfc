@@ -92,6 +92,8 @@ When configured, a scheduled workflow (`discord-monitor.yml`) runs every 4 hours
 - Tips classification refinement and daily digest roll-up
 
 To set up, see [specs/001-discord-monitor/quickstart.md](specs/001-discord-monitor/quickstart.md).
+For the one-time bot creation, privileged-intent toggles, install URL, and
+token rotation procedure, see [docs/DISCORD-BOT-SETUP.md](docs/DISCORD-BOT-SETUP.md).
 This feature is entirely optional — the core redemption workflow works without it.
 
 ---
