@@ -178,6 +178,11 @@ Your stored JWT's `exp` claim is in the past. Either:
   touches the named one. Then update the GitHub secret (the script does
   this for you if `gh` is available).
 
+If every configured account returns `TOKEN_EXPIRED` and there are no
+infrastructure errors, `run-all` exits with code **2** so the workflow fails as
+a clear secret-rotation signal. Mixed runs (some valid, some expired) still
+exit 0; infrastructure failures exit 1.
+
 ### `Refresh token` workflow says "Scopely served a CAPTCHA"
 Headless-browser bot detection. Run `npm run capture-token` locally with
 the visible browser and solve the challenge there.
@@ -209,4 +214,3 @@ This feature requires two additional secrets:
    configuring the allow-list, and troubleshooting.
 2. The feature is dormant until the allow-list is populated and the `DISCORD_BOT_TOKEN`
    secret is set. No danger of breakage by accident.
-

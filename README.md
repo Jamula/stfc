@@ -206,7 +206,10 @@ like:
 When a token has fewer than a few days left it is highlighted, and once it
 actually expires the run summary clearly flags it as **TOKEN_EXPIRED** so you
 know to re-capture and update the secret. Expired tokens for one account do
-**not** stop other accounts from being processed.
+**not** stop other accounts from being processed. If every configured account
+returns **TOKEN_EXPIRED** and there are no infrastructure errors, the
+`run-all` skill exits with code **2** so the workflow fails as a clear
+secret-rotation signal. Mixed runs still exit 0; infrastructure failures exit 1.
 
 ---
 
@@ -249,4 +252,3 @@ STFC_ACCOUNTS=[{"name":"main","token":"<JWT>"}]
 ```
 
 then run e.g. `npm run skill:check-auth`. The `.env` file is gitignored.
-
