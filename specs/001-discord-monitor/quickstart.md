@@ -143,7 +143,31 @@ and `tests/discord/digest.test.ts`. Fixtures are under
 `tests/fixtures/discord/`. None of them require live Discord access — the
 REST client is stubbed.
 
-## 8. Trigger the scheduled workflow manually
+## 8. Operational dependencies
+
+### ⚠️ Branch protection on `main` will break this feature
+
+The discord-monitor workflow auto-commits redeemed promo codes and state
+files directly to `main` via `GITHUB_TOKEN`. If your repository enforces
+**required pull request reviews** or **status checks before merging** on
+`main`, the auto-commit step will fail with a 403.
+
+**Remediation options (choose one):**
+
+1. **Disable required PR review for `github-actions[bot]`** — create a
+   branch protection bypass for the bot actor. This is the simplest path.
+2. **Enable PR-gated auto-commit mode** — configure the workflow to open
+   a PR instead of direct-committing. This is more conservative but adds
+   latency between code discovery and promo-codes.txt update.
+
+### State files: operator vs. skill-managed
+
+| File | Owner | Editing policy |
+|------|-------|----------------|
+| `data/discord/suppression.json` | **Operator** | Human-curated deny/allow rules. Edit via reviewed PR. Add `"CODE": { "action": "deny", "reason": "…", "addedAt": "…", "addedBy": "…" }` to block a code, or `"action": "allow"` to override a cooldown. |
+| `data/discord/cooldowns.json` | **Skill** | Written automatically by the discord-monitor skill after failed redemption attempts. **Do not hand-edit** — the skill manages expiry and eviction. Manual edits may be silently overwritten on the next run. |
+
+## 9. Trigger the scheduled workflow manually
 
 ```bash
 gh workflow run discord-monitor.yml
@@ -154,7 +178,7 @@ Inspect the resulting commit on `main` (workflow-attributed bot identity).
 If the run added a successful new code, you'll see a follow-up commit:
 `chore(promo-codes): auto-append N codes from Discord monitor (run ...)`.
 
-## 9. Rotate the bot token
+## 10. Rotate the bot token
 
 ```bash
 # 1. At developer portal: Bot → Reset Token

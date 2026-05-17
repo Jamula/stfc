@@ -748,7 +748,7 @@ testable. `npm test` green. Run `workflow_dispatch` on
 **Purpose**: Operator documentation verification, state-files contract
 hardening, and final hygiene gate validation.
 
-- [ ] T039 [P] Validate `specs/001-discord-monitor/quickstart.md`
+- [x] T039 [P] Validate `specs/001-discord-monitor/quickstart.md`
   operator walkthrough: trace through all steps and confirm § 8 (or
   equivalent operational-dependencies section) contains a clearly-titled
   advisory "Branch protection on `main` will break this feature" with
@@ -760,7 +760,7 @@ hardening, and final hygiene gate validation.
   `data/discord/cooldowns.json` should be documented as skill-managed
   (operators should not hand-edit).
 
-- [ ] T040 [P] Add rerun/cursor edge-case documented behavior to
+- [x] T040 [P] Add rerun/cursor edge-case documented behavior to
   `specs/001-discord-monitor/contracts/state-files.contract.md` under a
   new § "Rerun behavior after partial failure": a workflow rerun after
   partial failure (where `cursors.json` was not flushed) will re-extract
@@ -769,12 +769,12 @@ hardening, and final hygiene gate validation.
   STFC API. Behavior is bounded and intentional, not a bug — Picard
   Condition 7.
 
-- [ ] T041 [P] Run `npm run typecheck` and `npm test` — confirm all 43
+- [x] T041 [P] Run `npm run typecheck` and `npm test` — confirm all 43
   tasks' deliverables compile and all tests pass. Address any type
   errors or test failures before considering the feature branch ready
   for implementation review.
 
-- [ ] T042 [P] Validate artifact hygiene gate end-to-end: inject a
+- [x] T042 [P] Validate artifact hygiene gate end-to-end: inject a
   synthetic forbidden token (JWT-shaped string) into a test file at
   `data/digests/test-hygiene.md`, run
   `scripts/check-artifact-hygiene.mjs`, confirm scanner returns
