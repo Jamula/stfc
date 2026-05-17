@@ -481,6 +481,14 @@ describe("discordMonitor / workflow YAML assertions (T027)", () => {
     "workflows",
     "redeem.yml",
   );
+  const refreshTokenYamlPath = path.resolve(
+    import.meta.dirname,
+    "..",
+    "..",
+    ".github",
+    "workflows",
+    "refresh-token.yml",
+  );
 
   it("discord-monitor.yml exists and has cron `15 */4 * * *`", () => {
     const yaml = fs.readFileSync(yamlPath, "utf8");
@@ -492,13 +500,16 @@ describe("discordMonitor / workflow YAML assertions (T027)", () => {
     assert.match(yaml, /cron:\s*["']\*\/15 \* \* \* \*["']/);
   });
 
-  it("concurrency group is `stfc-gift-redeemer` bit-for-bit (matches redeem.yml)", () => {
+  it("concurrency group is `stfc-gift-redeemer` bit-for-bit (matches redeem.yml and refresh-token.yml)", () => {
     const monitor = fs.readFileSync(yamlPath, "utf8");
     const redeem = fs.readFileSync(redeemYamlPath, "utf8");
+    const refreshToken = fs.readFileSync(refreshTokenYamlPath, "utf8");
     const monitorGroup = /group:\s*(\S+)/.exec(monitor)?.[1];
     const redeemGroup = /group:\s*(\S+)/.exec(redeem)?.[1];
+    const refreshTokenGroup = /group:\s*(\S+)/.exec(refreshToken)?.[1];
     assert.equal(monitorGroup, "stfc-gift-redeemer");
     assert.equal(monitorGroup, redeemGroup, "concurrency groups must match bit-for-bit");
+    assert.equal(monitorGroup, refreshTokenGroup, "refresh-token.yml concurrency group must match bit-for-bit");
   });
 
   it("all `uses:` actions are SHA-pinned (40-hex)", () => {
