@@ -7,7 +7,7 @@ import { createLogger } from "../lib/logger.ts";
 import { loadModelTiers } from "../telemetry/tiers.ts";
 import { collectTelemetry } from "../telemetry/collector.ts";
 import { generateReport } from "../telemetry/reporter.ts";
-import { generateRecommendations } from "../telemetry/recommender.ts";
+import { generateRecommendations, renderRecommendations } from "../telemetry/recommender.ts";
 
 const log = createLogger("telemetry");
 
@@ -64,12 +64,9 @@ export async function telemetry(opts: TelemetryOptions = {}): Promise<TelemetryO
       result.errors.push(...collectResult.errors);
     }
 
-    if (!sub || sub === "report") {
-      log.info("generating telemetry report...");
-      const reportResult = await generateReport({ dataDir });
-      result.reportPath = reportResult.reportPath;
-    }
-
+    // When running full cycle, generate recommendations first so they
+    // can be included in the report (T029).
+    let recommendationsMarkdown: string | undefined;
     if (!sub || sub === "recommend") {
       log.info("generating recommendations...");
       const recResult = await generateRecommendations({
@@ -78,6 +75,16 @@ export async function telemetry(opts: TelemetryOptions = {}): Promise<TelemetryO
         minSessionsForRecommendation: minSessions,
       });
       result.recommendations = recResult.recommendations.length;
+      recommendationsMarkdown = renderRecommendations(recResult);
+    }
+
+    if (!sub || sub === "report") {
+      log.info("generating telemetry report...");
+      const reportResult = await generateReport({
+        dataDir,
+        recommendationsMarkdown,
+      });
+      result.reportPath = reportResult.reportPath;
     }
 
     return { result, exitCode: 0 };

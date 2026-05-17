@@ -19,6 +19,8 @@ const DEFAULT_DATA_DIR = "data/telemetry";
 
 export interface ReportOptions {
   dataDir?: string;
+  /** Pre-rendered recommendations Markdown to append to report. */
+  recommendationsMarkdown?: string;
 }
 
 export interface ReportResult {
@@ -257,7 +259,7 @@ export async function generateReport(opts: ReportOptions = {}): Promise<ReportRe
   const dataDir = opts.dataDir ?? DEFAULT_DATA_DIR;
   const records = await loadRecords(dataDir);
   const summary = aggregateRecords(records);
-  const markdown = renderReport(summary);
+  const markdown = renderReport(summary, opts.recommendationsMarkdown);
 
   const date = summary.generatedAt.split("T")[0]!;
   const reportPath = `${dataDir}/reports/${date}.md`;

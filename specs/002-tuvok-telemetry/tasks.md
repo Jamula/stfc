@@ -115,14 +115,14 @@ before the fix and passes after. Tests are NOT optional.
 
 ### Tests for User Story 3 (REQUIRED — Principle IX) ⚠️
 
-- [ ] T026 [P] [US3] Recommender tests in `tests/telemetry/recommender.test.ts` — US3-S1: cost-saving recommendation generated when lower-tier model has similar success rate at fewer tokens; US3-S2: quality-improving recommendation generated when failure rate >50% on a model; US3-S3: agents/models with fewer than `minSessionsForRecommendation` sessions excluded with insufficient-data note; confidence level set correctly based on data volume
+- [x] T026 [P] [US3] Recommender tests in `tests/telemetry/recommender.test.ts` — US3-S1: cost-saving recommendation generated when lower-tier model has similar success rate at fewer tokens; US3-S2: quality-improving recommendation generated when failure rate >50% on a model; US3-S3: agents/models with fewer than `minSessionsForRecommendation` sessions excluded with insufficient-data note; confidence level set correctly based on data volume
 
 ### Implementation for User Story 3
 
-- [ ] T027 [US3] Implement `generateRecommendations()` in `src/telemetry/recommender.ts` — read `data/telemetry/sessions.jsonl`, group by agent+model, compare success rates and token efficiency across models for the same agent/category, generate `ModelRecommendation` records with evidence
-- [ ] T028 [US3] Implement recommendation filtering in `src/telemetry/recommender.ts` — enforce `minSessionsForRecommendation` threshold (default: 10), set confidence levels (`low`/`medium`/`high`) based on session count, exclude insufficient-data combinations with explanatory note
-- [ ] T029 [US3] Integrate recommendations into report output in `src/telemetry/reporter.ts` — append "Recommendations" section to report Markdown with human-review warning (FR-011), call `generateRecommendations()` during report generation
-- [ ] T030 [US3] Wire `recommend` subcommand in `src/skills/telemetry.ts` — route to `generateRecommendations()`, return recommendation count in `TelemetryResult.recommendations`
+- [x] T027 [US3] Implement `generateRecommendations()` in `src/telemetry/recommender.ts` — read `data/telemetry/sessions.jsonl`, group by agent+model, compare success rates and token efficiency across models for the same agent/category, generate `ModelRecommendation` records with evidence
+- [x] T028 [US3] Implement recommendation filtering in `src/telemetry/recommender.ts` — enforce `minSessionsForRecommendation` threshold (default: 10), set confidence levels (`low`/`medium`/`high`) based on session count, exclude insufficient-data combinations with explanatory note
+- [x] T029 [US3] Integrate recommendations into report output in `src/telemetry/reporter.ts` — append "Recommendations" section to report Markdown with human-review warning (FR-011), call `generateRecommendations()` during report generation
+- [x] T030 [US3] Wire `recommend` subcommand in `src/skills/telemetry.ts` — route to `generateRecommendations()`, return recommendation count in `TelemetryResult.recommendations`
 
 **Checkpoint**: At this point, `npm run skill:telemetry recommend` produces actionable recommendations. US1 + US2 + US3 all work independently.
 
