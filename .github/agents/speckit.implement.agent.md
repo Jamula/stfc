@@ -197,3 +197,32 @@ Note: This command assumes a complete task breakdown exists in tasks.md. If task
         EXECUTE_COMMAND: {command}
         ```
     - If no hooks are registered or `.specify/extensions.yml` does not exist, skip silently
+
+## Phase-boundary commits (HARD REQUIREMENT)
+
+Enforces `copilot-instructions.md` §5.
+
+- **Commit at the end of every phase** using subject:
+  `feat(NNN-feature): Phase N — {name} (T{XXX}–T{YYY})`
+  where `NNN` is the feature number, `N` is the phase number, `{name}` is the phase name, and `T{XXX}`–`T{YYY}` are the first and last task IDs in the phase.
+- **Never accumulate WIP across phases.** The commit is the last step of every phase — it is part of "completing the phase", not a separate user action.
+- **Phase boundaries auto-commit; the user must NEVER type `speckit.git.commit`.** If the user types `speckit.git.commit` mid-flight, that is a Rule 5 violation — self-correct on the next phase.
+- **If the pre-commit hook fails** (e.g., `npm test` errors), fix the failure **then** commit. Do NOT skip the phase-boundary commit. Do NOT use `--no-verify`.
+
+**Stage surgical paths only** — never `git add .` or `git add -A` (Rule 2: broad globs sweep in Scribe-owned `.squad/` paths):
+
+```bash
+git add -- <file1> <file2> ...
+git commit -m "feat(NNN-feature): Phase N — {name} (T{XXX}–T{YYY})"
+```
+
+## Resume protocol (when interrupted)
+
+When the session is interrupted (timeout, context window, manual stop) and the user sends *"continue"*, *"continue from where you stopped"*, *"what's next"*, or any variant, derive state using these four steps **in order**:
+
+1. Read the most recent `feat(NNN-feature): Phase N` commit subject (`git log --oneline -1`).
+2. Read the phase checkbox state in `specs/NNN-feature/tasks.md`
+   (`grep '^- \[ \]' specs/NNN-feature/tasks.md | head -1`).
+3. Skip directly to the next unchecked task. Do NOT re-read `tasks.md` from the top.
+   Do NOT ask the user "where were we?".
+4. Answer in 1 line ("Resuming Phase N at T0XX") and proceed to the next task immediately.
