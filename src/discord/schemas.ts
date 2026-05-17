@@ -248,6 +248,43 @@ export const DiscordUserMeSchema = z
   .passthrough();
 export type DiscordUserMe = z.infer<typeof DiscordUserMeSchema>;
 
+// ── Feature 003: BotIdentity (validated /users/@me result) ─────────────────
+//
+// Stricter than `DiscordUserMeSchema` — the latter is the raw upstream
+// envelope; `BotIdentitySchema` is what `DiscordClient.getMe()` returns to
+// callers after asserting `bot === true` (per data-model.md §BotIdentity).
+export const BotIdentitySchema = z
+  .object({
+    id: SnowflakeSchema,
+    username: z.string().min(1).max(32),
+    discriminator: z.string().default("0"),
+    bot: z.literal(true),
+  })
+  .passthrough();
+export type BotIdentity = z.infer<typeof BotIdentitySchema>;
+
+// ── Feature 003: per-channel error taxonomy (RunHealth.channelsErrored[]) ──
+export const ChannelErrorReasonSchema = z.enum([
+  "forbidden_guild",
+  "forbidden_channel",
+  "forbidden_other",
+  "not_found",
+  "rate_limited",
+  "transient",
+  "schema_mismatch",
+  "unknown",
+]);
+export type ChannelErrorReason = z.infer<typeof ChannelErrorReasonSchema>;
+
+export const ChannelErroredEntrySchema = z.object({
+  channelId: z.string(),
+  errorClass: z.string(),
+  reason: ChannelErrorReasonSchema,
+  discordErrorCode: z.number().int().optional(),
+  remediation: z.string().optional(),
+});
+export type ChannelErroredEntry = z.infer<typeof ChannelErroredEntrySchema>;
+
 // ── Entity 1: IngestedMessage (transient, in-memory only) ───────────────────
 
 export interface IngestedMessage {
@@ -313,7 +350,16 @@ export interface RunHealth {
   finishedAt: string;
   channelsConfigured: number;
   channelsRead: number;
-  channelsErrored: Array<{ channelId: string; errorClass: string }>;
+  channelsErrored: Array<{
+    channelId: string;
+    errorClass: string;
+    /** Feature 003: classification used by digest renderer. Optional for
+     *  backwards-compat with existing in-memory health objects that may
+     *  pre-date the extension. */
+    reason?: ChannelErrorReason;
+    discordErrorCode?: number;
+    remediation?: string;
+  }>;
   messagesScanned: number;
   candidatesExtracted: number;
   candidatesSubmitted: number;
