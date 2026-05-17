@@ -120,14 +120,21 @@ The `.squad/` directory exists in each worktree as a copy. This is safe because:
 After a worktree's PR is merged to dev:
 
 ```bash
-# From the main clone
+# From the main clone — sweep .squad/ artifacts before removal (Rule 8).
+# Agents leave .squad/ uncommitted per Rule 2; this preserves them for Scribe.
+if [ -d "../squad-195/.squad" ]; then
+  rsync -a --ignore-existing ../squad-195/.squad/ .squad/
+fi
+
+# Now safe to remove the worktree
 git worktree remove ../squad-195
 git worktree prune          # clean stale metadata
 git branch -d squad/195-fix-stamp-bug
 git push origin --delete squad/195-fix-stamp-bug
 ```
 
-If a worktree was deleted manually (rm -rf), `git worktree prune` recovers the state.
+If a worktree was deleted manually (rm -rf), `git worktree prune` recovers the state
+— but any uncommitted `.squad/` artifacts are permanently lost. Always sweep first.
 
 ---
 

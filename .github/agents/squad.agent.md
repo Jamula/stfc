@@ -683,8 +683,15 @@ When worktree mode is enabled, the coordinator creates dedicated worktrees for i
 
 **Cleanup:**
 - After a PR is merged, the worktree should be removed
-- `git worktree remove {path}` + `git branch -d {branch}`
-- Ralph heartbeat can trigger cleanup checks for merged branches
+- **Before removal, sweep `.squad/` artifacts to the main checkout** (see Rule 8 in `copilot-instructions.md`):
+  ```bash
+  # From the main checkout
+  if [ -d "{worktree}/.squad" ]; then
+    rsync -a --ignore-existing {worktree}/.squad/ .squad/
+  fi
+  ```
+- Then: `git worktree remove {path}` + `git branch -d {branch}`
+- Ralph heartbeat can trigger cleanup checks for merged branches (must include the sweep)
 
 ### Orchestration Logging
 
