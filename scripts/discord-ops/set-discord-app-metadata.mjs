@@ -85,25 +85,6 @@ Environment:
   DISCORD_BOT_TOKEN        Bot token, REQUIRED unless --help is passed.
                            Never pass the token on argv.
 
-Exit codes:
-  0                        All requested PATCHes succeeded (or --dry-run
-                           previewed cleanly).
-  1                        Operator / infra failure BEFORE or AROUND the
-                           Discord call: bad/missing args, validation
-                           failure, missing DISCORD_BOT_TOKEN, icon file
-                           missing or unreadable, oversize icon, network
-                           unreachable. Re-run after fixing the input.
-  2                        Discord API said no: 4xx/5xx response with an
-                           error body (e.g. 401 Unauthorized, 403 Missing
-                           Permissions, 400 invalid form body). Matches
-                           the runAll.ts convention where exit 2 = remote
-                           service rejected a well-formed request. On a
-                           partial-success run (e.g. --icon --description
-                           where /users/@me succeeded but /applications/@me
-                           was rejected), the success line for the first
-                           PATCH IS still printed to stdout before the
-                           failure line and the non-zero exit.
-
 At least one of --icon / --description / --username is required.
 `;
 
@@ -338,36 +319,9 @@ export function validateUsername(name) {
 // ── Discord PATCH primitive ──────────────────────────────────────────────────
 
 /**
- * Error class for Discord API non-2xx responses. Distinguishes "the
- * remote service said no" (exit 2) from network/transport failures
- * (exit 1). Both error paths route their message through `redactString`
- * before construction, so `.message` is always safe to surface.
- */
-export class DiscordApiError extends Error {
-  constructor(message, { status, code } = {}) {
-    super(message);
-    this.name = "DiscordApiError";
-    this.status = status;
-    this.code = code;
-  }
-}
-
-/**
  * PATCH a JSON body to a Discord endpoint. Returns the parsed JSON body
- * on 2xx. Throws a redacted Error on non-2xx (DiscordApiError) or
- * transport failure (plain Error). The token is captured in closure so
- * it can be redacted from any error.
- *
- * Idempotency note: this is a one-shot operator script. We deliberately
- * do NOT GET the current state and diff before PATCHing — the saving
- * (one HTTP round-trip per invocation, run cadence is "a few times a
- * year" by a human operator) does not justify the added error-model
- * surface (now-stale read, partial-merge ambiguity, two failure modes
- * per call instead of one). Discord's PATCH on /users/@me and
- * /applications/@me is server-side idempotent — re-PATCHing the same
- * payload is a no-op as far as the bot's presentation is concerned.
- * See Kirk's review on PR #71:
- * https://github.com/Jamula/stfc/pull/71#issuecomment-4473820298
+ * on 2xx. Throws a redacted Error on non-2xx or transport failure. The
+ * token is captured in closure so it can be redacted from any error.
  */
 export async function discordPatch({ path, body, token, fetchImpl, baseUrl }) {
   const url = `${baseUrl ?? DISCORD_API_BASE}${path}`;
@@ -410,12 +364,11 @@ export async function discordPatch({ path, body, token, fetchImpl, baseUrl }) {
         ? parsed.message
         : truncate(raw, 200);
     const suffix = code === undefined ? "" : ` (code ${code})`;
-    throw new DiscordApiError(
+    throw new Error(
       redactString(
         `Discord PATCH ${path} failed: HTTP ${res.status}${suffix} — ${message}`,
         token,
       ),
-      { status: res.status, code },
     );
   }
 
@@ -447,7 +400,7 @@ export async function runCli({
   } catch (err) {
     stderr.write(`${redactString(err instanceof Error ? err.message : String(err))}\n`);
     stderr.write(USAGE);
-    return 1;
+    return 2;
   }
 
   if (args.help) {
@@ -462,7 +415,7 @@ export async function runCli({
   ) {
     stderr.write("At least one of --icon, --description, --username is required.\n");
     stderr.write(USAGE);
-    return 1;
+    return 2;
   }
 
   // Validate text fields up front (fail fast, no Discord call).
@@ -471,13 +424,12 @@ export async function runCli({
     if (args.username !== undefined) validateUsername(args.username);
   } catch (err) {
     stderr.write(`${redactString(err instanceof Error ? err.message : String(err))}\n`);
-    return 1;
+    return 2;
   }
 
   // Token check. We deliberately do not echo the var name's *value* in any
   // error path — the message tells the operator the var is missing, nothing
-  // about what was found. Missing token is exit 1 (operator/infra) per the
-  // taxonomy in USAGE above.
+  // about what was found.
   const token = env.DISCORD_BOT_TOKEN;
   if (typeof token !== "string" || token.length === 0) {
     stderr.write("DISCORD_BOT_TOKEN env var not set\n");
@@ -494,7 +446,7 @@ export async function runCli({
       stderr.write(
         `${redactString(err instanceof Error ? err.message : String(err), token)}\n`,
       );
-      return 1;
+      return 2;
     }
     for (const w of iconLoaded.warnings) {
       stderr.write(`warning: ${w}\n`);
@@ -511,15 +463,6 @@ export async function runCli({
 
   const plannedCalls = [];
   if (Object.keys(userMeBody).length > 0) {
-    // Idempotency note: this is a one-shot operator script. Each planned
-    // PATCH is issued unconditionally — we do NOT GET the current
-    // /users/@me or /applications/@me state and diff before writing.
-    // Discord's PATCH on these endpoints is server-side idempotent and
-    // the script's run cadence is "a few times a year by a human", so
-    // the cost of one wasted round-trip is far below the cost of the
-    // extra error surface a read-then-diff would introduce (stale read,
-    // partial-merge ambiguity, two failure modes per call). See Kirk's
-    // PR #71 review: https://github.com/Jamula/stfc/pull/71#issuecomment-4473820298
     plannedCalls.push({
       path: "/users/@me",
       body: userMeBody,
@@ -546,14 +489,6 @@ export async function runCli({
     return 0;
   }
 
-  // Partial-success behavior: each PATCH is independent. If the first
-  // PATCH (e.g. /users/@me for avatar) succeeds and the second
-  // (/applications/@me for description) fails, the success line for the
-  // first IS still printed to stdout — the operator needs to know which
-  // mutations landed before retrying just the failed one. The final exit
-  // code reflects the WORST outcome across all calls: DiscordApiError
-  // (remote said no) → 2; network/transport failure → 1.
-  let worstExit = 0;
   for (const call of plannedCalls) {
     try {
       await discordPatch({
@@ -567,12 +502,11 @@ export async function runCli({
       stderr.write(
         `${redactString(err instanceof Error ? err.message : String(err), token)}\n`,
       );
-      const thisExit = err instanceof DiscordApiError ? 2 : 1;
-      if (thisExit > worstExit) worstExit = thisExit;
+      return 1;
     }
   }
 
-  return worstExit;
+  return 0;
 }
 
 function describePatch(...fields) {
@@ -602,15 +536,7 @@ if (isMain) {
     (code) => process.exit(code),
     (err) => {
       // Last-ditch safety net: anything that escapes runCli still gets
-      // redacted before it hits stderr. NOTE: the token is scoped inside
-      // runCli (read from env there), so this fallback cannot do
-      // token-substitution redaction — only header/JWT patterns. In
-      // practice, every escaping path inside runCli already calls
-      // `redactString(msg, token)` (parser/validation/icon/token/PATCH),
-      // so reaching this branch with an un-redacted token in the
-      // message is a should-not-happen. Treated as a defense-in-depth
-      // layer for header/JWT shapes only — see Garak's PR #71 review:
-      // https://github.com/Jamula/stfc/pull/71#issuecomment-4473826038
+      // redacted before it hits stderr.
       process.stderr.write(
         `${redactString(err instanceof Error ? err.message : String(err))}\n`,
       );

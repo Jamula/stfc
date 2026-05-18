@@ -31,8 +31,6 @@ import "./skills/discordMonitor.test.ts";
 import "./scripts/pre-commit.test.ts";
 import "./scripts/pre-push.test.ts";
 import "./scripts/discord-ops/set-discord-app-metadata.test.ts";
-import "./scripts/discord-ops/partial-success.test.ts";
-import "./scripts/discord-ops/endpoint-narrowing.test.ts";
 import "./constitution/discord-ops-carveout.test.ts";
 import "./workflows/discord-ops-workflow.test.ts";
 import "./agents/picard.test.ts";

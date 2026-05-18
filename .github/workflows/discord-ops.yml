@@ -89,17 +89,7 @@ jobs:
           mkdir -p /tmp/discord-ops
           # -sSfL: silent, show errors, fail-fast on HTTP 4xx/5xx, follow redirects.
           # --max-filesize 10485760: 10 MiB hard cap matching Discord's avatar limit.
-          # --proto '=https': SSRF belt-and-suspenders — the `=` form is
-          #   EXCLUSIVE (https ONLY, no http/file/ftp/etc. ever, regardless
-          #   of operator typo or malicious typo'd URL).
-          # --proto-redir '=https': same restriction applies to ANY redirect
-          #   chain so a 301 from an attacker-controlled URL cannot downgrade
-          #   to plain HTTP or pivot to file://.
-          # Mitigation note: GitHub-hosted ubuntu-latest runners have no
-          # private VPC reachable from this job; this is defense-in-depth,
-          # not the primary control. Per Kirk PR #71 LOW-3.
-          curl -sSfL --proto '=https' --proto-redir '=https' \
-            --max-filesize 10485760 -o /tmp/discord-ops/icon.bin "$ICON_URL"
+          curl -sSfL --max-filesize 10485760 -o /tmp/discord-ops/icon.bin "$ICON_URL"
 
       - name: Run metadata setter
         env:
