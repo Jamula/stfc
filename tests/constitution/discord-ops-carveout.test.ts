@@ -95,19 +95,88 @@ describe("Constitution Principle V — scripts/discord-ops/ carve-out", () => {
   );
 
   it(
-    "names a write verb (PATCH / PUT / POST) in the same section as the carve-out",
+    "names ALL THREE write verbs (PATCH, PUT, POST) in the same section as the carve-out (Garak NIT-1)",
     { skip: !carveoutLanded },
     () => {
-      // Find the carve-out occurrence and slice +/- 1500 chars around it
-      // to bound "same section".
+      // Garak PR #71 NIT-1: the old assertion passed if ANY of
+      // PATCH|PUT|POST appeared in the window. A future degenerate edit
+      // that authorized only POST (or stripped two of the three verbs)
+      // would have stayed green. Require all three so the verb grant
+      // stays explicit and complete.
       const idx = constitutionText!.indexOf("scripts/discord-ops/");
       const start = Math.max(0, idx - 1500);
       const end = Math.min(constitutionText!.length, idx + 1500);
       const window = constitutionText!.slice(start, end);
-      assert.match(
-        window,
-        /\b(PATCH|PUT|POST)\b/,
-        "carve-out must explicitly grant a write verb (PATCH/PUT/POST)",
+      for (const verb of ["PATCH", "PUT", "POST"]) {
+        assert.match(
+          window,
+          new RegExp(`\\b${verb}\\b`),
+          `carve-out must explicitly grant ${verb} (Garak NIT-1: pin all three verbs, not just one)`,
+        );
+      }
+    },
+  );
+
+  it(
+    "enumerates BOTH /users/@me AND /applications/@me as the narrowed endpoint surface (Garak MED-1)",
+    { skip: !carveoutLanded },
+    () => {
+      // Garak PR #71 MED-1: the constitution narrows the discord.com
+      // /api/v10 write surface to exactly two endpoints. Previously the
+      // carve-out test only asserted the api/v10 base was named — a
+      // future degenerate edit could re-broaden to "any v10 endpoint"
+      // (including /channels/{id}/messages) and the suite stayed green.
+      // Pin both endpoints by name in the carve-out window.
+      const idx = constitutionText!.indexOf("scripts/discord-ops/");
+      const start = Math.max(0, idx - 1500);
+      const end = Math.min(constitutionText!.length, idx + 1500);
+      const window = constitutionText!.slice(start, end);
+      assert.ok(
+        window.includes("/users/@me"),
+        "carve-out window must enumerate `/users/@me` (Garak MED-1)",
+      );
+      assert.ok(
+        window.includes("/applications/@me"),
+        "carve-out window must enumerate `/applications/@me` (Garak MED-1)",
+      );
+    },
+  );
+
+  it(
+    "does NOT grant writes to any other discord.com/api/v10 endpoint (Garak MED-1)",
+    { skip: !carveoutLanded },
+    () => {
+      // Negative assertion: no other endpoint string of the shape
+      // `discord.com/api/v10/<something>` appears in the carve-out
+      // window UNLESS the <something> is users/@me or applications/@me.
+      // Tolerates the bare base (`discord.com/api/v10` with no trailing
+      // path) which is referenced as the "API surface" — only flags
+      // paths that look like specific endpoint enumerations.
+      const idx = constitutionText!.indexOf("scripts/discord-ops/");
+      const start = Math.max(0, idx - 1500);
+      const end = Math.min(constitutionText!.length, idx + 1500);
+      const window = constitutionText!.slice(start, end);
+      // Match `discord.com/api/v10/<path-segment>` where <path-segment>
+      // is one or more URL-safe chars (incl. @, /, {, }, -, _, .).
+      // Capture the segment so the assertion message names the violator.
+      const RE = /discord\.com\/api\/v10\/([A-Za-z0-9@_\-./{}]+)/g;
+      const violators: string[] = [];
+      for (const m of window.matchAll(RE)) {
+        const seg = (m[1] ?? "").replace(/[.,;)\]]+$/, ""); // strip trailing punct
+        if (seg === "users/@me" || seg === "applications/@me") continue;
+        // Also accept sub-paths that START with one of the two
+        // enumerated endpoints — defensive in case a future edit
+        // references `/users/@me/connections` as an EXAMPLE of what is
+        // forbidden. Such enumeration is allowed if the surrounding
+        // prose is a non-grant; we only forbid the segment from
+        // appearing as a positive grant.
+        if (seg.startsWith("users/@me") || seg.startsWith("applications/@me")) continue;
+        violators.push(seg);
+      }
+      assert.deepEqual(
+        violators,
+        [],
+        `carve-out must not name discord.com/api/v10/<path> for any path other than users/@me / applications/@me; found: ${JSON.stringify(violators)}`,
       );
     },
   );
