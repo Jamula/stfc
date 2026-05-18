@@ -144,3 +144,5 @@ for any future `scripts/<vendor>-ops/` wrapper.
   `discordPatch`, parsers/validators; isMain guard at the bottom; `process.exit`
   only at the entrypoint. Keeps tests fast (no spawn needed for unit tests) and
   the workflow integration via spawnSync is still possible for end-to-end pin tests.
+
+**2026-05-18T04:00:10Z:** PR #73 merged; exit-code convention restored — see decisions.md (PR #73 → bashir-exit-code-restoration decision)

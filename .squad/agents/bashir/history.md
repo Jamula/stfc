@@ -151,3 +151,28 @@ Coordinated Phase 1 fan-out (Tuvok constitution v1.5.0, Scotty script, Bashir te
 
 ---
 
+
+---
+
+### 2026-05-18T04:00:10Z — Exit-code restoration (issue #72, b01ffdf regression)
+
+**Trigger:** User pushed `b01ffdf` which collapsed exit codes onto a single non-zero value, contradicting runAll.ts convention. User chose `fix_exit_codes` option; accepted the other b01ffdf simplifications (drop `--proto '=https'`, drop USAGE prose block, drop workflow-pin concurrency/timeout tests).
+
+**What changed:**
+- `scripts/discord-ops/set-discord-app-metadata.mjs`: Added `DiscordApiError extends Error` with `{ status, code }` opts; `discordPatch` now throws `DiscordApiError` on non-2xx (was plain `Error`). `runCli`: parseArgs/no-flag/validation/icon-load → `return 1` (was 2 for three of those). PATCH loop: replaced `return 1` short-circuit with `worstExit` fold; `DiscordApiError` folds to `max(worstExit, 2)`, transport throws fold to `max(worstExit, 1)`. Added 3-line exit-code comment above `runCli`.
+- `tests/scripts/discord-ops/set-discord-app-metadata.test.ts`: 401-from-Discord test tightened from `notEqual(r.status, 0)` to `equal(r.status, 2)`. Three new pinning tests: unknown-flag→1, no-flag→1 (with "At least one of" message check), invalid-username→1.
+- `tests/index.test.ts`: Re-added `partial-success.test.ts` and `endpoint-narrowing.test.ts` imports (dropped by b01ffdf, files still existed).
+
+**Accepted simplifications (user direction, do NOT restore):** full USAGE exit-code prose block, `--proto '=https'` curl hardening, workflow concurrency.group/timeout-minutes literal pins.
+
+**Result:** 566/566 tests pass (up from 557 in PR #73 head, 9 new tests from the three new files now registered + 3 new pinning assertions). Typecheck: one pre-existing huggingface error unchanged.
+
+**Commit:** f93947a
+
+## Learnings
+
+**Exit-code restoration pattern:** When a refactor collapses a multi-value exit-code taxonomy into a single non-zero code, the minimum restoration surface is: (a) an error-type discriminator class, (b) a `worstExit` fold in the loop, (c) three new pinning tests. Do NOT restore prose docs the user explicitly accepted as removed.
+
+**Re-registering dropped test imports:** When a refactor drops import lines from `tests/index.test.ts` but leaves the test files on disk, re-add the imports. The files pin behaviour that matches the restored convention — letting them be orphaned means the pinning is silent.
+
+**runAll.ts convention reinforcement:** 0=success, 1=operator/infra (bad args, missing env, validation, file-not-found, transport), 2=remote service rejected a well-formed request (4xx/5xx). Every script in this repo must follow this split. The discriminator pattern (custom error class thrown on remote rejection, plain Error on transport) is the canonical implementation.

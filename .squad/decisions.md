@@ -1514,3 +1514,205 @@ Garak identified a gap: when a constitution amendment introduces new MUST-langua
 - Original Picard (c) verdict: .squad/decisions/inbox/picard-discord-avatar-automation-scope.md
 - Tuvok memo: .squad/decisions/inbox/tuvok-constitution-v1.5.0.md
 
+---
+
+### 2026-05-18: User-token automation — rejected per Discord ToS + Constitution Principle V
+**From:** Uhura (Integrations Dev)
+
+**Verdict:** **NO** — Using Cyrus's personal Discord user-account token to drive the monitor is prohibited by Discord's ToS §9, carries permanent-account-ban risk, and contradicts Constitution Principle V's sanctioned-secrets enumeration.
+
+**Reasoning:**
+- Self-bot use (automation via user token, not Bot token) is explicitly prohibited in Discord ToS §9 *Restrictions on your use of Discord's services*: "Don't use ... any robot, spider, crawler, scraper, or other automatic device, process, or software" without written consent.
+- Discord's enforcement is strict: permanent account termination is the standard; self-bot bans are non-appealable per their published enforcement matrix.
+- Project-side damage would span Constitution Principle V (user token is a net-new secret class not in the enumeration), the governance story (bot schemas, contracts, audit trail all presume Bot account), and the Path A outreach pitch (a covert user token breaks the "verifiable Bot User-Agent" promise).
+
+**Recommendation:**
+- **Hold Path A** (request whitelist from STFC mods via professional outreach).
+- **If Path A declines, jump to Path B** (Cyrus admins a personal relay server with the bot invited legitimately).
+- **If neither: Path C** (poll `startrekfleetcommand.com/wp-json/` instead; no Discord, no ToS risk).
+
+**References:**
+- Discord ToS §9: https://discord.com/terms
+- Constitution Principle V (sanctioned secrets): `.specify/memory/constitution.md`
+
+---
+
+### 2026-05-18: STFC-News-Bot Discord application identifiers registered
+**By:** Cyrus Jamula (operator)
+
+**What:** New Discord application **STFC-News-Bot** created for the `003-discord-oauth` work (issue #51).
+
+**Public identifiers (safe to commit):**
+- **Application ID (client_id):** `1505752454388514916`
+- **Public Key:** `505b2f8384e61947003357a956a16986e1d9c48b451def18aed2297568e0fcbf`
+
+**Why:** Needed to construct the OAuth2 install URL and future interaction-webhook signature verification (Public Key). Both are public by Discord's design.
+
+**Secret handling:** The **Bot Token** (`DISCORD_BOT_TOKEN`) remains the only secret — set via `gh secret set DISCORD_BOT_TOKEN` only. Constitution Principle V, FR-012. If operator ever pastes a token in chat, refuse to write it and request rotation.
+
+**References:**
+- docs/DISCORD-BOT-SETUP.md line 68
+- specs/003-discord-oauth/quickstart.md line 40
+
+---
+
+### 2026-05-18: Garak — PR #71 hostile fact-check: Constitution v1.5.0 discord-ops carve-out
+**By:** Garak (Hostile Fact-Checker)
+
+**Verdict:** **APPROVE** ✅
+
+**Branch reviewed:** discord-ops-automation @ 87a8ef6 (Tuvok constitution + plan-template sync) on top of 226ce7b (Scotty script) on top of 6ea61c8 (O'Brien workflow).
+
+**Attack list — all defensible:**
+| Vector | Finding |
+|--------|---------|
+| Endpoint narrowing (only `/users/@me` + `/applications/@me`) | Sufficient for foreseeable bot identity + app metadata writes. Verified by tsconfig include allowlist enforcement. Positive endpoint enumeration closes loophole. |
+| "Outside src/" boundary widening claim | Enforced by tsconfig.json include allowlist, not just asserted. ✓ |
+| Non-grant clause ("monitored servers/channels") | Tightly phrased; positive endpoint enumeration closes loophole; tightening to "any channel" is optional future prose edit. |
+| Workflow-pinning obligation | Written as MUST; enforced by pre-commit `checkWorkflowPinningTests`. ✓ |
+| Cross-reference integrity (FR-009, FR-012) | ✓ Both resolve to spec.md:78/:81. SIR, version footer, Last Amended consistent (v1.5.0 / 2026-05-18). |
+| Plan-template sync (Rule 1) | ✓ Row contains all required tokens; full inline sentence, not comment. |
+| Script constraint compliance | ✓ Zero hits in `src/`, redaction on every error path, clean transport wrapping. |
+| Workflow token leak | ✓ No `set -x`, DISCORD_BOT_TOKEN scoped to single step only. |
+| Test rigor | ✓ Workflow-pin test catches sneaky `schedule:` triggers; SHA-pin assertion catches version drift. |
+| npm test baseline | ✓ 557/557 green. |
+
+**Findings (public comment at PR #71#issuecomment-4473826038):**
+- [MEDIUM] Constitution-pin test does not pin `/users/@me` + `/applications/@me` endpoint enumeration (scope #1).
+- [MEDIUM] Workflow-pin test does not pin `concurrency.group: stfc-discord-ops` (scope #2) — asymmetric with repo convention.
+- [LOW] Non-grant clause "monitored" qualifier (optional tightening; loophole closed by positive enumeration).
+- [LOW] Last-ditch redactor lacks token arg (practically closed; in-runCli redactors are comprehensive).
+- [NIT] Constitution-pin test verb assertion too permissive (ANY of PATCH/PUT/POST passes; require ALL THREE).
+
+**Side-channel notes:**
+1. **Routing on any follow-up:** MEDIUM findings (endpoint scope, workflow concurrency pinning) are Bashir's charter, NOT Tuvok's. Constitution wording itself is sound.
+2. **Pinning-test scope check pattern (for Picard's charter):** Every MUST-language obligation in a constitution amendment should map to a literal-value assertion in tests/. This amendment introduces four MUST clauses; only three are directly pinned. Future reviews: enumerate MUST clauses, grep for each in tests/.
+3. **Cross-provider value:** A within-family reviewer might wave through the "narrowed on purpose" justification. Garak's role is to verify each narrowing actually closes the loophole (endpoint scope ✓, src/ boundary ✓, non-grant clause ✓, workflow obligation ✓).
+4. **Carry-forward to Picard:** Picard's earlier Decline centered on read-only invariant on monitored channels. This carve-out preserves that invariant (FR-009 cross-ref verified; monitor runtime byte-identical to v1.4.0). Picard has no factual basis to re-Decline.
+
+**Audit trail:**
+- PR: https://github.com/Jamula/stfc/pull/71
+- Comment: https://github.com/Jamula/stfc/pull/71#issuecomment-4473826038
+
+---
+
+### 2026-05-18: Kirk — PR #71 code review: discord-ops script + workflow + pinning tests
+**By:** Kirk (Lead / Architect)
+
+**Verdict:** **APPROVE** ✅
+
+**PR:** https://github.com/Jamula/stfc/pull/71#issuecomment-4473820298
+
+**Summary:** Architecture is sound. Shell-injection hardening matches GitHub Security Hardening guidance verbatim. Fetch-injection seam clean; sentinel-token leak test pins FR-012 correctly. npm test: 557/557 green.
+
+**Findings (LOW/NIT only — none gate merge):**
+1. **Idempotency design undocumented** — script always PATCHes. Worth a one-line comment near `plannedCalls.push` so next reader doesn't try to "optimise" with GET-then-diff. *Assigned to: Bashir.*
+2. **Token-missing exit code inconsistency** — should be 2 not 1 per script's own comment-stated taxonomy (operator error → 2). *Assigned to: Bashir.*
+3. **curl `--proto` hardening** — could add `--proto '=https' --proto-redir '=https'` to lock scheme + reject `file://`/`gopher://` redirects. Belt-and-suspenders; runner network isolated. *Assigned to: Uhura.*
+4. **Partial-success path untested** — if `/users/@me` succeeds and `/applications/@me` fails, exits with both lines. PATCH is idempotent (defensible) but no test. *Assigned to: Bashir.*
+
+**Revision routing (reviewer-lockout protocol):**
+- Idempotency comment, token exit code, partial-success test, pin tightening → **Bashir** (NOT Scotty/O'Brien).
+- curl `--proto` hardening → **Uhura** (NOT O'Brien).
+
+**Pattern for skill promotion:** O'Brien's proposed `.copilot/skills/operator-workflows/`. Four invariants for any future `scripts/<vendor>-ops/` wrapper:
+1. `workflow_dispatch:` only (no `schedule`/`push`/`pull_request`).
+2. Minimal top-level `permissions:` (`contents: read`) + step-scoped secret env.
+3. Unique concurrency group per third-party-API write target.
+4. Operator inputs routed through quoted env vars + bash arrays.
+
+**Architectural notes:**
+- `discordPatch({ fetchImpl })` mirrors `src/api/client.ts` + `src/discord/client.ts` — keep pattern uniform for interchangeable test stubs.
+- Inlining `redactString` (vs importing from src/lib/) is correct FR-009 trade: ~10 LOC duplication for clean "scripts/ never imports src/" boundary. Sentinel-token test pins drift.
+- Shell-injection hardening via env-routed inputs is battle-tested. Future workflow PRs touching `inputs.*` should reference this PR as pattern.
+
+**Audit trail:**
+- PR: https://github.com/Jamula/stfc/pull/71
+- Comment: https://github.com/Jamula/stfc/pull/71#issuecomment-4473820298
+
+---
+
+### 2026-05-18: Bashir — PR #73 (v1.5.1 polish): discord-ops exit-code + pinning follow-ups from PR #71 review
+**By:** Bashir (Tester / QA)
+
+**PR:** https://github.com/Jamula/stfc/pull/73  
+**Issue:** #72 (consolidated findings from Kirk + Garak verdicts on PR #71)  
+**Upstream:** PR #71 merged @ 2f26241 with Kirk + Garak + Picard APPROVEs
+
+**Summary:** PR #71 review findings consolidated in issue #72 and routed to Bashir + Uhura per reviewer-lockout protocol. PR #73 addresses all findings; test count grows from 557 → 569 (+12 tests). All 569/569 green. npm test runtime ~5.6s.
+
+**Disposition table:**
+
+| ID | Reviewer | Severity | Disposition | Commit |
+|----|----------|----------|-------------|--------|
+| Kirk-LOW-1 | Kirk | LOW | Addressed | 175c208 |
+| Kirk-LOW-2 | Kirk | LOW | Addressed (expanded) | 175c208 |
+| Kirk-LOW-3 | Kirk | LOW | Addressed | e485cb2 |
+| Kirk-LOW-4 | Kirk | LOW | Addressed | 175c208 |
+| Garak-MED-1 | Garak | MEDIUM | Addressed | 1fcc765 |
+| Garak-MED-2 | Garak | MEDIUM | Addressed | e485cb2 |
+| Garak-LOW-1 | Garak | LOW | Deferred | — |
+| Garak-LOW-2 | Garak | LOW | Addressed (doc-only) | 175c208 |
+| Garak-NIT-1 | Garak | NIT | Addressed | 1fcc765 |
+
+**Key outcomes:**
+- **Kirk-LOW-2 (exit code):** Expanded to full runAll.ts convention (0=success, 1=infra/operator error, 2=Discord-said-no). New `DiscordApiError` class discriminates API rejection from transport failure at catch site. PATCH loop folds per exception type.
+- **Garak-MED-1 (endpoint narrowing):** Constitution test now pins BOTH `/users/@me` AND `/applications/@me` enumeration. New companion `tests/scripts/discord-ops/endpoint-narrowing.test.ts` pins implementation side via four assertions (base, path literals, forbidden-prefix, full substring scan).
+- **Garak-MED-2 (workflow pinning):** Three new workflow-test pins: `concurrency.group: stfc-discord-ops`, `timeout-minutes: 5`, `--proto '=https' --proto-redir '=https'`.
+- **Garak-LOW-1 (monitored clause tightening):** Deferred to v1.5.2 amendment (constitution does not change; v1.5.0 stays per prompt constraint). Loophole closed by positive endpoint enumeration.
+
+**Constraints honored:**
+- ✅ No new dependencies (fixtures use built-in `fetch` + `Response`)
+- ✅ Constitution unchanged (v1.5.0)
+- ✅ FR-009, FR-012 preserved; sentinel-token assertion on EACH new error path
+- ✅ 569/569 tests green; `npm run typecheck` baseline unchanged (pre-existing huggingface error unrelated)
+- ✅ Three logical commits (script / workflow / tests); Rule 3 (workflow YAML change + pin test in same commit); Rule 2 (no broad globs); Rule 12 (PR body `Closes #72` on own line); Rule 9b (re-review via `gh pr comment`)
+
+**Reviewer-lockout discipline (meta):**
+Lockout protocol ensures follow-up findings are addressed by independent agent (Bashir here), not original authors (Scotty/O'Brien). This keeps the "reviewer + author" gate distinct and gives Kirk fresh code to evaluate on re-review.
+
+**Audit trail:**
+- This PR: https://github.com/Jamula/stfc/pull/73
+- Upstream PR #71: https://github.com/Jamula/stfc/pull/71
+- Issue #72: https://github.com/Jamula/stfc/issues/72
+- Kirk re-review request: https://github.com/Jamula/stfc/pull/73#issuecomment-4473899125
+
+---
+
+### 2026-05-18: Exit-code restoration — PR #73 merge + Scribe decision record
+**By:** Bashir (Tester)
+
+**Trigger:** User pushed commit b01ffdf (250-line refactor) which collapsed exit-code taxonomy contradicting runAll.ts convention. Coordinator presented 4 options via ask_user form; user selected `fix_exit_codes`.
+
+**Decision:** Restore runAll.ts exit-code convention (1=infra, 2=Discord-said-no) after b01ffdf collapse. The following simplifications from b01ffdf are **accepted as permanent** and must NOT be re-introduced:
+- Full USAGE exit-code prose block (script body stays slim)
+- `--proto '=https' --proto-redir '=https'` curl hardening in discord-ops.yml
+- `concurrency.group` and `timeout-minutes` literal pins in workflow test
+
+**Implementation:**
+- **Discriminator:** `DiscordApiError extends Error` with `{ status, code }` opts.
+  - `discordPatch` throws `DiscordApiError` on non-2xx (Discord rejected).
+  - `discordPatch` throws plain `Error` on transport failure.
+  - PATCH loop folds: `DiscordApiError` → `worstExit = max(worstExit, 2)`; plain `Error` → `max(worstExit, 1)`.
+
+**Exit codes (final):**
+| Scenario | Exit |
+|----------|------|
+| parseArgs throws (bad args) | 1 |
+| No flag passed | 1 |
+| validateDescription/Username fails | 1 |
+| DISCORD_BOT_TOKEN missing | 1 |
+| Icon load/validation fails | 1 |
+| Discord 4xx/5xx in PATCH loop | 2 |
+| Transport error in PATCH loop | 1 |
+| All calls succeed | 0 |
+| Dry-run preview | 0 |
+
+**Test coverage:**
+- `set-discord-app-metadata.test.ts`: 3 new pinning tests (bad-args→1, no-flag→1, invalid-username→1); 401 test tightened to `=== 2`.
+- `tests/index.test.ts`: re-registered `partial-success.test.ts` and `endpoint-narrowing.test.ts` (orphaned by b01ffdf).
+
+**Commit:** f93947a — "fix(discord-ops): restore runAll.ts exit-code convention (1=infra, 2=Discord-said-no)"
+
+**Merged to main:** abe06a1 (squash commit of PR #73, issue #72 auto-closed)
+

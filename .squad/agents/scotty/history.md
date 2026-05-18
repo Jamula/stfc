@@ -91,3 +91,5 @@ Coordinated Phase 1 fan-out (Tuvok constitution v1.5.0, Scotty script, Bashir te
 
 ---
 
+
+**2026-05-18T04:00:10Z:** PR #73 merged; exit-code convention restored in discord-ops script — see decisions.md (PR #73 → bashir-exit-code-restoration decision)
