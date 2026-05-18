@@ -691,3 +691,18 @@ The compression from 14 audit-suggested issues to 9 filed (Picard learning #16) 
 **Cross-check:** No secondary references in routing.md, constitution.md, or team.md require update. The three charter edits are self-contained.
 
 **Evidence base:** User findings passed as explicit directives on 2026-05-18 audit form.
+### 2026-05-18T01:12:00Z: Issue #62 hygiene batch closed
+
+**By:** Tuvok
+
+**What:** Final two sub-items completed — Ralph history seeded with role-specific learnings; Garak's charter `## Model` section now documents the `gpt-5.5` config.json operational override.
+
+**Files touched:** 
+- `.squad/agents/ralph/history.md` (+~50 lines Learnings section)
+- `.squad/agents/garak/charter.md` (+3 lines Model config override note)
+
+**Scope:** Editorial/documentation only. No code, no tests.
+
+**Why:** Closeout of audit-derived hygiene batch (issue #62). The audit verdict (`are-all-squad-members-needed-are-they-adding-value.md`) flagged Ralph as "underused post-rules-codification." Issue #62 captured the seeding task to transform Ralph's history into institutional memory. Garak's model override was invisible to auditors — now surfaced in charter so readers understand why `gpt-5.5` runs instead of `auto`.
+
+**Decision:** Closed #62 with all sub-items addressed (routing row, registry gaps, decisions.md corruption pre-fix, Ralph seeding, Garak doc). Ready for Scribe commit batch.

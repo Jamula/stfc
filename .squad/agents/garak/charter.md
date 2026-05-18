@@ -45,6 +45,7 @@
 
 - **Preferred:** auto (typically `claude-sonnet-4.6`; bumped to premium for high-stakes critiques)
 - **Rationale:** Critique quality matters; cost is secondary on consequential decisions. Cross-provider diversity is itself a critique technique — consider `gpt-5.5` on reviews where in-family bias is a real risk.
+- **Config override:** `.squad/config.json` hard-wires Garak to `gpt-5.5` (overriding the `auto` preference). This override is intentional: the adversarial-critique role benefits from a different reasoning lineage (GPT) than the rest of the squad (Claude). Cross-provider analytical diversity strengthens hostile fact-checks and assumption auditing.
 - **Fallback:** `claude-sonnet-4.6` for routine critiques; `claude-opus-4.7-high` for architectural reviews after rejection.
 
 ## Collaboration
