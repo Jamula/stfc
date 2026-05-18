@@ -108,3 +108,26 @@ PR #20):
 **2026-05-18T00:** New squad meta issues #61–#69 filed by Picard 2026-05-18; review when picking up squad:picard work
 
 2026-05-18T00:57Z: New teammate O'Brien (Miles) joined as DevOps/Platform Engineer; @copilot activated for autonomous issue pickup; new routing rules added (Garak hard-gate on src/ PRs, Discord precedence, Bashir/Kirk reviewer mitigation). See decisions.md and routing.md.
+
+### News-fetch request — discovered Discord allowlist empty (2026-05-18T01:35:13.728+00:00)
+
+**Context:** User asked `@uhura please fetch the latest news`. Investigated all news sources I own.
+
+**Sources surveyed:**
+- `data/discord/` — only `.gitkeep`; no `candidates.jsonl`, no `suppression.json`, no `cooldowns.json`.
+- `data/digests/` — only `.gitkeep`; no daily digest has ever been written to main.
+- `config/discord-allowlist.json` — `{ "version": 1, "entries": [] }`. **Zero channels configured.**
+- `Discord monitor` workflow run 26002780232 (2026-05-17T21:09Z) — succeeded with log line `INFO [discordMonitor] allowlist empty — graceful no-op (FR-001)`. Every scheduled run since the feature shipped has been a no-op for the same reason.
+- `docs/redeem-history.md` — actively appended every cron tick; 16 rows in the last 24h, all from `main` account. Daily reset (2026-05-17 04:34) claimed a big bundle including a 24 Hr Bajoran Favor chest + UC Event Ticket.
+- `promo-codes.txt` — last meaningful edit was 2026-05-08 (76e40d6) seeding 30 publicly-listed codes; nothing newly added since.
+
+**Learnings about news sources in this project:**
+
+1. **The Discord monitor is the canonical "news" surface but it is currently dark.** Without entries in `config/discord-allowlist.json`, the skill takes the FR-001 graceful-no-op path on every cron and writes nothing. Anyone asking for "latest news" before the allowlist is populated will hear silence — and the workflow `success` status hides this from a casual `gh run list` check. Always grep the run log for `allowlist empty` before claiming "no news" in a report.
+2. **`docs/redeem-history.md` is the only live news stream right now.** It is the most reliable "what just happened" source because the redeem cron commits to main on every successful claim. New rows are inserted at the top — `head -20` after the header is the right read.
+3. **`promo-codes.txt` is a seed list, not a feed.** It only changes when an operator commits new codes. It is not auto-populated by the Discord monitor (that path requires the allowlist to be live).
+4. **Workflow `success` ≠ "did real work".** The Discord monitor returning 0 is identical whether it processed 1000 messages or short-circuited on an empty allowlist. The discriminator is the log line, not the exit code.
+5. **Repo activity (commits, PRs, issues) is Ralph's domain, not mine.** Defer unless the user explicitly asks for "repo news" or "code news".
+
+**Action items surfaced (not taken — out of scope for a news request):**
+- Operator needs to populate `config/discord-allowlist.json` with at least one channel ID for the monitor to produce actual news. Worth filing as an issue if it stays empty for another week — but not unilaterally from a news-fetch task.
