@@ -706,3 +706,71 @@ The compression from 14 audit-suggested issues to 9 filed (Picard learning #16) 
 **Why:** Closeout of audit-derived hygiene batch (issue #62). The audit verdict (`are-all-squad-members-needed-are-they-adding-value.md`) flagged Ralph as "underused post-rules-codification." Issue #62 captured the seeding task to transform Ralph's history into institutional memory. Garak's model override was invisible to auditors — now surfaced in charter so readers understand why `gpt-5.5` runs instead of `auto`.
 
 **Decision:** Closed #62 with all sub-items addressed (routing row, registry gaps, decisions.md corruption pre-fix, Ralph seeding, Garak doc). Ready for Scribe commit batch.
+
+### 2026-05-18T01:39:34.656+00:00: Official STFC Discord identified — allowlist configuration pending
+
+**By:** Uhura (Integrations Dev)
+
+**Status:** Proposed — awaits team ratification + operator action (bot invite)
+
+**Context:**
+`config/discord-allowlist.json` on `main` is `{ "version": 1, "entries": [] }`. The Discord monitor workflow has been running successfully but taking the FR-001 graceful-no-op path on every cron tick because no channels are configured. This is the only blocker preventing the Discord-sourced news pipeline (candidates → tips → digest → promo-code extraction) from producing anything.
+
+**Finding:**
+There is exactly **one** Discord server advertised across all official STFC surfaces:
+
+- **Invite URL:** `https://discord.com/invite/stfc` (vanity: `stfc`, never expires)
+- **Guild ID:** `509679626763632640`
+- **Name:** `Star Trek Fleet Command`
+- **Discord-issued features:** `VERIFIED`, `PARTNERED`, `COMMUNITY`, `DISCOVERABLE` — confirms publisher-owned status, not a fan server
+- **Scale:** ~129K members, ~7.9K online at time of check
+- **Default landing channel:** `👋-welcome-to-cadet-corner` (id `1301298382182285322`)
+- **Source pages (all link to the same invite):** `startrekfleetcommand.com/` (home), `/news/`, `/faq/`, `/community-spotlight/`, `/creator-program/`, `/fan-art/`, `/new-user-guides/`, `/star-trek-fleet-command-database/`
+
+The store portal (`home.startrekfleetcommand.com`) and Scopely's support helpshift are SPA / non-relevant.
+
+**Permanent facts (for future sessions):**
+
+1. Scopely publishes exactly one official STFC Discord and links it identically from every page on the marketing site.
+2. Discord `VERIFIED` + `PARTNERED` tags are the wire-level proof of officialness.
+3. The official site does NOT link to content-creator Discord servers.
+
+**Proposal:**
+Add the official server to the allowlist scaffold, gated on the operator completing the bot-invite step:
+
+```jsonc
+// config/discord-allowlist.json
+{
+  "version": 1,
+  "entries": [
+    // Pending operator action: invite DISCORD_BOT_TOKEN bot to guild 509679626763632640
+    // then add per-channel entries with { id, name, enabled: true }.
+    // Candidate channels (TBD, requires bot to be in the server first):
+    //   - patch notes / announcements
+    //   - promo codes / giveaways
+    //   - events
+  ]
+}
+```
+
+**Required operator action (cannot be done by an agent):**
+
+1. Cyrus joins the server at `https://discord.com/invite/stfc` (one-click).
+2. Invite the monitor bot to the same server. The bot's client ID lives in whatever app owns `DISCORD_BOT_TOKEN` — Cyrus needs Server Admin on a server he owns to invite it, OR he needs to ask a server admin of the official STFC server to invite the bot.
+3. **Alternative path (recommended):** Cyrus stands up a *personal* test Discord server, invites the bot there, and uses it as the allowlist target. He then manually forwards/quotes interesting messages from the official STFC server into his personal server.
+4. Capture channel IDs via Discord developer mode (Settings → Advanced → Developer Mode → right-click channel → Copy ID).
+5. Commit allowlist entries in the format `{ "id": "<channel_id>", "name": "<human label>", "enabled": true }`.
+
+**Open question for the team:**
+
+Which path do we take?
+- **(A)** Try to get the bot into the official STFC server (low probability of admin approval; we don't own it).
+- **(B)** Operator runs a personal relay server and curates content into it manually (more work but full control, no third-party trust).
+- **(C)** Skip Discord ingestion entirely and rely on other sources (e.g. scraping `startrekfleetcommand.com/news/` or Reddit /r/STFC_Official).
+
+Picard's call on which architecture fits the project's privacy / trust model best.
+
+**References:**
+- Source: `https://startrekfleetcommand.com/` (HTML grep)
+- Discord API: `GET https://discord.com/api/v10/invites/stfc?with_counts=true` (200, verified)
+- Monitor implementation: `src/skills/discordMonitor.ts`, `src/discord/ingest.ts`, `src/discord/state.ts`

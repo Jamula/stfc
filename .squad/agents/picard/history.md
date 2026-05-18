@@ -20,3 +20,5 @@ Key learnings from this round:
 - See `history-archive.md` for condensed summary of 21 prior learnings on governance template sync, superseded-PR detection, triage-bot patterns, self-test taxonomy, audit compression heuristics.
 
 2026-05-18T00:57Z: New teammate O'Brien (Miles) joined as DevOps/Platform Engineer; @copilot activated for autonomous issue pickup; new routing rules added (Garak hard-gate on src/ PRs, Discord precedence, Bashir/Kirk reviewer mitigation). See decisions.md and routing.md.
+
+2026-05-18T01:40Z: Uhura proposed 3-path Discord+news architecture in decisions.md (admin approval vs relay server vs website scrape). Awaits team ratification on path choice.
