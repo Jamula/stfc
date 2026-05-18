@@ -319,9 +319,24 @@ export function validateUsername(name) {
 // ── Discord PATCH primitive ──────────────────────────────────────────────────
 
 /**
+ * Thrown by discordPatch when Discord returns a non-2xx response.
+ * Distinct from plain Error (transport failure) so the caller can
+ * apply different exit codes per the runAll.ts convention.
+ */
+export class DiscordApiError extends Error {
+  constructor(message, { status, code } = {}) {
+    super(message);
+    this.name = "DiscordApiError";
+    this.status = status;
+    this.code = code;
+  }
+}
+
+/**
  * PATCH a JSON body to a Discord endpoint. Returns the parsed JSON body
- * on 2xx. Throws a redacted Error on non-2xx or transport failure. The
- * token is captured in closure so it can be redacted from any error.
+ * on 2xx. Throws DiscordApiError on non-2xx (Discord rejected the
+ * request) or plain Error on transport failure. The token is captured
+ * in closure so it can be redacted from any error.
  */
 export async function discordPatch({ path, body, token, fetchImpl, baseUrl }) {
   const url = `${baseUrl ?? DISCORD_API_BASE}${path}`;
@@ -364,11 +379,12 @@ export async function discordPatch({ path, body, token, fetchImpl, baseUrl }) {
         ? parsed.message
         : truncate(raw, 200);
     const suffix = code === undefined ? "" : ` (code ${code})`;
-    throw new Error(
+    throw new DiscordApiError(
       redactString(
         `Discord PATCH ${path} failed: HTTP ${res.status}${suffix} — ${message}`,
         token,
       ),
+      { status: res.status, code },
     );
   }
 
@@ -381,6 +397,11 @@ function truncate(s, n) {
 }
 
 // ── Main entry point (exported for tests) ────────────────────────────────────
+
+// Exit codes (runAll.ts convention):
+//   0 = success / dry-run preview
+//   1 = operator/infra (bad args, missing env, validation, icon-load, transport)
+//   2 = Discord rejected a well-formed request (4xx/5xx)
 
 /**
  * Run the CLI. Returns the exit code. All I/O is injectable so tests
@@ -400,7 +421,7 @@ export async function runCli({
   } catch (err) {
     stderr.write(`${redactString(err instanceof Error ? err.message : String(err))}\n`);
     stderr.write(USAGE);
-    return 2;
+    return 1;
   }
 
   if (args.help) {
@@ -415,7 +436,7 @@ export async function runCli({
   ) {
     stderr.write("At least one of --icon, --description, --username is required.\n");
     stderr.write(USAGE);
-    return 2;
+    return 1;
   }
 
   // Validate text fields up front (fail fast, no Discord call).
@@ -424,7 +445,7 @@ export async function runCli({
     if (args.username !== undefined) validateUsername(args.username);
   } catch (err) {
     stderr.write(`${redactString(err instanceof Error ? err.message : String(err))}\n`);
-    return 2;
+    return 1;
   }
 
   // Token check. We deliberately do not echo the var name's *value* in any
@@ -446,7 +467,7 @@ export async function runCli({
       stderr.write(
         `${redactString(err instanceof Error ? err.message : String(err), token)}\n`,
       );
-      return 2;
+      return 1;
     }
     for (const w of iconLoaded.warnings) {
       stderr.write(`warning: ${w}\n`);
@@ -489,6 +510,7 @@ export async function runCli({
     return 0;
   }
 
+  let worstExit = 0;
   for (const call of plannedCalls) {
     try {
       await discordPatch({
@@ -502,11 +524,17 @@ export async function runCli({
       stderr.write(
         `${redactString(err instanceof Error ? err.message : String(err), token)}\n`,
       );
-      return 1;
+      // DiscordApiError = remote rejected well-formed request (exit 2);
+      // anything else = transport / infra failure (exit 1). Per runAll.ts.
+      if (err instanceof DiscordApiError) {
+        worstExit = Math.max(worstExit, 2);
+      } else {
+        worstExit = Math.max(worstExit, 1);
+      }
     }
   }
 
-  return 0;
+  return worstExit;
 }
 
 function describePatch(...fields) {
