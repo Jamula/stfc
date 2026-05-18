@@ -1,0 +1,109 @@
+# Manual one-shot Discord app metadata setter.
+#
+# Wraps `scripts/discord-ops/set-discord-app-metadata.mjs` so the operator can
+# update STFC-News-Bot's avatar / description / username from the GitHub
+# Actions UI WITHOUT exporting DISCORD_BOT_TOKEN to a laptop or Codespace.
+#
+# Trigger: `workflow_dispatch` ONLY. There is no schedule, no push trigger, no
+# PR trigger — every PATCH to discord.com is the result of a human button
+# press. This is what makes the carve-out under Constitution Principle V
+# (operator-only one-shot scripts under `scripts/discord-ops/`) safe: there is
+# no automation path that can issue a surprise write.
+#
+# Secret handling: DISCORD_BOT_TOKEN is mapped into the env of the single step
+# that runs the script. It is never echoed, never passed on the command line,
+# and the workflow does NOT enable `set -x`. The script itself is responsible
+# for redacting the token from any error message before exit (FR-012).
+#
+# Pinning test: `tests/workflows/discord-ops-workflow.test.ts` (Bashir) asserts
+# the exact values below — trigger set, permissions, concurrency group,
+# timeout, secret-mapping shape, and the 10 MB curl cap. Per repo Rule 3,
+# any edit here ships in the same commit as the test update.
+name: Discord Bot Ops
+
+on:
+  workflow_dispatch:
+    inputs:
+      icon_url:
+        description: "URL to a PNG/JPEG/GIF image (≤10MB, ≥512x512) to set as the bot avatar. Leave blank to skip."
+        required: false
+        type: string
+      description:
+        description: "Discord application description (≤400 chars). Leave blank to skip."
+        required: false
+        type: string
+      username:
+        description: "New bot username. Leave blank to skip."
+        required: false
+        type: string
+      dry_run:
+        description: "Print intended changes without calling Discord."
+        required: false
+        type: boolean
+        default: false
+
+# Token is consumed via env mapping on the single step that needs it; the
+# workflow itself only needs `contents: read` for the checkout. No id-token,
+# no packages, no broader scopes.
+permissions:
+  contents: read
+
+# Serialize operator clicks so two rapid dispatches cannot race to PATCH the
+# same Discord endpoint. Distinct group from the redeem / monitor pipelines
+# (`stfc-gift-redeemer`) — different write target, different blast radius.
+concurrency:
+  group: stfc-discord-ops
+  cancel-in-progress: false
+
+jobs:
+  set-metadata:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.0
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4.4.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate at least one input
+        env:
+          ICON_URL: ${{ inputs.icon_url }}
+          DESCRIPTION: ${{ inputs.description }}
+          USERNAME: ${{ inputs.username }}
+        run: |
+          if [ -z "$ICON_URL" ] && [ -z "$DESCRIPTION" ] && [ -z "$USERNAME" ]; then
+            echo "::error::At least one of icon_url, description, or username must be provided."
+            exit 1
+          fi
+
+      - name: Download icon (if provided)
+        if: inputs.icon_url != ''
+        env:
+          ICON_URL: ${{ inputs.icon_url }}
+        run: |
+          mkdir -p /tmp/discord-ops
+          # -sSfL: silent, show errors, fail-fast on HTTP 4xx/5xx, follow redirects.
+          # --max-filesize 10485760: 10 MiB hard cap matching Discord's avatar limit.
+          curl -sSfL --max-filesize 10485760 -o /tmp/discord-ops/icon.bin "$ICON_URL"
+
+      - name: Run metadata setter
+        env:
+          # Token lives ONLY in this step's env. Never echoed, never logged,
+          # never expanded onto the command line. Script handles redaction.
+          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+          ICON_URL: ${{ inputs.icon_url }}
+          DESCRIPTION: ${{ inputs.description }}
+          USERNAME: ${{ inputs.username }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          ARGS=()
+          [ -n "$ICON_URL" ] && ARGS+=(--icon /tmp/discord-ops/icon.bin)
+          [ -n "$DESCRIPTION" ] && ARGS+=(--description "$DESCRIPTION")
+          [ -n "$USERNAME" ] && ARGS+=(--username "$USERNAME")
+          [ "$DRY_RUN" = "true" ] && ARGS+=(--dry-run)
+          node scripts/discord-ops/set-discord-app-metadata.mjs "${ARGS[@]}"
