@@ -1,17 +1,28 @@
 <!-- SYNC IMPACT REPORT -->
-Version change: 1.3.0 → 1.4.0 (MINOR)
-Bump rationale: MINOR — Principle V durable-inputs enumeration expanded
-to cover four new committed paths introduced by the Tuvok token-usage
-telemetry feature (issue #15, specs/002-tuvok-telemetry/). No principle
-is removed, no obligation narrowed, no existing safeguard weakened. No
-new secrets introduced. No new outbound network destinations. No new
-sanctioned writer of `STFC_ACCOUNTS`. Privacy by design: only token
-counts and metadata are stored — no prompt content or assistant responses
-(per FR-009 in the feature spec).
+Version change: 1.4.0 → 1.5.0 (MINOR)
+Bump rationale: MINOR — Principle V gains an explicit, narrowly-scoped
+carve-out for operator-only one-shot ops scripts under
+`scripts/discord-ops/` that manage Discord *application metadata* (bot
+avatar, application description, bot username) by issuing `PATCH`/`PUT`/
+`POST` requests against `https://discord.com/api/v10/users/@me` and
+`https://discord.com/api/v10/applications/@me`. No principle is removed,
+no existing obligation narrowed. No new secrets are introduced
+(`DISCORD_BOT_TOKEN` is reused). No new outbound destinations are
+introduced (`discord.com/api/v10` is already sanctioned for the
+`discord-monitor` skill). No new sanctioned writer of `STFC_ACCOUNTS`.
+The strict read-only constraint on the monitor runtime
+(`src/skills/discordMonitor.ts`, `src/discord/**`, per FR-009 of
+specs/003-discord-oauth) is preserved verbatim because the ops scripts
+are not loaded by the monitor runtime — they live outside `src/` and
+are invoked only by the operator (locally or via `workflow_dispatch`).
+FR-012's token-redaction obligation is extended to the new scripts.
 
-Assembled: 2026-05-17
-Assembled by: speckit.constitution for feature 002-tuvok-telemetry
-Requested by: cyrusj
+Assembled: 2026-05-18
+Assembled by: Tuvok (editorial pass) under Cyrus Jamula override of
+  Picard's earlier (c) Decline verdict
+  (see .squad/decisions/inbox/picard-discord-avatar-automation-scope.md
+  and .squad/decisions/inbox/copilot-directive-override-picard-discord-avatar-(a).md)
+Requested by: Cyrus Jamula
 
 Per-principle change summary:
   I.    UNCHANGED — User Safety & Trust First
@@ -19,57 +30,72 @@ Per-principle change summary:
   III.  UNCHANGED — Resilient Upstream-API Automation
   IV.   UNCHANGED — Type-Safe Headless TypeScript CLI
   V.    REVISED   — Stateless Operation & Secret Custody:
-                    Durable-inputs enumeration extended to include:
-                    (a) `config/model-tiers.json` (operator-maintained
-                        model tier classification);
-                    (b) `data/telemetry/sessions.jsonl` (append-only
-                        session telemetry records);
-                    (c) `data/telemetry/collection-log.jsonl` (append-only
-                        collection audit log);
-                    (d) `data/telemetry/reports/*.md` (generated summary
-                        reports).
-                    No new secrets. No new sanctioned writers of
-                    `STFC_ACCOUNTS`. Token Capture Custody unchanged.
+                    New subsection "Operator-Only One-Shot Ops Scripts
+                    (Discord application metadata)" added after Token
+                    Capture Custody. Authorizes write traffic from
+                    `scripts/discord-ops/**` to two specific Discord
+                    REST endpoints for application-metadata management
+                    only; preserves the read-only constraint on the
+                    monitor runtime; reuses `DISCORD_BOT_TOKEN` with the
+                    full FR-012 redaction obligation. Durable-inputs
+                    enumeration unchanged. Two-writer custody rule for
+                    `STFC_ACCOUNTS` unchanged.
   VI.   UNCHANGED — Specification-First Governance
   VII.  UNCHANGED — Artifact Hygiene
   VIII. UNCHANGED — Wire-First Discovery
   IX.   UNCHANGED — Test-First Discipline
 
 Speckit Reviewer Gates: UNCHANGED.
-Security & Compliance Constraints: UNCHANGED — no new outbound network
-  destinations, no new workflow permissions, no new third-party actions.
+Security & Compliance Constraints: REVISED — the "Outbound network
+  scope" bullet now acknowledges the `scripts/discord-ops/` write
+  traffic to `https://discord.com/api/v10/users/@me` and
+  `https://discord.com/api/v10/applications/@me`. No new destinations
+  beyond `discord.com/api/v10`. The third-party-action SHA-pinning rule
+  now also applies to any `workflow_dispatch` workflow that carries
+  `DISCORD_BOT_TOKEN` for `scripts/discord-ops/` (the rule already
+  covered workflows that "carry the `DISCORD_BOT_TOKEN`" so this is a
+  clarification, not an expansion).
 Development Workflow: UNCHANGED.
 Governance: UNCHANGED.
 
 Templates re-synced:
   - .specify/templates/plan-template.md ✅ (Principle V row updated to
-    include `config/model-tiers.json`, `data/telemetry/` paths)
+    reference constitution v1.5.0 and to record `scripts/discord-ops/`
+    as the additional permitted write surface for the
+    `DISCORD_BOT_TOKEN` + `discord.com/api/v10` pair).
   (spec-template.md and tasks-template.md contain no durable-inputs
-  claim; no changes required.)
+  or outbound-destination claim; no changes required.)
 
 Cross-artifact follow-ups:
   - `package.json`, `README.md`: do not reference constitution version;
     no update required.
+  - Workflow `.github/workflows/discord-ops.yml` (when added) and its
+    accompanying pinning tests under `tests/` are tracked by the
+    Scotty/Bashir dispatches in the same `discord-ops-automation`
+    branch; this constitution amendment does NOT itself add or modify
+    the workflow.
   - The three Known Tensions carried from v1.2.0 (Principle III auth/me
     overclaim; Principle VII scan-path overclaim; redeem/refresh
     concurrency lock un-principled) remain unresolved and are preserved
     verbatim. They are deferred to a subsequent revision.
 
 Cross-check: Principles I, II, III, IV, VI, VII, VIII, IX, Speckit
-  Reviewer Gates, Security & Compliance Constraints, Development
-  Workflow, and Governance sections are byte-identical to v1.3.0.
-  Only Principle V and the version footer were modified.
+  Reviewer Gates, Development Workflow, and Governance sections are
+  byte-identical to v1.4.0. Only Principle V (carve-out subsection
+  added), the Security & Compliance Constraints "Outbound network
+  scope" bullet (one sentence added), the version footer, and this
+  SIR header were modified.
 
-Prior SIR history: v1.2.0 → v1.3.0 report is retained in the v1.3.0
+Prior SIR history: v1.3.0 → v1.4.0 report is retained in the v1.4.0
   amendment record; not duplicated here.
 <!-- /SYNC IMPACT REPORT -->
 
 
 # STFC Gift Redeemer Constitution
 
-**Version:** 1.4.0
+**Version:** 1.5.0
 **Ratified:** 2026-05-08
-**Last Amended:** 2026-05-17
+**Last Amended:** 2026-05-18
 
 ## Core Principles
 
@@ -367,6 +393,60 @@ codifying the exact bounded set (and the obligations on the writer scripts) give
 contributors a clear test for "is this change safe?": if it adds a new place a token
 can live, or a new path that writes `STFC_ACCOUNTS`, it requires an amendment.
 
+**Operator-Only One-Shot Ops Scripts (Discord application metadata)**
+
+Scripts under `scripts/discord-ops/` are operator-invoked utilities for
+managing Discord *application metadata* — the bot avatar, the application
+description, and the bot username — and MAY issue `PATCH` / `PUT` /
+`POST` requests against `https://discord.com/api/v10/users/@me` and
+`https://discord.com/api/v10/applications/@me`. This is a narrow carve-out
+to the "read-only Discord bot auth token" framing above: it authorizes
+write traffic for application-metadata management only, and explicitly
+NOT for sending messages, reactions, or any other write operation against
+monitored servers or channels. The strict read-only constraint on the
+runtime Discord client (FR-009 of specs/003-discord-oauth) is preserved
+verbatim because these scripts are NOT the client — they are out-of-band
+operator utilities.
+
+Obligations on every script placed under `scripts/discord-ops/`:
+
+- The scripts MUST NOT be loaded, imported, or executed by the
+  `discord-monitor` runtime (`src/skills/discordMonitor.ts`,
+  `src/discord/**`, or any code reachable from a cron-driven entry
+  point under `.github/workflows/discord-monitor.yml` or
+  `.github/workflows/redeem.yml`). Static separation is enforced by
+  location: ops scripts live outside `src/` so the type-check, the test
+  suite, and any future static audit can distinguish them from the
+  monitor runtime by path alone.
+- The scripts MUST redact `DISCORD_BOT_TOKEN` from every thrown error,
+  every log line, every `process.exit` message, and every GitHub Actions
+  Job Summary write — the same FR-012 obligation that already governs
+  `src/discord/**`. Use the existing `redactString` helper at
+  `src/lib/redact.ts` or an equivalent wrapper that produces the same
+  guarantees.
+- The scripts MAY be invoked locally with `DISCORD_BOT_TOKEN` in the
+  operator's process env, OR via a `workflow_dispatch` workflow that
+  maps the repo's `DISCORD_BOT_TOKEN` GitHub Actions secret onto the
+  script's env (preferred — keeps the token off operator laptops).
+- Any accompanying `workflow_dispatch` workflow MUST declare an
+  explicit `permissions:` block per the Security & Compliance
+  Constraints below, MUST pin every third-party action to a full
+  commit SHA (the action-pinning rule already covers workflows that
+  "carry the `DISCORD_BOT_TOKEN`"), and MUST be covered by a pinning
+  test under `tests/` per the workflow-YAML rule in
+  `.github/copilot-instructions.md` (Rule 3).
+
+This carve-out introduces no new outbound destinations and no new
+secrets: the existing enumeration of `https://discord.com/api/v10/...`
+in the Security & Compliance Constraints below and `DISCORD_BOT_TOKEN`
+in the sanctioned-secrets list above is reused. `DISCORD_BOT_TOKEN`
+remains NOT a sanctioned writer of `STFC_ACCOUNTS`; the two-writer
+custody rule for `STFC_ACCOUNTS` is unchanged. Any future ops script
+that would call a Discord REST endpoint other than `/users/@me` or
+`/applications/@me`, or would introduce a new outbound destination or
+a new secret, requires a constitutional amendment — this carve-out
+authorizes only the two endpoints named here.
+
 ### VI. Specification-First Governance
 
 The team follows spec-driven development: non-trivial work is validated
@@ -572,7 +652,16 @@ cannot enforce on its own.
   runner. All message classification is performed on-runner by the locally
   cached model; the only outbound traffic from the classifier path is the
   one-time model-weights fetch above. Any other outbound destination requires
-  a constitutional amendment.
+  a constitutional amendment. **Operator-only one-shot ops scripts under
+  `scripts/discord-ops/` (see Principle V, "Operator-Only One-Shot Ops
+  Scripts") additionally issue `PATCH`/`PUT`/`POST` against
+  `https://discord.com/api/v10/users/@me` and
+  `https://discord.com/api/v10/applications/@me` for application-metadata
+  management (bot avatar, application description, bot username). These
+  scripts are NOT part of the monitor runtime, MUST live outside `src/`,
+  and MUST redact `DISCORD_BOT_TOKEN` from every error path per FR-012.
+  This is the only authorized write traffic to Discord; the read-only
+  constraint on the monitor runtime is preserved.**
 - **Secret hygiene in artifacts.** Specs, plans, tasks, PR descriptions, and other
   committed artifacts MUST NOT contain real JWTs, real account names, real player IDs,
   or unsanitized API responses. Principle VII covers this obligation; automated
@@ -739,4 +828,4 @@ reality, or it must be updated — never left as a zombie.
 - **Resolution scheduled:** v1.3.0
 - **Tracking:** `.squad/decisions/inbox/v1.3.0-backlog.md`
 
-**Version**: 1.4.0 | **Ratified**: 2026-05-08 | **Last Amended**: 2026-05-17
+**Version**: 1.5.0 | **Ratified**: 2026-05-08 | **Last Amended**: 2026-05-18

@@ -113,3 +113,41 @@ US3 token validation tests integrated. 3 new test files added (ingest.test.ts, t
 **2026-05-18T00:** New squad meta issues #61–#69 filed by Picard 2026-05-18; review when picking up squad:picard work
 
 2026-05-18T00:57Z: New teammate O'Brien (Miles) joined as DevOps/Platform Engineer; @copilot activated for autonomous issue pickup; new routing rules added (Garak hard-gate on src/ PRs, Discord precedence, Bashir/Kirk reviewer mitigation). See decisions.md and routing.md.
+
+---
+
+### 2026-05-18T02:29:30Z — Discord-ops pinning tests (PR feature: discord-ops-automation)
+
+**Three test files shipped** (committed in 87a8ef6 alongside Tuvok's constitution amendment due to a concurrent-staging race; commit body acknowledges the test additions):
+
+- `tests/scripts/discord-ops/set-discord-app-metadata.test.ts` — behavioral tests for Scotty's script via `node:child_process.spawnSync` + a `--import`'d fetch-stub fixture. 8 assertions covering `--help`, missing-token exit, dry-run, 401 redaction, 200 OK, missing-icon, oversize-icon.
+- `tests/constitution/discord-ops-carveout.test.ts` — Rule 1 pinning for Tuvok's Principle V carve-out; structural assertions over `scripts/discord-ops/`, write-verb, `discord.com/api/v10`, and version-bump above v1.4.0.
+- `tests/workflows/discord-ops-workflow.test.ts` — Rule 3 pinning for O'Brien's `.github/workflows/discord-ops.yml`; workflow_dispatch-only, declared inputs, secrets→env mapping, minimal permissions block, node invocation, SHA-pinned actions.
+
+**Result:** `npm test` 557/557 pass after both Scotty's script + Tuvok's constitution + O'Brien's workflow + my tests are all in the tree.
+
+### Patterns to remember
+
+**Sentinel-token leak assertion pattern** — set `DISCORD_BOT_TOKEN` to a unique, greppable, never-reused string (here: `BOT_TOKEN_SENTINEL_DO_NOT_LEAK_a8f3c91e`) and assert `!output.includes(SENTINEL)` on every failure path (--dry-run, 401, missing file, oversize file). The sentinel is registered in `.squad/decisions/inbox/bashir-discord-ops-tests.md` — future devs MUST NOT reuse it for any other purpose, or the leak guard becomes a false-positive.
+
+**Fetch-stub-must-redact-too pattern** — when a stub records calls to stderr for test inspection, the stub itself must redact `Authorization` headers in its own output. Otherwise the test false-positives by detecting the sentinel in the stub's debug log (not the script's error path). The stub is part of the test harness, not the system under test, but it shares the same output channel.
+
+**Workflow-pinning YAML grep pattern** — mirrors `tests/skills/discordMonitor.test.ts:465+`: `fs.readFileSync` the YAML as text, then `assert.match(yaml, /pattern/)` over the raw body. To isolate sub-blocks like `on:` or `permissions:`, slice from the block header to the next top-level key (regex `\n[a-zA-Z_][\w-]*:\s*\n`). Cheaper and more reliable than adding a YAML parser dependency.
+
+**Constitution-pinning version-bump check** — parse the version footer (`**Version**: 1.4.0 | ...`) AND the SIR header (`Version change: 1.3.0 → 1.4.0`) and compare with a `cmpVersion` helper. Take the highest version that appears. Restrict regex search to footer + SIR lines to avoid matching unrelated semver strings elsewhere in the document.
+
+**Subprocess test discipline for `.mjs` scripts** — when a script doesn't expose a programmatic entry point, spawn it via `node:child_process.spawnSync` with:
+- A scrubbed env (PATH + HOME only; never inherit the developer's `DISCORD_BOT_TOKEN`).
+- `--import ./tests/fixtures/.../stub.mjs` for global `fetch` injection. Env vars on the child control the stub's behavior (status, body) so each test case is one line.
+- A bounded `timeout` (10s here) so a hung HTTP call doesn't hang CI.
+
+**Skip-gracefully when upstream artifacts missing** — guard each `describe` / `it` with `{ skip: !fileExists }` so the suite stays green during Phase 1 fan-out (before all sibling agents have landed their files). Once the upstream commits, the skips automatically become real assertions. Avoids the "tests block tests" deadlock that comes from strict `fs.readFileSync` at the top of a test file.
+
+**Concurrent-process commit hazard** — multiple squad agents working on the same workspace can collide on `.git/index`. Observed symptoms: (a) `git commit` lands a different set of files than was staged; (b) `git status` and `git status --porcelain` disagree; (c) `index.lock` appears mid-command. Mitigation: stage explicitly, immediately verify with `git status --short`, and `git diff --cached` before committing. If the index gets clobbered, `git reset HEAD^` and retry. Don't trust the staged state across multiple shell commands.
+
+## 2026-05-18T02:45:00Z — PR #71 discord-ops automation batch completed
+
+Coordinated Phase 1 fan-out (Tuvok constitution v1.5.0, Scotty script, Bashir tests, O'Brien workflow, Picard historical record). Cross-agent awareness: all decisions merged to decisions.md, orchestration logs written, session log at .squad/log/2026-05-18T024500Z-discord-ops-automation.md.
+
+---
+
