@@ -114,18 +114,14 @@ describe("Kirk — reviewer-rejection lockout", () => {
 });
 
 describe("Kirk — cross-cutting rule compliance", () => {
-  it("routing table maps workflow YAML changes to Scotty/Uhura split", () => {
+  it("routing table maps workflow YAML changes to O'Brien (unified as of 2026-05-18)", () => {
     const workflowEntry = routingEntries.find((e) =>
       e.workType.toLowerCase().includes("github actions"),
     );
     assert.ok(workflowEntry, "Routing table should have GitHub Actions entry");
     assert.ok(
-      workflowEntry.routeTo.toLowerCase().includes("scotty"),
-      "Workflow entry should include Scotty",
-    );
-    assert.ok(
-      workflowEntry.routeTo.toLowerCase().includes("uhura"),
-      "Workflow entry should include Uhura",
+      workflowEntry.routeTo.toLowerCase().includes("o'brien"),
+      "Workflow entry should route to O'Brien (unified ownership)",
     );
   });
 

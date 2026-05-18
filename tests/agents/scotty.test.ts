@@ -50,14 +50,14 @@ describe("Scotty — routing accuracy", () => {
     assertRoutedTo(routingEntries, "TypeScript", "Scotty");
   });
 
-  it("routes GitHub Actions workflows (build/test) to Scotty", () => {
+  it("routes GitHub Actions workflows to O'Brien (unified as of 2026-05-18)", () => {
     const workflowEntry = routingEntries.find((e) =>
       e.workType.toLowerCase().includes("github actions"),
     );
     assert.ok(workflowEntry, "Should have GitHub Actions entry");
     assert.ok(
-      workflowEntry.routeTo.toLowerCase().includes("scotty"),
-      "GitHub Actions (build/test) should route to Scotty",
+      workflowEntry.routeTo.toLowerCase().includes("o'brien"),
+      "GitHub Actions should route to O'Brien (unified ownership)",
     );
   });
 

@@ -65,14 +65,14 @@ describe("Uhura — routing accuracy", () => {
     assertRoutedTo(routingEntries, "STFC API, auth, secrets", "Uhura");
   });
 
-  it("routes GitHub Actions cron + secrets to Uhura", () => {
+  it("routes GitHub Actions workflows to O'Brien (unified as of 2026-05-18)", () => {
     const workflowEntry = routingEntries.find((e) =>
       e.workType.toLowerCase().includes("github actions"),
     );
     assert.ok(workflowEntry, "Should have GitHub Actions entry");
     assert.ok(
-      workflowEntry.routeTo.toLowerCase().includes("uhura"),
-      "GitHub Actions (cron + secrets) should route to Uhura",
+      workflowEntry.routeTo.toLowerCase().includes("o'brien"),
+      "GitHub Actions should route to O'Brien (unified ownership)",
     );
   });
 
