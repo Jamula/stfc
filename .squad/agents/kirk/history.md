@@ -84,3 +84,63 @@ not the data output.
 **2026-05-18T00:** New squad meta issues #61–#69 filed by Picard 2026-05-18; review when picking up squad:picard work
 
 2026-05-18T00:57Z: New teammate O'Brien (Miles) joined as DevOps/Platform Engineer; @copilot activated for autonomous issue pickup; new routing rules added (Garak hard-gate on src/ PRs, Discord precedence, Bashir/Kirk reviewer mitigation). See decisions.md and routing.md.
+
+## 2026-05-18T02:46Z — PR #71 review: discord-ops-automation (Scotty + O'Brien)
+
+**Verdict:** APPROVE ✅ (architecture review). Comment: https://github.com/Jamula/stfc/pull/71#issuecomment-4473820298
+
+**Scope:** `scripts/discord-ops/set-discord-app-metadata.mjs` (546 LOC, zero new deps) +
+`.github/workflows/discord-ops.yml` (operator-only workflow_dispatch wrapper) +
+Bashir's 10 pinning/behavior tests. Garak ran parallel hostile fact-check on the
+constitution v1.5.0 amendment; Picard is the final governance gate.
+
+**What I checked (review pattern for "script + workflow + tests" PRs):**
+
+1. **Fetch-injection seam.** `discordPatch({ fetchImpl })` with call-time fallback to
+   `fetchImpl ?? fetch` lets Bashir stub via `--import` without module-level state.
+   Same pattern as `src/discord/client.ts` and `src/api/client.ts`. Uniform.
+2. **Inlined redact vs import.** Scotty inlined `redactString` to keep FR-009's
+   "scripts/ unreachable from src/" boundary. ~10 LOC duplication. Sentinel-token
+   leak test catches future drift. Defensible.
+3. **Shell-injection hardening (O'Brien).** Every operator input routed through env
+   var → quoted use site → built into argv via bash array. Matches GitHub Security
+   Hardening guidance verbatim. First reference implementation of this pattern in
+   the repo.
+4. **Concurrency group uniqueness.** `grep -h 'concurrency:' .github/workflows/*.yml`
+   confirmed `stfc-discord-ops` is unique — distinct from the shared
+   `stfc-gift-redeemer` group used by redeem/refresh-token/monitor. Correct because
+   the write target is Discord API, not repo `git push`.
+5. **Idempotency design.** Script always PATCHes (no GET-diff short-circuit).
+   Correct for a one-shot operator script but undocumented — flagged LOW.
+6. **Exit-code consistency.** Comment-stated taxonomy: 0=success, 1=infra, 2=operator
+   error. Token-missing returns 1 — inconsistency with the stated intent. LOW.
+
+**LOW findings (none gating):**
+
+- Idempotency comment missing near `plannedCalls.push`.
+- `DISCORD_BOT_TOKEN not set` should be exit 2, not 1.
+- `curl --proto '=https' --proto-redir '=https'` would harden SSRF (belt-and-suspenders).
+- Partial-success path (icon OK, description fail) untested.
+
+**Reviewer-rejection lockout:** routed follow-ups to Bashir (script tweaks + test)
+and Uhura (curl hardening) — NOT back to Scotty or O'Brien.
+
+**Skill candidate endorsed:** `.copilot/skills/operator-workflows/` for the four
+reusable invariants (workflow_dispatch-only · minimal perms + step-scoped secret env ·
+unique concurrency group · env-routed quoted inputs). First workflow of its shape in
+the repo (operator-only, manual-only, third-party-mutating) — the pattern is reusable
+for any future `scripts/<vendor>-ops/` wrapper.
+
+## Learnings
+
+- **Env-routed input hardening is the canonical GHA shell-injection pattern** and
+  this PR is now the reference implementation in this repo. Future workflow PRs
+  touching `inputs.*` in `run:` blocks should be diffed against `discord-ops.yml`.
+- **First-of-its-kind workflow shape** (operator-only + third-party-mutating) needs
+  its own concurrency group, distinct from `stfc-gift-redeemer`. Blast-radius
+  isolation matters even when both groups serialize "writes" — the writes are to
+  different systems.
+- **Script-as-CLI-with-injection-seams** is the pattern: export `runCli`,
+  `discordPatch`, parsers/validators; isMain guard at the bottom; `process.exit`
+  only at the entrypoint. Keeps tests fast (no spawn needed for unit tests) and
+  the workflow integration via spawnSync is still possible for end-to-end pin tests.

@@ -88,3 +88,30 @@ The takeaway for future rounds: after verifying each correction landed, run a se
 **2026-05-18T00:** New squad meta issues #61–#69 filed by Picard 2026-05-18; review when picking up squad:picard work
 
 2026-05-18T00:57Z: New teammate O'Brien (Miles) joined as DevOps/Platform Engineer; @copilot activated for autonomous issue pickup; new routing rules added (Garak hard-gate on src/ PRs, Discord precedence, Bashir/Kirk reviewer mitigation). See decisions.md and routing.md.
+
+### 2026-05-18T02:46Z: PR #71 hostile fact-check (Constitution v1.4.0 → v1.5.0 scripts/discord-ops/ carve-out)
+
+**Verdict:** APPROVE ✅ with 2× MEDIUM, 2× LOW, 1× NIT findings (all non-blocking, all pinning-test-scope issues to be addressed by Bashir if Picard wants v1.5.1 polish).
+
+**Methodology that worked here:**
+
+1. **Map every MUST-language obligation in the amendment to its pinning test.** Tuvok's carve-out introduces four MUST obligations (path scope, redaction, invocation surface, workflow pinning). Bashir's `tests/constitution/discord-ops-carveout.test.ts` covers 3/4 — the endpoint-scope narrowing (`/users/@me` + `/applications/@me` only) is NOT literally pinned. Adding "for each MUST in the amendment, grep `tests/` for a literal-value assertion" to the standard attack list catches this whole class.
+
+2. **Verify "narrowing" claims by reading the positive enumeration, not the negation.** Tuvok's deviation #3 (explicit non-grant for message writes) is phrased narrowly ("monitored servers or channels") but the positive endpoint enumeration ("only the two endpoints named here") closes the loophole by construction. Reviewing the negation alone would have flagged a false positive; reviewing both halves is what gave the clean read.
+
+3. **Cross-check static-separation claims against tsconfig.** The carve-out claims "ops scripts live outside `src/` so the type-check, the test suite, and any future static audit can distinguish them from the monitor runtime by path alone." Verified via tsconfig.json `include`: it's an allowlist (`src/{cli,api,discord,lib,skills,telemetry}` + `tests/**`), so `scripts/` is excluded by construction, not by exclusion list. The claim holds. Future reviews: never trust a "live outside X" claim without checking `include`/`exclude`/`paths` in the build config.
+
+4. **Workflow secret-scope audit by step.** For any new workflow that carries a secret, walk every step and confirm the secret-bearing env is scoped to ONLY the step that needs it. `discord-ops.yml` correctly maps DISCORD_BOT_TOKEN only to the "Run metadata setter" step (line 98) — not at workflow level, not at job level, not on checkout/setup-node/install/validate/download. Existing repo pattern (refresh-token.yml, redeem.yml) follows the same discipline.
+
+**New attack-list category to standardize for future constitution-amendment reviews:**
+
+- **Pinning-test scope check.** Every MUST-language obligation the amendment adds should map to a literal-value assertion in a `tests/` file. The amendment's SIR should be cross-referenced against `tests/constitution/**` and `tests/workflows/**` to confirm coverage of each new MUST. Missing pinning is a MEDIUM finding (regression risk on degenerate future edits), not a BLOCKER (the amendment itself is correct).
+
+**What I would have flagged but didn't, because the evidence didn't support it:**
+
+- I considered flagging "endpoint narrowing locks out future bot tags / install_params writes" as a HIGH but verified those go through `/applications/@me` PATCH (already authorized). Discord's REST API model puts most application-level metadata under `/applications/@me`, so the narrowing actually locks out only `/channels/*`, `/guilds/*`, `/applications/{id}/emojis`, and similar — which is the intended bound. Conclusion stayed at "deviation defensible."
+
+- I considered flagging path traversal exploit (`scripts/discord-ops/../foo/`) on the "lives outside src/" widening, but the operative path constraint is the specific `scripts/discord-ops/` prefix (first sentence of the subsection), not the looser "outside src/" justification. Traversal isn't a real risk because the constraint is checked by reviewer-eyes-on-PR, not by runtime path resolution.
+
+**Cross-provider critique value:** Running on `gpt-5.5` gave a clean read on whether each narrowing actually closes the loophole it was sold as closing — not just trusting Tuvok's "I narrowed it on purpose" framing. Same-provider review might have rubber-stamped all four deviations as obviously-good without verifying each one's mechanism.
+

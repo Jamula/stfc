@@ -28,5 +28,27 @@ Key learnings from this round:
 
 Coordinated Phase 1 fan-out (Tuvok constitution v1.5.0, Scotty script, Bashir tests, O'Brien workflow, Picard historical record). Cross-agent awareness: all decisions merged to decisions.md, orchestration logs written, session log at .squad/log/2026-05-18T024500Z-discord-ops-automation.md.
 
+## 2026-05-18T02:52:00Z — Picard governance sign-off: PR #71 three-reviewer gate cleared
+
+**Verdict:** APPROVE ✅ (governance sign-off). All three gates clear (Kirk + Garak + Picard APPROVE). Per Rule 7, Coordinator auto-merges. Consolidated follow-up issue #72 filed (`v1.5.1 polish: discord-ops pinning + script hardening follow-ups`).
+
+**Key learnings:**
+
+### Override → ship pattern (first success)
+When Cyrus issues an override directive (e.g., `.squad/decisions/inbox/copilot-directive-override-picard-discord-avatar-(a).md`), the governance sign-off workflow is:
+1. Scope validation — override scope reflected in implementation, zero scope creep
+2. Amendment integrity — SIR header + version footer + plan-template sync + cross-ref verification
+3. Reviewer findings consolidation — Kirk + Garak findings independently tracked, explicit owner assignment (Bashir/Uhura per reviewer-lockout protocol)
+4. Three-gate clear — all reviewers APPROVE, CI green → Rule 7 auto-merge
+5. Scribe commits .squad/ — Picard posts decisions/inbox/picard-pr-71-signoff.md but does NOT commit (Rule 2)
+
+This pattern ran successfully once (PR #71). If it repeats, encode as `.copilot/skills/override-signoff/` with hard boundaries between steps.
+
+### Constitution amendment review — fact-check closes Decline
+Picard's (c) Decline (2026-05-18T02:23Z) was grounded in "read-only DISCORD_BOT_TOKEN" (constitution.md:285/564). Cyrus overrode with narrower scope (/users/@me + /applications/@me only). **Garak's cross-provider hostile review (GPT-5.5) validated that the narrowing closes all four loopholes** (endpoint surface, src/ boundary, non-grant clause, workflow obligation). When a fact-check confirms the loopholes are factually closed, the evidence base for Decline is gone. Ship it.
+
+### Pinning-test scope check — new governance heuristic
+Garak identified: constitution amendments with new MUST clauses should each map to literal-value assertions in tests/. The discord-ops amendment introduced 4 MUSTs; constitution-pin test covers 3/4 directly but endpoint narrowing itself is not literally pinned. **For future constitution reviews:** enumerate MUST clauses, grep for each in tests/, flag any gap as [MEDIUM] (post-merge polish, appropriate reviewer).
+
 ---
 

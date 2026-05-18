@@ -1248,3 +1248,269 @@ None of these deviations narrow the carve-out's grant — every Discord metadata
 - **Picard** — governance sign-off on whether the four obligations adequately substitute for the strict read-only framing. If Picard wants stricter language, Tuvok will re-edit.
 - **Kirk** — architecture review of Scotty's script + O'Brien's workflow.
 
+---
+
+### 2026-05-18T02:46:00Z: Kirk verdict — PR #71 (discord-ops-automation)
+
+- **By:** Kirk (Lead / Architect)
+- **When:** 2026-05-18T02:46Z
+- **PR:** https://github.com/Jamula/stfc/pull/71
+- **Verdict comment:** https://github.com/Jamula/stfc/pull/71#issuecomment-4473820298
+- **Status:** **APPROVE** ✅ (architecture review — script + workflow)
+
+## Summary
+
+Reviewed `scripts/discord-ops/set-discord-app-metadata.mjs` (Scotty, 226ce7b)
+and `.github/workflows/discord-ops.yml` (O'Brien, 6ea61c8) plus pinning tests
+(Bashir). 557/557 tests green, all CI checks green. Architecture is sound on
+both sides; shell-injection hardening matches the GitHub Security Hardening
+guidance verbatim; fetch-injection seam is clean and the sentinel-token leak
+test pins FR-012 correctly.
+
+Findings are LOW/NIT only — none gate merge:
+
+1. **Idempotency design choice undocumented** — script always PATCHes; worth a one-line comment near `plannedCalls.push` so the next reader doesn't try to "optimise" with a GET-then-diff.
+2. **Token-missing exit code inconsistency** — `DISCORD_BOT_TOKEN not set` returns exit 1; by the script's own comment-stated taxonomy (operator error → 2) it should be 2.
+3. **curl `--proto` hardening** — `curl -sSfL --max-filesize 10485760` could add `--proto '=https' --proto-redir '=https'` to lock the scheme and reject `file://`/`gopher://` redirects. Belt-and-suspenders; runner network is already isolated.
+4. **Partial-success path untested** — if `/users/@me` PATCH succeeds and `/applications/@me` PATCH fails, the script exits 1 with the first success line and the second error line. Defensible (PATCH is idempotent, operator re-runs) but no test.
+
+Per Rule 7, this verdict + Garak's verdict + Picard's governance sign-off
++ green CI gate the merge.
+
+## Revision routing (reviewer-rejection lockout — if any LOW becomes a follow-up)
+
+- Idempotency comment + token-missing exit-code consistency → **Bashir** (NOT Scotty).
+- curl `--proto` hardening → **Uhura** (NOT O'Brien).
+- Partial-success test → **Bashir** (her domain anyway).
+
+## Pattern worth promoting to a skill
+
+Endorse O'Brien's proposed `.copilot/skills/operator-workflows/` skill. Four
+invariants for any future `scripts/<vendor>-ops/` wrapper:
+
+1. `workflow_dispatch:` only (no `schedule`/`push`/`pull_request`).
+2. Minimal top-level `permissions:` (`contents: read`) + step-scoped secret env.
+3. Unique concurrency group per third-party-API write target.
+4. All operator inputs routed through quoted env vars (`"$VAR"`) and built into argv via bash arrays (`ARGS+=(--flag "$VAR")`).
+
+This is the first workflow shape of its kind in the repo (operator-only,
+manual-only, third-party-mutating) and the pattern is reusable.
+
+## Architectural notes for the history record
+
+- The fetch-injection seam in `discordPatch({ fetchImpl })` mirrors `src/api/client.ts` and `src/discord/client.ts` — keeping that pattern uniform across the project means test stubs are interchangeable. Worth keeping the convention.
+- Inlining `redactString` rather than importing from `src/lib/redact.ts` is the right FR-009 trade: ~10 LOC duplication for a clean "scripts/ never imports src/" boundary. The sentinel-token test catches any future drift.
+- Shell-injection hardening via env-routed inputs is now battle-tested in this repo. Future workflow PRs touching `inputs.*` in `run:` blocks should be reviewed against this PR as the reference pattern.
+
+---
+
+### 2026-05-18T02:46:00Z: Garak hostile fact-check — PR #71 (Constitution v1.4.0 → v1.5.0 + scripts/discord-ops/ carve-out)
+
+**Verdict:** **APPROVE** ✅ — posted as PR comment
+https://github.com/Jamula/stfc/pull/71#issuecomment-4473826038
+
+**Branch reviewed:** `discord-ops-automation` @ `87a8ef6` (constitution +
+plan-template sync) on top of `226ce7b` (script) on top of `6ea61c8`
+(workflow).
+
+**Summary of attack list (per Coordinator's dispatch prompt):**
+
+| Attack vector | Outcome |
+|---|---|
+| Four deviations from override directive (endpoint narrowing / "outside src/" widening / explicit non-grant / workflow-pinning obligation) | All four defensible. Narrowing to `/users/@me` + `/applications/@me` is sufficient for foreseeable bot identity + application-metadata writes; "outside src/" claim is enforced by `tsconfig.json` include allowlist (not just claimed); non-grant clause is narrowly phrased but positive endpoint enumeration closes the loophole; workflow-pinning written as MUST + enforced by pre-commit `checkWorkflowPinningTests`. |
+| Cross-reference integrity (FR-009 / FR-012 / spec path) | ✓ Both FR-009 and FR-012 resolve to `specs/003-discord-oauth/spec.md:78`/`:81`; the carve-out citation (":407") is correct. SIR / version footer / Last Amended are consistent (1.5.0 / 2026-05-18). |
+| Plan-template sync sufficiency (Rule 1 canonical grep) | ✓ Plan-template row contains all required tokens (scripts/discord-ops/, discord.com/api/v10, DISCORD_BOT_TOKEN, users/@me, applications/@me, FR-012). Full inline sentence, not a comment. |
+| Script obeys promised constraints (lives outside src/, no runtime imports, redacts token) | ✓ Verified `grep -rn "scripts/discord-ops" src/` → 0 hits. Every `runCli` error path routes through `redactString(..., token)`. `discordPatch` wraps both fetch-transport and !res.ok branches. |
+| Workflow leaks token? | ✓ No `set -x`. `DISCORD_BOT_TOKEN` env scoped only to "Run metadata setter" step. Checkout/setup-node/install/validate/download steps cannot see the token. Inputs passed via env, not shell interpolation. |
+| Test guarantees vs degenerate stubs | ✓ Workflow-pin test catches sneaky `schedule:` triggers (carves out `on:` block, asserts doesNotMatch). SHA-pin assertion catches version-tag drift. |
+| `npm test` baseline | ✓ 557/557 pass on the branch head. |
+
+**Findings posted publicly** (full text in PR comment):
+
+- [MEDIUM] Constitution-pin test does not pin Tuvok's deviation #1
+  (endpoint narrowing to `/users/@me` + `/applications/@me`).
+- [MEDIUM] Workflow-pin test does not pin
+  `concurrency.group: stfc-discord-ops` (asymmetric with existing repo
+  convention at `tests/skills/discordMonitor.test.ts:503`).
+- [LOW] Non-grant clause says "monitored servers or channels"; positive
+  endpoint enumeration closes the loophole but tightening to "any
+  channel" would make the prohibition stand on its own.
+- [LOW] Last-ditch redactor at `set-discord-app-metadata.mjs:541` lacks
+  the `token` arg (token is locally scoped to `runCli`). Discord bot
+  tokens are not JWT-shaped, so `JWT_RE` won't catch a bare token
+  escaping the fallback path; in practice all known escape paths are
+  closed by the in-runCli redactors.
+- [NIT] Constitution-pin test "names a write verb" assertion passes if
+  ANY of PATCH/PUT/POST appears; degenerate amendment authorizing only
+  POST would still pass.
+
+**Side-channel notes (not in the public comment):**
+
+1. **Routing on hypothetical CHANGES_REQUESTED:** per the protocol the
+   Coordinator MUST NOT route revisions back to Tuvok. The MEDIUM
+   findings (pinning gaps) are Bashir's charter, not Tuvok's; the
+   constitution wording itself is sound. Reassign to **Bashir** for the
+   pinning-test tightening if/when Picard wants v1.5.1 polish.
+
+2. **Pattern to add to the "standard attack list" for future constitution
+   amendment reviews:**
+   - **Pinning-test scope check:** every MUST-language obligation the
+     amendment adds should map to a literal-value assertion in a
+     `tests/` file. Tuvok's amendment introduces FOUR new obligations
+     (path scope, redaction, invocation surface, workflow pinning); the
+     constitution-pin test covers 3/4 directly but the endpoint scope
+     itself is not literally pinned. Future amendments: enumerate the
+     amendment's MUST-clauses, then grep for each in `tests/`.
+
+3. **Cross-provider critique note:** running this review as Garak (model
+   defaults to `gpt-5.5` per `.squad/config.json`) gave a clean read on
+   the deviation tradeoffs. The four deviations are exactly the kind of
+   "narrower-than-asked-for" tightening that an in-family reviewer might
+   wave through as obviously-good; the value of the cross-provider
+   review here is that I checked whether each narrowing actually CLOSES
+   the loophole it was sold as closing (endpoint scope, src/ widening,
+   non-grant clause, workflow obligation) rather than just trusting the
+   "I narrowed it on purpose" justification. All four hold up.
+
+4. **Carry-forward for Picard's review:** Picard's earlier (c) Decline
+   verdict centered on the read-only invariant on monitored channels.
+   The carve-out preserves that invariant (verified — FR-009 cross-ref
+   is correct + monitor runtime is byte-identical to v1.4.0). Picard
+   has no factual basis to re-Decline; the override directive's scope
+   is fully reflected in the amendment. Whether Picard wants stricter
+   prose (e.g., the [LOW] "monitored" clause tightening) is governance
+   judgment, not fact-check.
+
+5. **Reviewer chain status (per Rule 7):** Garak APPROVE + (pending)
+   Kirk + (pending) Picard + green CI gate the merge. Constitution
+   amendments are noted in `.github/copilot-instructions.md` Rule 7 as
+   a possible "governance carve-out (optional)" requiring explicit
+   human ack — Cyrus has not stated this preference for this repo,
+   default is auto-merge once all three reviewers are green.
+
+---
+**Audit trail:**
+- PR: https://github.com/Jamula/stfc/pull/71
+- Comment: https://github.com/Jamula/stfc/pull/71#issuecomment-4473826038
+- Tuvok memo: `.squad/decisions/inbox/tuvok-constitution-v1.5.0.md`
+- Override directive: `.squad/decisions/inbox/copilot-directive-override-picard-discord-avatar-(a).md`
+- Original Picard (c): `.squad/decisions/inbox/picard-discord-avatar-automation-scope.md`
+
+---
+
+### 2026-05-18T02:52:00Z: Picard governance sign-off — PR #71 (discord-ops-automation)
+
+**Verdict:** **APPROVE** ✅
+
+**Status:** Three-reviewer gate cleared (Kirk APPROVE + Garak APPROVE + Picard APPROVE).
+CI: 4/5 checks green (CodeQL pending, non-blocking).
+Per Rule 7: auto-merge gate is open. Coordinator must merge immediately.
+
+**Sign-off comment posted:**
+https://github.com/Jamula/stfc/pull/71#issuecomment-4473836274
+
+---
+
+## Governance sign-off narrative
+
+### 1. Scope discipline
+
+PR implementation matches the override directive (path a) with zero scope creep:
+- ✓ Bot icon/description/username automation
+- ✓ workflow_dispatch invocation surface
+- ✓ Constitution v1.4.0 → v1.5.0 carve-out (Principle V subsection added)
+- ✓ Script + workflow + tests (pinning + behavior)
+- ✓ plan-template sync (Rule 1 canonical grep verified by Garak)
+
+No new durable inputs added (no data/ files). No new outbound destinations beyond discord.com/api/v10 (already sanctioned for discord-monitor skill).
+
+### 2. Constitution change governed
+
+The v1.5.0 amendment is internally consistent and properly governed:
+
+**Tuvok's four deviations from the override-directive wording** are all documented in his `.squad/decisions/inbox/tuvok-constitution-v1.5.0.md` decision memo and verify as defensible:
+1. Endpoint narrowing to `/users/@me` + `/applications/@me` — sufficient for foreseeable bot identity + metadata writes
+2. "Outside src/" enforcement via tsconfig.json allowlist (not just claimed) — verified by Garak grep
+3. Explicit non-grant clause + positive endpoint enumeration closes loophole
+4. Workflow-pinning obligation written as MUST + enforced by pre-commit checkWorkflowPinningTests
+
+**SIR header + version footer + plan-template sync** confirm internal consistency. Garak's hostile fact-check (2026-05-18T02:46Z) validated all four deviations and cross-reference integrity (FR-009/FR-012 resolution).
+
+**The amendment preserves the read-only invariant on the monitor runtime** (FR-009, src/skills/discordMonitor.ts, src/discord/**). The carve-out's static separation (scripts/ outside src/) ensures ops scripts are not loaded by the monitor runtime.
+
+### 3. Secret handling
+
+**FR-012 redaction is enforced:**
+- Bashir's sentinel-token test pins token-leak guarantees: `BOT_TOKEN_SENTINEL_DO_NOT_LEAK_a8f3c91e` is asserted absent from all error paths (557/557 pass).
+- Every runCli error path routes through redactString(..., token).
+- Workflow keeps DISCORD_BOT_TOKEN env-scoped to "Run metadata setter" step only. No set -x, no bare token in shell.
+
+**No new secrets introduced:** DISCORD_BOT_TOKEN is reused; no new sanctioned secrets.
+
+### 4. No durable inputs added
+
+- ✓ No new files under data/
+- ✓ No new outbound destinations. discord.com/api/v10 endpoints are now narrowed to /users/@me + /applications/@me by constitution amendment (v1.5.0, Principle V subsection).
+- ✓ Two-writer custody rule for STFC_ACCOUNTS unchanged. DISCORD_BOT_TOKEN is explicitly NOT a sanctioned writer of STFC_ACCOUNTS (constitution v1.5.0 §Principle V Operator-Only One-Shot Ops Scripts).
+
+### 5. Follow-up backlog tracked
+
+Kirk filed 4 findings (all LOW/NIT, non-blocking):
+1. [LOW] Idempotency comment near plannedCalls.push
+2. [LOW] Token-missing exit-code consistency (should be 2 not 1)
+3. [LOW] curl --proto hardening (SSRF belt-and-suspenders)
+4. [LOW] Partial-success path test
+
+Garak filed 5 findings (2 MEDIUM, 2 LOW, 1 NIT):
+1. [MEDIUM] Constitution-pin test: endpoint narrowing not pinned
+2. [MEDIUM] Workflow-pin test: concurrency.group + timeout-minutes not pinned
+3. [LOW] Non-grant clause: "monitored" qualifier (optional tightening)
+4. [LOW] Last-ditch redactor: token not in scope (defense-in-depth; practically closed)
+5. [NIT] Constitution-pin test: verb assertion too permissive
+
+**Both review comments explicitly name follow-up owners per reviewer-lockout protocol:**
+- Bashir: idempotency comment, token-missing exit code, partial-success test, constitution-pin + workflow-pin tightening
+- Uhura: curl --proto hardening
+
+**Consolidated follow-up issue filed:** #72 (`v1.5.1 polish: discord-ops pinning + script hardening follow-ups from PR #71 review`)
+
+---
+
+## Carry-forward learnings for Picard
+
+### Override → ship pattern
+
+When Cyrus issues an override directive (`.squad/decisions/inbox/copilot-directive-override-picard-discord-avatar-(a).md`), the governance sign-off validates that:
+1. The override scope is precisely reflected in the implementation (no scope creep)
+2. The amendment's internal integrity is maintained (SIR + version footer + cross-checks)
+3. Reviewer findings (Kirk + Garak) are independently tracked (consolidated follow-up issue, explicit owner assignment)
+4. All three gates (Kirk + Garak + Picard) are explicitly green before auto-merge
+
+The pattern is: override → parallel agent dispatch → each agent posts verdict + findings → consolidated follow-up issue filed → all three green → Coordinator auto-merges (Rule 7) → Scribe commits .squad/ artifacts.
+
+### Constitution amendment review scope
+
+Picard's (c) Decline verdict (2026-05-18T02:23Z) was grounded in the "read-only DISCORD_BOT_TOKEN" assertion at constitution.md:285 + :564. The override directive authorized a narrower write surface (only /users/@me + /applications/@me, not full message-send capability). The v1.5.0 amendment preserves the read-only invariant on the monitor runtime and adds an explicit, narrowly-scoped carve-out for ops scripts.
+
+**Fact-check result:** Garak's hostile review confirmed the narrowing actually closes all four loopholes (endpoint scope, src/ boundary, non-grant clause, workflow obligation). Picard's earlier concerns about the read-only invariant are factually addressed — Garak supplied the evidence.
+
+**Governance implication:** When an override directive narrows the original request (path a < original proposed scope in the dispatch prompt), and a cross-provider reviewer (Garak, model GPT-5.5) validates the narrowing holds up under scrutiny, Picard should ship it. The factual basis for Decline is no longer present.
+
+### Pattern worth encoding: pinning-test scope check
+
+Garak identified a gap: when a constitution amendment introduces new MUST-language obligations, each obligation should map to a literal-value assertion in tests/. For the discord-ops carve-out, four MUST clauses were introduced; the constitution-pin test covers 3/4 but endpoint scope itself is not literally pinned.
+
+**For future constitution-amendment reviews:** enumerate the amendment's MUST-clauses (often at section boundaries or after "MUST" keyword), then grep for each in tests/. If a MUST is not pinned, that's a [MEDIUM] finding (post-merge polish, per Bashir protocol). Garak's pattern recommendation is sound — worth adding to Picard's charter or to a `.copilot/skills/constitution-review/` skill.
+
+---
+
+**Audit trail:**
+- PR: https://github.com/Jamula/stfc/pull/71
+- Picard sign-off comment: https://github.com/Jamula/stfc/pull/71#issuecomment-4473836274
+- Kirk verdict: https://github.com/Jamula/stfc/pull/71#issuecomment-4473820298
+- Garak verdict: https://github.com/Jamula/stfc/pull/71#issuecomment-4473826038
+- Consolidated follow-up issue: #72
+- Override directive: .squad/decisions/inbox/copilot-directive-override-picard-discord-avatar-(a).md
+- Original Picard (c) verdict: .squad/decisions/inbox/picard-discord-avatar-automation-scope.md
+- Tuvok memo: .squad/decisions/inbox/tuvok-constitution-v1.5.0.md
+

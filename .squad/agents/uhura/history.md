@@ -79,3 +79,25 @@ Codespace-managed `GITHUB_TOKEN` lacks `security_events` scope by default. Fix: 
 **Action queued for Cyrus:** review the outreach doc, commit it to main so the public URL works, identify Discord Application ID, substitute it for `{CLIENT_ID}` in the invite link, and DM a server mod. The DM draft in §6 is ready to send as-is.
 
 **2026-05-18T01:47:36Z** — Path C DEFER per Picard review. Complementary to Path A but solves different problem (patch notes ≠ codes). Revisit if Path A stalled >14d, consumer named, or patch/event correlation needed. Auto-reject in ~30d if none fire. See decisions.md for full memo.
+
+### Discord ToS prohibits user-token automation — verdict logged (2026-05-18T02:01:02.354+00:00)
+
+**Context:** Cyrus asked whether his personal Discord account could read the official STFC server instead of pursuing Path A (bot whitelist). Investigated ToS + enforcement posture.
+
+**Permanent fact for future sessions:** **Discord prohibits self-bots / user-token automation via Terms of Service §9 ("Restrictions on your use of Discord's services").** Verbatim language from https://discord.com/terms (Effective 2025-09-29):
+
+> *"Don't use the services to do harm to Discord. Among other things, this includes ... scraping our services without our written consent, including by using any robot, spider, crawler, scraper, or other automatic device, process, or software ..."*
+
+And §9 ¶1:
+
+> *"Don't use the services to do harm to yourself or others. Among other things, this includes ... auto-messaging, or auto-dialing people through our services ..."*
+
+**Enforcement is severe:** confirmed self-bot use → permanent, non-appealable account termination. Discord detects via behavioral fingerprinting (request cadence, missing client telemetry, raw HTTP signatures), not solely by user reports.
+
+**Sanctioned mechanism for any automated read is the Bot account flow**, governed by the Discord Developer ToS (https://discord.com/developers/docs/policies-and-agreements/developer-terms-of-service). The ToS explicitly references this as the only sanctioned path for "apps, bots, or other products developed by third parties."
+
+**No user-OAuth-scope alternative exists.** Discord does not publish a `messages.read` (or equivalent) user scope that would let a third-party app legitimately read message content on behalf of a user. Bots are the only sanctioned read mechanism. This is unlikely to change — it's been Discord's position since at least 2017.
+
+**Project implication permanently established:** any future "can we just use a user account / personal token / cookie" question for Discord integration must be answered NO with the §9 citation above. The only sanctioned paths are: (a) Bot whitelist in a server we don't own, requiring admin consent, or (b) Bot in a server we DO own (relay pattern), no third-party consent required. Putting a user token in any project secret (incl. `STFC_ACCOUNTS`) would also require constitution Principle V amendment, which Picard should reject on first principles.
+
+Verdict committed at `.squad/decisions/inbox/uhura-user-token-verdict.md`.
