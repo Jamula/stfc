@@ -292,6 +292,121 @@ header so the verdict is greppable. Do not call `gh pr review` first and fall
 back on failure — go straight to `gh pr comment`. The Rule 7 "reviewer-approved
 + CI-green auto-merge" gate reads these comment headers.
 
+## 10. The compound "list + review comments + ask remaining questions" ritual
+
+The phrase **"show me the list of open issues and questions for me / review my comments
+in the open issues and ask me any remaining questions"** appears verbatim repeatedly
+(6+ times in a single session on 2026-05-17). Rule 9's "Fast board scan phrase" only
+covers the first half. The full multi-line variant is a different ritual:
+
+1. **Scan the board** — `gh issue list --state open` + `gh pr list --state open` +
+   `ls .squad/decisions/inbox/`
+2. **Diff user comments since last review** — for each open issue:
+   ```bash
+   gh issue view <N> --json comments \
+     --jq '[.comments[] | select(.author.login == "cyrusjamula") | .body]'
+   ```
+3. **Surface only NEW unanswered questions** — do NOT re-ask resolved ones. If a
+   user comment provided a decision (re-triage, disposition, cross-link), treat it
+   as answered.
+4. **Present open questions via `ask_user`** with a structured form, not free text.
+   If there are no unanswered questions, say so explicitly: *"No open questions
+   from you right now."*
+
+This is **Direct Mode** (no agent spawn). Execute the scan + diff in one batch.
+Never silently skip step 3 — if step 1 found 5 open issues but the user has already
+left dispositions on all of them, the correct output is "no questions" plus the
+status table, not a re-prompt of the resolved items.
+
+## 11. The `Researching:` prefix triggers a multi-agent research → review → file chain
+
+The user-typed prefix **`Researching: ...`** (observed 2× on 2026-05-17 — *"Researching:
+review the squad configuration"* and *"Researching: are all squad members needed?"*)
+is a structured trigger for deep-research mode, not a free-form question.
+
+**Recognized chain when input starts with `Researching:`:**
+
+1. **Dispatch multiple research subagents in parallel** (3–7 depending on scope),
+   each scoped to a non-overlapping investigation area.
+2. **Synthesize findings** into a single report at
+   `~/.copilot/session-state/.../research/<topic-slug>.md` with prioritized
+   recommendations.
+3. **If the prompt includes "let picard review" or "have {agent} review"** — dispatch
+   that reviewer agent with the report.
+4. **If the prompt includes "promote necessary ones as gh issues"** — file each P0/P1
+   finding as a `gh issue create` and route to the appropriate `squad:*` label per
+   `.squad/routing.md`. Group minor findings into batched issues so the board stays
+   manageable.
+
+Do NOT treat `Researching:` as a normal request. The user expects the full pipeline
+(research → synthesize → review → file) in one continuous session, not piecemeal.
+
+## 12. PR body close keywords — one `Closes #N` per line
+
+GitHub's auto-close on merge **does not reliably parse multi-issue close lists** like
+`Closes #48, #49`. Observed on 2026-05-17: PR #54 said `Closes #48, #49` — only #48
+auto-closed; #49 stayed open and required manual `gh issue close 49`.
+
+**Required PR body format:**
+
+```markdown
+Closes #48
+Closes #49
+Closes #50
+```
+
+Never `Closes #48, #49, #50` on one line. The comma-list parses inconsistently —
+sometimes the second issue closes, sometimes it doesn't. Per-line is the only
+reliable form.
+
+**Post-merge sweep (belt and suspenders):** when a PR merges, parse its body for
+`Closes #N` references and verify each is `state: CLOSED`:
+
+```bash
+gh pr view <N> --json body --jq '.body' \
+  | grep -oE 'Closes #[0-9]+' \
+  | grep -oE '[0-9]+' \
+  | while read issue; do
+      state=$(gh issue view "$issue" --json state --jq '.state')
+      [ "$state" = "OPEN" ] && gh issue close "$issue" --comment "Closed by PR #<N> (squash merge)"
+    done
+```
+
+Run this as part of the Rule 6 ship-it ritual.
+
+## 13. CodeQL alerts API 403 in Codespaces — token scope, not Advanced Security
+
+When `gh api repos/{owner}/{repo}/code-scanning/alerts` returns
+`403 Advanced Security must be enabled` **from inside a Codespace**, the diagnosis is
+almost certainly **wrong**. The actual cause is the Codespaces-injected `GITHUB_TOKEN`
+not carrying the `security_events` scope.
+
+**Do NOT report to the user:** *"no actionable CodeQL issues — would need Advanced
+Security enabled"*. That's misleading. Advanced Security may already be enabled; the
+token just can't see it.
+
+**Correct diagnosis sequence:**
+
+1. Check whether CodeQL workflows are actually running and uploading SARIF:
+   ```bash
+   gh run list --workflow="CodeQL" --limit 3 \
+     --json status,conclusion --jq '.[] | "\(.status) \(.conclusion)"'
+   ```
+   If runs are succeeding, CodeQL IS analyzing — the API access is the only gap.
+2. Confirm the token-scope hypothesis:
+   ```bash
+   gh auth status 2>&1 | grep -i scope
+   # Codespaces-injected tokens will show a fixed scope list missing security_events
+   ```
+3. Tell the user: *"CodeQL is running and clean on main, but the Codespaces token
+   lacks `security_events` scope to fetch alerts via API. The fix is in
+   `devcontainer.json` (see PR #16) which adds the scope on rebuild. Alternatively,
+   view alerts in the GitHub UI at `https://github.com/{owner}/{repo}/security/code-scanning`."*
+
+The `gh auth refresh --hostname github.com -s security_events` workaround **does not
+work** inside Codespaces (the runtime won't let you re-auth the injected token). Don't
+suggest it as a fix; mention only as a diagnostic if needed.
+
 ## Project quick reference
 
 - **Tests:** `npm test` (full suite, ~2s, 90+ tests via node:test/tsx).
