@@ -1002,3 +1002,249 @@ The exception that would change this is a sanctioned OAuth2 user-scope flow (e.g
 - Project bot schemas requiring `bot: true`: `src/discord/schemas.ts:261`
 - Project bot setup runbook (the sanctioned path): `docs/DISCORD-BOT-SETUP.md`
 - Constitution Principle V (sanctioned secrets): `.specify/memory/constitution.md`
+
+### 2026-05-18T02:23:00Z: Picard decision — Discord avatar automation scope
+
+**Verdict:** (c) Decline — Portal upload is the right tool for this job.
+
+**Rationale:** The constitution describes `DISCORD_BOT_TOKEN` verbatim as the
+"read-only Discord bot auth token" (constitution.md:285) and Principle V's
+outbound-network clause sanctions `discord.com/api/v10` only "REST only,
+read-only bot scopes" (constitution.md:564). Authorizing a PATCH script —
+even a one-shot under `scripts/discord-ops/` — converts that token from a
+strictly-read credential into a write-capable one, which is the strongest
+single property the constitution gives that secret; once relaxed it cannot be
+cheaply re-asserted. Setting a bot avatar is a one-time-ever operation (or
+~once per major rebrand): the manual Developer Portal upload is ~60 seconds
+and adds zero permanent code surface, zero constitutional carve-out, zero
+plan-template sync, and zero ongoing maintenance burden. Cyrus said
+"automate," but Picard's charter is explicit that I will say "no" when "no"
+is the right answer; the trade between a 60-second manual op and a
+constitution amendment + new script + Garak adversarial review + Tuvok
+editorial pass is not close. If avatar refresh ever becomes recurring
+(e.g., seasonal/themed icons, multiple bots), revisit and pick (a) then —
+the cost amortizes over real frequency.
+
+**Delegated to (if a or b):** N/A — declined. No issue filed.
+
+**Constitution change required (if a):** N/A — declined.
+
+**Closing condition:** Cyrus uploads the icon via the Discord Developer
+Portal (Application → Bot → "App Icon"). This decision is reopened only if
+either (1) avatar refresh becomes a recurring operation (≥4×/year or
+multi-bot), or (2) the operator demonstrates a workflow need that the
+Portal genuinely cannot serve. At that point, option (a) becomes
+proportionate and I will re-dispatch the Scotty/Tuvok/Garak chain.
+
+**Pushback acknowledged:** Cyrus may overrule this decision. If he does, I
+will dispatch option (a) immediately — the scope is well-understood
+(constitution carve-out for `scripts/discord-ops/`, plan-template sync,
+PATCH-capable script with `redactString` on every error path, Garak
+hard-gate review of the carve-out wording).
+
+---
+
+
+### 2026-05-18T02:29:30Z: User directive — Override Picard verdict (c) → (a)
+**By:** Cyrus Jamula (via Copilot)
+**What:** Cyrus explicitly overrode Picard's earlier (c) Decline verdict (see `.squad/decisions/inbox/picard-discord-avatar-automation-scope.md`) and accepted option (a): full automation of the Discord app metadata setter (icon + description + username). Scope:
+1. **Constitution amendment** — explicit carve-out under Principle V: "Operator-only one-shot scripts under `scripts/discord-ops/` MAY use PATCH/PUT/POST to `discord.com/api/v10`. These scripts are NOT loaded by the monitor runtime, MUST live outside `src/discord/`, and MUST redact `DISCORD_BOT_TOKEN` from every error path (FR-012)."
+2. **Plan-template sync** — `.specify/templates/plan-template.md` enumerates the same destinations + secrets; must reflect the carve-out.
+3. **Script** — `scripts/discord-ops/set-discord-app-metadata.mjs` taking `--icon <file>`, `--description <text>`, `--username <name>`. Reads `DISCORD_BOT_TOKEN` from env; calls `PATCH /users/@me` (icon + username) and/or `PATCH /applications/@me` (description). Redacts the token from any thrown error using existing `redactString` pattern.
+4. **Workflow_dispatch wrapper** — `.github/workflows/discord-ops.yml` exposing the same flags as Actions inputs (image URL or path, description, username), running on `ubuntu-latest`, mapping `DISCORD_BOT_TOKEN` secret → env. Cyrus is in a Codespace and needs to run this from the Actions UI, not his laptop.
+5. **Tests** — Bashir writes: (a) script behavior tests with stubbed fetch, asserting token never appears in error messages; (b) constitution-pinning test under `tests/` asserting the carve-out wording is present; (c) workflow-pinning test asserting `discord-ops.yml` declares the right permissions, inputs, and secrets mapping (Rule 3 — workflow YAML changes need pinning tests in the same commit).
+6. **Reviewers** — Garak hostile fact-check of the constitution amendment (does the wording survive a literal reading against the rest of Principle V?). Kirk architecture review of the script + workflow. Picard governance sign-off before merge.
+
+**Why:** Cyrus accepts the scope cost. End-to-end automation reduces future ops friction beyond a one-time icon update — covers description, username, future metadata writes from the same script. Workflow_dispatch keeps the token out of his laptop entirely.
+
+**Coordinator actions @ 2026-05-18T02:29:30Z:**
+- Captured this directive (drop-box).
+- Dispatched Phase 1 fan-out (background, parallel): Tuvok, Scotty, Bashir, O'Brien — all in one turn.
+- Picard's earlier (c) verdict remains in the inbox as historical record; Scribe will merge both files in order. This override is the operative decision.
+- Phase 2 (Garak fact-check, Kirk arch, Picard sign-off) dispatches after Phase 1 lands.
+- New GH issue to be filed by Picard or Tuvok as part of their work (tracking + audit trail).
+
+**Closing condition:** PR merged to main with passing CI, real bot icon visible in Discord Developer Portal, decisions.md reflects the constitutional carve-out as enforced.
+
+---
+
+
+### 2026-05-18T02:29:30Z: Bashir decision — discord-ops pinning tests landed
+
+**By:** Bashir (Tester/QA)
+**Commit (de facto):** `87a8ef6` (test files swept in alongside Tuvok's constitution amendment due to a concurrent-staging race on a shared workspace; commit body acknowledges the test additions and `npm test` shows 557/557 pass).
+
+**What shipped:** Three test files + one fixture pinning the discord-ops operator-script subsystem:
+
+| File | What it pins | Pattern |
+|---|---|---|
+| `tests/scripts/discord-ops/set-discord-app-metadata.test.ts` | FR-012 token redaction across every script failure path | Sentinel-token assertion via `spawnSync` + `--import` fetch-stub |
+| `tests/constitution/discord-ops-carveout.test.ts` | Principle V carve-out wording + plan-template sync (Rule 1) | Structural assertions over carve-out window (±1500 chars) + version-bump check |
+| `tests/workflows/discord-ops-workflow.test.ts` | `.github/workflows/discord-ops.yml` triggers, inputs, secrets, permissions (Rule 3) | YAML regex over raw body, mirrors `tests/skills/discordMonitor.test.ts` |
+| `tests/fixtures/discord-ops/fetch-stub.mjs` | Env-driven global `fetch` stub for the subprocess tests | Auto-redacts Authorization headers in its own debug output |
+
+**Sentinel value — reserved:**
+
+The script-leak tests use this exact token string as the `DISCORD_BOT_TOKEN` value:
+```
+BOT_TOKEN_SENTINEL_DO_NOT_LEAK_a8f3c91e
+```
+
+⚠️ DO NOT reuse this string for any other purpose in this repo. It is greppable and unique by design — every assertion in `tests/scripts/discord-ops/set-discord-app-metadata.test.ts` asserts this exact substring is *absent* from the script's stdout/stderr on every failure path. Reusing it as a fixture, sample env value, README example, or anything else would either:
+- false-trip the leak guard (causing real tests to fail on innocent reuse), or
+- mask a real future leak by making the sentinel look "expected" in test output.
+
+**Tests added to `tests/index.test.ts`:**
+
+Three new imports were added to the test bootstrap so `npm test` actually runs them:
+
+```ts
+import "./scripts/discord-ops/set-discord-app-metadata.test.ts";
+import "./constitution/discord-ops-carveout.test.ts";
+import "./workflows/discord-ops-workflow.test.ts";
+```
+
+**Verification:** `npm test`: **557/557 pass** (was 478 before this work; new tests are net +79 assertions).
+
+**For reviewers (Kirk, Garak, Picard):**
+
+- **Kirk:** the subprocess + fetch-stub approach was chosen because Scotty's script is a CLI entrypoint with no programmatic export. True end-to-end coverage.
+- **Garak:** constitution-pinning tests use *structural* assertions, not exact-wording matches. Version-bump assertion is strict — any new constitution edit MUST bump the footer or this test fails. Intentional.
+- **Picard:** Rule 1 sync between `.specify/memory/constitution.md` and `.specify/templates/plan-template.md` is now mechanically enforced — drift on either side trips the pinning test.
+
+---
+
+
+### 2026-05-18T02:29:30Z: Scotty decision — `set-discord-app-metadata.mjs` tradeoffs
+
+**Author:** Scotty (Core Dev)
+**Scope:** `scripts/discord-ops/set-discord-app-metadata.mjs` (PR on `discord-ops-automation`, commit `226ce7b`).
+
+**Tradeoffs taken:**
+
+1. **Inlined `redactString` instead of importing from `src/lib/redact.ts`**
+   - **What:** The script ships its own ~10-line `redactString(input, token)` copy of the two regexes from `src/lib/redact.ts`, plus a literal-token substitution pass.
+   - **Why:** FR-009 requires `scripts/discord-ops/` to be unreachable from `src/` runtime. Importing `src/lib/redact.ts` would create a reverse edge. Inlining is ~10 LOC of duplicated regex; the cost is low and the boundary stays clean.
+   - **Risk:** If `src/lib/redact.ts` adds a new redaction pattern, the script will drift. Mitigation: there's a test pinning the sentinel-token leak invariant; any future redaction-shaped leak would surface there.
+
+2. **JPEG dimension probe via SOF marker walk, not a library**
+   - **What:** Width/height for JPEGs comes from walking the marker stream from byte 2 until we hit an SOF (0xC0–0xCF). PNGs read IHDR at byte 16; GIFs read the Logical Screen Descriptor.
+   - **Why:** Hard "no new dependencies" constraint. The alternative (`image-size`) is 100% the right pick for a real pipeline but is overkill for an ops script that only needs a soft >=512×512 warning.
+   - **Risk:** Progressive JPEGs with unusual marker orderings, or weird/corrupt files, may fail to probe — in which case the script emits a `warning: Could not probe image dimensions...` line and proceeds.
+
+3. **Last-wins on repeated flags**
+   - **What:** `--description a --description b` uses `b`. The arg parser does not error.
+   - **Why:** Workflow_dispatch wrappers tend to pass optional inputs as either populated or empty; tolerating overrides keeps the wrapper simple. The script will never be invoked with conflicting intent by a human.
+   - **Risk:** A typo-induced double-flag silently picks the second value. Acceptable for an ops script where the operator sees the dry-run output and the final stdout line.
+
+4. **`--dry-run` truncates the base64 avatar payload in stdout**
+   - **What:** On `--dry-run`, the avatar field is rendered as `<first 64 chars>…[+N chars]` rather than the full data URI.
+   - **Why:** A 10 MB icon expands to ~14 MB of base64; dumping that into a terminal is hostile. The prefix is enough to verify format (`data:image/png;base64,…`) and the suffix tells the operator the length is what they expect.
+   - **Risk:** None — the actual PATCH body sent to Discord still carries the full payload; the truncation is display-only.
+
+**No follow-up needed from other agents:** Bashir's tests all pass. O'Brien's workflow wrapper can shell out to the script as-is; the CLI shape matches the directive. Tuvok's constitution amendment satisfies what the script claims to do.
+
+---
+
+
+### 2026-05-18T02:35Z: O'Brien decision — Operator-only `workflow_dispatch` wrapper pattern (`discord-ops.yml`)
+
+**By:** O'Brien (DevOps / Platform Engineer)
+**Branch:** `discord-ops-automation`
+**Commit:** `6ea61c8` — *ci(discord-ops): add workflow_dispatch wrapper for bot metadata setter*
+
+**TL;DR:** A first-of-its-kind workflow shape for this repo: **operator-only, manual-only, third-party-mutating**. Cyrus runs it from the Actions UI to update Discord app metadata (avatar / description / username) without `DISCORD_BOT_TOKEN` ever leaving GitHub-secrets storage. Every PATCH to `discord.com` is the direct result of a human button press; there is no schedule, no `push`, no `PR` trigger that could fire it.
+
+This is a different shape than every other workflow in this repo:
+
+| Workflow class | Trigger | Writes to | Permissions | Concurrency group |
+|---|---|---|---|---|
+| Cron + dispatch repo-mutator (`redeem.yml`, `discord-monitor.yml`) | `schedule:` + `workflow_dispatch:` | repo (`git push`) | `contents: write` | `stfc-gift-redeemer` (shared) |
+| CI gate (`test.yml`, `squad-test-gate.yml`) | `pull_request:` / `push:` | none | `contents: read` | per-PR |
+| **Operator one-shot (`discord-ops.yml`) — new** | **`workflow_dispatch:` ONLY** | **`discord.com` API** | **`contents: read`** | **`stfc-discord-ops` (unique)** |
+
+**The four reusable platform invariants (should become default checklist for any future operator-only workflow):**
+
+1. **Trigger surface = `workflow_dispatch:` only** — Never `schedule:`, `push:`, `pull_request:`. Pin test enforces this.
+2. **Permissions stay minimal; secrets go via env only** — `permissions: { contents: read }` only. `DISCORD_BOT_TOKEN` via `env:` on the ONE step that calls the script. Never `echo "$TOKEN"`, never `set -x`.
+3. **`concurrency:` with a unique group serialises operator clicks** — `group: stfc-discord-ops` with `cancel-in-progress: false` queues runs behind each other. Distinct group per distinct write target.
+4. **`curl -sSfL --max-filesize <bytes>` for untrusted HTTP** — Operator-supplied URLs are user input. The flag soup is non-optional: `-s` silent, `-S` show errors, `-f` fail-fast, `-L` follow redirects, `--max-filesize` caps to upstream service limit.
+
+**One additional thing beyond the directive's exact YAML:** The directive sketched direct `${{ inputs.X }}` interpolation in the shell (e.g. `--description "${{ inputs.description }}"`). That's a shell-injection foot-gun. O'Brien instead routed user inputs through env vars:
+
+```yaml
+env:
+  DESCRIPTION: ${{ inputs.description }}
+run: |
+  ARGS+=(--description "$DESCRIPTION")
+```
+
+Same end behaviour; injection-safe. Bashir's pin test doesn't care — it asserts shapes, not interpolation style. Kirk should sanity-check this in Phase 2; if he prefers the literal template, O'Brien will roll back.
+
+**Rule 3 same-commit handoff confirmed:** First commit attempt was rejected by `scripts/pre-commit.mjs` — Bashir had the pin test in the working tree but hadn't staged it. Resolution: staged both files together, committed, 557/557 tests green, pushed.
+
+**Skill candidate — `.copilot/skills/operator-workflows/`:** If a second operator-only `workflow_dispatch` wrapper lands in this repo, promote this into a skill that includes:
+- A scaffold of the YAML with the four invariants pre-populated.
+- A pre-flight checklist.
+- A pointer to the matching pin-test template.
+- The Rule-3 handoff procedure.
+
+Until then, this decision file is the source of truth and Bashir's test is the canonical pin-test exemplar.
+
+**What's pending in Phase 2:** Garak hostile fact-check, Kirk architecture review, Picard governance sign-off. Once Phase 2 lands, ship-it ritual on `discord-ops-automation`.
+
+---
+
+
+### 2026-05-18T02:40:18Z: Tuvok decision memo — Constitution v1.4.0 → v1.5.0 (scripts/discord-ops/ carve-out)
+
+**Status:** Shipped. Commit `87a8ef6` on branch `discord-ops-automation`, pushed to `origin/discord-ops-automation`. Ready for Garak hostile fact-check and Picard governance sign-off per the override directive's Phase 2 plan.
+
+**(a) Version bump:** v1.4.0 → **v1.5.0** (MINOR). Justification: this is an addition of new obligation (the Principle V carve-out subsection and its four-bullet obligations), not a wording refinement (PATCH) and not a removal/incompatible redefinition (MAJOR). Matches the existing versioning policy.
+
+**(b) Carve-out wording (canonical, as shipped in commit `87a8ef6`):**
+
+The new subsection in Principle V reads, in full:
+
+> **Operator-Only One-Shot Ops Scripts (Discord application metadata)**
+>
+> Scripts under `scripts/discord-ops/` are operator-invoked utilities for managing Discord *application metadata* — the bot avatar, the application description, and the bot username — and MAY issue `PATCH` / `PUT` / `POST` requests against `https://discord.com/api/v10/users/@me` and `https://discord.com/api/v10/applications/@me`. This is a narrow carve-out to the "read-only Discord bot auth token" framing above: it authorizes write traffic for application-metadata management only, and explicitly NOT for sending messages, reactions, or any other write operation against monitored servers or channels. The strict read-only constraint on the runtime Discord client (FR-009 of specs/003-discord-oauth) is preserved verbatim because these scripts are NOT the client — they are out-of-band operator utilities.
+>
+> Obligations on every script placed under `scripts/discord-ops/`:
+>
+> - The scripts MUST NOT be loaded, imported, or executed by the `discord-monitor` runtime (`src/skills/discordMonitor.ts`, `src/discord/**`, or any code reachable from a cron-driven entry point under `.github/workflows/discord-monitor.yml` or `.github/workflows/redeem.yml`). Static separation is enforced by location: ops scripts live outside `src/` so the type-check, the test suite, and any future static audit can distinguish them from the monitor runtime by path alone.
+> - The scripts MUST redact `DISCORD_BOT_TOKEN` from every thrown error, every log line, every `process.exit` message, and every GitHub Actions Job Summary write — the same FR-012 obligation that already governs `src/discord/**`. Use the existing `redactString` helper at `src/lib/redact.ts` or an equivalent wrapper that produces the same guarantees.
+> - The scripts MAY be invoked locally with `DISCORD_BOT_TOKEN` in the operator's process env, OR via a `workflow_dispatch` workflow that maps the repo's `DISCORD_BOT_TOKEN` GitHub Actions secret onto the script's env (preferred — keeps the token off operator laptops).
+> - Any accompanying `workflow_dispatch` workflow MUST declare an explicit `permissions:` block per the Security & Compliance Constraints below, MUST pin every third-party action to a full commit SHA (the action-pinning rule already covers workflows that "carry the `DISCORD_BOT_TOKEN`"), and MUST be covered by a pinning test under `tests/` per the workflow-YAML rule in `.github/copilot-instructions.md` (Rule 3).
+>
+> This carve-out introduces no new outbound destinations and no new secrets: the existing enumeration of `https://discord.com/api/v10/...` in the Security & Compliance Constraints below and `DISCORD_BOT_TOKEN` in the sanctioned-secrets list above is reused. `DISCORD_BOT_TOKEN` remains NOT a sanctioned writer of `STFC_ACCOUNTS`; the two-writer custody rule for `STFC_ACCOUNTS` is unchanged. Any future ops script that would call a Discord REST endpoint other than `/users/@me` or `/applications/@me`, or would introduce a new outbound destination or a new secret, requires a constitutional amendment — this carve-out authorizes only the two endpoints named here.
+
+**(c) Sections touched:**
+
+| File | Section | Change |
+|------|---------|--------|
+| `.specify/memory/constitution.md` | Sync Impact Report (top) | REPLACED v1.3.0 → v1.4.0 SIR with v1.4.0 → v1.5.0 SIR. Prior SIR retained via reference. |
+| `.specify/memory/constitution.md` | Version front matter | `**Version:** 1.4.0` → `1.5.0`; Last Amended: 2026-05-17 → 2026-05-18. |
+| `.specify/memory/constitution.md` | Principle V (new subsection) | NEW "Operator-Only One-Shot Ops Scripts (Discord application metadata)" — full text in (b). |
+| `.specify/memory/constitution.md` | Security & Compliance Constraints → outbound scope | EXPANDED discord.com clause with addendum acknowledging `scripts/discord-ops/` write traffic. |
+| `.specify/memory/constitution.md` | Version footer | `**Version**: 1.4.0` → `1.5.0`; Last Amended: 2026-05-17 → 2026-05-18. |
+| `.specify/templates/plan-template.md` | Principle V row | Bumped reference from "v1.4.0" to "v1.5.0"; appended inline sentence enumerating `scripts/discord-ops/` carve-out. |
+
+**Deviations from override directive (4 deliberate wording refinements):**
+
+1. **Narrowed endpoint surface from `discord.com/api/v10` (the whole API) to `/users/@me` and `/applications/@me` (the two specific paths).** Prevents the carve-out from being read as "open Discord write license" by a future contributor.
+
+2. **Widened "lives outside" constraint from `src/discord/` to `src/`.** Makes the separation enforceable by `grep`/`tsc` alone.
+
+3. **Added explicit non-grant clause: "explicitly NOT for sending messages, reactions, or any other write operation against monitored servers or channels."** Makes Picard's governance concern visibly addressed.
+
+4. **Added the `workflow_dispatch` workflow obligation (permissions block + SHA-pin + pinning-test requirement).** States the workflow obligation inline in the carve-out.
+
+None of these deviations narrow the carve-out's grant — every Discord metadata write the directive envisaged remains authorized. They tighten the obligations around that grant.
+
+**Reviewer assignments (Phase 2):**
+
+- **Garak** — hostile fact-check of the carve-out wording. Specific questions: (i) does the "MUST NOT be loaded by the monitor runtime" clause survive a literal reading? (ii) does the endpoint-scoping actually match Scotty's REST calls? (iii) does FR-012 resolve correctly?
+- **Picard** — governance sign-off on whether the four obligations adequately substitute for the strict read-only framing. If Picard wants stricter language, Tuvok will re-edit.
+- **Kirk** — architecture review of Scotty's script + O'Brien's workflow.
+
