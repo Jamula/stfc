@@ -537,49 +537,80 @@ Knowledge codified and reusable.
 - Integration test guards against future regressions on the tip data path.
 - TypeScript does not warn on block-scoped shadowing by default; the test is the durable safety net.
 
-# Decision: Fix extractor short-code gaps (Issue #18)
+### 2026-05-18T00:50:13Z: Squad audit review — Picard verdict on R1–R16
 
-**Date:** 2026-05-17T17:53:01.345+00:00
-**Author:** Bashir (Tester)
-**PR:** #38 (`squad/18-fix-extractor-short-codes`)
+**By:** Picard
 
-## Decision
+**What:** Reviewed the 16-recommendation squad audit report (Research session 5f58f070, `research/are-all-squad-members-needed-are-they-adding-value.md`). Filed **9 GitHub issues** (#61–#69) consolidating 13 of the 16 recommendations. R15 rejected. R11 and R13 folded into R7 rather than filed separately. R2, R3, R5, R14, R16 batched into a single hygiene issue per the audit's own suggestion.
 
-Implemented **Option B** from #18: relax `CORE_CODE_REGEX` minimum from
-4 chars to 3 (`{3,19}` → `{2,19}`), and expand the stoplist with 38
-common 3-letter English words to maintain precision.
+**Issues filed:**
 
-## Rationale
+| # | Title | Maps R# | Label(s) |
+|---|-------|---------|----------|
+| #61 | Squad: activate @copilot on roster (capability profile + auto-assign) | R1 | `squad:picard` |
+| #62 | Squad: hygiene batch — routing row, registry gaps, decisions.md corruption, Ralph history, Garak config doc | R2+R3+R5+R14+R16 | `squad:scribe` |
+| #63 | Squad: routing.md missing Bashir reviewer-gate escalation path | R4 | `squad:picard` |
+| #64 | Squad: activate Garak — weekly fact-check ceremony, hard gate, or formal retirement | R6 | `squad:picard` |
+| #65 | Squad: resolve workflow ownership + DevOps/Security/Release scope (extract role or codify split) | R7+R11+R13 | `squad:picard`, `squad:kirk` |
+| #66 | Squad: add Platform/Tooling role and re-route Issues #8–#12 + #24–#32 off Tuvok | R8 | `squad:picard` |
+| #67 | Squad: routing.md precedence rule for Discord monitor (Kirk vs Uhura) | R9 | `squad:kirk` |
+| #68 | Squad: document Kirk-as-author-and-reviewer mitigation (also Bashir) | R10 | `squad:picard` |
+| #69 | Squad: extend Uhura charter for HF classifier/ML lifecycle (sha256, cache, eval) | R12 | `squad:picard` |
 
-- TNG, GQ5, GQ7 are real active promo codes that were silently dropped.
-- A blocklist approach (stoplist) is already the established pattern in
-  this codebase — extending it to cover 3-char false positives is the
-  natural, lowest-risk path.
-- The stoplist is O(1) lookup and easy to maintain.
+**Verdict table — R1 through R16:**
 
-## Impact
+| R# | Verdict | Justification (1 sentence) |
+|----|---------|---------------------------|
+| R1 | ✅ APPROVE — file as issue (#61) | Cheapest win on the board: three workflows pre-wired, one `team.md` edit unlocks autonomous pickup |
+| R2 | 🔀 APPROVE — fold into #62 | One-line routing-table row, naturally batches with the other Scribe-mechanical hygiene items |
+| R3 | 🔀 APPROVE — fold into #62 | `decisions.md` cleanup is mechanical Scribe work; no scope question to debate |
+| R4 | ✅ APPROVE — file as issue (#63) | Standalone because it requires a Rule 7 amendment too — that's governance, not hygiene |
+| R5 | 🔀 APPROVE — fold into #62 | Registry-vs-agent-dir mismatch is mechanical to fix; bundle with other hygiene |
+| R6 | ✅ APPROVE — file as issue (#64) | 9 days of zero output from a "warm seat" is a scope decision Picard must make; activation OR retirement |
+| R7 | ✅ APPROVE — file as issue (#65) | Real charter↔routing mismatch is biting; needs Picard scope call before any implementation |
+| R8 | ✅ APPROVE — file as issue (#66) | 10 issues parked weeks ago against a charter that forbids the work — must unblock |
+| R9 | ✅ APPROVE — file as issue (#67) | Small surgical routing edit; routed to Kirk because technical-direction owner makes the call |
+| R10 | ✅ APPROVE — file as issue (#68) | Author-as-reviewer is a silent governance hole; auto-merge (Rule 7) is the load-bearing risk |
+| R11 | 🔀 APPROVE — folded into #65 | Security scope decision rides on the same DevOps/Platform decision as R7 — file together |
+| R12 | ✅ APPROVE — file as issue (#69) | Real friction (manual sha256 rotation); cheapest path is extending Uhura, not a new role |
+| R13 | 🔀 APPROVE — folded into #65 | Release engineering only matters if/when DevOps role is created; defer to the umbrella decision |
+| R14 | 🔀 APPROVE — fold into #62 | Mechanical (wire orchestration-log writes for Ralph); fits the hygiene batch |
+| R15 | ❌ REJECT — not the right call | `D-NNN` decision IDs are taxonomy invention with no demonstrated retrieval failure; PR refs and prose work today, adding numbering creates maintenance burden for theoretical benefit. Will reconsider if a real programmatic cross-ref need emerges |
+| R16 | 🔀 APPROVE — fold into #62 | One-line charter doc edit; pure hygiene |
 
-- All 30 promo-codes.txt entries now extract (was 27/30).
-- Test suite: 287 pass, 0 fail, 0 todo (was 283 pass + 3 todo).
-- Schemas and contract docs updated to match the new regex.
+**Why (scope-level reasoning):**
 
-## Files Changed
+1. **Batching discipline:** The audit suggested batching hygiene items and I extended that — R7+R11+R13 all converge on a single "do we extract a DevOps charter?" decision, so they go in one issue (#65). Filing them separately would force Picard to make the same scope call three times.
+2. **Don't invent without evidence:** R15 (decision IDs) is the textbook "create taxonomy for hypothetical future need" anti-pattern. The current `decisions.md` is 585 lines and PR refs work fine — when retrieval actually breaks, we'll know what shape of ID we need. Inventing now risks shipping the wrong scheme.
+3. **Garak is the most uncomfortable verdict.** Easy to file (#64), hard to answer. I'm explicitly opening it as a choice between activation paths AND formal retirement, because "warm seat with zero output" is worse than either. The Critic role itself is valuable (Borg Queen's evidence); whether the *Garak* implementation of it is valuable is undetermined.
+4. **#65 and #66 are the biggest scope-call issues.** Both need Picard time, not implementation time. The umbrella nature is intentional — one decision drives many downstream edits.
+5. **Author-as-reviewer (R10/#68) was undersold in the audit.** Rule 7 auto-merges on reviewer-approve + CI-green. If Kirk reviews Kirk's own architectural call and auto-merge fires, the governance gate has been silently bypassed. This needs explicit Rule-7 carve-out language, hence standalone.
+6. **Communication-graph findings** (Garak/Ralph/Scribe isolation, no decision IDs, `gh pr review` blocked) are partially addressed by #62 (Ralph history) and #64 (Garak activation). The other two (decision IDs rejected; `gh pr review` block already documented in Rule 9b) need no new issue.
 
-- `src/discord/extractor.ts`
-- `src/discord/schemas.ts`
-- `src/discord/stoplist.ts`
-- `tests/discord/extractor.test.ts`
-- `tests/discord/schemas.test.ts`
-- `specs/001-discord-monitor/contracts/state-files.contract.md`
+**Not filed / deliberately omitted:**
+- The "9 self-test epics" (#24–#32) are referenced in #66 for re-routing, not re-filed.
+- Decision-narrative on "do we keep Ralph as a pure dispatcher trigger or extend his charter?" — included implicitly in #62's seed-history item; if seeding reveals Ralph charter drift, that becomes a new issue downstream.
 
-**Process recommendation:** Add ESLint `no-shadow` rule to the project to catch
-block-scope variable shadowing at CI time. This class of bug compiles cleanly and
-passes typecheck but produces wrong runtime behavior.
+**Risk callouts:**
+- #65 is large enough that it might split into 3 sub-issues after the Picard decision lands. That's fine; the umbrella issue is the decision artifact, not the implementation contract.
+- #66 promises re-triage of 14 issues (#8–#12, #24–#32) as part of its acceptance criteria. That's a lot of label churn. Acceptable because the alternative is leaving them parked.
 
-**Status:** PR #35 and #36 ready for merge. PR #37 blocked on Scotty's revision.
+---
 
-- `.squad/templates/issue-lifecycle.md`
+### 2026-05-18T00:50:13Z: Rules 10–13 shipped to main
 
-**Status:** PR #35 open, awaiting review.
+**By:** Tuvok
 
-**Status**: Landed in PR #37, pending review.
+**What:** Committed +115 lines to .github/copilot-instructions.md adding:
+- Rule 10: compound "list + review comments + ask remaining questions" ritual (6+ repeated user phrasings on 2026-05-17, Direct Mode, no agent spawn)
+- Rule 11: `Researching:` prefix → multi-agent research chain (research → synthesize → review → file pipeline)
+- Rule 12: per-line `Closes #N` PR-body convention (GitHub auto-close reliability; post-merge sweep verification)
+- Rule 13: CodeQL 403 in Codespaces = token-scope, not Advanced Security (diagnostic sequence, devcontainer.json fix reference)
+
+**Commit SHA:** 40e62dc
+
+**Rebase:** Yes (1 commit: chore(history) from redeem.yml cron). Conflict-free per Rule 4 (docs/redeem-history.md unaffected).
+
+**Pre-commit gate:** 531 tests passed, 0 failed.
+
+**Why:** User-affirmed review+commit ("1 & 2") after Prior session offer. Captured from `/chronicle improve` rounds; no contradictions with Rules 1–9. Editorial review found no typos, merge markers, secrets, or formatting issues. Numbering correct (10 follows 9, 13 is last).

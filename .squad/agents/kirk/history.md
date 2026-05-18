@@ -81,3 +81,4 @@ not the data output.
   This is the same pattern discovered during the PR #20 review cycle.
 
 2026-05-17T21:39Z: Feature 003-discord-oauth shipped; code review approved and merged via PR #59.
+**2026-05-18T00:** New squad meta issues #61–#69 filed by Picard 2026-05-18; review when picking up squad:picard work

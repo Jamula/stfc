@@ -96,10 +96,47 @@ No direct output from Tuvok; work logged in orchestration-log entries for cross-
 
 ---
 
+## Session 2026-05-18 — Rules 10–13 Review & Ship (2026-05-18T00:50:13Z)
+
+### Input & Mandate
+
+**Request:** User affirmed "1 & 2" (review-then-commit) for Rules 10–13 (+115 lines uncommitted on main).
+
+**Mandate:** Surgical review → rebase → test → commit → push → decision drop.
+
+### Work Log
+
+1. **Diff review:** Rules 10 (compound list-review ritual), 11 (Researching: prefix → multi-agent chain), 12 (per-line Closes #N), 13 (CodeQL 403 = token-scope, not Advanced Security). 
+   - **Findings:** No typos, merge markers, contradictions, secrets/PII, or formatting issues. Numbering correct (10 follows 9, 13 is last). Editorial quality consistent with Rules 1–9.
+   - **Edits required:** None.
+
+2. **Pre-commit gate:** `npm test` passed: 531 tests, 0 failures (7.0s).
+
+3. **Rebase:** `git rebase origin/main` successful. 1 commit (chore(history) from redeem.yml cron) rebased ahead. No conflicts (docs/redeem-history.md unaffected per Rule 4 design).
+
+4. **Commit SHA:** Before rebase: 046bae5 → After rebase: 40e62dc (expected rewrite).
+
+5. **Push:** Landed at origin/main without CodeQL delay (Rule 4 subsection inapplicable).
+
+### Learnings
+
+- **Chronicle-tip persistence:** Rules 10–13 now codified in main; captures recurring user-typed compound directives from `/chronicle improve` rounds. Reduces friction cycle on "list + review + ask" (10), "Researching:" prefix (11), PR close-keyword hygiene (12), CodeQL diagnostic (13).
+- **Rebase-before-push discipline:** Rebase was needed (1 cron commit ahead). Surgical single-file staging (`git add --`) and pre-commit hook passed before commit, ensuring push succeeded clean.
+- **No editorial fallout:** All rules well-formed; no secondary cross-references needed update (Rules 1–9 untouched; constitution.md check per Rule 1 inapplicable).
+
+### Status
+
+**Commit shipped:** 40e62dc (docs(copilot-instructions): add Rules 10–13)
+
+**Decision memo:** `.squad/decisions/inbox/tuvok-rules-10-13-shipped.md`
+
+---
+
 ## Status
 
-**Most recent work:** Session 2026-05-17 sweep (5 parallel agent tracks, final consolidation to decisions.md + history summarization pending)
+**Most recent work:** Session 2026-05-18 — Rules 10–13 shipped (2026-05-18T00:50:13Z)
 
 **Next session prep:** Constitution automation (issue #8 — enforcement gate for re-sync rule); triage bot fix (issue pending Kirk routing-rules decision); #15 token-usage telemetry epic (TBD with Bashir driver reuse).
 
 **Charter:** `.squad/agents/tuvok/charter.md`
+**2026-05-18T00:** New squad meta issues #61–#69 filed by Picard 2026-05-18; review when picking up squad:picard work

@@ -126,3 +126,61 @@ decision points. Reusable for every future agent added to the squad.
 **Decision memo:** `.squad/decisions/inbox/picard-self-test-epic-2026-05-17.md`.
 
 2026-05-17T21:39Z: Feature 003-discord-oauth shipped; governance PR #6 (v1.3.0 amendment) already merged.
+
+## Learnings — 2026-05-18 (squad audit R1–R16 review + filing)
+
+**Filed 9 issues (#61–#69) from a 16-recommendation audit.** Decision memo:
+`.squad/decisions/inbox/picard-squad-audit-review-2026-05-18.md`.
+
+12. **Batch by *decision*, not by *recommendation*.** R7+R11+R13 each
+    asked "should we add role X?" (DevOps, Security, Release). Filing
+    three separate issues would force Picard to make the same umbrella
+    scope call three times, with three different framings, weeks apart.
+    One issue (#65) frames it once: *"do we extract a DevOps/Platform
+    charter that absorbs all three, or codify per-file splits?"*
+    Heuristic: **if two or more recommendations converge on the same
+    yes/no scope question, file one issue with options (a)/(b)/(c), not
+    N issues with isolated scope.** The audit's own "Suggested issues"
+    table got this wrong — it 1-to-1-mapped R# to issue rows.
+
+13. **"Warm seat with zero output" is the worst possible state.** Garak
+    has been a dormant seat for 9 days. Filing "activate Garak" alone
+    invites a half-hearted ceremonial fix that doesn't change behaviour.
+    Filing "retire Garak" alone loses the demonstrated Critic value.
+    The right framing (#64) is **forced choice between activation paths
+    AND formal retirement** — making "do nothing" not an option on the
+    ballot. Pattern: when an under-used role is on the agenda, the issue
+    must include retirement as an explicit option, otherwise the
+    discussion drifts to "we should use Garak more" with no action.
+
+14. **Reject taxonomy invention.** R15 (`D-NNN` decision IDs) is a
+    textbook "create scheme for theoretical future need" anti-pattern.
+    Today nothing cross-references decisions programmatically; nothing
+    has *failed* due to lacking decision IDs. Adding the scheme now
+    means picking a format blind, maintaining it across every new
+    decision, and likely picking wrong. Heuristic: **don't add an ID
+    scheme until a real retrieval has demonstrably broken.** Same logic
+    applies to versioning, namespacing, and tagging conventions —
+    invent under load, not in anticipation.
+
+15. **Audits surface their own blind spots.** This audit was thorough
+    on capability gaps but undersold R10 (author-as-reviewer): it
+    framed it as a charter-doc issue, when the load-bearing risk is
+    that Rule 7's auto-merge gate fires on Kirk-approves-Kirk's-own-call.
+    The Critic seat being dormant is *exactly* why R10 didn't get a
+    harder framing in the audit — there's been no hostile fact-check
+    on this audit itself. **Action:** when an audit is produced during
+    a period of Critic dormancy, the reviewer (me) must look for
+    soft-pedaled risk findings and re-frame them as governance gates,
+    not as documentation tasks. R10 was upgraded to a Rule-7 amendment
+    when I filed #68; that wouldn't have happened if I'd taken the
+    audit's framing at face value.
+
+16. **The "Suggested GitHub Issues for Picard Triage" table at the end
+    of a research report is a *suggestion*, not a spec.** This audit
+    proposed 14 separate issues; I filed 9. The compression came from
+    rule 12 (batch by decision) + R15 reject + folding R11/R13 into
+    R7's umbrella. Future audits should follow this pattern — assume
+    the reviewing manager will compress, and design recommendations to
+    cluster cleanly around 5–10 real decisions, not 16 atomic asks.
+**2026-05-18T00:** New squad meta issues #61–#69 filed by Picard 2026-05-18; review when picking up squad:picard work

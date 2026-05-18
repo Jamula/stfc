@@ -105,3 +105,4 @@ PR #20):
 
 
 2026-05-17T21:39Z: Feature 003-discord-oauth shipped to main (PR #59); issue #51 closed.
+**2026-05-18T00:** New squad meta issues #61–#69 filed by Picard 2026-05-18; review when picking up squad:picard work
