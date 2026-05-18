@@ -18,6 +18,7 @@
 - The bookmarklet (`docs/BOOKMARKLET.md`) and any client-side capture tooling
 - Discord monitor integration: `DISCORD_BOT_TOKEN` custody, Discord API calls, channel monitoring
 - GitHub Actions workflows (secrets and integrations)
+- ML classifier API integration: model loading code in `src/discord/classifier.ts`, SHA-256 integrity verification in `load()`, model selection, and the runtime privacy invariant that `classify()` issues zero outbound HTTP calls. (Infrastructure ownership — HuggingFace cache invalidation strategy, SHA rotation discipline on model upgrades, model upgrade decision-making — belongs to the DevOps Engineer.)
 
 ## How I Work
 

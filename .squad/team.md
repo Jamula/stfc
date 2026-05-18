@@ -20,8 +20,21 @@
 | Borg Queen | Critic | `.squad/agents/garak/charter.md` (history archive only) | 🗄️ Retired (2026-05-16 — seat transferred to Garak) |
 | Garak | Critic | `.squad/agents/garak/charter.md` | ✅ Active |
 | Tuvok | Process Auditor / Editorial Specialist | `.squad/agents/tuvok/charter.md` | ✅ Active |
+| O'Brien | DevOps / Platform Engineer | `.squad/agents/obrien/charter.md` | ✅ Active |
+| @copilot | 🤖 Coding Agent — Autonomous Coding Agent (model: —) — see capability profile below | (GitHub Copilot coding agent — assigned via `gh issue edit --add-assignee Copilot`) | ✅ Active |
 | Scribe | Session Logger | `.squad/agents/scribe/charter.md` | 📋 Silent |
 | Ralph | Work Monitor | `.squad/agents/ralph/charter.md` | 🔄 Monitor |
+
+### @copilot capability profile
+
+🟢 **Small** (single-file edits, typo fixes, dependency bumps, simple test additions)
+🟡 **Medium** (multi-file refactors with clear scope, scaffolding, documented patterns)
+🔴 **Architecture** (anything cross-cutting, novel design decisions, security-sensitive)
+
+@copilot is activated on the full tier profile (🟢🟡🔴) per user decision 2026-05-18
+(audit issue #61). Picard triages which issues route to @copilot; @copilot is
+auto-assignable via `gh issue edit --add-assignee Copilot` and picks up work
+asynchronously.
 
 ### Role hierarchy
 
@@ -40,9 +53,7 @@
 
 ## Coding Agent
 
-<!-- copilot-auto-assign: false -->
-
-<!-- @copilot is not on the roster yet. Ask cyrusj to add it if you want autonomous issue pickup. -->
+<!-- copilot-auto-assign: true -->
 
 ## Issue Source
 

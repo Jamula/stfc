@@ -132,11 +132,47 @@ No direct output from Tuvok; work logged in orchestration-log entries for cross-
 
 ---
 
+## Session 2026-05-18 — Charter Extensions (Uhura ML, Garak Hard-Gate, Kirk Reviewer Carve-Out)
+
+### Input & Mandate
+
+**Request:** User affirmed three audit findings from session 2026-05-18 (explicit mandate form); requested surgical edits to three charter files + decision drop + history append.
+
+**Mandate:** Surgical edits per explicit reviewer findings (no invention, no scope creep).
+
+### Work Log
+
+1. **Charter edits — three files, three findings:**
+   - **.squad/agents/uhura/charter.md** (lines 12–21): Appended ML classifier API integration to "What I Own" — model loading, SHA-256 verification, model selection, privacy invariant. Infrastructure scope (cache, SHA rotation, decisions) delegated to DevOps Engineer.
+   - **.squad/agents/garak/charter.md** (lines 13–20): Appended hard-gate adversarial review to "What I Own" — every `feat(*)` PR touching `src/` requires mandatory `**APPROVE** ✅` / `**CHANGES_REQUESTED** ⚠️` comment.
+   - **.squad/agents/garak/charter.md** (lines 31–37): Added "Hard-gate clarification" sub-section in Boundaries to signal hard-gate is _triggered responsibility_, not discretionary.
+   - **.squad/agents/kirk/charter.md** (lines 39–50): Appended Kirk-as-author-and-reviewer carve-out to Boundaries — when Kirk authors a design, Garak must co-review per routing.md mitigation rule.
+
+2. **Issue #69 comment:** Posted charter-extension completion status; flagged that infrastructure scope (HF cache, SHA rotation) remains Picard/DevOps work.
+
+3. **Decision drop:** `.squad/decisions/inbox/tuvok-charter-extensions-2026-05-18.md` (documents all three findings, file locations, cross-check for secondary references).
+
+4. **Cross-check discipline:** Verified no secondary references in routing.md, constitution.md, or team.md require update (charter edits self-contained).
+
+### Learnings
+
+- **User-as-explicit-reviewer pattern:** This is the 2nd firing of this pattern in the current session (first: Rules 10–13 shipping, second: these three charter extensions). User passes explicit findings verbatim; Tuvok's job is _fidelity to the finding_, not reinterpretation or scope expansion. No ambiguity threshold crossed — all three findings were actionable.
+- **Hard-gate clarification technique:** The clarifying sub-section (adding "Hard-gate clarification" to Garak's Boundaries) converts implicit triggered-responsibility into explicit opt-out-is-not-allowed phrasing. This pattern can be reused for other mandatory-gated responsibilities.
+- **Charter scope separation discipline:** The Uhura edit cleanly separates API+integration ownership from infrastructure ownership. Pattern: "Owns X; does not own Y (belongs to Z)" preserves role boundaries without encroachment.
+
+### Status
+
+**Edits shipped:** 3 charter files + 1 decision drop + issue comment posted.
+
+---
+
 ## Status
 
-**Most recent work:** Session 2026-05-18 — Rules 10–13 shipped (2026-05-18T00:50:13Z)
+**Most recent work:** Session 2026-05-18 — Charter extensions shipped (2026-05-18T00:57:58Z)
 
-**Next session prep:** Constitution automation (issue #8 — enforcement gate for re-sync rule); triage bot fix (issue pending Kirk routing-rules decision); #15 token-usage telemetry epic (TBD with Bashir driver reuse).
+**Next session prep:** Constitution automation (issue #8 — enforcement gate for re-sync rule); triage bot fix (issue pending Kirk routing-rules decision); #15 token-usage telemetry epic (TBD with Bashir driver reuse); Picard's DevOps engineer charter parallel track for #69 infrastructure scope.
 
 **Charter:** `.squad/agents/tuvok/charter.md`
-**2026-05-18T00:** New squad meta issues #61–#69 filed by Picard 2026-05-18; review when picking up squad:picard work
+**2026-05-18T00:** New squad meta issues #61–#69 filed by Picard 2026-05-18; #69 extended; #64, #68 resolved via charter edits
+
+2026-05-18T00:57Z: New teammate O'Brien (Miles) joined as DevOps/Platform Engineer; @copilot activated for autonomous issue pickup; new routing rules added (Garak hard-gate on src/ PRs, Discord precedence, Bashir/Kirk reviewer mitigation). See decisions.md and routing.md.

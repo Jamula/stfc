@@ -614,3 +614,80 @@ Knowledge codified and reusable.
 **Pre-commit gate:** 531 tests passed, 0 failed.
 
 **Why:** User-affirmed review+commit ("1 & 2") after Prior session offer. Captured from `/chronicle improve` rounds; no contradictions with Rules 1–9. Editorial review found no typos, merge markers, secrets, or formatting issues. Numbering correct (10 follows 9, 13 is last).
+
+### 2026-05-18T00:57:58Z: Audit recommendations resolved — DevOps agent hired (O'Brien), @copilot activated, 7 routing rules added
+
+**By:** Picard
+
+**What:**
+
+- **New hire — O'Brien (DevOps / Platform Engineer)** — `.squad/agents/obrien/{charter,history}.md`. Star Trek (DS9/TNG) Chief-of-Operations archetype, chosen because the role name literally is "DevOps" in his original universe. Absorbs four previously-orphaned ownership concerns into one accountable charter: workflow YAML (R7 — replaces the Scotty/Uhura split), Platform/Tooling (R11), security toolchain (CodeQL/Dependabot/secrets-check/PAT lifecycle), and release engineering (R13 — release.yml, CHANGELOG, version bumps). Also owns ML cache infrastructure (HF cache invalidation, model-SHA rotation strategy); Uhura retains API + integration ownership.
+
+- **@copilot activation** — added to `.squad/team.md` Members table with full tier profile (🟢 small / 🟡 medium / 🔴 architecture) per user decision on audit #61. Switched `<!-- copilot-auto-assign: false -->` → `true` and removed the "not on the roster yet" stub. Capability profile section added below the table.
+
+- **Registry hygiene fix** — backfilled **Scribe** and **Ralph** into `.squad/casting/registry.json` and `history.json` as `legacy_named: true` entries (audit issue #62). Both pre-date the Star Trek casting decision and serve mechanical/loop roles; kept as legacy-named rather than forcing a Trek rename on pure-utility seats.
+
+- **`.squad/casting/registry.json`** — added `obrien` entry with universe="Star Trek", role="DevOps / Platform Engineer", created_at=2026-05-18T00:57:58.675+00:00, legacy_named=false, expansion_type="diegetic". Star Trek capacity now 8/20 slots used.
+
+- **`.squad/casting/history.json`** — appended snapshot for O'Brien hire and registry backfill.
+
+- **`.squad/routing.md` — 4 new work-type rows added:**
+  - GitHub Actions workflows (build/test, cron, secrets, squad-automation) → **O'Brien**
+  - CodeQL alerts, Dependabot triage, PAT lifecycle, secrets-check → **O'Brien**
+  - Release engineering (release.yml, CHANGELOG, version bumps) → **O'Brien**
+  - ML model lifecycle → **O'Brien** (infrastructure) / **Uhura** (API + integration)
+
+- **`.squad/routing.md` — 4 new §Rules entries:**
+  - **#9 Garak hard-gate** — every `feat(*) src/` PR requires Garak adversarial review BEFORE merge; Kirk and Garak are independent gates, both required (audit #64).
+  - **#10 Bashir reviewer-gate escalation** — Bashir-rejected revisions route to a different agent: product code → Scotty/Uhura, test infra → O'Brien (audit #63).
+  - **#11 Discord direction precedence** — architecture/refactor of `src/discord/` → Kirk; integration/protocol/API-shape → Uhura (audit #67).
+  - **#12 Kirk-as-author-and-reviewer mitigation** — PRs implementing Kirk-authored designs require Garak co-review; Kirk's APPROVE alone does not satisfy the Rule 7 auto-merge gate (audit #68).
+
+- **`.squad/routing.md` — 4 new issue-label rows:** `squad:tuvok` → Tuvok (audit #62 carryover), `squad:obrien` → O'Brien, `squad:copilot` → @copilot, plus reaffirmed `squad:garak` → Garak.
+
+**Issues closed:** #63, #64, #65, #66, #67, #68
+
+**Issues still open:**
+- **#61** (@copilot activation) — left open for next-step triage (which existing/new issues route to @copilot).
+- **#62** (hygiene batch) — partial: `squad:tuvok` routing row added and registry gaps fixed; Ralph history seeding and Garak config doc deferred to follow-up.
+- **#69** (Uhura ML extension) — awaiting Tuvok's confirmation of `uhura/charter.md` edit (handled in parallel by Tuvok per dispatch).
+
+**Why:** User-affirmed decisions on 6 audit questions via structured-form responses on 2026-05-18:
+- #61 → @copilot full tier profile
+- #64 → Garak hard-gate (every feat(*) src/ PR)
+- #65 + #66 → new DevOps/Platform charter (absorb all four concerns: DevOps + Security + Release + workflow ownership)
+- #68 → Garak co-review required on PRs implementing Kirk-authored designs
+- #69 → Uhura ML charter extension (charter edit handled by Tuvok)
+
+The compression from 14 audit-suggested issues to 9 filed (Picard learning #16) plus the consolidation of R7/R11/R13 into one O'Brien charter (rather than three half-roles) is the load-bearing structural move here. The alternative — three new roles or per-file ownership splits — would have re-created the ambiguity that triggered the audit in the first place.
+
+**Follow-ups for next session:**
+- Triage existing issues #8–#12 and #24–#32 onto `squad:obrien` where applicable (per #66 comment).
+- File a separate re-triage issue if the #8–#12 / #24–#32 carryover doesn't fit a single batch comment.
+- Pick first @copilot pilot issue (small/🟢 tier) to validate the activation.
+
+### 2026-05-18T00:57:58Z: Charter extensions — Uhura ML, Garak hard-gate, Kirk reviewer carve-out
+
+**By:** Tuvok (Process Auditor / Editorial Specialist)
+
+**What:** Three charter files extended per explicit user findings from audit-resolution session 2026-05-18.
+
+- **Uhura (charter.md):** Extended "What I Own" to include ML classifier API integration: model loading code in `src/discord/classifier.ts`, SHA-256 integrity verification, model selection, and the runtime privacy invariant that `classify()` issues zero outbound HTTP calls. Infrastructure scope (HF cache, SHA rotation, model decisions) explicitly delegated to the DevOps Engineer.
+
+- **Garak (charter.md):** Extended "What I Own" to add hard-gate adversarial review: every `feat(*)` PR touching `src/` receives mandatory `**APPROVE** ✅` or `**CHANGES_REQUESTED** ⚠️` comment per Rule 9b. Added "Hard-gate clarification" sub-section in Boundaries to signal this is a _triggered responsibility_ (not optional / on request), co-equal with Kirk's technical review gate.
+
+- **Kirk (charter.md):** Extended Boundaries to add Kirk-as-author-and-reviewer carve-out: when a PR implements a design Kirk authored (traceable via decisions.md), Kirk cannot be the sole reviewer — Garak must co-review per the Kirk-as-author-and-reviewer mitigation rule in routing.md.
+
+**Files touched:**
+- `.squad/agents/uhura/charter.md` (lines 12–21, appended ML scope to Owns)
+- `.squad/agents/garak/charter.md` (lines 13–20, appended hard-gate to Owns; lines 31–37, added hard-gate clarification to Boundaries)
+- `.squad/agents/kirk/charter.md` (lines 39–50, appended Kirk-as-author-and-reviewer carve-out to Boundaries)
+
+**Why:**
+- Issue #69 (Uhura ML charter extension): Resolves governance gap on ML model lifecycle ownership. User explicit finding.
+- Issue #64 (Garak hard-gate): Codifies the hard-gate adversarial review as a _triggered_ responsibility, not discretionary. User explicit finding.
+- Issue #68 (Kirk-as-author-and-reviewer): Enforces the Kirk-as-author-and-reviewer mitigation rule stated in routing.md. Prevents single-author-reviewer scenario. User explicit finding.
+
+**Cross-check:** No secondary references in routing.md, constitution.md, or team.md require update. The three charter edits are self-contained.
+
+**Evidence base:** User findings passed as explicit directives on 2026-05-18 audit form.

@@ -46,6 +46,8 @@ If a technical decision has scope implications (e.g., "this approach will add a 
 
 **If I review others' work:** On rejection, I name a different agent to revise — never the original author. The Coordinator enforces this.
 
+**Kirk-as-author-and-reviewer carve-out:** When a PR implements a design I authored (traceable via `.squad/decisions.md` attribution), I cannot be the sole reviewer gate — Garak must co-review per the Kirk-as-author-and-reviewer mitigation rule in `.squad/routing.md`.
+
 ## Model
 
 - **Preferred:** `claude-opus-4.7-1m-internal`
