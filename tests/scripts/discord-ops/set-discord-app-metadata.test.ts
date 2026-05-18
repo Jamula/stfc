@@ -106,12 +106,27 @@ describe("scripts/discord-ops/set-discord-app-metadata.mjs", { skip: !scriptExis
 
   it("missing DISCORD_BOT_TOKEN exits 1 with clear message", () => {
     const r = run({ args: ["--description", "hi"] });
-    assert.equal(r.status, 1, `expected exit 1 when token missing`);
+    assert.equal(r.status, 1, `expected exit 1 when token missing (operator/infra per USAGE table)`);
     const out = (r.stdout + r.stderr).toLowerCase();
     // Message must name the variable so the operator knows what to set,
     // but must NOT echo any token-looking value (there is no value to echo
     // in this case — this assertion is here for documentation).
     assert.match(out, /discord_bot_token/);
+  });
+
+  it("bad/missing args exit 1 (operator) not 2 (Discord said no)", () => {
+    // No flags at all → operator error → exit 1 per the USAGE exit-code table.
+    const r1 = run({ args: [], env: { DISCORD_BOT_TOKEN: SENTINEL } });
+    assert.equal(r1.status, 1, `expected exit 1 for missing input flags`);
+    // Unknown arg → operator error → exit 1.
+    const r2 = run({ args: ["--frobnicate"], env: { DISCORD_BOT_TOKEN: SENTINEL } });
+    assert.equal(r2.status, 1, `expected exit 1 for unknown flag`);
+    // Validation failure (too-long description) → operator error → exit 1.
+    const r3 = run({
+      args: ["--description", "x".repeat(401)],
+      env: { DISCORD_BOT_TOKEN: SENTINEL },
+    });
+    assert.equal(r3.status, 1, `expected exit 1 for description validation failure`);
   });
 
   it("--dry-run does NOT echo the token in stdout or stderr", () => {
@@ -139,8 +154,9 @@ describe("scripts/discord-ops/set-discord-app-metadata.mjs", { skip: !scriptExis
       stubStatus: 401,
       stubBody: JSON.stringify({ message: "401: Unauthorized", code: 0 }),
     });
-    // Non-zero exit expected on auth failure.
-    assert.notEqual(r.status, 0, `expected non-zero exit on 401`);
+    // Non-zero exit expected on auth failure. Per USAGE exit-code table,
+    // a Discord 4xx is exit 2 ("Discord API said no"), not 1 (operator/infra).
+    assert.equal(r.status, 2, `expected exit 2 on 401 (Discord-said-no, per USAGE table)`);
     const combined = r.stdout + r.stderr;
     // Discord's error message MUST be visible to the operator…
     assert.match(combined, /unauthorized/i, "expected Discord auth message in output");
@@ -238,7 +254,8 @@ describe("scripts/discord-ops/set-discord-app-metadata.mjs", { skip: !scriptExis
         args: ["--icon", bigFile],
         env: { DISCORD_BOT_TOKEN: SENTINEL },
       });
-      assert.notEqual(r.status, 0, `expected non-zero exit on oversize icon`);
+      // Per USAGE exit-code table, oversize icon is operator/infra → exit 1.
+      assert.equal(r.status, 1, `expected exit 1 on oversize icon (operator/infra)`);
       const combined = (r.stdout + r.stderr).toLowerCase();
       assert.ok(
         combined.includes("10 mb") ||
