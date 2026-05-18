@@ -774,3 +774,150 @@ Picard's call on which architecture fits the project's privacy / trust model bes
 - Source: `https://startrekfleetcommand.com/` (HTML grep)
 - Discord API: `GET https://discord.com/api/v10/invites/stfc?with_counts=true` (200, verified)
 - Monitor implementation: `src/skills/discordMonitor.ts`, `src/discord/ingest.ts`, `src/discord/state.ts`
+
+### 2026-05-18T01:47:36Z: Picard review — Path C (`wpNewsMonitor` / WordPress polling)
+
+**By:** Picard (M2 / Engineering Manager)
+**Re:** Uhura's 3-path Discord+news proposal — Path C only. Path A is now in flight
+(Cyrus-led outreach to STFC Discord admins per
+`copilot-directive-2026-05-18T0146.md`); Path B remains a fallback.
+
+---
+
+## Verdict: **DEFER**
+
+Don't build `wpNewsMonitor` now. Conditions for revisit are below.
+
+---
+
+## 1. What problem does Path C actually solve?
+
+`https://startrekfleetcommand.com/wp-json/wp/v2/posts` is the official Scopely
+WordPress news feed. Uhura's discovery confirmed two posts in the last 7 days:
+patch notes (Update 90.3) and event pairings (Infinite Incursions). It is
+**stable, sanctioned-by-virtue-of-being-public, low-traffic, and rate-friendly**.
+
+But: **the WP feed does not carry promo codes.** Scopely doesn't drop redeemable
+codes on the marketing blog — codes appear in Discord (creator drops, event
+giveaways, mod posts), in YouTuber/streamer descriptions, and occasionally in
+in-game mail. The project's mission is auto-redeeming promo codes. A patch-notes
+digest is **adjacent** to that mission, not central to it.
+
+So Path C solves a *different* problem than Path A:
+- **Path A** → community chatter, leaks, dev hints, **and the codes themselves**
+- **Path C** → official patch notes and event-pairing announcements (no codes)
+
+They are complementary surfaces, not competing implementations of the same need.
+Path C does **not** become redundant if Path A succeeds, and conversely Path C
+does **not** substitute for Path A if Path A is declined.
+
+## 2. Constitution check
+
+Path C is **not free under Principle V**. It would require a MINOR amendment
+(v1.4.0 or later) covering:
+
+| Item | Current state | Path C change |
+|------|---------------|---------------|
+| Outbound destinations (lines 556–575) | STFC store API, `home.startrekfleetcommand.com/store`, `discord.com/api`, `huggingface.co` | **Add** `https://startrekfleetcommand.com/wp-json/wp/v2/posts` (read-only GET) |
+| Durable inputs/outputs enumeration (lines 207–270) | `STFC_ACCOUNTS`, `promo-codes.txt`, `config/discord-allowlist.json`, `config/classifier-model.json`, `data/discord/*`, `data/digests/*`, `config/model-tiers.json`, `data/telemetry/*` | **Add** `data/stfc-news/seen-posts.json` (or equivalent dedup ledger) and any `data/stfc-news/digests/*` artifact |
+| Workflow inventory | `redeem.yml`, `refresh-token.yml`, `discord-monitor.yml`, etc. | **Add** either a new `news-monitor.yml` cron OR an extension to `discord-monitor.yml` (the latter avoids Rule 3 pinning-test sprawl) |
+| Plan template re-sync (Rule 1) | aligned | Re-grep `.specify/templates/plan-template.md` after the amendment |
+
+This is a tractable amendment — it adds one outbound destination with a
+narrow, public, read-only justification. No new secrets. But it is **not**
+something to slip in under "trivial change" cover; it needs the speckit chain
+or at minimum an explicit constitution-amendment PR with reviewer sign-off.
+
+## 3. Compete or complement with Path A?
+
+**Complement, cleanly.** See §1. Different surfaces, different signal types,
+zero overlap on the promo-code mission.
+
+The honest follow-up question is whether the project even wants a
+patch-notes digest as a product feature. Today, nothing consumes that signal.
+The discord-monitor classifier looks for promo codes, not patch metadata.
+Without a downstream consumer, Path C produces a daily JSON file that nothing
+reads.
+
+## 4. Sequencing call
+
+**Not now.** Reasons:
+
+1. **Path A is the active bet** on the core mission. Until we know whether
+   the STFC Discord admins approve, decline, or ignore the request, we should
+   not fragment attention with a parallel pipeline that solves a different
+   problem.
+2. **Scope load is real.** We just merged 003-discord-oauth (PR #59) and the
+   `discord-monitor` skill is taking the FR-001 no-op path pending allowlist
+   population. The first concrete deliverable from the Discord pipeline
+   hasn't shipped yet. Adding a second monitor before the first produces
+   signal is premature.
+3. **No identified consumer.** A patch-notes digest with no reader is
+   write-only telemetry. Define the consumer first.
+4. **The constitution cost is non-zero.** Worth paying, but only against
+   demonstrated demand.
+
+**Conditions for revisit (any one is sufficient):**
+
+- **(a)** Path A is declined by STFC admins, OR stalls without response for
+  >14 days from Cyrus's outreach. (Path C becomes a partial hedge — still
+  doesn't cover codes, but does cover official announcements.)
+- **(b)** A user request, issue, or product decision explicitly asks for an
+  official-patch-notes digest as a deliverable (i.e. someone wants to read
+  it).
+- **(c)** The redemption pipeline grows a need to correlate redeemed codes
+  with patch/event windows (e.g. "this code dropped during Infinite
+  Incursions") — at which point patch-note ingestion becomes a dependency,
+  not an adjacency.
+
+If none of (a)/(b)/(c) materialise within ~30 days, downgrade to **REJECT**
+and close the proposal.
+
+## 5. Hand-off to Kirk (only if/when revisited)
+
+If a revisit trigger fires and we move Path C into the build queue, Kirk
+owns these technical calls before any speckit chain starts:
+
+1. **Skill boundary.** New `wpNewsMonitor` skill under `src/skills/`, or
+   extension of the existing `discord-monitor` digest renderer? Rule 3
+   implications favour co-locating the cron in `discord-monitor.yml` over
+   a new workflow.
+2. **Dedup strategy.** `post.id` is stable; `post.modified_gmt` handles
+   edits. Pick one as the ledger key and document it.
+3. **Conditional GET hygiene.** ETag / `If-Modified-Since` against a
+   public WP endpoint is polite and cheap; Kirk's call on whether it's
+   in scope for v1 or a follow-up.
+4. **Digest surface.** Reuse `data/digests/YYYY-MM-DD.md` (add a "News"
+   section) or carve `data/stfc-news/digests/*`? Affects the Principle V
+   enumeration.
+5. **Failure mode.** WP endpoint 5xx or schema drift — fail-soft (skip,
+   log, continue) or fail-loud (alert)? Should match `discord-monitor`'s
+   posture.
+
+**I'm not pre-empting any of these.** Listed only so Kirk has a head start
+if/when the trigger fires.
+
+---
+
+## Summary line for `decisions.md` ingestion
+
+> Picard: **DEFER** Path C (`wpNewsMonitor`). Complements rather than
+> competes with Path A but solves a different problem (official patch
+> notes, not promo codes) with no identified consumer today. Revisit if
+> Path A is declined/stalls >14d, a consumer is named, or
+> patch/event correlation becomes a redemption-pipeline dependency.
+> Constitution amendment (v1.x.0 MINOR) required at build time:
+> new outbound `startrekfleetcommand.com/wp-json/`, new
+> `data/stfc-news/*` durable inputs, workflow inventory update.
+
+### 2026-05-18T01:46:17Z: User directive — Discord bot access strategy
+
+**By:** Cyrus Jamula (via Copilot)
+**What:** Pursue **Path A** from the Uhura Discord-discovery proposal — request bot whitelisting on the official Star Trek Fleet Command Discord server (guild_id 509679626763632640, vanity `discord.gg/stfc`). Do NOT default to Path B (personal relay server) or Path C (WordPress polling) at this time.
+**Why:** User request — captured for team memory. Path A keeps the bot on the canonical source of truth where Scopely-announced patch notes, events, and promo codes actually appear. Paths B and C remain available as fallbacks if Path A is declined by the server admins.
+
+**Implications:**
+- Outreach is human-led — Cyrus must personally contact STFC server mods/admins. The team cannot DM Discord users.
+- The team's role is to PREPARE the outreach package: a precise, professional request the admins can evaluate quickly.
+- The bot's permission scope must be minimal-and-explicit (READ-only on specific channels) to maximize approval odds.
+- If Path A is declined: re-open the decision and fall back to Path B or C — both are still on the table.

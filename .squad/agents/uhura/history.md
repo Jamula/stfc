@@ -58,3 +58,24 @@ Codespace-managed `GITHUB_TOKEN` lacks `security_events` scope by default. Fix: 
 **Deliverables:** Decision proposal (merged to decisions.md), 2 orchestration logs, cross-agent pointer to Picard.
 
 **Next:** Awaits Picard's path ratification (A/B/C) to proceed with allowlist population or wpNewsMonitor architecture.
+
+### Discord bot outreach package — Path A drafted (2026-05-18T01:46:17.656+00:00)
+
+**Context:** Cyrus chose Path A from `.squad/decisions/inbox/uhura-stfc-discord-discovery.md` — request bot whitelisting from the official STFC Discord admins.
+
+**Deliverable:** `.squad/agents/uhura/outreach/stfc-discord-bot-request.md` — single self-contained outreach package. Sections: (1) admin-quotable ask, (2) precise technical scope with code citations, (3) minimum permissions (scopes/intents/channel-perms), (4) invite URL template with `{CLIENT_ID}` placeholder, (5) proposed channel target list with explicit "we don't know IDs until inside" caveat, (6) <300-word DM draft, (7) decline-plan.
+
+**Path to send to admins:** `https://github.com/Jamula/stfc/blob/main/.squad/agents/uhura/outreach/stfc-discord-bot-request.md` (once committed to main). Until then: `.squad/agents/uhura/outreach/stfc-discord-bot-request.md` in repo working copy.
+
+**Key reusable facts about our Discord integration (for future outreach / audit / governance work):**
+
+1. **Exactly two Discord REST endpoints are used by the entire codebase**: `GET /users/@me` (`src/discord/client.ts:127`) and `GET /channels/{id}/messages` (`src/discord/client.ts:150-158`). No other Discord API surface is touched. Grep `src/discord/client.ts` for `method.*POST` returns zero matches — useful one-liner proof of read-only behavior.
+2. **No gateway connection at all.** The codebase pulls via REST polling on a 15-minute cron. Anyone familiar with Discord bots will assume there's a WebSocket; we should pre-empt that assumption in any external communication.
+3. **The permissions bitmask `66560` is canonical for this project** and is already documented in `docs/DISCORD-BOT-SETUP.md` §4 with a justification table. Cite that doc whenever asked "why these permissions and not more."
+4. **Message Content Intent is a Developer-Portal toggle, not a server-admin grant.** Server admins should not be asked to do anything about intents — they only grant `VIEW_CHANNEL` + `READ_MESSAGE_HISTORY` at the channel level.
+5. **The classifier's no-outbound-HTTP guarantee is a constitution-level invariant** documented at the top of `src/discord/classifier.ts` (lines 5-29). This is a credible privacy promise to surface to any third party — model inference is local; the only network in the file is a one-time HF download with SHA-256 verification, skip-able by placeholder hash.
+6. **The User-Agent string already contains the repo URL** (`STFC-Discord-Monitor (https://github.com/Jamula/stfc, 0.1.0)`), so any admin auditing their logs can immediately find the source.
+
+**Action queued for Cyrus:** review the outreach doc, commit it to main so the public URL works, identify Discord Application ID, substitute it for `{CLIENT_ID}` in the invite link, and DM a server mod. The DM draft in §6 is ready to send as-is.
+
+**2026-05-18T01:47:36Z** — Path C DEFER per Picard review. Complementary to Path A but solves different problem (patch notes ≠ codes). Revisit if Path A stalled >14d, consumer named, or patch/event correlation needed. Auto-reject in ~30d if none fire. See decisions.md for full memo.
