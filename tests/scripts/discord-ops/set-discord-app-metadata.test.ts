@@ -139,8 +139,8 @@ describe("scripts/discord-ops/set-discord-app-metadata.mjs", { skip: !scriptExis
       stubStatus: 401,
       stubBody: JSON.stringify({ message: "401: Unauthorized", code: 0 }),
     });
-    // Non-zero exit expected on auth failure.
-    assert.notEqual(r.status, 0, `expected non-zero exit on 401`);
+    // Discord rejected a well-formed request → exit 2 per runAll.ts convention.
+    assert.equal(r.status, 2, `expected exit 2 (Discord-said-no) on 401; got ${r.status}`);
     const combined = r.stdout + r.stderr;
     // Discord's error message MUST be visible to the operator…
     assert.match(combined, /unauthorized/i, "expected Discord auth message in output");
@@ -252,5 +252,31 @@ describe("scripts/discord-ops/set-discord-app-metadata.mjs", { skip: !scriptExis
         `sentinel token leaked on oversize path`,
       );
     });
+  });
+
+  // ── Exit-code convention pins (runAll.ts: 1=infra, 2=Discord-said-no) ──────
+
+  it("unknown flag exits 1 (bad args = operator/infra error)", () => {
+    const r = run({ args: ["--unknown-flag"] });
+    assert.equal(r.status, 1, `bad args must exit 1 per runAll.ts; got ${r.status}`);
+  });
+
+  it("no flag exits 1 with 'At least one of' message (operator/infra error)", () => {
+    const r = run({ args: [] });
+    assert.equal(r.status, 1, `no-flag must exit 1 per runAll.ts; got ${r.status}`);
+    assert.match(
+      r.stdout + r.stderr,
+      /at least one of/i,
+      "expected 'At least one of' guidance in output",
+    );
+  });
+
+  it("empty --username exits 1 (validation failure = operator/infra error)", () => {
+    // validateUsername rejects names shorter than USERNAME_MIN (2 chars).
+    const r = run({
+      args: ["--username", "x"],
+      env: { DISCORD_BOT_TOKEN: SENTINEL },
+    });
+    assert.equal(r.status, 1, `validation failure must exit 1 per runAll.ts; got ${r.status}`);
   });
 });
