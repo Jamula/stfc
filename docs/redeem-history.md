@@ -7,6 +7,7 @@ inserted at the top**, so the most recent run is always visible first.
 
 | Date (UTC) | Time (UTC) | Account | Gifts claimed |
 | --- | --- | --- | --- |
+| 2026-05-22 | 15:25 | main | 4 Hr Free Chest, 10 Min Free Chest |
 | 2026-05-22 | 12:09 | main | 10 Min Free Chest |
 | 2026-05-22 | 09:42 | main | Emerald Chain Tier 26+, 4 Hr Free Chest, 10 Min Free Chest, Nadion Supply |
 | 2026-05-22 | 05:51 | main | Daily Mission Key Drop |
