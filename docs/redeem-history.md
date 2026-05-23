@@ -7,6 +7,7 @@ inserted at the top**, so the most recent run is always visible first.
 
 | Date (UTC) | Time (UTC) | Account | Gifts claimed |
 | --- | --- | --- | --- |
+| 2026-05-23 | 15:44 | main | Incursion Prep, 10 Min Free Chest |
 | 2026-05-23 | 12:44 | main | 4 Hr Free Chest, 10 Min Free Chest |
 | 2026-05-23 | 10:02 | main | 10 Min Free Chest |
 | 2026-05-23 | 07:56 | main | Emerald Chain Tier 26+, 4 Hr Free Chest, 10 Min Free Chest, Nadion Supply |
