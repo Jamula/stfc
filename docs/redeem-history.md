@@ -7,6 +7,7 @@ inserted at the top**, so the most recent run is always visible first.
 
 | Date (UTC) | Time (UTC) | Account | Gifts claimed |
 | --- | --- | --- | --- |
+| 2026-05-23 | 19:22 | main | 10 Min Free Chest |
 | 2026-05-23 | 17:47 | main | 10 Min Free Chest |
 | 2026-05-23 | 16:43 | main | Remembrance Day: Memento Mori Gift, 10 Min Free Chest |
 | 2026-05-23 | 15:44 | main | Incursion Prep, 10 Min Free Chest |
