@@ -7,6 +7,7 @@ inserted at the top**, so the most recent run is always visible first.
 
 | Date (UTC) | Time (UTC) | Account | Gifts claimed |
 | --- | --- | --- | --- |
+| 2026-05-25 | 20:11 | main | 10 Min Free Chest |
 | 2026-05-25 | 18:17 | main | 10 Min Free Chest |
 | 2026-05-25 | 16:39 | main | 4 Hr Free Chest, 10 Min Free Chest |
 | 2026-05-25 | 14:16 | main | 10 Min Free Chest, Holo-Field Amplifiers |
