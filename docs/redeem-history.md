@@ -7,6 +7,7 @@ inserted at the top**, so the most recent run is always visible first.
 
 | Date (UTC) | Time (UTC) | Account | Gifts claimed |
 | --- | --- | --- | --- |
+| 2026-05-26 | 20:23 | main | 4 Hr Free Chest, 10 Min Free Chest |
 | 2026-05-26 | 17:45 | main | 10 Min Free Chest, Compensation Gift |
 | 2026-05-26 | 14:20 | main | 4 Hr Free Chest, 10 Min Free Chest, Holo-Field Amplifiers |
 | 2026-05-26 | 08:07 | main | Daily Mission Key Drop, 10 Min Free Chest |
