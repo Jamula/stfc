@@ -7,6 +7,7 @@ inserted at the top**, so the most recent run is always visible first.
 
 | Date (UTC) | Time (UTC) | Account | Gifts claimed |
 | --- | --- | --- | --- |
+| 2026-05-28 | 10:19 | main | 4 Hr Free Chest, 10 Min Free Chest |
 | 2026-05-28 | 05:53 | main | Daily Mission Key Drop, 24 Hr Free Chest [BAJORAN FAVOR], Emerald Chain Tier 26+, 4 Hr Free Chest, 10 Min Free Chest |
 | 2026-05-28 | 01:26 | main | 4 Hr Free Chest, 10 Min Free Chest |
 | 2026-05-27 | 23:39 | main | 10 Min Free Chest, Delivery Delays |
