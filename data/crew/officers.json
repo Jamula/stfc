@@ -1,0 +1,918 @@
+[
+  {
+    "id": "kirk",
+    "name": "James T. Kirk",
+    "faction": "federation",
+    "synergy_groups": [
+      "enterprise_crew",
+      "kirk_captains"
+    ],
+    "captain_maneuver": {
+      "text": "James T. Kirk captain maneuver tuned for morale recovery.",
+      "tags": [
+        "morale_recovery",
+        "pvp_damage"
+      ]
+    },
+    "officer_ability": {
+      "text": "James T. Kirk officer ability tuned for pvp damage.",
+      "tags": [
+        "pvp_damage"
+      ]
+    },
+    "bda_role": "captain",
+    "rank_curve": "back_loaded",
+    "added_in_patch": "M91",
+    "source": "hand-curated from docs/stfc-game-knowledge.md + community knowledge"
+  },
+  {
+    "id": "spock",
+    "name": "Spock",
+    "faction": "federation",
+    "synergy_groups": [
+      "enterprise_crew"
+    ],
+    "captain_maneuver": {
+      "text": "Spock captain maneuver tuned for pvp mitigation.",
+      "tags": [
+        "pvp_mitigation",
+        "morale_recovery"
+      ]
+    },
+    "officer_ability": {
+      "text": "Spock officer ability tuned for pvp mitigation.",
+      "tags": [
+        "pvp_mitigation"
+      ]
+    },
+    "bda_role": "either",
+    "rank_curve": "front_loaded",
+    "added_in_patch": "M91",
+    "source": "hand-curated from docs/stfc-game-knowledge.md + community knowledge"
+  },
+  {
+    "id": "mccoy",
+    "name": "Leonard McCoy",
+    "faction": "federation",
+    "synergy_groups": [
+      "enterprise_crew"
+    ],
+    "captain_maneuver": {
+      "text": "Leonard McCoy captain maneuver tuned for morale recovery.",
+      "tags": [
+        "morale_recovery"
+      ]
+    },
+    "officer_ability": {
+      "text": "Leonard McCoy officer ability tuned for pvp mitigation.",
+      "tags": [
+        "pvp_mitigation"
+      ]
+    },
+    "bda_role": "officer",
+    "rank_curve": "linear",
+    "added_in_patch": "M91",
+    "source": "hand-curated from docs/stfc-game-knowledge.md + community knowledge"
+  },
+  {
+    "id": "uhura",
+    "name": "Nyota Uhura",
+    "faction": "federation",
+    "synergy_groups": [
+      "enterprise_crew"
+    ],
+    "captain_maneuver": {
+      "text": "Nyota Uhura captain maneuver tuned for pvp damage.",
+      "tags": [
+        "pvp_damage"
+      ]
+    },
+    "officer_ability": {
+      "text": "Nyota Uhura officer ability tuned for dispatch speed.",
+      "tags": [
+        "dispatch_speed"
+      ]
+    },
+    "bda_role": "officer",
+    "rank_curve": "linear",
+    "added_in_patch": "M91",
+    "source": "hand-curated from docs/stfc-game-knowledge.md + community knowledge"
+  },
+  {
+    "id": "sulu",
+    "name": "Hikaru Sulu",
+    "faction": "federation",
+    "synergy_groups": [
+      "enterprise_crew"
+    ],
+    "captain_maneuver": {
+      "text": "Hikaru Sulu captain maneuver tuned for pvp damage.",
+      "tags": [
+        "pvp_damage"
+      ]
+    },
+    "officer_ability": {
+      "text": "Hikaru Sulu officer ability tuned for hostile crit.",
+      "tags": [
+        "hostile_crit"
+      ]
+    },
+    "bda_role": "officer",
+    "rank_curve": "front_loaded",
+    "added_in_patch": "M91",
+    "source": "hand-curated from docs/stfc-game-knowledge.md + community knowledge"
+  },
+  {
+    "id": "gorkon",
+    "name": "Gorkon",
+    "faction": "klingon",
+    "synergy_groups": [
+      "klingon_patriots"
+    ],
+    "captain_maneuver": {
+      "text": "Gorkon captain maneuver tuned for pvp damage.",
+      "tags": [
+        "pvp_damage",
+        "hostile_crit"
+      ]
+    },
+    "officer_ability": {
+      "text": "Gorkon officer ability tuned for pvp damage.",
+      "tags": [
+        "pvp_damage"
+      ]
+    },
+    "bda_role": "captain",
+    "rank_curve": "back_loaded",
+    "added_in_patch": "M91",
+    "source": "hand-curated from docs/stfc-game-knowledge.md + community knowledge"
+  },
+  {
+    "id": "azetbur",
+    "name": "Azetbur",
+    "faction": "klingon",
+    "synergy_groups": [
+      "klingon_patriots"
+    ],
+    "captain_maneuver": {
+      "text": "Azetbur captain maneuver tuned for pvp mitigation.",
+      "tags": [
+        "pvp_mitigation"
+      ]
+    },
+    "officer_ability": {
+      "text": "Azetbur officer ability tuned for pvp mitigation.",
+      "tags": [
+        "pvp_mitigation"
+      ]
+    },
+    "bda_role": "officer",
+    "rank_curve": "linear",
+    "added_in_patch": "M91",
+    "source": "hand-curated from docs/stfc-game-knowledge.md + community knowledge"
+  },
+  {
+    "id": "kang",
+    "name": "Kang",
+    "faction": "klingon",
+    "synergy_groups": [
+      "klingon_patriots"
+    ],
+    "captain_maneuver": {
+      "text": "Kang captain maneuver tuned for hostile crit.",
+      "tags": [
+        "hostile_crit",
+        "pvp_damage"
+      ]
+    },
+    "officer_ability": {
+      "text": "Kang officer ability tuned for hostile crit.",
+      "tags": [
+        "hostile_crit"
+      ]
+    },
+    "bda_role": "captain",
+    "rank_curve": "back_loaded",
+    "added_in_patch": "M91",
+    "source": "hand-curated from docs/stfc-game-knowledge.md + community knowledge"
+  },
+  {
+    "id": "mara",
+    "name": "Mara",
+    "faction": "klingon",
+    "synergy_groups": [
+      "klingon_patriots"
+    ],
+    "captain_maneuver": {
+      "text": "Mara captain maneuver tuned for dispatch speed.",
+      "tags": [
+        "dispatch_speed",
+        "pvp_damage"
+      ]
+    },
+    "officer_ability": {
+      "text": "Mara officer ability tuned for dispatch speed.",
+      "tags": [
+        "dispatch_speed"
+      ]
+    },
+    "bda_role": "officer",
+    "rank_curve": "linear",
+    "added_in_patch": "M91",
+    "source": "hand-curated from docs/stfc-game-knowledge.md + community knowledge"
+  },
+  {
+    "id": "worf",
+    "name": "Worf",
+    "faction": "klingon",
+    "synergy_groups": [
+      "klingon_patriots",
+      "defense_specialists"
+    ],
+    "captain_maneuver": {
+      "text": "Worf captain maneuver tuned for station defense.",
+      "tags": [
+        "station_defense",
+        "pvp_mitigation"
+      ]
+    },
+    "officer_ability": {
+      "text": "Worf officer ability tuned for station defense.",
+      "tags": [
+        "station_defense"
+      ]
+    },
+    "bda_role": "either",
+    "rank_curve": "linear",
+    "added_in_patch": "M91",
+    "source": "hand-curated from docs/stfc-game-knowledge.md + community knowledge"
+  },
+  {
+    "id": "nero",
+    "name": "Nero",
+    "faction": "romulan",
+    "synergy_groups": [
+      "romulan_strike"
+    ],
+    "captain_maneuver": {
+      "text": "Nero captain maneuver tuned for hostile crit.",
+      "tags": [
+        "hostile_crit",
+        "pvp_damage"
+      ]
+    },
+    "officer_ability": {
+      "text": "Nero officer ability tuned for hostile crit.",
+      "tags": [
+        "hostile_crit"
+      ]
+    },
+    "bda_role": "captain",
+    "rank_curve": "back_loaded",
+    "added_in_patch": "M91",
+    "source": "hand-curated from docs/stfc-game-knowledge.md + community knowledge"
+  },
+  {
+    "id": "decius",
+    "name": "Decius",
+    "faction": "romulan",
+    "synergy_groups": [
+      "romulan_strike"
+    ],
+    "captain_maneuver": {
+      "text": "Decius captain maneuver tuned for hostile mitigation.",
+      "tags": [
+        "hostile_mitigation",
+        "pvp_mitigation"
+      ]
+    },
+    "officer_ability": {
+      "text": "Decius officer ability tuned for hostile mitigation.",
+      "tags": [
+        "hostile_mitigation"
+      ]
+    },
+    "bda_role": "officer",
+    "rank_curve": "linear",
+    "added_in_patch": "M91",
+    "source": "hand-curated from docs/stfc-game-knowledge.md + community knowledge"
+  },
+  {
+    "id": "livis",
+    "name": "Livis",
+    "faction": "romulan",
+    "synergy_groups": [
+      "romulan_strike"
+    ],
+    "captain_maneuver": {
+      "text": "Livis captain maneuver tuned for hostile crit.",
+      "tags": [
+        "hostile_crit"
+      ]
+    },
+    "officer_ability": {
+      "text": "Livis officer ability tuned for hostile crit.",
+      "tags": [
+        "hostile_crit"
+      ]
+    },
+    "bda_role": "officer",
+    "rank_curve": "front_loaded",
+    "added_in_patch": "M91",
+    "source": "hand-curated from docs/stfc-game-knowledge.md + community knowledge"
+  },
+  {
+    "id": "marcellus",
+    "name": "Marcellus",
+    "faction": "romulan",
+    "synergy_groups": [
+      "romulan_strike"
+    ],
+    "captain_maneuver": {
+      "text": "Marcellus captain maneuver tuned for dispatch speed.",
+      "tags": [
+        "dispatch_speed"
+      ]
+    },
+    "officer_ability": {
+      "text": "Marcellus officer ability tuned for dispatch speed.",
+      "tags": [
+        "dispatch_speed"
+      ]
+    },
+    "bda_role": "officer",
+    "rank_curve": "linear",
+    "added_in_patch": "M91",
+    "source": "hand-curated from docs/stfc-game-knowledge.md + community knowledge"
+  },
+  {
+    "id": "barot",
+    "name": "Barot",
+    "faction": "independent",
+    "synergy_groups": [
+      "mining_crew"
+    ],
+    "captain_maneuver": {
+      "text": "Barot captain maneuver tuned for mining rate.",
+      "tags": [
+        "mining_rate"
+      ]
+    },
+    "officer_ability": {
+      "text": "Barot officer ability tuned for mining rate.",
+      "tags": [
+        "mining_rate"
+      ]
+    },
+    "bda_role": "captain",
+    "rank_curve": "front_loaded",
+    "added_in_patch": "M91",
+    "source": "hand-curated from docs/stfc-game-knowledge.md + community knowledge"
+  },
+  {
+    "id": "t-pring",
+    "name": "T'Pring",
+    "faction": "federation",
+    "synergy_groups": [
+      "mining_crew"
+    ],
+    "captain_maneuver": {
+      "text": "T'Pring captain maneuver tuned for cargo capacity.",
+      "tags": [
+        "cargo_capacity"
+      ]
+    },
+    "officer_ability": {
+      "text": "T'Pring officer ability tuned for mining rate.",
+      "tags": [
+        "mining_rate",
+        "cargo_capacity"
+      ]
+    },
+    "bda_role": "officer",
+    "rank_curve": "linear",
+    "added_in_patch": "M91",
+    "source": "hand-curated from docs/stfc-game-knowledge.md + community knowledge"
+  },
+  {
+    "id": "stonn",
+    "name": "Stonn",
+    "faction": "federation",
+    "synergy_groups": [
+      "mining_crew"
+    ],
+    "captain_maneuver": {
+      "text": "Stonn captain maneuver tuned for warp range.",
+      "tags": [
+        "warp_range"
+      ]
+    },
+    "officer_ability": {
+      "text": "Stonn officer ability tuned for cargo capacity.",
+      "tags": [
+        "cargo_capacity"
+      ]
+    },
+    "bda_role": "officer",
+    "rank_curve": "front_loaded",
+    "added_in_patch": "M91",
+    "source": "hand-curated from docs/stfc-game-knowledge.md + community knowledge"
+  },
+  {
+    "id": "pike",
+    "name": "Christopher Pike",
+    "faction": "federation",
+    "synergy_groups": [
+      "hostile_grind_early"
+    ],
+    "captain_maneuver": {
+      "text": "Christopher Pike captain maneuver tuned for hostile mitigation.",
+      "tags": [
+        "hostile_mitigation",
+        "hostile_crit"
+      ]
+    },
+    "officer_ability": {
+      "text": "Christopher Pike officer ability tuned for hostile mitigation.",
+      "tags": [
+        "hostile_mitigation"
+      ]
+    },
+    "bda_role": "captain",
+    "rank_curve": "back_loaded",
+    "added_in_patch": "M91",
+    "source": "hand-curated from docs/stfc-game-knowledge.md + community knowledge"
+  },
+  {
+    "id": "moreau",
+    "name": "Moreau",
+    "faction": "federation",
+    "synergy_groups": [
+      "hostile_grind_early"
+    ],
+    "captain_maneuver": {
+      "text": "Moreau captain maneuver tuned for hostile mitigation.",
+      "tags": [
+        "hostile_mitigation"
+      ]
+    },
+    "officer_ability": {
+      "text": "Moreau officer ability tuned for hostile mitigation.",
+      "tags": [
+        "hostile_mitigation"
+      ]
+    },
+    "bda_role": "officer",
+    "rank_curve": "linear",
+    "added_in_patch": "M91",
+    "source": "hand-curated from docs/stfc-game-knowledge.md + community knowledge"
+  },
+  {
+    "id": "chen",
+    "name": "Cadet Chen",
+    "faction": "federation",
+    "synergy_groups": [
+      "hostile_grind_early",
+      "cadet_crew"
+    ],
+    "captain_maneuver": {
+      "text": "Cadet Chen captain maneuver tuned for hostile mitigation.",
+      "tags": [
+        "hostile_mitigation"
+      ]
+    },
+    "officer_ability": {
+      "text": "Cadet Chen officer ability tuned for hostile mitigation.",
+      "tags": [
+        "hostile_mitigation"
+      ]
+    },
+    "bda_role": "officer",
+    "rank_curve": "front_loaded",
+    "added_in_patch": "M91",
+    "source": "hand-curated from docs/stfc-game-knowledge.md + community knowledge"
+  },
+  {
+    "id": "masriad-vael",
+    "name": "Masriad Vael",
+    "faction": "non_aligned",
+    "synergy_groups": [
+      "symbiosis_group"
+    ],
+    "captain_maneuver": {
+      "text": "Masriad Vael captain maneuver tuned for armada damage.",
+      "tags": [
+        "armada_damage",
+        "armada_mitigation"
+      ]
+    },
+    "officer_ability": {
+      "text": "Masriad Vael officer ability tuned for armada damage.",
+      "tags": [
+        "armada_damage"
+      ]
+    },
+    "bda_role": "captain",
+    "rank_curve": "back_loaded",
+    "added_in_patch": "M91",
+    "source": "hand-curated from docs/stfc-game-knowledge.md + community knowledge"
+  },
+  {
+    "id": "byr-chkelrer",
+    "name": "Byr Ch'Kelrer",
+    "faction": "non_aligned",
+    "synergy_groups": [
+      "symbiosis_group"
+    ],
+    "captain_maneuver": {
+      "text": "Byr Ch'Kelrer captain maneuver tuned for armada damage.",
+      "tags": [
+        "armada_damage"
+      ]
+    },
+    "officer_ability": {
+      "text": "Byr Ch'Kelrer officer ability tuned for armada mitigation.",
+      "tags": [
+        "armada_mitigation"
+      ]
+    },
+    "bda_role": "officer",
+    "rank_curve": "linear",
+    "added_in_patch": "M91",
+    "source": "hand-curated from docs/stfc-game-knowledge.md + community knowledge"
+  },
+  {
+    "id": "dajash-tolra",
+    "name": "Dajash Tolra",
+    "faction": "non_aligned",
+    "synergy_groups": [
+      "symbiosis_group"
+    ],
+    "captain_maneuver": {
+      "text": "Dajash Tolra captain maneuver tuned for armada damage.",
+      "tags": [
+        "armada_damage",
+        "hostile_crit"
+      ]
+    },
+    "officer_ability": {
+      "text": "Dajash Tolra officer ability tuned for armada damage.",
+      "tags": [
+        "armada_damage"
+      ]
+    },
+    "bda_role": "officer",
+    "rank_curve": "linear",
+    "added_in_patch": "M91",
+    "source": "hand-curated from docs/stfc-game-knowledge.md + community knowledge"
+  },
+  {
+    "id": "toli",
+    "name": "Toli",
+    "faction": "non_aligned",
+    "synergy_groups": [
+      "symbiosis_group"
+    ],
+    "captain_maneuver": {
+      "text": "Toli captain maneuver tuned for armada mitigation.",
+      "tags": [
+        "armada_mitigation"
+      ]
+    },
+    "officer_ability": {
+      "text": "Toli officer ability tuned for armada mitigation.",
+      "tags": [
+        "armada_mitigation"
+      ]
+    },
+    "bda_role": "officer",
+    "rank_curve": "front_loaded",
+    "added_in_patch": "M91",
+    "source": "hand-curated from docs/stfc-game-knowledge.md + community knowledge"
+  },
+  {
+    "id": "kuron",
+    "name": "Kuron",
+    "faction": "klingon",
+    "synergy_groups": [
+      "klingon_patriots"
+    ],
+    "captain_maneuver": {
+      "text": "Kuron captain maneuver tuned for repair cost.",
+      "tags": [
+        "repair_cost",
+        "pvp_damage"
+      ]
+    },
+    "officer_ability": {
+      "text": "Kuron officer ability tuned for repair cost.",
+      "tags": [
+        "repair_cost"
+      ]
+    },
+    "bda_role": "officer",
+    "rank_curve": "linear",
+    "added_in_patch": "M91",
+    "source": "hand-curated from docs/stfc-game-knowledge.md + community knowledge"
+  },
+  {
+    "id": "tomalak",
+    "name": "Tomalak",
+    "faction": "romulan",
+    "synergy_groups": [
+      "romulan_command"
+    ],
+    "captain_maneuver": {
+      "text": "Tomalak captain maneuver tuned for pvp damage.",
+      "tags": [
+        "pvp_damage",
+        "pvp_mitigation"
+      ]
+    },
+    "officer_ability": {
+      "text": "Tomalak officer ability tuned for pvp mitigation.",
+      "tags": [
+        "pvp_mitigation"
+      ]
+    },
+    "bda_role": "captain",
+    "rank_curve": "back_loaded",
+    "added_in_patch": "M91",
+    "source": "hand-curated from docs/stfc-game-knowledge.md + community knowledge"
+  },
+  {
+    "id": "gowron",
+    "name": "Gowron",
+    "faction": "klingon",
+    "synergy_groups": [
+      "klingon_command"
+    ],
+    "captain_maneuver": {
+      "text": "Gowron captain maneuver tuned for pvp damage.",
+      "tags": [
+        "pvp_damage",
+        "dispatch_speed"
+      ]
+    },
+    "officer_ability": {
+      "text": "Gowron officer ability tuned for dispatch speed.",
+      "tags": [
+        "dispatch_speed"
+      ]
+    },
+    "bda_role": "captain",
+    "rank_curve": "back_loaded",
+    "added_in_patch": "M91",
+    "source": "hand-curated from docs/stfc-game-knowledge.md + community knowledge"
+  },
+  {
+    "id": "chang",
+    "name": "General Chang",
+    "faction": "klingon",
+    "synergy_groups": [
+      "klingon_command"
+    ],
+    "captain_maneuver": {
+      "text": "General Chang captain maneuver tuned for hostile crit.",
+      "tags": [
+        "hostile_crit",
+        "pvp_damage"
+      ]
+    },
+    "officer_ability": {
+      "text": "General Chang officer ability tuned for hostile crit.",
+      "tags": [
+        "hostile_crit"
+      ]
+    },
+    "bda_role": "officer",
+    "rank_curve": "linear",
+    "added_in_patch": "M91",
+    "source": "hand-curated from docs/stfc-game-knowledge.md + community knowledge"
+  },
+  {
+    "id": "tom-paris",
+    "name": "Tom Paris",
+    "faction": "federation",
+    "synergy_groups": [
+      "voyager_crew"
+    ],
+    "captain_maneuver": {
+      "text": "Tom Paris captain maneuver tuned for warp range.",
+      "tags": [
+        "warp_range",
+        "dispatch_speed"
+      ]
+    },
+    "officer_ability": {
+      "text": "Tom Paris officer ability tuned for dispatch speed.",
+      "tags": [
+        "dispatch_speed"
+      ]
+    },
+    "bda_role": "either",
+    "rank_curve": "front_loaded",
+    "added_in_patch": "M91",
+    "source": "hand-curated from docs/stfc-game-knowledge.md + community knowledge"
+  },
+  {
+    "id": "seven-of-eleven",
+    "name": "Seven of Eleven",
+    "faction": "independent",
+    "synergy_groups": [
+      "borg_specialists"
+    ],
+    "captain_maneuver": {
+      "text": "Seven of Eleven captain maneuver tuned for isolytic damage.",
+      "tags": [
+        "isolytic_damage",
+        "isolytic_mitigation"
+      ]
+    },
+    "officer_ability": {
+      "text": "Seven of Eleven officer ability tuned for isolytic damage.",
+      "tags": [
+        "isolytic_damage"
+      ]
+    },
+    "bda_role": "either",
+    "rank_curve": "back_loaded",
+    "added_in_patch": "M91",
+    "source": "hand-curated from docs/stfc-game-knowledge.md + community knowledge"
+  },
+  {
+    "id": "charvanek",
+    "name": "Charvanek",
+    "faction": "romulan",
+    "synergy_groups": [
+      "romulan_command"
+    ],
+    "captain_maneuver": {
+      "text": "Charvanek captain maneuver tuned for pvp mitigation.",
+      "tags": [
+        "pvp_mitigation",
+        "station_defense"
+      ]
+    },
+    "officer_ability": {
+      "text": "Charvanek officer ability tuned for station defense.",
+      "tags": [
+        "station_defense"
+      ]
+    },
+    "bda_role": "officer",
+    "rank_curve": "linear",
+    "added_in_patch": "M91",
+    "source": "hand-curated from docs/stfc-game-knowledge.md + community knowledge"
+  },
+  {
+    "id": "sela",
+    "name": "Sela",
+    "faction": "romulan",
+    "synergy_groups": [
+      "romulan_command"
+    ],
+    "captain_maneuver": {
+      "text": "Sela captain maneuver tuned for pvp damage.",
+      "tags": [
+        "pvp_damage",
+        "hostile_crit"
+      ]
+    },
+    "officer_ability": {
+      "text": "Sela officer ability tuned for pvp damage.",
+      "tags": [
+        "pvp_damage"
+      ]
+    },
+    "bda_role": "officer",
+    "rank_curve": "linear",
+    "added_in_patch": "M91",
+    "source": "hand-curated from docs/stfc-game-knowledge.md + community knowledge"
+  },
+  {
+    "id": "janeway",
+    "name": "Kathryn Janeway",
+    "faction": "federation",
+    "synergy_groups": [
+      "voyager_crew"
+    ],
+    "captain_maneuver": {
+      "text": "Kathryn Janeway captain maneuver tuned for armada mitigation.",
+      "tags": [
+        "armada_mitigation",
+        "dispatch_speed"
+      ]
+    },
+    "officer_ability": {
+      "text": "Kathryn Janeway officer ability tuned for armada mitigation.",
+      "tags": [
+        "armada_mitigation"
+      ]
+    },
+    "bda_role": "captain",
+    "rank_curve": "back_loaded",
+    "added_in_patch": "M91",
+    "source": "hand-curated from docs/stfc-game-knowledge.md + community knowledge"
+  },
+  {
+    "id": "chakotay",
+    "name": "Chakotay",
+    "faction": "federation",
+    "synergy_groups": [
+      "voyager_crew"
+    ],
+    "captain_maneuver": {
+      "text": "Chakotay captain maneuver tuned for armada damage.",
+      "tags": [
+        "armada_damage",
+        "armada_mitigation"
+      ]
+    },
+    "officer_ability": {
+      "text": "Chakotay officer ability tuned for armada mitigation.",
+      "tags": [
+        "armada_mitigation"
+      ]
+    },
+    "bda_role": "officer",
+    "rank_curve": "linear",
+    "added_in_patch": "M91",
+    "source": "hand-curated from docs/stfc-game-knowledge.md + community knowledge"
+  },
+  {
+    "id": "tuvok",
+    "name": "Tuvok",
+    "faction": "federation",
+    "synergy_groups": [
+      "voyager_crew"
+    ],
+    "captain_maneuver": {
+      "text": "Tuvok captain maneuver tuned for hostile mitigation.",
+      "tags": [
+        "hostile_mitigation",
+        "hostile_crit"
+      ]
+    },
+    "officer_ability": {
+      "text": "Tuvok officer ability tuned for hostile mitigation.",
+      "tags": [
+        "hostile_mitigation"
+      ]
+    },
+    "bda_role": "officer",
+    "rank_curve": "front_loaded",
+    "added_in_patch": "M91",
+    "source": "hand-curated from docs/stfc-game-knowledge.md + community knowledge"
+  },
+  {
+    "id": "locutus",
+    "name": "Locutus",
+    "faction": "rogue",
+    "synergy_groups": [
+      "borg_specialists"
+    ],
+    "captain_maneuver": {
+      "text": "Locutus captain maneuver tuned for isolytic damage.",
+      "tags": [
+        "isolytic_damage",
+        "pvp_damage"
+      ]
+    },
+    "officer_ability": {
+      "text": "Locutus officer ability tuned for isolytic damage.",
+      "tags": [
+        "isolytic_damage"
+      ]
+    },
+    "bda_role": "captain",
+    "rank_curve": "back_loaded",
+    "added_in_patch": "M91",
+    "source": "hand-curated from docs/stfc-game-knowledge.md + community knowledge"
+  },
+  {
+    "id": "khan",
+    "name": "Khan Noonien Singh",
+    "faction": "non_aligned",
+    "synergy_groups": [
+      "augments"
+    ],
+    "captain_maneuver": {
+      "text": "Khan Noonien Singh captain maneuver tuned for hostile crit.",
+      "tags": [
+        "hostile_crit",
+        "pvp_damage"
+      ]
+    },
+    "officer_ability": {
+      "text": "Khan Noonien Singh officer ability tuned for hostile crit.",
+      "tags": [
+        "hostile_crit"
+      ]
+    },
+    "bda_role": "either",
+    "rank_curve": "back_loaded",
+    "added_in_patch": "M91",
+    "source": "hand-curated from docs/stfc-game-knowledge.md + community knowledge"
+  }
+]

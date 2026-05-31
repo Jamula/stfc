@@ -1,0 +1,19 @@
+id: station-defense
+name: Station Defense
+description: Defensive bridge setup for base defense and raid deterrence.
+slots:
+  captain:
+    bda_role: captain
+  officer_a:
+    bda_role: officer
+  officer_b:
+    bda_role: officer
+tag_weights:
+  station_defense: 10
+  pvp_mitigation: 6
+  repair_cost: 2
+synergy_bonus: 3
+constraints:
+  exclude_officers: []
+notes: |
+  Optimizes for staying power and repair efficiency during repeated hits.

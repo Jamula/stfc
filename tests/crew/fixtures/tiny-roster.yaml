@@ -1,0 +1,15 @@
+account: tiny
+last_updated: 2026-05-31T20:25:00Z
+officers:
+  - id: kirk
+    owned: true
+    level: 60
+    rank: 4
+    promotions: 3
+  - id: chen
+    owned: true
+    level: 28
+    rank: 2
+    promotions: 1
+  - id: spock
+    owned: false

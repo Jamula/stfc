@@ -1,0 +1,19 @@
+id: hostile-grind
+name: Hostile Grinding
+description: Sustained hostile farming with mitigation and crit pressure.
+slots:
+  captain:
+    bda_role: captain
+  officer_a:
+    bda_role: officer
+  officer_b:
+    bda_role: officer
+tag_weights:
+  hostile_mitigation: 8
+  hostile_crit: 6
+  pvp_mitigation: 1
+synergy_bonus: 4
+constraints:
+  exclude_officers: []
+notes: |
+  Prioritizes survivability first, then hostile clear speed.

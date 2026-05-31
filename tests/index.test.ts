@@ -50,3 +50,8 @@ import "./telemetry/collector.test.ts";
 import "./telemetry/reporter.test.ts";
 import "./telemetry/recommender.test.ts";
 import "./skills/telemetry.test.ts";
+import "./crew/schemas.test.ts";
+import "./crew/database.test.ts";
+import "./crew/roster.test.ts";
+import "./crew/tasks.test.ts";
+import "./crew/realdata.test.ts";
