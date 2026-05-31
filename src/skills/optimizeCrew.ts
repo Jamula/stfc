@@ -107,7 +107,7 @@ export async function optimizeCrew(options: OptimizeCrewOptions = {}): Promise<S
   const results: AccountResult[] = [];
 
   for (const accountFile of accounts) {
-    const docPath = path.join(docsDir, `${accountFile.account}.md`);
+    const docPath = path.join(docsDir, `${accountFile.account}-optimize.md`);
     try {
       const roster = await loadRoster(accountFile.filePath);
       const staleness = evaluateStaleness(roster, now());
@@ -235,7 +235,7 @@ async function maybeWriteDoc(args: {
   const markdownBody = renderAccountMarkdown(args.taskId, args.top, args.accountResult);
   args.accountResult.docWrite = await writeCrewDocIfChanged({
     docsDir: args.docsDir,
-    account: args.account,
+    account: `${args.account}-optimize`,
     inputHash,
     markdownBody,
   });

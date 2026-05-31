@@ -79,7 +79,7 @@ export async function progression(options: ProgressionOptions = {}): Promise<Ski
 
   const results: AccountProgressionResult[] = [];
   for (const accountFile of accounts) {
-    const docPath = path.join(docsDir, `${accountFile.account}.md`);
+    const docPath = path.join(docsDir, `${accountFile.account}-progression.md`);
     try {
       const roster = await loadRoster(accountFile.filePath);
       const staleness = evaluateStaleness(roster, now());
@@ -190,7 +190,7 @@ async function maybeWriteDoc(args: {
   const markdownBody = renderAccountMarkdown(args.accountResult);
   args.accountResult.docWrite = await writeCrewDocIfChanged({
     docsDir: args.docsDir,
-    account: args.account,
+    account: `${args.account}-progression`,
     inputHash,
     markdownBody,
   });

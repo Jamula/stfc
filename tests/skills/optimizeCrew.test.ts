@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { promises as fs } from "node:fs";
 import * as path from "node:path";
 import { optimizeCrew } from "../../src/skills/optimizeCrew.ts";
+import { progression } from "../../src/skills/progression.ts";
 
 interface BufferingWriter {
   out: string[];
@@ -350,7 +351,7 @@ describe("skill:optimize-crew", () => {
       now: () => FIXED_NOW,
     });
 
-    const docPath = path.join(docsDir, "alpha.md");
+    const docPath = path.join(docsDir, "alpha-optimize.md");
     const first = await fs.readFile(docPath, "utf8");
     assert.match(first, /^<!-- input-hash: [a-f0-9]{64} -->/);
 
@@ -397,7 +398,7 @@ describe("skill:optimize-crew", () => {
 
   it("rewrites legacy docs without an input-hash header", async () => {
     await fs.mkdir(docsDir, { recursive: true });
-    const docPath = path.join(docsDir, "alpha.md");
+    const docPath = path.join(docsDir, "alpha-optimize.md");
     await fs.writeFile(docPath, "# legacy\n", "utf8");
 
     await optimizeCrew({
@@ -413,5 +414,38 @@ describe("skill:optimize-crew", () => {
     const content = await fs.readFile(docPath, "utf8");
     assert.match(content, /^<!-- input-hash: [a-f0-9]{64} -->/);
     assert.match(content, /## optimize-crew/);
+  });
+
+  it("writes an optimize doc without suppressing the progression doc", async () => {
+    await optimizeCrew({
+      argv: ["--task", "mining-g3", "--account", "alpha"],
+      rosterDir,
+      taskDir,
+      docsDir,
+      officerDatabasePath: officersPath,
+      writer: makeWriter(),
+      now: () => FIXED_NOW,
+    });
+
+    await progression({
+      argv: ["--account", "alpha"],
+      rosterDir,
+      taskDir,
+      docsDir,
+      officerDatabasePath: officersPath,
+      writer: makeWriter(),
+      now: () => FIXED_NOW,
+    });
+
+    const optimizeDocPath = path.join(docsDir, "alpha-optimize.md");
+    const progressionDocPath = path.join(docsDir, "alpha-progression.md");
+    const optimizeDoc = await fs.readFile(optimizeDocPath, "utf8");
+    const progressionDoc = await fs.readFile(progressionDocPath, "utf8");
+
+    assert.match(optimizeDoc, /^<!-- input-hash: [a-f0-9]{64} -->/);
+    assert.match(optimizeDoc, /## optimize-crew/);
+    assert.match(progressionDoc, /^<!-- input-hash: [a-f0-9]{64} -->/);
+    assert.match(progressionDoc, /## progression/);
+    await assert.rejects(fs.access(path.join(docsDir, "alpha.md")));
   });
 });

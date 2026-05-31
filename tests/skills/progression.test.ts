@@ -238,7 +238,7 @@ describe("skill:progression", () => {
   });
 
   it("writes docs only when the computed input hash changes", async () => {
-    const docPath = path.join(docsDir, "alpha.md");
+    const docPath = path.join(docsDir, "alpha-progression.md");
     await progression({
       argv: ["--account", "alpha"],
       rosterDir,
