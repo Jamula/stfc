@@ -1,7 +1,13 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import * as path from "node:path";
+import { formatUnknownOfficerError, loadOfficerDatabase } from "../../src/crew/database.ts";
 import { analyzeProgression } from "../../src/crew/progression.ts";
+import { loadRoster } from "../../src/crew/roster.ts";
 import type { Officer, Roster } from "../../src/crew/schemas.ts";
+
+const tinyOfficersPath = path.join(process.cwd(), "tests/crew/fixtures/tiny-officers.json");
+const tinyRosterPath = path.join(process.cwd(), "tests/crew/fixtures/tiny.yaml");
 
 function officer(
   id: string,
@@ -24,6 +30,29 @@ function officer(
 }
 
 describe("crew progression", () => {
+  it("throws the canonical unknown-officer error for owned and unowned roster entries", async () => {
+    const database = await loadOfficerDatabase(tinyOfficersPath);
+    const baseRoster = await loadRoster(tinyRosterPath);
+    const unknown = "definitely-not-real";
+    const rosters: Roster[] = [
+      {
+        ...baseRoster,
+        officers: [...baseRoster.officers, { id: unknown, owned: false }],
+      },
+      {
+        ...baseRoster,
+        officers: [...baseRoster.officers, { id: unknown, owned: true, level: 1, rank: 1, promotions: 0 }],
+      },
+    ];
+
+    for (const roster of rosters) {
+      assert.throws(
+        () => analyzeProgression({ database, roster }),
+        (err: unknown) => err instanceof Error && err.message === formatUnknownOfficerError(unknown),
+      );
+    }
+  });
+
   it("detects high-value missing officers", () => {
     const officers = [
       officer("miner", ["mining_rate", "cargo_capacity"], [], ["mining_set"]),

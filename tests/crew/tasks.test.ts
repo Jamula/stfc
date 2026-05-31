@@ -31,8 +31,11 @@ function validTaskYaml(overrides: string[] = []): string {
 describe("crew tasks", () => {
   it("loads all task definitions from a directory", async () => {
     const tasks = await loadTaskDefinitions(tinyTaskDir);
-    assert.equal(tasks.length, 1);
-    assert.equal(tasks[0]?.id, "mining-g3");
+    assert.equal(tasks.length, 4);
+    assert.deepEqual(
+      tasks.map((task) => task.id),
+      ["armada-25", "hostile-grind", "mining-g3", "station-defense"],
+    );
   });
 
   it("loads a single task by id", async () => {

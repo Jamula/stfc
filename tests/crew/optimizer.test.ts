@@ -1,8 +1,8 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import * as path from "node:path";
-import { loadOfficerDatabase } from "../../src/crew/database.ts";
-import { optimizeCrew, type OptimizerTaskInput } from "../../src/crew/optimizer.ts";
+import { formatUnknownOfficerError, loadOfficerDatabase, type OfficerDatabase } from "../../src/crew/database.ts";
+import { optimizeCrew, type OptimizedCrew, type OptimizerTaskInput } from "../../src/crew/optimizer.ts";
 import { loadRoster } from "../../src/crew/roster.ts";
 import { loadTask } from "../../src/crew/tasks.ts";
 import type { Officer, Roster } from "../../src/crew/schemas.ts";
@@ -19,6 +19,42 @@ function withOwned(roster: Roster, id: string, level = 40, rank = 3, promotions 
       return { id, owned: true, level, rank, promotions };
     }),
   };
+}
+
+function crewMemberIds(crew: OptimizedCrew): string[] {
+  return [crew.crew.captain, ...crew.crew.bridge, ...crew.crew.below_deck].filter((id): id is string => Boolean(id));
+}
+
+function assertSlotLegal(database: OfficerDatabase, crew: OptimizedCrew): void {
+  if (crew.crew.captain) {
+    assert.match(database.getOfficerById(crew.crew.captain).bda_role, /^(captain|either)$/);
+  }
+
+  for (const id of crew.crew.bridge) {
+    assert.match(database.getOfficerById(id).bda_role, /^(officer|either)$/);
+    assert.notEqual(id, crew.crew.captain);
+  }
+
+  const ids = crewMemberIds(crew);
+  assert.equal(new Set(ids).size, ids.length);
+  const requiredTotal =
+    crew.completeness.requiredSlots.captain + crew.completeness.requiredSlots.bridge + crew.completeness.requiredSlots.below_deck;
+  assert.equal(ids.length, requiredTotal);
+}
+
+async function assertTinyTaskOptimization(taskId: string, expectedScore: number): Promise<void> {
+  const database = await loadOfficerDatabase(tinyOfficersPath);
+  const roster = withOwned(await loadRoster(tinyRosterPath), "spock", 45, 3, 2);
+  const task = await loadTask(taskId, tinyTaskDir);
+
+  const runA = optimizeCrew({ database, roster, task, top: 1 });
+  const runB = optimizeCrew({ database, roster, task, top: 1 });
+
+  assert.deepEqual(runA, runB);
+  assert.equal(JSON.stringify(runA), JSON.stringify(runB));
+  assert.equal(runA.ranked_crews.length, 1);
+  assertSlotLegal(database, runA.ranked_crews[0]!);
+  assert.equal(runA.ranked_crews[0]?.score, expectedScore);
 }
 
 function officer(
@@ -42,6 +78,29 @@ function officer(
 }
 
 describe("crew optimizer", () => {
+  it("throws the canonical unknown-officer error before filtering owned officers", async () => {
+    const database = await loadOfficerDatabase(tinyOfficersPath);
+    const baseRoster = await loadRoster(tinyRosterPath);
+    const unknown = "definitely-not-real";
+    const rosters: Roster[] = [
+      {
+        ...baseRoster,
+        officers: [...baseRoster.officers, { id: unknown, owned: false }],
+      },
+      {
+        ...baseRoster,
+        officers: [...baseRoster.officers, { id: unknown, owned: true, level: 1, rank: 1, promotions: 0 }],
+      },
+    ];
+
+    for (const roster of rosters) {
+      assert.throws(
+        () => optimizeCrew({ database, roster, task: { id: "unknown", name: "unknown", tag_weights: {}, synergy_bonus: 1 } }),
+        (err: unknown) => err instanceof Error && err.message === formatUnknownOfficerError(unknown),
+      );
+    }
+  });
+
   it("applies synergy bonus when a full group is present", async () => {
     const database = await loadOfficerDatabase(tinyOfficersPath);
     const baseRoster = await loadRoster(tinyRosterPath);
@@ -166,6 +225,18 @@ describe("crew optimizer", () => {
     assert.deepEqual(first.crew.bridge, []);
     assert.equal(first.completeness.missingSlots.captain, 1);
     assert.equal(first.completeness.missingSlots.bridge, 2);
+  });
+
+  it("optimizes for hostile-grind against tiny world", async () => {
+    await assertTinyTaskOptimization("hostile-grind", 13);
+  });
+
+  it("optimizes for armada-25 against tiny world", async () => {
+    await assertTinyTaskOptimization("armada-25", 6);
+  });
+
+  it("optimizes for station-defense against tiny world", async () => {
+    await assertTinyTaskOptimization("station-defense", 8);
   });
 
   it("matches exact ranked output for tiny fixture mining-g3", async () => {

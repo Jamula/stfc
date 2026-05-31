@@ -1,0 +1,17 @@
+id: station-defense
+name: Tiny Station Defense
+description: Fixture task for station-defense coverage in the tiny world.
+slots:
+  captain:
+    bda_role: captain
+  officer_a:
+    bda_role: officer
+  officer_b:
+    bda_role: officer
+tag_weights:
+  station_defense: 9
+  pvp_mitigation: 4
+synergy_bonus: 4
+constraints:
+  exclude_officers: []
+notes: Fixture-only task definition.

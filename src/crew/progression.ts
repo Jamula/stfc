@@ -1,4 +1,5 @@
 import type { OfficerDatabase } from "./database.ts";
+import { validateRosterOfficerIds } from "./roster.ts";
 import type { Officer, Roster, TagId } from "./schemas.ts";
 
 const TASK_CLASS_TAGS = {
@@ -65,6 +66,7 @@ export function analyzeProgression(input: {
   roster: Roster;
 }): ProgressionAnalysis {
   const { database, roster } = input;
+  validateRosterOfficerIds(roster, database);
   const rosterMap = new Map(roster.officers.map((entry) => [entry.id, entry]));
   const ownedIds = new Set(
     roster.officers.filter((entry): entry is Extract<(typeof roster.officers)[number], { owned: true }> => entry.owned).map(

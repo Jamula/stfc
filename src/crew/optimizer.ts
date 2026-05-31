@@ -1,4 +1,5 @@
 import type { OfficerDatabase } from "./database.ts";
+import { validateRosterOfficerIds } from "./roster.ts";
 import type { Officer, Roster, TaskDefinition, TagId } from "./schemas.ts";
 
 export interface SlotConstraints {
@@ -233,6 +234,7 @@ export function optimizeCrew(input: {
   top?: number;
 }): OptimizeCrewResult {
   const { database, roster } = input;
+  validateRosterOfficerIds(roster, database);
   const task = toTaskInput(input.task);
   const top = Math.max(1, input.top ?? 3);
   const required = resolveSlotConstraints(task);

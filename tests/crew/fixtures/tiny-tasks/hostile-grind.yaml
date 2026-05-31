@@ -1,0 +1,17 @@
+id: hostile-grind
+name: Tiny Hostile Grind
+description: Fixture task for hostile-grinding coverage in the tiny world.
+slots:
+  captain:
+    bda_role: captain
+  officer_a:
+    bda_role: officer
+  officer_b:
+    bda_role: officer
+tag_weights:
+  hostile_mitigation: 8
+  morale_recovery: 2
+synergy_bonus: 3
+constraints:
+  exclude_officers: []
+notes: Fixture-only task definition.
