@@ -258,3 +258,143 @@ Four options evaluated:
 
 **Do NOT pick Options B or C** — blocked and high-risk.
 
+# Decision — Crew Optimizer (issue #77) spec pipeline + v1 scope split
+
+**By:** Picard (M2/EM)
+**Date:** 2026-05-31
+**Issue:** https://github.com/Jamula/stfc/issues/77
+**PR:** https://github.com/Jamula/stfc/pull/97
+**Status:** Active (PR open, reviewer gates pending per #84)
+**Requested by:** cyrusj
+
+## What
+
+Rolled-up speckit pipeline (Phase 0–5) for `specs/004-crew-optimizer/`
+plus the v1 constitution amendment (v1.5.0 → v1.6.0). One PR, one
+`Closes #77`. The 18 implementation issues (#78–#95) on the 19-issue
+board remain authoritative; `speckit.taskstoissues` is explicitly
+skipped for this feature.
+
+## Scope split decision (v1 / v1.5 / v2)
+
+| Phase | Surface | Gate |
+|---|---|---|
+| **v1** | Pure-compute optimizer + progression + `skill:roster` family (5 subcommands) + `optimize-crew.yml` workflow (no cron, group `stfc-crew-optimizer`) | None — ships standalone, fully usable from a developer machine. |
+| **v1.5** | iPhone → Discord → PR loop for roster ingestion via OCR; new `roster-sync.yml`; `cdn.discordapp.com` inbound; new `skill:bootstrap-roster`; new roster-channel allowlist class. | **OCR POC bar** (FR-020): ≥95% field accuracy on 20 real screenshots; ≤2-min per-batch review; ≤500 MB model on CPU `ubuntu-latest`; ≤30s per screenshot; ≤2-min cold start. Fail any → v1.5 dropped and v1 stands alone. |
+| **v2** | Read-only `!crew` Discord commands (10 verbs incl. retrieval-only `!crew knowledge`); embedding pipeline; `knowledge-rebuild.yml`. | Gated on v1 ship. Parallel-stream with v1.5 (both unblock from #84). |
+
+Each subsequent phase carries its own constitution amendment as
+needed (v1.5 = issue #87; v2 = issues #93/#94 cohort). They are
+**separate amendments**, never bundled with v1.
+
+## Roster privacy default — TRACKED-BY-DEFAULT
+
+`data/crew/roster/*.yaml` is committed by default. Operators who want
+private rosters opt out via a one-line `.gitignore` snippet
+documented in `docs/CREW-OPTIMIZER.md` § 6.
+
+**Why:** keeps the optimizer reproducible across operator machines;
+lets the CI workflow regenerate `docs/crew/{account}.md` reliably;
+trivial opt-out for privacy-conscious operators; missing roster
+files are not an error (skip with warning, exit 0 for other
+accounts). The alternative (gitignore-by-default with explicit
+opt-in) would create surprising empty per-account reports in CI for
+first-time operators and force a "first-run helper" into
+`skill:roster`.
+
+Encoded in FR-004, plan §Constitution Check (Principle V), research
+R4, data-model invariants, roster.contract.md, quickstart §6, and
+constitution v1.6.0 Principle V.
+
+## Tag enum locked at v1
+
+15 tags fixed in v1 (FR-002): `mining_rate, hostile_crit,
+hostile_mitigation, armada_damage, armada_mitigation,
+isolytic_damage, isolytic_mitigation, warp_range, cargo_capacity,
+station_defense, pvp_damage, pvp_mitigation, dispatch_speed,
+repair_cost, morale_recovery`.
+
+**Why locked, not grown per task PR:** tag drift between officer
+entries and task definitions silently weakens the scoring function.
+A closed vocabulary keeps scoring deterministic and lets the schema
+validator catch typos at load time. Adding a tag in v1.x is a
+schema-update PR + an officer/task PR; not a constitution
+amendment unless the optimizer's surface expands.
+
+## Other resolved clarify questions
+
+- **Q1 officer DB seeding:** Hand-curate ~30–50 officers from
+  `docs/stfc-game-knowledge.md` section 6 for v1. stfc.space
+  scraping deferred to v1.x with a separate licensing check.
+- **Q4 multi-account aggregation:** Deferred to v2+ unless cheap.
+  v1 ships per-account only.
+- **Q5 `skill:roster` UX:** Subcommand-style (`skill:roster
+  status`, `add`, `promote`, `rankup`, `validate`) matching the
+  existing `src/cli.ts` style.
+
+## Constitution amendment shape
+
+- Version: 1.5.0 → 1.6.0 (MINOR).
+- Principle II + Principle V + Security & Compliance "Third-party
+  action pinning" enumeration changes.
+- No principle removed. No obligation narrowed. No new secrets.
+  No new outbound destinations for v1.
+- SIR header front-loaded with the new amendment block; prior
+  v1.4.0 → v1.5.0 SIR retained verbatim below.
+- Tuvok editorial pass complete (2 surgical grammar fixes; no
+  flagged-for-Picard findings).
+- Rule 1 plan-template re-sync grep verified green — single match
+  at `.specify/templates/plan-template.md:44` (Principle V cell)
+  updated.
+
+## What did NOT happen, and why
+
+- **No `speckit.taskstoissues` run.** The 19-issue board (#77 +
+  #78–#95) is authoritative; `tasks.md` is in-spec consumption
+  only. Re-issuing tasks would double-track the work.
+- **No source code under `src/crew/`.** That's #78 onward
+  (Scotty). This PR is spec + governance only.
+- **No `.github/workflows/optimize-crew.yml`.** That's #82
+  (O'Brien) and carries its own Rule 3 pinning tests.
+- **No v1.5 / v2 constitution amendments.** Filed at issues #87
+  and #93/#94 respectively when those phases unblock.
+- **No additional GitHub issues opened.**
+- **No auto-merge of PR #97.** Reviewer gates (#84) handle merge
+  per the standard reviewer protocol.
+
+## Test plan
+
+- `npm test`: 567/567 pass at every phase boundary commit
+  (pre-commit hook green).
+- Constitution pinning tests
+  (`tests/constitution/discord-ops-carveout.test.ts`) initially
+  failed because the new v1.6.0 SIR mentioned the ops-script path
+  literally — the test reads the FIRST occurrence with a ±1500 char
+  window expecting the carve-out body. Fixed by rephrasing the SIR
+  to reference "Operator-Only One-Shot Ops Scripts" (the principle
+  subsection title) instead of the literal path string. **Pattern
+  worth memorialising:** new SIRs MUST avoid including literal paths
+  that are also pinned by indexOf-style tests, OR the SIR must
+  itself be self-contained against those tests.
+
+## Acceptance criteria coverage (per issue #77 body)
+
+| Criterion | Met by |
+|---|---|
+| `spec.md` with v1/v1.5/v2 scope, hybrid roster, Discord transport, POC bar verbatim, v2 FRs | `specs/004-crew-optimizer/spec.md` |
+| `plan.md` + `research.md` + `data-model.md` + `contracts/` populated | `specs/004-crew-optimizer/{plan,research,data-model}.md` + 4 contracts |
+| `tasks.md` with per-task T### identifiers (not for issue generation) | `specs/004-crew-optimizer/tasks.md` |
+| v1 constitution amendment (durable inputs + sanctioned skills + workflow surface) | `.specify/memory/constitution.md` v1.6.0 |
+| Plan-template re-synced per Rule 1 | `.specify/templates/plan-template.md:44` |
+| `speckit.analyze` passes | Phase 4 commit `004745d` |
+| PR opened with `Closes #77` (one per line) | PR #97 |
+
+## Action items
+
+- [ ] Reviewer gate (#84): Garak hostile fact-check, Kirk technical,
+      Picard governance — APPROVE comments per Rule 9b.
+- [ ] On merge, Scotty picks up #78 (data layer); the spec
+      hand-off note for #78 is inlined in `tasks.md`.
+- [ ] Scribe sweeps `.squad/` artifacts from this worktree on
+      Rule 6 ship-it (this decision file + Picard history append +
+      `.squad/skills/speckit-pipeline-driver/SKILL.md`).
