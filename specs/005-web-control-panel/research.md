@@ -173,7 +173,7 @@ Gemini Flash fallback on 429 is prudent given the modest daily cap.
 
 **Recommendation:** Use GitHub Models (`gpt-4o-mini` as primary, Low
 tier, 150 req/day). Implement 429 → Gemini Flash fallback as v3
-specifies. Store `GITHUB_MODELS_TOKEN` (PAT with `models:read`) as a
+specifies. Store `MODELS_API_TOKEN` (PAT with `models:read`) as a
 SWA Function app setting — separate from `GITHUB_APP_PRIVATE_KEY` to
 keep blast radii distinct. For production scale, opt into paid usage
 via GitHub Models billing.
