@@ -1,0 +1,65 @@
+# Push-on-change crew optimizer.
+#
+# Triggered whenever `data/crew/**` files change (e.g. after a roster
+# export) or manually via workflow_dispatch. Runs both crew skills and
+# commits any updated recommendation files back to the branch.
+#
+# NO schedule: — this workflow is push-on-change only. The skills are
+# pure-compute + small file writes and finish in seconds.
+name: Optimize crew
+
+on:
+  push:
+    paths:
+      - "data/crew/**"
+  workflow_dispatch: {}
+
+permissions:
+  # `write` so the post-run step can commit per-account docs/crew/*.md
+  # files back to the repo using the default GITHUB_TOKEN.
+  contents: write
+
+# Opt into the Node 24 runtime for actions/* internals (default June 2026).
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+# Distinct from stfc-gift-redeemer and discord-monitor — crew optimizer
+# does not share the git-push lock with those workflows.
+concurrency:
+  group: stfc-crew-optimizer
+  cancel-in-progress: false
+
+jobs:
+  optimize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.0
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4.4.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run skill:optimize-crew -- --all
+
+      - run: npm run skill:progression -- --all
+
+      - name: Commit crew recommendations (if changed)
+        if: always()
+        run: |
+          set -euo pipefail
+          if [ -z "$(git status --porcelain docs/crew/)" ]; then
+            echo "No recommendations changed."
+            exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git status --porcelain docs/crew/ | awk '{print $2}' | while read -r f; do
+            git add -- "$f"
+          done
+          git commit -m "chore(crew): regen optimizer recommendations [skip ci]"
+          git pull --rebase origin "$GITHUB_REF_NAME" || true
+          git push origin "HEAD:$GITHUB_REF_NAME"
