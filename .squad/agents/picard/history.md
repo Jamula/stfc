@@ -9,6 +9,44 @@
 
 ---
 
+## 2026-05-31T22:13:00Z — Plan v2: 005-web-control-panel (scope/governance review)
+
+**Verdict:** APPROVE WITH CHANGES. Plan is materially hardened over v1 (good rubber-duck integration), but scope is too aggressive, routing violates a standing decision, the constitution amendment is under-scoped for the surface area being added, and the timing collides with in-flight 004 v2 work that has overlapping infrastructure.
+
+**Top findings (8):**
+
+1. **Cut Phase 7 (chat write tools) entirely; defer Phase 5 (refresh-token via web) and Phase 6 (RAG/chat) to a v2 control panel.** Phase 7's risk-to-reward is poor (a chat-dispatched workflow vs a button click is the same UX win at a much larger attack surface). Phase 5 duplicates working operator flow (`scripts/capture-token.mjs`). Phase 6's RAG pipeline DIRECTLY overlaps 004-crew-optimizer v2 issue #93 ("Knowledge-base embedding pipeline") — two embedders in flight is duplicated infra. Ship Phases 0–4 + a Phase-8-lite (audit + kill-switches scoped to what's shipped) as v1.
+
+2. **Routing violation: workflow edits assigned to Uhura, but Rule (routing.md, 2026-05-18) says O'Brien owns ALL `.github/workflows/*.yml`.** Re-route Phase 3/4/5 workflow extensions (redeem.yml, discord-monitor.yml, refresh-token.yml) and SWA deployment workflow + `staticwebapp.config.json` to O'Brien. CSRF/idempotency middleware is not integration-specific — re-route to Scotty.
+
+3. **Uhura is overloaded (~13 issues); O'Brien is under-loaded (~4 issues).** Re-balance per #2 above. Target: ~7 Uhura, ~9 O'Brien, ~12 Scotty.
+
+4. **Constitution amendment is materially under-scoped.** Phase 0 lists outbound destinations, durable artifacts, and re-sync — but MISSES: (a) GitHub App as a new sanctioned secret + new sanctioned dispatcher of workflows (Principle V, two-writer custody analog); (b) Azure SWA + Functions as a new RUNTIME surface, which is a Principle IV ("Type-Safe Headless TypeScript CLI") carve-out — analogous to the v1.5 ops-script carve-out and needs the same explicit subsection; (c) `correlation_id` as a new workflow-input + run-name + result-artifact obligation (Principle VII or new sub-principle); (d) chat as a new UNTRUSTED-INPUT surface that can influence dispatch — that's a Principle I addendum; (e) explicit "no STFC/Discord secrets ever cross into SWA" assertion. This is a **MAJOR (2.0.0)** amendment, not MINOR. Tuvok should draft.
+
+5. **Speckit-chain shape: bundle the v2.0.0 amendment WITH the speckit pipeline in one PR**, per the 004-crew-optimizer precedent (commit `c6432d9`: "P0–P5 spec pipeline + v1 constitution amendment"). Plan currently treats them as two separate issues in Phase 0 — that risks an amendment shipping that references speckit artifacts not yet in the tree. Also: Phase 0 underspecifies the speckit artifacts. Enumerate `spec.md`, `plan.md`, `research.md`, `data-model.md`, `quickstart.md`, `contracts/`, per the established `004-crew-optimizer/` shape.
+
+6. **43 issues is borderline-overwhelming.** Realistic target is ~25 by batching: Phase 1's frontend shell + /api/data + digests-unignore can be 2 issues, not 6. Phase 3's workflow-extend + result-artifact can be 1. Phase 8's audit + cost + runbook + docs can be 2.
+
+7. **Per-phase reviewer-gate matrix is missing.** Plan only states Phase 0 acceptance (Picard + Garak). Per Rules 9 and 12, EVERY phase touching `src/` needs Kirk + Garak + Picard (+ Bashir if coverage). Add a reviewer-gate column to the per-phase test+doc summary table. Phases 6 and 7 (chat) MUST have Garak adversarial review on prompt-injection corpus as a hard gate — currently mentioned but not gated.
+
+8. **Standing rules: trim from 5 to 2.** Rules 2 (test scope per phase) and 3 (docs on capability change) duplicate constitutional Principles IX and VII respectively — don't duplicate, just reference. Rule 5 (fleet mode + worktrees) is config in `.squad/config.json`, not a rule. Keep Rule 1 (gh-issues-driven) and Rule 4 (rubber-duck on multi-phase plans) — both genuinely new, both belong in `.github/copilot-instructions.md` as Rules 14–15, NOT the constitution. Also: "rubber-duck agent" isn't a roster member. Either name the existing agent (Garak does hostile fact-check; this is adjacent) or onboard the new role explicitly via team.md.
+
+**Priority finding (8):** 004-crew-optimizer v1 is still mid-ship (PR #101 open). I owe POC gate decision on #86 that gates ~8 v1.5 issues. v2 has 4 queued issues including #93 (knowledge embeddings) which COLLIDES with this plan's Phase 6. Recommendation: **sequence Phase 0 (governance) in parallel with finishing 004; defer Phases 1+ until 004 v1 ships and the POC gate clears.** This keeps the speckit pipeline moving without doubling squad load.
+
+**What needs to change before APPROVE upgrades to clean APPROVE:**
+- Cut Phase 7; defer Phases 5 and 6 to a stated future v2.
+- Re-route workflow YAML edits and SWA config to O'Brien.
+- Tuvok drafts the v2.0.0 (MAJOR) amendment covering the five missing items in finding 4.
+- Bundle amendment + speckit pipeline in one PR (Phase 0).
+- Add reviewer-gate matrix per phase; Garak adversarial corpus is a hard gate on chat phases.
+- Trim standing rules to 2 (Rules 14–15 in copilot-instructions.md, not constitution).
+- Batch issues to ~25 total.
+- Sequence: Phase 0 in parallel with 004 wrap; Phases 1+ start after 004 v1 + POC gate.
+
+**Not in my lane (defer to Kirk / Garak):** architecture choice (Lit+Vite vs React), CSRF/idempotency/correlation-id design, SWA-vs-alternative hosting, RAG embedder selection, claims-vs-repo fact-check. Coordinator should route to Kirk and Garak for those.
+
+---
+
 ## 2026-05-31T19:50:00Z — Issue #77: crew-optimizer speckit pipeline + v1 constitution amendment (PR #97)
 
 **Verdict:** SHIPPED to reviewer gate. PR #97 opened with `Closes #77`. Constitution bumped v1.5.0 → v1.6.0 (MINOR).

@@ -106,3 +106,21 @@ Coordinated Phase 1 fan-out (Tuvok constitution v1.5.0, Scotty script, Bashir te
 
 Both PRs required non-Scotty revisions (bootstrap path + validation + fixtures). Bashir pre-push gate caught test coverage; Garak caught correctness gaps. The bootstrap path was missed by pre-push gate but caught at PR review stage — future pre-push gates should include bootstrap assertions. Pattern: lockout-routed PR revisions work, but pre-push gates remain sensitive to new I/O boundary contracts.
 
+
+## 2026-05-31 — PR #103 timestamp-redaction fix (lockout-routed from Uhura)
+
+**Context:** Garak's hostile fact-check re-review of PR #103 caught that Uhura had pasted verbatim CLI output into `docs/CREW-OPTIMIZER.md`, including `generatedAt` ISO-8601 timestamps that are freshly emitted per run. Garak re-ran the CLI and saw a different timestamp — byte-match failed.
+
+**Fix (Option A — docs-only):** Replaced the three literal `generatedAt` timestamp values (lines 38, 253, 300) and three `stalenessDays` values with `"<timestamp>"` and `<N>` placeholders. Added one-line blockquote notes above each example block explaining the substitution. No code changes required.
+
+**Rebase:** Clean — no README conflict despite #102 having just merged. Branch was rebased onto `30fffcf`.
+
+**Commit:** `24abf70` — pushed to `squad/83-operator-docs` (PR #103 unchanged, still OPEN).
+
+**Tests:** 704/704 pass.
+
+## Learnings
+
+- **Verbatim-CLI-output-in-docs must redact volatile fields.** Any doc example that pastes raw CLI JSON must replace fields that change per invocation (`generatedAt`, `stalenessDays`, elapsed timers, process IDs, cache hashes) with labeled placeholders (e.g. `"<timestamp>"`, `<N>`). Add a one-line note above the block: *"Note: `<field>` is replaced with a placeholder; the actual CLI emits a fresh value per run."* This prevents hostile fact-check byte-match failures on fields that are structurally stable but value-volatile. The pattern is: placeholder + note = structurally-identical claim, not byte-identical claim.
+
+**2026-05-31:** First lockout-routed assignment on PR #103 (reviser escalation from Uhura; doc timestamp redaction fix). Completed same-day; Garak approved. (3rd-agent escalation pattern — anti-fragility mechanism activated).

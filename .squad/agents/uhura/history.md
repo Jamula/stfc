@@ -198,3 +198,5 @@ Executed the lockout-routed revision pattern: reviewer-lockout rule barred Scott
 Pushed revision 277f7023 (+53 tests, 650 total). Both Garak and Bashir re-approved same day. Merged as eb2fd9d.
 
 **Pattern insight:** Lockout-routed revision actually accelerated the cycle because Uhura (integrations focus) could see that both Garak's contract violation and Bashir's coverage gaps stemmed from the same root issue: the roster file/account mismatch and lack of real-data validation. Scotty's perspective would have been test-then-revert; Uhura's was fix-the-contract-first. Single revision beat two revision rounds.
+
+**2026-05-31:** Lockout-routed on PR #103 (doc timestamp redaction) — 5th lockout-routed revision on record (anti-fragility signal: ready for structural escalation on next cycle).
