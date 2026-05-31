@@ -7,6 +7,7 @@ inserted at the top**, so the most recent run is always visible first.
 
 | Date (UTC) | Time (UTC) | Account | Gifts claimed |
 | --- | --- | --- | --- |
+| 2026-05-31 | 13:00 | main | 10 Min Free Chest, Holo-Field Amplifiers, UC Event Ticket Gift |
 | 2026-05-31 | 11:21 | main | 10 Min Free Chest |
 | 2026-05-31 | 09:35 | main | 4 Hr Free Chest, Borg Data Link Tier 4, 10 Min Free Chest |
 | 2026-05-31 | 06:27 | main | 10 Min Free Chest, Daily Mission Key Drop |
