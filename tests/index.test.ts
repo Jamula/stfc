@@ -55,3 +55,7 @@ import "./crew/database.test.ts";
 import "./crew/roster.test.ts";
 import "./crew/tasks.test.ts";
 import "./crew/realdata.test.ts";
+import "./crew/optimizer.test.ts";
+import "./crew/progression.test.ts";
+import "./crew/staleness.test.ts";
+import "./crew/diff.test.ts";
