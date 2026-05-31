@@ -407,6 +407,73 @@ The `gh auth refresh --hostname github.com -s security_events` workaround **does
 work** inside Codespaces (the runtime won't let you re-auth the injected token). Don't
 suggest it as a fix; mention only as a diagnostic if needed.
 
+## 14. gh-issues-driven workflow
+
+Every non-trivial task has a tracking issue with the appropriate `squad:{member}` label before work starts. The Coordinator does not start work that lacks an issue.
+
+**Non-trivial** means: anything that produces a commit visible in `git log`, excluding trivial typo fixes in agent histories.
+
+**Required before dispatching any agent:**
+
+```bash
+gh issue list --state open --label "squad:<member>" --limit 5
+# Confirm the issue exists; if not, create it first:
+gh issue create --title "<task>" --label "squad:<member>" --body "<scope>"
+```
+
+## 15. Per-phase test scope
+
+Every phase PR enumerates tests added or updated in its body under a `## Tests` heading.
+
+The underlying test-first obligation is constitutional Principle IX (Test-First Discipline, NON-NEGOTIABLE) — do not duplicate that text here. This rule governs the PR-body disclosure form only.
+
+**Required PR body section:**
+
+```markdown
+## Tests
+
+- Added `tests/foo.test.ts` — covers <scenario>
+- Updated `tests/bar.test.ts` — adds <case> for the new edge case
+```
+
+If no tests were added or modified, state explicitly: *"No test changes — behaviour covered by existing suite (see <test file>)."*
+
+## 16. Per-capability doc updates
+
+Any change that adds a user-facing surface, endpoint, environment variable, secret, or behaviour updates the relevant doc (`README.md`, `docs/*.md`, `specs/<feature>/quickstart.md`) in the same PR.
+
+The underlying hygiene obligation is constitutional Principle VII (Artifact Hygiene) — do not duplicate that text here. This rule governs routing and gate enforcement.
+
+**Gate:** Bashir's pre-push check verifies the docs diff reflects the new capability. Kirk's review is code-only; missing docs scope routes to Tuvok. Garak's hostile fact-check confirms the docs claim matches what the code actually does.
+
+## 17. Rubber-duck multi-phase plans (enforceable)
+
+The Coordinator MUST consult the rubber-duck agent on any plan touching more than one phase or more than one component before exiting plan mode. P0 findings must be incorporated, not deferred.
+
+**Mechanism:** `specs/*/plan.md` files MUST contain the following checkbox (added to `.specify/templates/plan-template.md`) checked before the plan is considered approved:
+
+```markdown
+- [x] Rubber-duck review: <agent_id / findings link>
+```
+
+A CI gate on `specs/*/plan.md` enforces that this checkbox is present and checked. An unchecked or missing checkbox blocks the phase transition.
+
+## 18. Fleet + worktree execution
+
+Implementation work uses fleet-dispatched agents in per-issue worktrees per `.squad/config.json` `"worktrees": true`. The shared-file ownership table (in the feature's `plan.md`) must be consulted before parallel dispatch to avoid merge conflicts.
+
+**Required before parallel agent dispatch:**
+
+```bash
+# Confirm worktrees key in squad config
+jq '.worktrees' .squad/config.json   # must be true
+
+# Check ownership table in plan.md for shared files
+grep -A 20 'ownership\|shared.file\|Shared File' specs/<NNN>-<feature>/plan.md
+```
+
+If two agents own the same file, serialize their work or split the file boundary before dispatch.
+
 ## Project quick reference
 
 - **Tests:** `npm test` (full suite, ~2s, 90+ tests via node:test/tsx).

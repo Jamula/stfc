@@ -51,6 +51,12 @@ lives at `.specify/memory/constitution.md`.
 Re-run this table after Phase 1 design and document any newly introduced
 deviations in Complexity Tracking before continuing.
 
+## Process Compliance
+
+*Required for plans touching more than one phase or more than one component (Rule 17).*
+
+- [ ] Rubber-duck review: <!-- agent_id / findings link — must be checked before plan is approved -->
+
 ## Project Structure
 
 ### Documentation (this feature)
