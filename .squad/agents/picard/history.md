@@ -103,3 +103,4 @@ Each phase's amendment is independent. Filing them as separate PRs (issues #87 v
 
 New skill at `.squad/skills/speckit-pipeline-driver/SKILL.md` codifying the phase-boundary commit pattern + the Phase 4 live-board lookup + the SIR-vs-pinning-test collision avoidance + the dual version footer.
 
+- Phase 0 shipped (PR #111, 988c302..aeef1b5)

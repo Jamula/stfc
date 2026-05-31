@@ -216,3 +216,4 @@ Reviewed PR #97 (v1.6.0 constitution amendment) and PR #98 (data layer) on the s
 **PR #98 (round 2):** Both re-reviews approved. Uhura addressed all 5 findings in single revision (277f7023, +53 tests). Merged as eb2fd9d.
 
 **Lesson:** Strict-mode TypeScript + contract clarity enables reviewers to work in parallel across different concern axes (Kirk: architecture + test strategy; Garak: contract enforcement; Bashir: coverage gaps). All findings ground-truthable against contracts → single-revision fix.
+- Phase 0 shipped (PR #111, aeef1b5)

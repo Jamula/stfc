@@ -132,3 +132,4 @@ Recommended Bashir (test/contract expert) not Scotty (per reviewer-lockout).
 **PR #98 (round 2):** Approved after revision 277f7023. All three findings resolved: file renamed, round-trip canonicalized + tested, real-data exception documented.
 
 **Lesson:** Contract enforcement gates data-layer stability. The three violations were inter-related (filename→account→serialization invariants). Kirk's architecture review missed these because they're not architectural—they're data-contract and test-contract bugs. Garak's role as fact-checker is essential on data-driven features.
+- Phase 0 shipped (PR #111, e5e26e4)

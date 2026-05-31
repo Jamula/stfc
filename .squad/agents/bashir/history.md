@@ -40,3 +40,4 @@ Approved. Merged as eb2fd9d.
 **Test suite result:** 703 pass / 0 fail in 8.96s.
 
 **Lesson:** Shared helper (`writeCrewDocIfChanged`, `parseSelector`, `resolveRosterFiles`) tested through one skill (optimizeCrew) is sufficient when the other skill (progression) already exercises the same code paths via its own integration tests. No gap in coverage despite Gap 9 not having a symmetric test in progression.test.ts.
+- Phase 0 shipped (PR #111)

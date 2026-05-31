@@ -202,3 +202,4 @@ Coordinated Phase 1 fan-out (Tuvok constitution v1.5.0, Scotty script, Bashir te
 
 ---
 
+- Phase 0 shipped (PR #111, 078d01f)
