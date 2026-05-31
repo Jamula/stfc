@@ -744,3 +744,54 @@ Verified: npm run typecheck pass, npm test 669/669 pass.
 4. **Filesystem isolation** — tests and smoke runs use env overrides (`STFC_ROSTER_DIR`, `STFC_OFFICERS_PATH`) for scratch paths only.
 5. **Pre-push SYNC gate by Bashir** — APPROVE ✅ with non-blocking nits only.
 
+  - Reading: bashir-issue81-approve.md
+# Bashir APPROVE — Issue #81 squad/81-optimize-cli
+
+**Date:** 2026-06-02  
+**Reviewer:** Bashir (Tester)  
+**Branch:** squad/81-optimize-cli  
+**Worktree:** /workspaces/stfc-81  
+**Verdict:** APPROVE ✅
+
+## Summary
+
+All 9 previously-requested test coverage gaps are now filled. Test suite: **703 pass / 0 fail** (8.96s).
+
+## Gap Resolution
+
+| # | Gap | Status | Key Evidence |
+|---|-----|--------|--------------|
+| 1 | Progression hash gating | ✅ | `progression.test.ts` "writes docs only when the computed input hash changes" |
+| 2 | Progression workflow summary | ✅ | `progression.test.ts` "appends workflow summary output when GITHUB_STEP_SUMMARY is set" |
+| 3 | Env cleanup | ✅ | `afterEach(() => { delete process.env.GITHUB_STEP_SUMMARY; ... })` in both test files |
+| 4 | Mixed status exit 0 | ✅ | `optimizeCrew.test.ts` "returns 0 for mixed account health under --all" |
+| 5 | Selector conflict | ✅ | Both files: "returns 2 on selector conflict (--account with --all)" |
+| 6 | No-accounts | ✅ | Both files: "returns 2 when no eligible roster files exist" |
+| 7 | Invalid top | ✅ | `optimizeCrew.test.ts` "returns 2 for invalid --top values" (tests "0" and "abc") |
+| 8 | Per-account failure isolation | ✅ | Both files cover malformed sibling account with broken.yaml, exit 0 |
+| 9 | Legacy doc header rewrite | ✅ | `optimizeCrew.test.ts` "rewrites legacy docs without an input-hash header" |
+
+## Notes for merge
+
+- Uncommitted files include new test files and source files — stage individually per Rule 2.
+- `docs/crew/demo.md` already has proper `<!-- input-hash: ... -->` header; no legacy rewrite needed in production data.
+- Pre-push hook will run npm test; confirmed green.
+
+**Ready to push and merge.**
+
+  - Reading: copilot-directive-docs-after-capability-changes.md
+### 2026-05-31T21:58Z: User directive — docs updates after capability changes
+**By:** cyrusj (via Copilot)
+**What:** Always update the docs after each major update to the app/capabilities. Capability-touching PRs are not complete without their corresponding documentation update in the same PR (or at minimum, a docs PR that lands before the next merge in the same stream).
+**Why:** User request — captured for team memory.
+
+**Scope of "major update":** any PR that adds a new CLI skill, a new workflow, a new sanctioned outbound destination, a new durable input class, a new public function in `src/` that operators interact with, or any change that would surprise an operator reading only the README/docs.
+
+**Routing implications:**
+- **Bashir's pre-push gate** for any feature PR adds: "did the docs in `README.md` / `docs/*.md` / `specs/<feature>/quickstart.md` get touched to reflect the new behavior?"
+- **Garak's hostile fact-check** adds: "if the PR adds a capability, does the docs diff describe it accurately, or does the docs claim something the code doesn't do?"
+- **Kirk's technical review** continues to be code-only; docs scope routes to Tuvok if the PR author skipped it.
+- **Operator docs phase issues** (e.g., #83 for v1, #89 for v1.5, #95 for v2) remain dedicated docs landing points; the directive is additive — major code PRs should already touch their relevant docs section, and the dedicated docs phase fills the rest (operator guides, full quickstarts, troubleshooting).
+
+**Applies retroactively to:** PR #81 (currently in flight — `scotty-3` building optimize-crew + progression CLI). Bashir's pre-push gate for #81 should now verify the README section / docs/CREW-OPTIMIZER.md stub were updated for the two new skills, OR explicitly defer to #83 with a clear cross-reference in the PR body.
+
