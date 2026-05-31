@@ -1,4 +1,144 @@
 <!-- SYNC IMPACT REPORT -->
+Version change: 1.5.0 → 1.6.0 (MINOR)
+Bump rationale: MINOR — Principle II gains three new sanctioned skills
+(`skill:roster` with five subcommands, `skill:optimize-crew`,
+`skill:progression`) and Principle V's durable-inputs enumeration gains
+four new entries (`data/crew/officers.json`,
+`data/crew/tasks/*.yaml`, `data/crew/roster/*.yaml` (tracked-by-default,
+documented opt-out), and the generated `docs/crew/*.md` per-account
+reports). The Security & Compliance Constraints "Third-party action
+pinning" bullet is extended to enumerate the new
+`.github/workflows/optimize-crew.yml` workflow (no cron; concurrency
+group `stfc-crew-optimizer`; triggers on `push` to `data/crew/**` and
+`workflow_dispatch`). No principle is removed, no existing obligation
+narrowed. No new secrets are introduced. No new outbound destinations
+are introduced for v1. No new sanctioned writer of `STFC_ACCOUNTS`.
+The v1.5.0 ops-script carve-out (Principle V "Operator-Only One-Shot
+Ops Scripts") is unchanged.
+
+Assembled: 2026-05-31
+Assembled by: speckit.constitution (drafted) + Tuvok (editorial pass)
+  under Picard (M2) — bundled with the spec/plan pipeline for issue #77
+  (specs/004-crew-optimizer/).
+Requested by: Cyrus Jamula
+
+Per-principle change summary:
+  I.    UNCHANGED — User Safety & Trust First
+  II.   REVISED   — Skill-Isolated CLI Architecture:
+                    Sanctioned-skills enumeration grows by three entries:
+                    `skill:roster` (with the five subcommands `status`,
+                    `add`, `promote`, `rankup`, `validate`),
+                    `skill:optimize-crew`, `skill:progression`. All three
+                    registered in `src/cli.ts` and follow the
+                    `{ result, exitCode }` contract. Each is exposed via
+                    a matching `npm run skill:*` script when added to
+                    `package.json`. Skill bodies live under
+                    `src/crew/**` (new namespace) and `src/skills/`
+                    entry points.
+  III.  UNCHANGED — Resilient Upstream-API Automation
+  IV.   UNCHANGED — Type-Safe Headless TypeScript CLI
+  V.    REVISED   — Stateless Operation & Secret Custody:
+                    New subsection "Crew Optimizer (v1) durable inputs"
+                    added to the durable-inputs enumeration. Adds four
+                    entries:
+                      • `data/crew/officers.json` — hand-curated officer
+                        database (~30–50 entries at v1 launch).
+                        Writer: human operator (manual edit, reviewed
+                        PR). Purpose: canonical officer reference for
+                        the optimizer.
+                      • `data/crew/tasks/*.yaml` — task definitions
+                        (slot requirements, tag weights, synergy
+                        bonus). Writer: human operator. Purpose: scoring
+                        target library for the optimizer.
+                      • `data/crew/roster/*.yaml` — per-account owned
+                        officer roster (tracked-by-default; operators
+                        wanting private rosters opt out via a documented
+                        `.gitignore` snippet in `docs/CREW-OPTIMIZER.md`).
+                        Writers: `skill:roster` maintenance subcommands
+                        (`add`, `promote`, `rankup`) AND human operator
+                        (hand-edit). Both writers MUST preserve stable
+                        key order and auto-bump `last_updated`.
+                      • `docs/crew/{account}.md` — generated per-account
+                        recommendation report. Writer:
+                        `.github/workflows/optimize-crew.yml` only when
+                        the input hash (officers + tasks + that account's
+                        roster) has changed since the last commit.
+                        Regenerated via rebase-before-push (Rule 4).
+                    None of these files contain secrets, JWTs, account
+                    material, or game-state credentials.
+                    Durable-inputs enumeration for other features is
+                    unchanged. Two-writer custody rule for
+                    `STFC_ACCOUNTS` is unchanged.
+  VI.   UNCHANGED — Specification-First Governance
+  VII.  UNCHANGED — Artifact Hygiene
+  VIII. UNCHANGED — Wire-First Discovery
+  IX.   UNCHANGED — Test-First Discipline
+
+Speckit Reviewer Gates: UNCHANGED.
+Security & Compliance Constraints: REVISED — the "Third-party action
+  pinning" bullet's verified-today list is extended to include
+  `optimize-crew.yml` (when the workflow file lands in #82). The
+  workflow MUST pin every third-party action to a full commit SHA and
+  is covered by Rule 3 pinning tests in
+  `tests/skills/optimizeCrew.test.ts`. The workflow uses a new
+  concurrency group `stfc-crew-optimizer` (distinct from
+  `stfc-gift-redeemer` and `discord-monitor`), triggers on `push` to
+  `data/crew/**` and `workflow_dispatch` only (NO cron), and uses
+  rebase-before-push (Rule 4) for any commit it makes.
+  Outbound network scope: UNCHANGED for v1. The crew optimizer is
+  pure compute with no upstream API surface. v1.5 (Discord/OCR
+  transport) and v2 (interactive `!crew` commands + embedding
+  rebuild) will require SEPARATE amendments at the time those phases
+  are unblocked (tracked as issues #81 and #93 respectively).
+Development Workflow: UNCHANGED.
+Governance: UNCHANGED.
+
+Templates re-synced:
+  - .specify/templates/plan-template.md ✅ (Principle V row updated to
+    reference constitution v1.6.0 and to enumerate the four new crew-
+    optimizer durable inputs alongside the existing list). Rule 1
+    grep run; see Templates needing re-sync below.
+
+Templates needing re-sync (Rule 1 grep verbatim):
+  $ grep -nE 'STFC_ACCOUNTS|promo-codes\.txt|DISCORD_BOT_TOKEN|data/discord|data/digests|huggingface|discord\.com|data/crew|skill:roster|skill:optimize-crew|optimize-crew\.yml' .specify/templates/*.md
+  Match: .specify/templates/plan-template.md:44 (Principle V cell)
+  → UPDATED in this PR. The cell now references constitution v1.6.0
+    and enumerates `data/crew/officers.json`,
+    `data/crew/tasks/*.yaml`, `data/crew/roster/*.yaml`, and
+    generated `docs/crew/*.md` alongside the prior durable inputs.
+  No matches in spec-template.md, tasks-template.md,
+    constitution-template.md, or checklist-template.md → no changes
+    required to those templates.
+
+Cross-artifact follow-ups:
+  - `package.json`, `README.md`: do not reference constitution version;
+    no update required here. New `npm run skill:roster` /
+    `skill:optimize-crew` / `skill:progression` script entries land
+    in the implementation phase (#80), not in this amendment.
+  - `.github/workflows/optimize-crew.yml` and its accompanying pinning
+    test under `tests/skills/optimizeCrew.test.ts` are tracked by the
+    O'Brien dispatch on issue #82; this amendment does NOT itself add
+    or modify the workflow.
+  - The three Known Tensions carried from v1.2.0 (Principle III
+    auth/me overclaim; Principle VII scan-path overclaim;
+    redeem/refresh concurrency lock un-principled) remain unresolved
+    and are preserved verbatim. They are deferred to a subsequent
+    revision.
+
+Cross-check: Principles I, III, IV, VI, VII, VIII, IX, Speckit
+  Reviewer Gates, Development Workflow, and Governance sections are
+  byte-identical to v1.5.0. Only Principle II (sanctioned-skills
+  enumeration extended), Principle V (crew-optimizer durable-inputs
+  subsection added), the Security & Compliance Constraints
+  third-party-action-pinning enumeration (one new workflow added),
+  the version footer, and this SIR header were modified.
+
+Prior SIR history: v1.4.0 → v1.5.0 report is retained below and
+  is byte-identical to its previous form.
+<!-- /SYNC IMPACT REPORT -->
+
+
+<!-- SYNC IMPACT REPORT -->
 Version change: 1.4.0 → 1.5.0 (MINOR)
 Bump rationale: MINOR — Principle V gains an explicit, narrowly-scoped
 carve-out for operator-only one-shot ops scripts under
@@ -93,9 +233,9 @@ Prior SIR history: v1.3.0 → v1.4.0 report is retained in the v1.4.0
 
 # STFC Gift Redeemer Constitution
 
-**Version:** 1.5.0
+**Version:** 1.6.0
 **Ratified:** 2026-05-08
-**Last Amended:** 2026-05-18
+**Last Amended:** 2026-05-31
 
 ## Core Principles
 
@@ -151,7 +291,7 @@ contributors know what they are required to preserve.
 
 The project is a headless Node CLI organized around isolated TypeScript skills, not a web app/browser-extension pair. The redeem runtime MUST keep user-facing skill behavior behind the `src/cli.ts` dispatcher and the skill modules in `src/skills/`.
 
-- Current skills are `run-all`, `check-auth`, `list-gifts`, `claim-gifts`, and `redeem-codes`. Each MUST be registered in `src/cli.ts` and exposed through the matching `npm run skill:*` script in `package.json` when it is intended for operator use.
+- Current skills are `run-all`, `check-auth`, `list-gifts`, `claim-gifts`, `redeem-codes`, plus the v1.6.0-sanctioned crew-optimizer family: `roster` (with the five subcommands `status`, `add`, `promote`, `rankup`, `validate`; dispatched inside `src/skills/roster.ts`), `optimize-crew`, and `progression`. Each MUST be registered in `src/cli.ts` and exposed through the matching `npm run skill:*` script in `package.json` when it is intended for operator use. The crew-optimizer skill bodies live under `src/crew/**` (new namespace) plus the skill entry points under `src/skills/`; pure-compute modules in `src/crew/**` do NOT call the network and do NOT call `process.exit`.
 - Skill isolation means each `src/skills/*.ts` module accepts typed options, returns a structured `{ result, exitCode }` object, and does not terminate the process directly. Shared account, logging, redaction, summary, promo-code, outcome, and API behavior belongs in `src/lib/` and `src/api/`, not duplicated inside individual skills.
 - Process termination is centralized only for the TypeScript skill runtime: within `src/`, `src/cli.ts` is the only file that calls `process.exit`. Project-wide, helper scripts also call `process.exit` (`scripts/check-artifact-hygiene.mjs` and `scripts/capture-token.mjs`), so the constitution MUST NOT claim `src/cli.ts` is the only file in the repository that exits.
 - The `src/cli.ts` exit-code contract is: `0` for successful/expected skill completion, `1` for account-configuration errors, uncaught skill failures, or a skill-reported infrastructure-class failure, and `2` for an unknown or missing skill name. Diagnostic skills may return `0` while reporting per-account errors because they are inspection tools.
@@ -292,6 +432,35 @@ sanctioned surfaces below; every other surface is treated as a leak.
   None of these files contain secrets, JWTs, account material,
   prompt content, or assistant responses (only model identifiers,
   token counts, timestamps, and aggregated metadata).
+- The `crew-optimizer` feature (`src/crew/**` and `src/skills/{roster,optimizeCrew,progression}.ts`, specs/004-crew-optimizer/, sanctioned in v1.6.0) additionally consumes and produces the following committed durable inputs/outputs (none of which contain secrets):
+  - `data/crew/officers.json` — hand-curated officer database (~30–50
+    entries at v1 launch, growing per PR). Writer: human operator
+    (manual edit, reviewed PR). Purpose: canonical officer reference
+    for the optimizer and progression engines. Closed-vocabulary tag
+    enum locked in v1 per `specs/004-crew-optimizer/spec.md` FR-002.
+  - `data/crew/tasks/*.yaml` — task definitions (slot requirements,
+    weighted tag preferences, synergy bonus, optional faction bonus,
+    optional officer-exclusion constraints). Writer: human operator
+    (manual edit, reviewed PR). Purpose: scoring target library.
+  - `data/crew/roster/*.yaml` — per-account owned officer rosters
+    (one file per account). **Tracked by default**; operators
+    wanting private rosters opt out via a documented `.gitignore`
+    snippet in `docs/CREW-OPTIMIZER.md`. Writers: the `skill:roster`
+    maintenance subcommands (`add`, `promote`, `rankup`) AND the
+    human operator (hand-edit, reviewed PR). Both writers MUST
+    preserve stable key order (`account`, `last_updated`,
+    `staleness_overrides`, `officers` sorted by `id`) and auto-bump
+    `last_updated` to the current UTC ISO timestamp. Purpose: the
+    operator's source-of-truth roster state.
+  - `docs/crew/{account}.md` — generated per-account recommendation
+    report. Writer: `.github/workflows/optimize-crew.yml` only when
+    the input hash (officers + tasks + that account's roster) has
+    changed since the last commit. Regenerated via rebase-before-
+    push (Rule 4). Purpose: human-readable recommendations surface
+    visible from the repo and GitHub mobile.
+  None of these files contain secrets, JWTs, account material, game-
+  state credentials, or screenshot bytes (no screenshot is ever
+  committed; v1.5 OCR keeps image bytes in runner tmpfs only).
 - These are the *only* additional durable inputs and outputs the project
   recognizes.
 - A rerun after a partial failure MUST be safe: per-account failure does not block
@@ -677,6 +846,10 @@ cannot enforce on its own.
   third-party action to a full commit SHA with the version in a trailing
   comment. This is verified today for `redeem.yml`, `refresh-token.yml`,
   `test.yml`, `squad-test-gate.yml`, `discord-monitor.yml` (added in v1.3.0),
+  `optimize-crew.yml` (added in v1.6.0 — no cron, triggers on `push`
+  to `data/crew/**` and `workflow_dispatch`, concurrency group
+  `stfc-crew-optimizer`, covered by Rule 3 pinning tests in
+  `tests/skills/optimizeCrew.test.ts`),
   and the SHA-pinned uses in `squad-artifact-hygiene.yml`. Auxiliary
   squad-process workflows
   (`sync-squad-labels.yml`, `squad-heartbeat.yml`, `squad-triage.yml`,
@@ -828,4 +1001,4 @@ reality, or it must be updated — never left as a zombie.
 - **Resolution scheduled:** v1.3.0
 - **Tracking:** `.squad/decisions/inbox/v1.3.0-backlog.md`
 
-**Version**: 1.5.0 | **Ratified**: 2026-05-08 | **Last Amended**: 2026-05-18
+**Version**: 1.6.0 | **Ratified**: 2026-05-08 | **Last Amended**: 2026-05-31
