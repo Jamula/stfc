@@ -4,7 +4,7 @@
 # export) or manually via workflow_dispatch. Runs both crew skills and
 # commits any updated recommendation files back to the branch.
 #
-# NO schedule: — this workflow is push-on-change only. The skills are
+# Push-on-change only — no periodic cron. The skills are
 # pure-compute + small file writes and finish in seconds.
 name: Optimize crew
 
