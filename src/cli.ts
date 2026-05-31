@@ -14,13 +14,23 @@ import { claimGifts } from "./skills/claimGifts.ts";
 import { redeemCodes } from "./skills/redeemCodes.ts";
 import { discordMonitor } from "./skills/discordMonitor.ts";
 import { telemetry } from "./skills/telemetry.ts";
+import { roster } from "./skills/roster.ts";
 
 const log = createLogger("cli");
 
 const PROMO_CODES_PATH = "promo-codes.txt";
 const HISTORY_PATH = "docs/redeem-history.md";
 
-const SKILLS = ["run-all", "check-auth", "list-gifts", "claim-gifts", "redeem-codes", "discord-monitor", "telemetry"] as const;
+const SKILLS = [
+  "run-all",
+  "check-auth",
+  "list-gifts",
+  "claim-gifts",
+  "redeem-codes",
+  "discord-monitor",
+  "telemetry",
+  "roster",
+] as const;
 type SkillName = (typeof SKILLS)[number];
 
 interface SkillOptions {
@@ -42,10 +52,11 @@ const SKILL_FNS: Record<SkillName, SkillFn> = {
   "telemetry": () => telemetry({
     subcommand: (process.argv[3] as "collect" | "report" | "recommend") ?? undefined,
   }),
+  "roster": () => roster(),
 };
 
 // Skills that do NOT require accounts (operate on session store, not STFC API).
-const ACCOUNT_FREE_SKILLS: ReadonlySet<SkillName> = new Set(["telemetry"]);
+const ACCOUNT_FREE_SKILLS: ReadonlySet<SkillName> = new Set(["telemetry", "roster"]);
 
 async function main(): Promise<number> {
   const skillName = (process.argv[2] ?? "").trim();
