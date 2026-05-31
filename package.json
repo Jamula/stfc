@@ -15,6 +15,8 @@
 		"skill:redeem-codes": "tsx src/cli.ts redeem-codes",
 		"skill:discord-monitor": "tsx src/cli.ts discord-monitor",
 		"skill:roster": "tsx src/cli.ts roster",
+		"skill:optimize-crew": "tsx src/cli.ts optimize-crew",
+		"skill:progression": "tsx src/cli.ts progression",
 		"test": "node --import tsx --test tests/index.test.ts",
 		"test:watch": "node --import tsx --test --watch tests/index.test.ts",
 		"typecheck": "tsc --noEmit",
