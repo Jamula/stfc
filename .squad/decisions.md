@@ -553,3 +553,194 @@ Re-verified both initial CHANGES_REQUESTED findings:
 
 5 findings across 2 review rounds (Garak + Bashir) → all addressed by Uhura in single revision → both reviewers re-approved → merged.
 
+
+## PR #99 — Crew Roster CLI (`skill:roster add|promote|rankup|validate|status`)
+
+### Initial review cycle
+
+#### Garak — Hostile fact-check (PR #99, round 1)
+
+**Verdict:** CHANGES_REQUESTED ⚠️
+**Date:** 2026-05-31
+
+Found one critical correctness gap:
+
+**Absent-roster bootstrap contract failure** — `skill:roster add` does not create `data/crew/roster/{account}.yaml` when absent, violating the quickstart contract. Implementation immediately calls `loadRoster(rosterPath)` and fails ENOENT rather than bootstrapping the schema-valid roster. Manual repro: `exitCode: 1`, `created: false`. This must be fixed before merge.
+
+**Required revision:** Non-Scotty agent should add a temp-dir test for `add` with no existing `{account}.yaml`, then implement canonical creation of `{ account, last_updated, officers: [] }` through the existing `saveRoster()` path before upserting, preserving the filename/account invariant.
+
+**All other checks:** CLI dispatch pattern, exit codes, canonical loaders, test patterns, and idempotency all pass.
+
+#### Bashir — Formal test review (PR #99, pre-push gate)
+
+**Verdict:** APPROVE ✅
+**Date:** 2026-05-31
+
+Pre-push gate APPROVE granted in-process. Formal PR-level verdict matches:
+
+- 5 subcommand blocks ✓
+- Round-trip byte-stability per mutation ✓
+- `last_updated` auto-bump per mutation ✓
+- Idempotency: enforced
+- Edge cases: covered (rank/unknown/missing/malformed)
+- Temp-dir scope: clean
+- tests/index.test.ts wiring: ✓
+- npm test: 661/661
+
+#### Kirk — Technical review (PR #99)
+
+**Verdict:** APPROVE ✅
+**Date:** 2026-05-31T21:35Z
+
+- CLI dispatch pattern (roster returns SkillOutput) — CLEAN
+- Exit codes (0/1/2) — ALIGNED
+- Canonical loaders (loadRoster/saveRoster/upsertRosterOfficer) — CORRECT
+- Concurrency — NO GUARD (noted, not blocking for operator-only use)
+- One follow-up: fix TODO comment in `resolveStalenessEvaluator` to reference #79, not #99
+- Test patterns — CLEAN
+
+### Uhura fix commit
+
+**Commit:** b24949b38e3010497376088208dec3e8a8903391
+**Date:** 2026-05-31T21:50Z
+
+Addressed Garak's CHANGES_REQUESTED: `add` now bootstraps fresh schema-valid roster when `{account}.yaml` absent. Other subcommands still report missing-file errors and do not bootstrap. Verified: npm test 663/663 pass, typecheck pass.
+
+### Re-review cycle
+
+#### Garak — Re-review (PR #99, round 2)
+
+**Verdict:** APPROVE ✅
+**Date:** 2026-05-31
+
+- Bootstrap path: works ✓ — file created, schema-valid, byte-stable, exit 0
+- Non-bootstrap preserved: promote/rankup/validate still ENOENT ✓
+- Filename/account contract: enforced on bootstrap ✓
+- npm test: 663/663
+- CI on b24949b: green
+
+### PR #99 merge record
+
+**Merged:** 2026-05-31
+**Merge commit:** 95d33d8
+**Squashed from:** b24949b (Uhura's fix)
+**Target:** main
+**Closes:** #80
+
+1 correctness gap (Garak r1) → Uhura fix → all reviewers approved → merged squash.
+
+---
+
+## PR #100 — Crew Optimizer Engine (`src/crew/{optimizer,progression,staleness,diff}.ts`)
+
+### Initial review cycle
+
+#### Garak — Hostile fact-check (PR #100, round 1)
+
+**Verdict:** CHANGES_REQUESTED ⚠️
+**Date:** 2026-05-31
+
+Found two correctness/coverage gaps:
+
+| Finding | Issue | Required revision |
+|---|---|---|
+| Unknown roster officers not uniformly loud at engine boundary | `optimizeCrew()` resolves only owned entries; unowned unknown entries silently ignored. `analyzeProgression()` never validates through database; unknown officers emitted in result with empty task classes. The loud path exists in `validateRosterOfficerIds()` but is not invoked. | Validate all roster officer IDs at the start of both engines before scoring. |
+| Optimizer fixture coverage over-fit to mining | Only `mining-g3.yaml` exercised; real task definitions (`hostile-grind`, `armada-25`, `station-defense`) not tested through `optimizeCrew()`. | Add optimizer tests over non-mining task definitions and assert deterministic, slot-legal output. |
+
+**Checks that passed:** Pure-compute (no I/O), tie-break documented, slot legality, determinism, synergy bonus, staleness math, diff symmetry, npm test 664/664.
+
+**Per lockout:** Scotty barred from revision.
+
+#### Kirk — Technical review (PR #100)
+
+**Verdict:** APPROVE ✅
+**Date:** 2026-05-31
+
+Reviewed 4 modules (1077 LOC added, 0 removed):
+
+- Module boundaries ✓ — orthogonal, no cross-imports
+- Public API shape ✓ — `optimizeCrew`, `analyzeProgression`, `evaluateStaleness`, `diffRosters`
+- Pure-compute ✓ — no I/O side effects
+- Slot legality ✓ — enforced during combination generation
+- Determinism ✓ — explicit tie-break order (score desc → officer-id lex → level sum)
+- Synergy semantics ✓ — full-group completion against DB membership
+- Progression output ✓ — under-leveled, missing high-value, promotion order, per-task gap aggregation
+- Roster diff ✓ — normalized per-officer changes with numeric deltas
+- Test patterns ✓ — no `/tmp`, clean lifecycle, comprehensive coverage
+
+#### Bashir — Formal test review (PR #100, pre-push gate)
+
+**Verdict:** APPROVE ✅
+**Date:** 2026-05-31
+
+Pre-push gate APPROVE granted in-process:
+
+- optimizer.test.ts: synergy + slot legality + determinism + tiebreaker + empty-roster ✓
+- progression.test.ts: gap detection + promotion order + multi-task ✓
+- staleness.test.ts: 7d/14d + per-account override + clock-skew edge ✓
+- diff.test.ts: symmetry + stable order + all change types ✓
+- End-to-end fixture test ✓ (mining-g3 against tiny world)
+- tests/index.test.ts wiring: ✓
+- npm test: 664/664 pass
+
+(Non-blocking follow-ups noted at #81 handoff.)
+
+### Uhura fix commit
+
+**Commit:** be57150
+**Date:** 2026-05-31T22:00Z
+
+Addressed both of Garak's CHANGES_REQUESTED findings:
+
+1. Engine-boundary validation now runs at the start of both `optimizeCrew()` and `analyzeProgression()` via `validateRosterOfficerIds()`, before any owned/unowned filtering.
+2. Optimizer fixture coverage now includes hostile-grind, armada-25, and station-defense task YAMLs with deterministic/slot-legal optimizer tests and exact top-score assertions.
+
+Verified: npm run typecheck pass, npm test 669/669 pass.
+
+### Re-review cycle
+
+#### Garak — Re-review (PR #100, round 2)
+
+**Verdict:** APPROVE ✅
+**Date:** 2026-05-31
+
+- Finding 1 resolved: both engines now call `validateRosterOfficerIds()` before scoring; unknown officers throw canonical error.
+- Finding 2 resolved: `tiny-tasks/` contains mining-g3 plus hostile-grind, armada-25, station-defense fixtures with sensible constraints.
+- Tests: npm test 669/669 pass ✓
+- CI: gh pr checks 100 green on be57150 ✓
+- Commit focus: only loud validation plus fixture/test coverage; Kirk's non-blocking scaling/synergy notes deferred.
+
+### PR #100 merge record
+
+**Merged:** 2026-05-31
+**Merge commit:** bdd5cc1
+**Squashed from:** be57150 (Uhura's fixes)
+**Target:** main
+**Closes:** #79
+
+2 correctness/coverage gaps (Garak r1) → Uhura fixes → all reviewers re-approved → merged squash.
+
+---
+
+## Agent decisions
+
+### Scotty — Crew engine and CLI behavior (#79/#80 handoff)
+
+**Date:** 2026-05-31
+
+#### Engine behavior decisions (#79)
+
+1. **Optimizer remains pure-compute with search-time slot legality** — enforced while generating combinations, not post-filtered.
+2. **Deterministic scoring order is explicit and tested** — primary sort by score (desc), tie-break #1 by officer-id lex (asc), tie-break #2 by roster level sum (desc).
+3. **Synergy semantics: full-group completion** — synergy group grants bonus only when all officers in that group (as DB-represented) are present in the candidate crew.
+4. **Progression analyzer returns practical planning outputs without side effects** — under-leveled owned, missing high-value, promotion order, per-task-class gap aggregation.
+5. **Roster diff normalized for downstream consumers** — per-officer changes (added|removed|changed) with numeric deltas when both sides owned.
+
+#### Roster CLI implementation decisions (#80)
+
+1. **Staleness bridge during #79/#99 in-flight** — `roster.ts` uses dynamic import fallback to temporary evaluator while staleness.ts not present on branch; TODO marker for cleanup at merge.
+2. **Exit-code contract** — precedence: schema/load errors → 2, unknown officers → 1, clean → 0.
+3. **Mutation safety + stability** — all mutations use `upsertRosterOfficer(..., now())` + `saveRoster()` for canonical ordering and auto-bump `last_updated`.
+4. **Filesystem isolation** — tests and smoke runs use env overrides (`STFC_ROSTER_DIR`, `STFC_OFFICERS_PATH`) for scratch paths only.
+5. **Pre-push SYNC gate by Bashir** — APPROVE ✅ with non-blocking nits only.
+

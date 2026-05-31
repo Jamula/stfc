@@ -101,3 +101,8 @@ Coordinated Phase 1 fan-out (Tuvok constitution v1.5.0, Scotty script, Bashir te
 **Rule 5 note:** For future data-layer or test-heavy work, spawn reviewer-lockout-approved agent (Bashir for test coverage, Garak for contract enforcement) as a SYNC gate BEFORE pushing the PR. This allows findings to be incorporated in the initial review round rather than requiring a separate revision cycle. The pattern worked in PR #98: Uhura knew about the 5 findings before revising because she was looped in early, enabling a single-revision fix.
 
 **Adopted practice:** On next data-layer work or comparable task, Scotty will coordinate with Coordinator to spawn Bashir + Garak SYNC before git push. This adds ~15 min to the initial authoring phase but saves a full revision cycle (1+ hour).
+
+## 2026-05-31: PR #99/#100 review cycle — lockout-routed revisions
+
+Both PRs required non-Scotty revisions (bootstrap path + validation + fixtures). Bashir pre-push gate caught test coverage; Garak caught correctness gaps. The bootstrap path was missed by pre-push gate but caught at PR review stage — future pre-push gates should include bootstrap assertions. Pattern: lockout-routed PR revisions work, but pre-push gates remain sensitive to new I/O boundary contracts.
+
