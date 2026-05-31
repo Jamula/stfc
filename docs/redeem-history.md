@@ -7,6 +7,7 @@ inserted at the top**, so the most recent run is always visible first.
 
 | Date (UTC) | Time (UTC) | Account | Gifts claimed |
 | --- | --- | --- | --- |
+| 2026-05-31 | 11:21 | main | 10 Min Free Chest |
 | 2026-05-31 | 09:35 | main | 4 Hr Free Chest, Borg Data Link Tier 4, 10 Min Free Chest |
 | 2026-05-31 | 06:27 | main | 10 Min Free Chest, Daily Mission Key Drop |
 | 2026-05-31 | 01:53 | main | 24 Hr Free Chest [BAJORAN FAVOR], Replicator Rations, Emerald Chain Tier 26+, Archive Data Shard, Trial Bells, 10 Min Free Chest, Nova Squadron Supply, Optical Diodes, Fleet Commander Materials, Independent Archives Schematics, Nadion Supply |
