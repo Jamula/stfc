@@ -138,7 +138,10 @@ For local diagnostics you can run individual steps:
 ├── docs/
 │   ├── SETUP.md                    # end-to-end setup guide
 │   ├── squad.md                    # AI team members, capabilities, and how they work
-│   ├── stfc-game-knowledge.md      # STFC game domain reference
+│   ├── stfc-game-knowledge.md      # STFC game domain reference (Scopely sources)
+│   ├── stfc-knowledge/
+│   │   ├── README.md                       # knowledge-base lineage convention (6 fields)
+│   │   └── community-reference-sheet/      # mirror of the JulesVern/Quasel/BlueMandalorian sheet
 │   └── redeem-history.md           # auto-appended log of every successful claim
 ├── specs/
 │   └── 001-discord-monitor/
@@ -146,7 +149,8 @@ For local diagnostics you can run individual steps:
 │       ├── plan.md                 # architecture and design
 │       └── quickstart.md           # operator setup for Discord monitor
 ├── scripts/
-│   └── capture-token.mjs           # Playwright-driven JWT capture
+│   ├── capture-token.mjs           # Playwright-driven JWT capture
+│   └── fetch-community-sheet.mjs   # refresh docs/stfc-knowledge community sheet mirror
 ├── src/                            # TypeScript source (api client, orchestrator, skills)
 ├── tests/                          # node:test suite
 ├── promo-codes.txt                 # one promo code per line, # for comments
