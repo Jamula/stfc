@@ -28,6 +28,7 @@ import "./discord/ingest-remediation.test.ts";
 import "./digest/digest.test.ts";
 import "./digest/health-remediation.test.ts";
 import "./skills/discordMonitor.test.ts";
+import "./skills/roster.test.ts";
 import "./scripts/pre-commit.test.ts";
 import "./scripts/pre-push.test.ts";
 import "./scripts/discord-ops/set-discord-app-metadata.test.ts";
