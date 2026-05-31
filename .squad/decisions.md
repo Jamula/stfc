@@ -398,3 +398,158 @@ amendment unless the optimizer's surface expands.
 - [ ] Scribe sweeps `.squad/` artifacts from this worktree on
       Rule 6 ship-it (this decision file + Picard history append +
       `.squad/skills/speckit-pipeline-driver/SKILL.md`).
+## PR #97 Review Round — Spec + Constitution v1.6.0 (May 2026)
+
+### Garak — Hostile fact-check (PR #97)
+
+**Date:** 2026-05-31T20:10Z
+**Verdict:** APPROVE ✅
+
+Verified the spec's Discord/OCR, HuggingFace, pure-compute, constitution, issue-map, scope, and test claims against the live repo and PR diff. All claims hold.
+
+| Check | Result | Evidence |
+|---|---|---|
+| iPhone → Discord → OCR realism | PASS | Current Discord runtime is message-text/schema only; image ingestion is deferred to v1.5 issue #88 and gated by OCR POC issue #85. |
+| `@huggingface/transformers` reuse | PASS | Dependency exists in `package.json`; `src/discord/classifier.ts` uses the Transformers pipeline. |
+| Pure-compute boundary | PASS | v1 module plan keeps scoring/search in `src/crew/optimizer.ts`; constitution v1.6.0 explicitly says pure-compute modules do not call network or `process.exit`. |
+| Constitution Rule 1 + SemVer | PASS | Rule 1 grep hits only `.specify/templates/plan-template.md:44`; SIR matches. v1.5.0 → v1.6.0 MINOR is correct. |
+| Issue/scope/test gates | PASS | `crew-plan-id in:body` returns #78–#95 matching T100–T304; PR diff is 12 spec/constitution/template files only; `npm test` reports 567 pass. |
+
+Non-blocking: Issue #86's title still references old issue range; update for board hygiene.
+
+### Kirk — Technical + governance ack (PR #97)
+
+**Date:** 2026-05-31T20:10Z
+**Verdict:** APPROVE ✅
+
+Checked:
+- **Architecture:** `src/crew/**` module split is coherent. Loaders isolated from scoring. v1/v1.5/v2 boundaries fenced. No circular dependency risk.
+- **Contracts:** officer DB / roster YAML / task YAML / CLI contracts are stable. Closed enums locked. Stable-round-trip rules explicit.
+- **Test strategy:** Aligned with Part-2 plan. Per-layer test matrix matches file split. `tests/crew/realdata.test.ts` is the right schema-drift guard.
+- **Constitution v1.5.0 → v1.6.0:** SemVer correct. Sanctioned skills and durable inputs enumerated correctly. Plan template re-sync verified (single hit at `plan-template.md:44`).
+- **CI state:** 5/5 checks green at review time.
+
+**Merge decision:** Kirk-only APPROVE is not sufficient per Rule 7 — Garak's verdict also required. (Garak has since APPROVED.)
+
+## PR #98 Review Round — Data Layer (May 2026)
+
+### Initial review findings
+
+#### Garak — Hostile fact-check (PR #98 initial)
+
+**Verdict:** CHANGES_REQUESTED ⚠️
+
+| Finding | Evidence | Required revision |
+|---|---|---|
+| Roster contract invariant violation | Committed file is `data/crew/roster/example.yaml` with `account: demo`; contract requires `{account}.yaml`. `loadRoster()` accepts the mismatch. | Rename to `demo.yaml` or change `account` to `example`; enforce filename/account equality at load time. |
+| Byte-stable round-trip false | Manual check: `loadRoster()` then `toRosterYaml()` changes bytes. Serialization sorts officers and reorders keys. | Canonicalize `example.yaml` to serializer output and/or fix sorting. Add real-data round-trip assertion. |
+| Live roster data in CLI-style tests | `tests/crew/realdata.test.ts:12` and `:30` load `data/crew/roster/example.yaml` directly. | Document exception in plan/contract if intentional; otherwise use fixtures. |
+
+Recommended revision agent: **Bashir** (test/contract repair), not Scotty.
+
+#### Bashir — Test coverage review (PR #98 initial)
+
+**Verdict:** CHANGES_REQUESTED ⚠️
+
+| Behaviour | Severity | Required test |
+|---|---|---|
+| Task YAML has an invalid tag | High | Add loader-path test in `tests/crew/tasks.test.ts` exercising malformed YAML through `loadTask()`. |
+| Schema invariants are not one-assertion-per-invariant | Medium | Expand `tests/crew/schemas.test.ts` so each invariant/malformed case is independently asserted. |
+
+Evidence: `npm test` green at 597/597; fixture `tiny-officers.json` covers captain/officer/either roles.
+
+Per reviewer-lockout, Scotty barred from revision. **Reassignment to Uhura** approved.
+
+#### Kirk — Technical review (PR #98 initial)
+
+**Verdict:** APPROVE ✅
+
+**Module boundaries — CLEAN:**
+- `schemas.ts`: pure zod, zero I/O.
+- `database.ts`: imports schemas only.
+- `roster.ts`: imports schemas + database (one-way).
+- `tasks.ts`: imports schemas only.
+- No circular risk when #79 and #80 layer on top.
+
+**Contract adherence — FAITHFUL:**
+- Officer DB: all 9 fields, correct enums, kebab-case id, tag-uniqueness, duplicate-id checks. ✅
+- Roster: field order matches, ISO-8601 regex, discriminated union, staleness cross-field checks. ✅
+- Task: filename-id enforced, slot constraints match contract examples. ✅
+
+**Error handling — STRUCTURED:**
+- Three named error subclasses with file path + schema path context.
+- `formatUnknownOfficerError` gives copy-pastable remediation.
+
+**TypeScript + dependencies:**
+- `npx tsc --noEmit` exits 0. No `any`, `@ts-ignore`, or new dependencies (yaml already in tree).
+
+**YAML round-trip — ROBUST:**
+- Uses `yaml.stringify` with deterministic root key order and sorted officers.
+- Byte-stable invariant holds for idempotent ops.
+
+**Test evidence:** `npm test`: 597 passed; `npx tsc --noEmit`: clean; CI 4/4 green.
+
+### Scotty — Data layer decisions memo
+
+**Date:** 2026-05-31
+
+Decisions made during implementation:
+
+1. **YAML runtime dependency:** Chose `yaml` (ESM-friendly). Added to runtime `dependencies`.
+2. **Error contract:** Each loader throws domain errors with file path + schema/parse path context. Unknown-officer lookup centralized in `database.ts` with spec-pinned message.
+3. **Roster serialization stability:** `saveRoster` writes stable YAML via deterministic root key ordering and sorted officer IDs. Mutation helpers bump `last_updated`.
+4. **Seed/fixture strategy:** `data/crew/officers.json` seeded with 37 officers (25 explicitly named + fringe set). Real-data drift test added. Tiny engine fixtures added for #79 handoff.
+
+### Uhura — Option A roster naming decision (PR #98 revision)
+
+**Date:** 2026-05-31
+
+**Decision:** Rename `data/crew/roster/example.yaml` → `data/crew/roster/demo.yaml` and enforce `account === filename basename` in `loadRoster()`.
+
+**Rationale:** Committed roster already used `account: demo`; `demo` is a clearer name and preserves the roster contract that filename matches in-file account.
+
+**Follow-up guardrails added:**
+- Positive and negative loader tests for filename/account matching.
+- Committed `demo.yaml` canonicalized through production serializer.
+- Real-data byte-for-byte round-trip test for `demo.yaml`.
+
+**Revision pushed:** 277f7023 (+53 tests, 650 total passing).
+
+### Re-review findings (after Uhura revision 277f7023)
+
+#### Garak — Re-review (PR #98)
+
+**Verdict:** APPROVE ✅
+**Date:** 2026-05-31
+
+Re-verified all three initial CHANGES_REQUESTED findings:
+
+1. **Roster contract invariant** — resolved. File renamed to `demo.yaml`; `loadRoster()` enforces filename/account equality with test coverage.
+2. **Byte-stable round-trip** — resolved. `loadRoster()` + `toRosterYaml()` equals source bytes; committed demo roster tested end-to-end.
+3. **T100 real-data exception documentation** — resolved. `tests/crew/realdata.test.ts` includes exception documentation; `specs/004-crew-optimizer/plan.md` explicitly authorizes real-data validation.
+
+**Validation:** `npm test`: 650/650 pass; CI: all 5 checks green on 277f7023.
+
+#### Bashir — Re-review (PR #98)
+
+**Verdict:** APPROVE ✅
+**Date:** 2026-05-31T21:10Z
+
+Re-verified both initial CHANGES_REQUESTED findings:
+
+- **Finding 4 (loader-path test):** resolved. 2 new tests in tasks.test.ts exercising malformed YAML through `loadTask()`.
+- **Finding 5 (schema invariants):** resolved. schemas.test.ts now has 35 assertions (was 14).
+
+**Validation:** `npm test`: 650/650 pass; CI: all 5 checks green.
+
+**Merge decision:** Ship it.
+
+### PR #98 merge record
+
+**Merged:** 2026-05-31
+**Merge commit:** eb2fd9d
+**Squashed from:** 277f7023 (Uhura's revision)
+**Target:** main
+
+5 findings across 2 review rounds (Garak + Bashir) → all addressed by Uhura in single revision → both reviewers re-approved → merged.
+

@@ -179,3 +179,22 @@ Once bot is in the guild, run `node scripts/fetch-discord-channel.mjs`.
 **Unblock path:** Cyrus or team contacts STFC Officer Tool Discord admin via https://discord.gg/BRhru6Vcnj using the ready-to-send DM template. Once bot invited with `66560` permissions, run `node scripts/fetch-discord-channel.mjs`.
 
 **Decision memo:** Merged to `.squad/decisions.md` by Scribe.
+
+## 2026-05-31 — Lockout-routed revision pattern (PR #98)
+
+Executed the lockout-routed revision pattern: reviewer-lockout rule barred Scotty (initial author) from revising after Garak + Bashir CHANGES_REQUESTED; Coordinator routed the fix to Uhura instead.
+
+**Findings addressed (5 total):**
+- **Garak (3):** Roster contract invariant, byte-stable round-trip, real-data test scope.
+- **Bashir (2):** Task YAML loader-path test, schema invariants one-per-assertion.
+
+**Single-revision approach:**
+- Renamed `data/crew/roster/example.yaml` → `demo.yaml` (Option A). Rationale: committed file already had `account: demo`; `demo` is clearer; preserves contract.
+- Enforced `account === filename basename` in `loadRoster()`.
+- Added real-data round-trip test for `demo.yaml`.
+- Added 2 task YAML loader-path tests in `tasks.test.ts`.
+- Expanded `schemas.test.ts` from 14 to 35 assertions.
+
+Pushed revision 277f7023 (+53 tests, 650 total). Both Garak and Bashir re-approved same day. Merged as eb2fd9d.
+
+**Pattern insight:** Lockout-routed revision actually accelerated the cycle because Uhura (integrations focus) could see that both Garak's contract violation and Bashir's coverage gaps stemmed from the same root issue: the roster file/account mismatch and lack of real-data validation. Scotty's perspective would have been test-then-revert; Uhura's was fix-the-contract-first. Single revision beat two revision rounds.

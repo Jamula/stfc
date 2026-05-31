@@ -115,3 +115,20 @@ The takeaway for future rounds: after verifying each correction landed, run a se
 
 **Cross-provider critique value:** Running on `gpt-5.5` gave a clean read on whether each narrowing actually closes the loophole it was sold as closing — not just trusting Tuvok's "I narrowed it on purpose" framing. Same-provider review might have rubber-stamped all four deviations as obviously-good without verifying each one's mechanism.
 
+
+## 2026-05-31 — Spec + Constitution v1.6.0 + Data Layer Fact-Check
+
+Garak's role: hostile fact-check on both PR #97 (spec claims) and PR #98 (contract enforcement).
+
+**PR #97:** Approved. Verified Discord/OCR realism (message-text only, OCR deferred to v1.5), HuggingFace dependency in tree, pure-compute constraint on v1, Rule 1 grep hit, issue/scope gates. All claims hold; SemVer correct. Non-blocking board note: issue #86 title outdated.
+
+**PR #98 (round 1):** CHANGES_REQUESTED. Three contract violations found:
+1. Roster filename/account mismatch: `example.yaml` with `account: demo` violates `{account}.yaml` contract.
+2. Byte-stable round-trip false: serializer sorts/reorders vs source.
+3. Live roster data in CLI test: unclear if intentional real-data validation or test-style mistake.
+
+Recommended Bashir (test/contract expert) not Scotty (per reviewer-lockout).
+
+**PR #98 (round 2):** Approved after revision 277f7023. All three findings resolved: file renamed, round-trip canonicalized + tested, real-data exception documented.
+
+**Lesson:** Contract enforcement gates data-layer stability. The three violations were inter-related (filename→account→serialization invariants). Kirk's architecture review missed these because they're not architectural—they're data-contract and test-contract bugs. Garak's role as fact-checker is essential on data-driven features.

@@ -34,3 +34,17 @@ Bashir identified the test-first discipline gap early and spearheaded enforcemen
 ## v1.0 & v1.1 Context (Archived — Preserved for Reference)
 
 All prior speckit testing implications analysis, Phase 1 briefing contribution, enforcement infrastructure planning, and test-quality checklist design archived; preserved for v1.3 reference if needed.
+
+## Archived from history.md on 2026-05-31
+
+**Summary:** Bashir (Test & QA) conducted 15+ test coverage reviews spanning issues #46–#98. Key patterns:
+- Early detection of fixture gaps, integration boundaries, and end-to-end test design. 
+- Validator invariant testing (`zod` schema coverage, error path validation).
+- Reviewer-lockout pattern: when author (e.g., Scotty) barred from revision, Bashir's findings routed to domain expert (Uhura for integrations) for faster single-revision fixes.
+- On PR #98: found 2 coverage gaps (task YAML loader, schema invariants) → routed to Uhura → 5 findings total (including Garak's 3) → single revision 277f7023 (+53 tests) → approved → merged.
+
+**Lessons for future reviewers:**
+1. Pair Bashir's test coverage review with Garak's contract enforcement — often same root cause, parallel review accelerates diagnosis.
+2. Reviewer-lockout reassignment (Scotty → Uhura on PR #98) can be faster than asking original author to revise twice.
+3. Real-data validation test (e.g., `tests/crew/realdata.test.ts`) is appropriate when seed data is committed; document the exception in plan/contract.
+

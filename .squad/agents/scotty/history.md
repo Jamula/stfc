@@ -93,3 +93,11 @@ Coordinated Phase 1 fan-out (Tuvok constitution v1.5.0, Scotty script, Bashir te
 
 
 **2026-05-18T04:00:10Z:** PR #73 merged; exit-code convention restored in discord-ops script — see decisions.md (PR #73 → bashir-exit-code-restoration decision)
+
+## 2026-05-31 — Lesson learned from PR #78: spawn Bashir SYNC before pushing
+
+**Context:** PR #78 cost a full revision cycle because Scotty shipped the data-layer PR without a SYNC gate spawn to Bashir before push. Garak + Bashir CHANGES_REQUESTED on test coverage gaps that could have been caught earlier if Bashir's review had happened in-flight (during the PR authoring phase) rather than after merge.
+
+**Rule 5 note:** For future data-layer or test-heavy work, spawn reviewer-lockout-approved agent (Bashir for test coverage, Garak for contract enforcement) as a SYNC gate BEFORE pushing the PR. This allows findings to be incorporated in the initial review round rather than requiring a separate revision cycle. The pattern worked in PR #98: Uhura knew about the 5 findings before revising because she was looped in early, enabling a single-revision fix.
+
+**Adopted practice:** On next data-layer work or comparable task, Scotty will coordinate with Coordinator to spawn Bashir + Garak SYNC before git push. This adds ~15 min to the initial authoring phase but saves a full revision cycle (1+ hour).

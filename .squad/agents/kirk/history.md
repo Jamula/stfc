@@ -204,3 +204,15 @@ zero `src/` or `.squad/` touches.
   explicitly — no convention update needed. The fetcher will differ (Discord API or
   manual snapshot rather than gviz) but the output format (6-field lineage + fenced block)
   is the same.
+
+## 2026-05-31 — Spec + Constitution v1.6.0 + Data Layer Review
+
+Reviewed PR #97 (v1.6.0 constitution amendment) and PR #98 (data layer) on the same cycle. Kirk's role: technical + governance ack on the constitution (vs Picard self-approval), plus standard code review on data layer.
+
+**PR #97:** Approved. Architecture, contracts, test strategy, and SemVer all correct. Plan template re-sync verified. Deferred merge pending Garak's hostile fact-check per Rule 7 — both reviewer approvals required on constitution amendments.
+
+**PR #98 (round 1):** Approved on architecture. Module split coherent; loaders isolated from compute; TypeScript strict mode clean. Garak + Bashir found 5 test/contract gaps; did not block Kirk's APPROVE because findings were non-architectural.
+
+**PR #98 (round 2):** Both re-reviews approved. Uhura addressed all 5 findings in single revision (277f7023, +53 tests). Merged as eb2fd9d.
+
+**Lesson:** Strict-mode TypeScript + contract clarity enables reviewers to work in parallel across different concern axes (Kirk: architecture + test strategy; Garak: contract enforcement; Bashir: coverage gaps). All findings ground-truthable against contracts → single-revision fix.
