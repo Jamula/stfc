@@ -126,6 +126,10 @@ export function grepTestsForWorkflow(basename) {
  * When a `.github/workflows/*.yml` file is staged, any test file that
  * references it by name must also be staged.
  *
+ * Excludes `tests/scripts/pre-commit.test.ts` — that file references
+ * workflow filenames only as fixture strings to exercise this hook
+ * itself, not as pinning regression guards.
+ *
  * @param staged  List of staged file paths.
  * @param grep    Optional grep function (for testing). Defaults to grepTestsForWorkflow.
  */
@@ -139,7 +143,11 @@ export function checkWorkflowPinningTests(staged, grep = grepTestsForWorkflow) {
 
   for (const wf of workflowFiles) {
     const basename = path.basename(wf);
-    const referencingTests = grep(basename);
+    const referencingTests = grep(basename).filter(
+      (t) =>
+        t.replace(/\\/g, '/').replace(/^\.\//, '') !==
+        'tests/scripts/pre-commit.test.ts',
+    );
 
     const unstagedTests = referencingTests.filter((t) => {
       const rel = t.replace(/\\/g, '/').replace(/^\.\//, '');

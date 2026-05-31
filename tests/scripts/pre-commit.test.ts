@@ -263,4 +263,14 @@ describe("checkWorkflowPinningTests", () => {
     );
     assert.equal(exitState.code, 1);
   });
+
+  it("ignores self-referential matches in tests/scripts/pre-commit.test.ts", () => {
+    // This file references workflow filenames only as fixture strings to
+    // exercise the hook — they are not real pinning regression guards, so
+    // they must NOT force the test file to be re-staged with every
+    // workflow edit.
+    const grep = () => ["tests/scripts/pre-commit.test.ts"];
+    checkWorkflowPinningTests([".github/workflows/redeem.yml"], grep);
+    assert.equal(exitState.code, null);
+  });
 });

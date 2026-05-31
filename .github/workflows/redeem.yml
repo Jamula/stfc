@@ -11,7 +11,7 @@ name: Redeem gifts
 
 on:
   schedule:
-    - cron: "*/15 * * * *"   # every 15 minutes — 4x/hour, 96/day (was hourly). See #7.
+    - cron: "*/10 * * * *"   # every 10 minutes — 6x/hour, 144/day (was */15).
   workflow_dispatch: {}
 
 permissions:
