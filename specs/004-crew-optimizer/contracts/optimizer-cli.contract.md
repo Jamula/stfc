@@ -109,5 +109,5 @@ above values literally.
 ## v1.5 / v2 surfaces
 
 Out of scope for v1 contracts. Documented in their own contracts when
-the respective amendments land (v1.5 amendment in issue #81, v2
-amendment in issue #93). Forward references only.
+the respective amendments land (v1.5 amendment in issue #87, v2
+amendment in issue #93 / #94 cohort). Forward references only.

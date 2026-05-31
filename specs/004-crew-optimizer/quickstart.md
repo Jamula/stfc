@@ -109,10 +109,10 @@ No cron. No periodic regeneration. New concurrency group:
 
 ## 8. Forward reference: v1.5 and v2
 
-When the OCR POC passes its acceptance bar (issue #79), v1.5 adds an
+When the OCR POC passes its acceptance bar (issue #85), v1.5 adds an
 iPhone → Discord → PR loop so you can refresh the roster from your
-phone. See `docs/CREW-OPTIMIZER.md#discord-bootstrap` after #82 lands.
+phone. See `docs/CREW-OPTIMIZER.md#discord-bootstrap` after #88 lands.
 
 When v1 ships, v2 adds read-only `!crew` interactive Discord
 commands (`!crew best`, `!crew progression`, `!crew knowledge <q>`,
-etc.). See `docs/CREW-OPTIMIZER.md#discord-commands` after #91 lands.
+etc.). See `docs/CREW-OPTIMIZER.md#discord-commands` after #92 lands.

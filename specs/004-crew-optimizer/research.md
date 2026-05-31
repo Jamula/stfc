@@ -131,7 +131,7 @@ roster). Regenerate only when the hash changes. One file per account.
 
 ## R9. v1.5 OCR transport (gated)
 
-**Decision deferred to issue #79** — the POC measurement step. The
+**Decision deferred to issue #85** — the POC measurement step. The
 acceptance bar (≥95% accuracy on 20 screenshots, ≤2 min review per
 batch, ≤500MB model, ≤30s per screenshot, ≤2-min cold start) is
 encoded as FR-020. If any criterion misses, v1.5 is dropped and v1
@@ -169,7 +169,7 @@ amendment for the model id.
 
 `research.md` enumerates the test layers that map onto the FRs. The
 per-phase test matrix from the source plan (Part 2) is reproduced in
-`tasks.md` and lives as closing criteria on issues #78–#94.
+`tasks.md` and lives as closing criteria on issues #78–#95.
 
 | Layer | Lives in | Catches |
 |---|---|---|

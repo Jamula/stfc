@@ -2,7 +2,7 @@
 
 **Branch**: `squad/77-speckit-pipeline` | **Date**: 2026-05-31 | **Spec**: [spec.md](./spec.md)
 **Input**: Feature specification from `/specs/004-crew-optimizer/spec.md`
-**Issue**: #77 (this spec pipeline) — implementation tracked under #78–#94
+**Issue**: #77 (this spec pipeline) — implementation tracked under #78–#95
 
 ## Summary
 
@@ -56,10 +56,10 @@ constitution lives at `.specify/memory/constitution.md`.
 | II | Skill-Isolated CLI Architecture | PASS — requires v1 amendment | New skills `skill:roster` (+subcommands), `skill:optimize-crew`, `skill:progression` registered in `src/cli.ts` and added to Principle II's sanctioned-skills enumeration via the v1 amendment in this same PR (per issue #77 acceptance criterion 4). Each skill returns `{ result, exitCode }` and does not call `process.exit` from `src/`. |
 | III | Resilient Upstream-API Automation | N/A | No STFC API traffic. v1.5 reuses `src/discord/client.ts` (which already routes through the typed-error/schema-validated pattern). |
 | IV | Type-Safe Headless TypeScript CLI | PASS | New `src/crew/**` lives inside the existing `tsconfig.json` include set. No UI/extension/bundler additions. |
-| V | Stateless Operation & Secret Custody | PASS — requires v1 amendment | New durable inputs `data/crew/officers.json`, `data/crew/tasks/*.yaml`, `data/crew/roster/*.yaml`, generated `docs/crew/*.md` enumerated in Principle V via the v1 amendment in this same PR. No new secrets. v1.5 and v2 amendments are SEPARATE PRs filed later (issues #81 and #93 respectively). |
+| V | Stateless Operation & Secret Custody | PASS — requires v1 amendment | New durable inputs `data/crew/officers.json`, `data/crew/tasks/*.yaml`, `data/crew/roster/*.yaml`, generated `docs/crew/*.md` enumerated in Principle V via the v1 amendment in this same PR. No new secrets. v1.5 and v2 amendments are SEPARATE PRs filed later (issues #87 and #93/#94 respectively). |
 | VI | Specification-First Governance | PASS | This very plan is the speckit artifact. Trigger threshold met (new feature, multi-file, cross-skill). |
 | VII | Artifact Hygiene | PASS | No real tokens / account names / live response bodies anywhere under `specs/004-crew-optimizer/**`. CI scanner enforced. |
-| VIII | Wire-First Discovery | N/A for v1 (pure compute). v1.5 OCR contract grounded in the POC measurement table (issue #79). v2 retrieval-only — no upstream contract. |
+| VIII | Wire-First Discovery | N/A for v1 (pure compute). v1.5 OCR contract grounded in the POC measurement table (issue #85). v2 retrieval-only — no upstream contract. |
 | IX | Test-First Discipline (NON-NEGOTIABLE) | PASS | Acceptance criteria mapped to test layers in `research.md`. Every new test file wired into `tests/index.test.ts` is enforced as a closing criterion on each implementation issue (#78–#83). |
 | — | Artifact Hygiene Check (CI gate) | PASS | Spec/plan/tasks files contain no JWT-shaped or bearer-token strings. |
 
@@ -93,14 +93,14 @@ specs/004-crew-optimizer/
 src/
 ├── cli.ts                         # extended with skill:roster / skill:optimize-crew / skill:progression
 ├── api/                           # unchanged
-├── discord/                       # unchanged in v1; extended in v1.5 (#82) and v2 (#90–#92)
+├── discord/                       # unchanged in v1; extended in v1.5 (#88) and v2 (#91–#93)
 ├── lib/                           # unchanged
 ├── skills/                        # extended with new skill entry points
 │   ├── roster.ts                  # NEW (#80)
-│   ├── optimizeCrew.ts            # NEW (#80)
-│   ├── progression.ts             # NEW (#80)
-│   └── knowledgeRebuild.ts        # NEW v2 (#92)
-└── crew/                          # NEW namespace — v1 (#78–#80)
+│   ├── optimizeCrew.ts            # NEW (#81)
+│   ├── progression.ts             # NEW (#81)
+│   └── knowledgeRebuild.ts        # NEW v2 (#93)
+└── crew/                          # NEW namespace — v1 (#78–#81)
     ├── schemas.ts                 # zod for officer / roster / task
     ├── database.ts                # loads + validates officers.json
     ├── roster.ts                  # loads + validates roster YAML; stable round-trip
@@ -110,10 +110,10 @@ src/
     ├── staleness.ts               # last_updated → warn/error policy
     ├── diff.ts                    # roster diffing (shared by roster + ocr later)
     ├── report.ts                  # markdown report rendering
-    ├── ocr.ts                     # NEW v1.5 (#82) — OCR pipeline
-    ├── commandParser.ts           # NEW v2 (#90)
-    ├── commandHandlers.ts         # NEW v2 (#91)
-    └── knowledge.ts               # NEW v2 (#92) — chunk + embed + top-k
+    ├── ocr.ts                     # NEW v1.5 (#88) — OCR pipeline
+    ├── commandParser.ts           # NEW v2 (#91)
+    ├── commandHandlers.ts         # NEW v2 (#92)
+    └── knowledge.ts               # NEW v2 (#93) — chunk + embed + top-k
 
 data/
 └── crew/
@@ -126,10 +126,10 @@ data/
     ├── roster/
     │   ├── .gitkeep
     │   └── example.yaml           # NEW (#78) — schema documentation
-    └── knowledge-embeddings.json  # NEW v2 (#92) — regenerated artifact
+    └── knowledge-embeddings.json  # NEW v2 (#93) — regenerated artifact
 
 docs/
-├── CREW-OPTIMIZER.md              # NEW (#80) — operator guide
+├── CREW-OPTIMIZER.md              # NEW (#83) — operator guide
 └── crew/
     └── {account}.md               # generated per-account report
 
@@ -164,8 +164,8 @@ tests/
 
 .github/workflows/
 ├── optimize-crew.yml              # NEW (#82) — push on data/crew/**, no cron
-├── roster-sync.yml                # NEW v1.5 (#83)
-└── knowledge-rebuild.yml          # NEW v2 (#93)
+├── roster-sync.yml                # NEW v1.5 (#88)
+└── knowledge-rebuild.yml          # NEW v2 (#94)
 ```
 
 **Structure Decision**: Single-project layout (Option 1). The optimizer

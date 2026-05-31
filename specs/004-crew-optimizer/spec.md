@@ -4,7 +4,7 @@
 **Created**: 2026-05-31
 **Status**: Draft
 **Input**: User description: "Add a capability to recommend optimal crews for STFC tasks and surface progression gaps. The game is played on iPhone; bootstrap/refresh of game state must work iPhone-first."
-**Issue**: #77 (spec pipeline) and #78–#94 (implementation phases)
+**Issue**: #77 (spec pipeline) and #78–#95 (implementation phases)
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -162,7 +162,7 @@ dropped and v1 stands alone.
 
 **Independent Test**: Local CLI `skill:bootstrap-roster --account X
 --screenshots ./shots/` runs the same OCR module the workflow uses;
-acceptance is the POC measurement table posted to issue #79.
+acceptance is the POC measurement table posted to issue #85.
 
 **Acceptance Scenarios**:
 
@@ -340,7 +340,7 @@ scoping, and rate-limit enforcement.
   is the gate.
 - **FR-020**: The OCR POC MUST be measured against the acceptance bar
   on 20 representative screenshots from the operator's actual gameplay
-  before any v1.5 implementation work proceeds (issues #79–#83).
+  before any v1.5 implementation work proceeds (issues #85–#90).
 
 **v2 — read-only interactive Discord commands (gated on v1 ship)**
 
@@ -389,7 +389,7 @@ scoping, and rate-limit enforcement.
 v1 introduces no external API surface. v1.5 reuses the existing
 `https://discord.com/api/v10` outbound destination and additionally
 fetches image bytes from `https://cdn.discordapp.com` (constitution
-v1.5 amendment in issue #81). v2 reuses the v1.5 amendments plus
+v1.5 amendment in issue #87). v2 reuses the v1.5 amendments plus
 optionally fetches the sentence-transformer model from
 `https://huggingface.co/...` — confirm against the existing carve-out
 during the v2 constitution check.
