@@ -133,3 +133,81 @@ Minimum lineage fields per artifact:
 This applies retroactively to in-flight work (#74) and to all future ingestion (#74's follow-up: STFC Discord channel 1115978499400933473).
 
 **Why:** User request — captured for team memory. Provenance is non-negotiable for community-sourced content.
+
+---
+
+## Issue #76 — Discord Channel Ingest (Officer Tool): Blocked on bot guild access
+
+**By:** Uhura (Integrations Dev)
+**Date:** 2026-05-31
+**Issue:** https://github.com/Jamula/stfc/issues/76
+**PR:** https://github.com/Jamula/stfc/pull/96 (draft)
+**Status:** Blocked — bot not in guild
+
+## What was attempted
+
+Ingest of STFC Officer Tool Discord `#data-collection` channel
+(guild `639255937869152267`, channel `1115978499400933473`) into
+`docs/stfc-knowledge/discord-channels/officer-tool-data-collection/`.
+
+The six-field lineage convention from issue #74 / Cyrus's directive was to
+be applied to every per-message artifact.
+
+## Access state
+
+`DISCORD_BOT_TOKEN` is stored exclusively as a GitHub Actions encrypted
+secret. It is not available in the local development environment (Codespace).
+Without the token, the following verification calls could not be executed:
+
+```
+GET https://discord.com/api/v10/guilds/639255937869152267
+GET https://discord.com/api/v10/channels/1115978499400933473
+```
+
+Historical context (`.squad/agents/uhura/history.md`, 2026-05-18): the bot was
+originally deployed for a different guild. The STFC Officer Tool guild was never
+explicitly targeted; guild membership is unknown but likely absent.
+
+## Approach
+
+Created the directory structure and all supporting scaffolding:
+
+- `docs/stfc-knowledge/discord-channels/README.md` — convention doc + blocker report
+- `docs/stfc-knowledge/discord-channels/officer-tool-data-collection/README.md` — channel stub with lineage block
+- `scripts/fetch-discord-channel.mjs` — full ingest script (ready to run once bot is in guild)
+- Updated `docs/stfc-knowledge/README.md` — added `discord-channels/` row
+- Skill: `.squad/skills/verify-discord-bot-access/SKILL.md`
+
+## To unblock
+
+A guild admin of `639255937869152267` must invite the bot with permissions `66560`
+(`VIEW_CHANNEL` + `READ_MESSAGE_HISTORY`). The invite URL template:
+```
+https://discord.com/api/oauth2/authorize?client_id={CLIENT_ID}&scope=bot&permissions=66560
+```
+Substitute `{CLIENT_ID}` from the Discord Developer Portal.
+
+The ready-to-send DM draft lives at:
+`.squad/agents/uhura/outreach/stfc-discord-bot-request.md`
+
+## Next action
+
+Cyrus (or team) contacts an STFC Officer Tool Discord admin (via
+<https://discord.gg/BRhru6Vcnj>) and requests the bot invite. Once confirmed,
+run `node scripts/fetch-discord-channel.mjs` from the repo root.
+
+---
+
+## 2026-05-31 — Crew Optimizer Issue Creation
+
+**By:** O'Brien (Test & Automation)
+**Date:** 2026-05-31
+**Context:** Created 19-issue crew optimizer board from Coordinator plan without touching source code or opening PRs.
+
+**Decision:** Use two-pass, idempotent issue creation keyed by hidden `crew-plan-id` body marker. Pass 1 creates or updates issue bodies with unresolved dependencies; pass 2 rewrites `Depends on:` after all issue numbers are known.
+
+**Label rule:** Use only explicit `squad:{member}` labels plus phase blockers such as `blocked:v1`. Do not apply plain `squad` label (triggers `squad-triage.yml` routing).
+
+**Operational note:** Body files written to repo-local scratch paths, cleaned up afterward (no `/tmp` or `mktemp`).
+
+**Outcome:** Issues #77–#95 created/updated, spot-checked with no plain `squad` label.

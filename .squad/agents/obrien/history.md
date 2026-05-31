@@ -66,3 +66,5 @@ Coordinated Phase 1 fan-out (Tuvok constitution v1.5.0, Scotty script, Bashir te
 
 ---
 
+
+2026-05-31T18:59:25Z — **Crew optimizer issue-board setup (#77–#95)**. Reusable issue-board patterns: use a hidden `<!-- crew-plan-id: ... -->` marker as the stable idempotency key, discover existing issues by body search before creating anything, write bodies through repo-local scratch files, and do a second body-edit pass after all issue numbers are known so dependency references resolve cleanly. For Squad-labeled work, add only the exact `squad:{member}` labels from the plan; never add the plain `squad` label, because that is a workflow trigger and will re-route otherwise already-routed work. Multi-owner issues are safest when each owner label is passed as a separate label flag and then spot-checked with a plain-`squad` label search.

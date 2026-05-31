@@ -119,3 +119,22 @@ Ingested STFC community Google Sheet with 6-field lineage tracking (source, name
 **Decision record:** `.squad/decisions/inbox/picard-issue-74-ingest-sheet.md` (merged to decisions.md by Scribe)
 
 **User directive:** 6-field lineage on all external knowledge ingestion (retroactive + forward)
+
+---
+
+## 2026-05-31T19:55Z — Scribe note: Uhura dispatch BLOCKED, awaiting triage
+
+**Uhura status:** Issue #76 Discord channel ingest BLOCKED on bot guild invite (PR #96 draft)
+
+**Triage required for:**
+- Bot invite coordination with STFC Officer Tool Discord admin (guild `639255937869152267`)
+- Optional: schedule follow-up if > 14 days without response
+- Optional: escalate to Cyrus if unresponsive or if alternative paths (relay server, alternative source) should be revisited
+
+**Blocker detail:** `DISCORD_BOT_TOKEN` is CI-only. Bot guild membership unknown; likely absent from target guild. Scaffolding complete; only guild invite blocks execution.
+
+**Deliverables (draft PR #96):** Production ingest script, new skill, docs structure, DM template ready to send.
+
+**Decision memo:** Merged to `.squad/decisions.md` by Scribe.
+
+See `.squad/log/2026-05-31T195500Z-issue-76-discord-channel-blocked.md` for full context.
