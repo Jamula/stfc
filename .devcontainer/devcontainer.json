@@ -5,12 +5,14 @@
   "features": {
     "ghcr.io/devcontainers/features/github-cli:1": {}
   },
-  "postCreateCommand": "npm ci",
+  "postCreateCommand": "npm ci && npm install -g @github/copilot",
   "customizations": {
     "vscode": {
       "extensions": [
         "GitHub.copilot",
-        "GitHub.copilot-chat"
+        "GitHub.copilot-chat",
+        "esbenp.prettier-vscode",
+        "ms-vscode.powershell"
       ]
     },
     "codespaces": {
