@@ -211,3 +211,50 @@ run `node scripts/fetch-discord-channel.mjs` from the repo root.
 **Operational note:** Body files written to repo-local scratch paths, cleaned up afterward (no `/tmp` or `mktemp`).
 
 **Outcome:** Issues #77–#95 created/updated, spot-checked with no plain `squad` label.
+
+---
+
+# Issue #77 — Crew Optimizer: Officer DB Seeding Research
+
+**By:** Research Agent (via Copilot) — salvaged by Coordinator
+**Date:** 2026-05-31
+**For:** Picard (speckit.clarify phase of issue #77)
+**Status:** Active (analysis complete, recommendation ready)
+
+## What
+
+Research on data sources for seeding ~35–40 officer records for the crew optimizer's initial officer database. The optimizer needs name, captain maneuver text, officer ability text, BDA role, faction enum, and rank curves for each officer across six synergy groups.
+
+## Research summary
+
+Four options evaluated:
+
+1. **Option A: Hand-curate from `docs/stfc-game-knowledge.md`** (RECOMMENDED)
+   - 25 officers explicitly named in Section 6 tables; extend with ~10–15 community-known fringe officers (Tomalak, Gowron, Chang, Tom Paris, Seven of Eleven, Charvanek, Sela, etc.)
+   - Effort: 1–2 days to author ~35–40 officers
+   - Maintenance: ongoing per STFC patch (~monthly); loud unknown-officer error path per plan
+   - Licensing: zero risk (hand-authored from functional facts, no creative expression or IP)
+   - Coverage: all six synergy groups needed for v1
+
+2. **Option B: Scrape stfc.space** (BLOCKED — HIGH RISK)
+   - Site is closed-source Vue.js SPA; no public API
+   - TOS completely invisible; estimated 180–200 officers
+   - Licensing risk: HIGH. Scopely IP + database compilation rights unclear
+
+3. **Option C: Official STFC database** (BLOCKED — UNUSABLE)
+   - Account login wall; no public export or API
+   - Scopely TOS prohibits scraping
+
+4. **Option D: Community sources** (REFERENCE ONLY)
+   - `mjstelly/stfcofficertool` CSV: use as completeness checklist only (no ability text, no synergy groups, unlicensed)
+   - STFC Fandom Wiki: CC BY-SA; use for manual reference during hand-authoring, not bulk copy
+   - STFC Officer Tool Discord `#data-collection`: best future path for v1.x licensed snapshot
+
+## Recommendation
+
+**For v1: Use Option A** — hand-curate ~35–40 officers from existing game knowledge + community fringe officers. Zero licensing risk, covers all synergy groups, timeline fits v1 delivery.
+
+**For v1.x: Outreach to STFC Officer Tool Discord** (#data-collection channel) to request CC-licensed officer-abilities snapshot; adapt the existing `scripts/fetch-community-sheet.mjs` pattern for refresh.
+
+**Do NOT pick Options B or C** — blocked and high-risk.
+
