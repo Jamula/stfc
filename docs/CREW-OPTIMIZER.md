@@ -10,7 +10,7 @@ The crew optimizer is a pure-compute, offline CLI feature that reads your
 produces two outputs: a ranked list of the **best legal crew for a given
 task** (annotated with the scoring rationale), and a **progression report**
 identifying which officer investments will yield the largest marginal gain
-across your current task mix. No game-API traffic; no credentials required.
+across the built-in task classes. No game-API traffic; no credentials required.
 All logic runs locally or in CI via the `optimize-crew.yml` workflow when
 it fires on changes to `data/crew/**`.
 
@@ -25,18 +25,20 @@ your own account.
 ```bash
 # 1. Get the best crew for G3 mining
 npm run skill:optimize-crew -- --account demo --task mining-g3
+```
 
-# Sample output:
-# Top 3 crews for "G3 Mining Run" (account: demo)
-#   Roster last updated: 2026-05-31T20:25:00Z. Age: 0 days.
-#
-#   1. Kirk + Chen + Pike — score 88
-#      matched: mining_rate (10 ← chen.captain), cargo_capacity (4 ← pike.officer)
-#      synergy: original_crew (kirk, chen) +5
-#      captain maneuver: "James T. Kirk captain maneuver tuned for morale recovery."
-#      officer abilities: "Chen officer ability..."; "Pike officer ability..."
-#   2. ...
+```text
+=== optimize-crew (task: mining-g3, top 3) ===
 
+Account: demo
+Status: ok
+Rank  Score  Captain  Bridge  Below Deck  Rationale
+----  -----  -------  ------  ----------  ---------
+1     0.00   kirk     chen
+{"skill":"optimize-crew","task":"mining-g3","topN":3,"generatedAt":"2026-05-31T22:31:02.229Z","accounts":[{"account":"demo","status":"ok","stalenessDays":0,"docWrite":"written","docPath":"docs/crew/demo-optimize.md","topCrews":[{"score":0,"captain":"kirk","bridge":["chen"],"belowDeck":[],"rationale":{"tags":[],"factionBonus":0,"synergyBonuses":[]}}]}]}
+```
+
+```bash
 # 2. Get progression recommendations
 npm run skill:progression -- --account demo
 ```
@@ -72,8 +74,20 @@ A JSON array of 37 `Officer` objects. Each officer has:
 | `source` | `string` | Provenance (e.g. `"docs/stfc-game-knowledge.md#section-6"`) |
 
 **Seeding:** The 37 v1 officers were hand-curated from
-`docs/stfc-game-knowledge.md` Section 6 and community knowledge, covering
-every BDA role and every faction with at least one captain + two officers.
+`docs/stfc-game-knowledge.md` Section 6 and community knowledge. Coverage
+varies by faction and BDA role; the current distribution is:
+
+| Faction | Captains | Officers | Either |
+|---|---:|---:|---:|
+| `federation` | 3 | 9 | 2 |
+| `independent` | 1 | 0 | 1 |
+| `klingon` | 3 | 4 | 1 |
+| `non_aligned` | 1 | 3 | 1 |
+| `rogue` | 1 | 0 | 0 |
+| `romulan` | 2 | 5 | 0 |
+
+See `data/crew/officers.json` for the current records; PRs are welcome to
+broaden coverage.
 
 **Adding a new officer:** Drop a new entry in `data/crew/officers.json`
 following the shape above. The closed `TagId` enum (15 tags) is defined in
@@ -225,22 +239,29 @@ npm run skill:optimize-crew -- --all --task hostile-grind
 | `--task T` | required | Task file `data/crew/tasks/{T}.yaml` must exist. |
 | `--top N` | `3` | Number of recommendations to return per account. |
 
-**Output format:**
+**Output format:** text table followed by a single-line JSON summary. Example
+from `npm run skill:optimize-crew -- --account demo --task mining-g3`:
 
+```text
+=== optimize-crew (task: mining-g3, top 3) ===
+
+Account: demo
+Status: ok
+Rank  Score  Captain  Bridge  Below Deck  Rationale
+----  -----  -------  ------  ----------  ---------
+1     0.00   kirk     chen
+{"skill":"optimize-crew","task":"mining-g3","topN":3,"generatedAt":"2026-05-31T22:31:02.229Z","accounts":[{"account":"demo","status":"ok","stalenessDays":0,"docWrite":"written","docPath":"docs/crew/demo-optimize.md","topCrews":[{"score":0,"captain":"kirk","bridge":["chen"],"belowDeck":[],"rationale":{"tags":[],"factionBonus":0,"synergyBonuses":[]}}]}]}
 ```
-Top {N} crews for "{task.name}" (account: {X})
-  Roster last updated: {iso}. Age: {N} days. [staleness banner if applicable]
 
-  1. {captain} + {officer_a} + {officer_b} — score {N}
-     matched: {tag} ({weight} ← {contributor}), ...
-     synergy: {group} ({members}) +{bonus}
-     captain maneuver: "{text}"
-     officer abilities: "{a-text}"; "{b-text}"
-  2. ...
-```
+Exit codes:
 
-Exit 0 on success; exit 1 on schema/load error, unknown task, unknown
-officer, or missing roster.
+- Exit 0 = success, including partial success when at least one account
+  produced a recommendation.
+- Exit 1 = infrastructure/load failure, such as officer database, task
+  definition, roster directory, or schema mismatch failure before per-account
+  recommendation processing can proceed.
+- Exit 2 = usage/selector error or all configured accounts degraded (for
+  example, every selected roster is missing or malformed).
 
 The skill also writes `docs/crew/{account}-optimize.md` (regenerated only
 when the input hash changes) and appends a job summary for CI.
@@ -249,8 +270,10 @@ when the input hash changes) and appends a job summary for CI.
 
 ## `skill:progression`
 
-Ranks the top officer upgrades by marginal utility across your full task
-mix.
+Ranks the top officer upgrades by marginal utility across built-in task
+classes (`mining`, `hostiles`, `armada`, `isolytic`, `pvp`, `utility`). The
+progression analyzer uses hard-coded task-class tag groups in
+`src/crew/progression.ts`; it does not iterate the task YAML files.
 
 ```bash
 npm run skill:progression -- --account main
@@ -262,19 +285,30 @@ npm run skill:progression -- --all
 | `--account X` | — | Single account. Mutually exclusive with `--all`. |
 | `--all` | — | Run against every roster in `data/crew/roster/` (skipping `demo.yaml`). |
 
-**Output format:**
+**Output format:** text table followed by a single-line JSON summary. Example
+from `npm run skill:progression -- --account demo`:
 
+```text
+=== progression ===
+
+Account: demo
+Status: ok
+Rank  Officer  Priority  Current    Reason
+----  -------  --------  ---------  ----------------------------------------------------
+1     chen     45.00     L35 R2 P1  Raises hostiles impact while closing level/rank gap.
+2     pike     35.00     L45 R3 P2  Raises hostiles impact while closing level/rank gap.
+{"skill":"progression","generatedAt":"2026-05-31T22:31:02.291Z","accounts":[{"account":"demo","status":"ok","stalenessDays":0,"docWrite":"written","docPath":"docs/crew/demo-progression.md","nextActions":[{"officerId":"chen","priority":45,"reason":"Raises hostiles impact while closing level/rank gap.","level":35,"rank":2,"promotions":1},{"officerId":"pike","priority":35,"reason":"Raises hostiles impact while closing level/rank gap.","level":45,"rank":3,"promotions":2}],"qualitySignals":[{"task_class":"pvp","covered_by_owned":1,"missing_high_value":19,"top_missing_officers":["mccoy","spock","sulu"]},{"task_class":"hostiles","covered_by_owned":2,"missing_high_value":12,"top_missing_officers":["sulu","chang","dajash-tolra"]},{"task_class":"utility","covered_by_owned":1,"missing_high_value":9,"top_missing_officers":["mccoy","spock","uhura"]},{"task_class":"armada","covered_by_owned":0,"missing_high_value":6,"top_missing_officers":["byr-chkelrer","chakotay","dajash-tolra"]},{"task_class":"mining","covered_by_owned":0,"missing_high_value":4,"top_missing_officers":["stonn","t-pring","tom-paris"]},{"task_class":"isolytic","covered_by_owned":0,"missing_high_value":2,"top_missing_officers":["locutus","seven-of-eleven"]}]}]}
 ```
-Progression candidates for account: {X}
-  Roster last updated: {iso}. Age: {N} days. [staleness banner]
 
-  1. {officer.name} — {current state} → {next state}
-     marginal utility: {N} across [{task ids}]
-     rationale: {short prose}
-  2. ...
-```
+Exit codes:
 
-Exit 0 on success; exit 1 on schema/load error or unknown officer.
+- Exit 0 = success, including partial success when at least one account
+  produced a recommendation.
+- Exit 1 = infrastructure/load failure, such as officer database, roster
+  directory, or schema mismatch failure before per-account recommendation
+  processing can proceed.
+- Exit 2 = usage/selector error or all configured accounts degraded (for
+  example, every selected roster is missing or malformed).
 
 The skill also writes `docs/crew/{account}-progression.md` (regenerated
 only when the input hash changes) and appends a job summary for CI.
@@ -297,8 +331,9 @@ No cron. Concurrency group: `stfc-crew-optimizer`.
 On each run it:
 
 1. Computes an input hash per account (officers + tasks + roster).
-2. Runs `skill:optimize-crew --all --task <each task>` and
-   `skill:progression --all`.
+2. Runs `skill:optimize-crew --all` and `skill:progression --all` once per
+   push to `data/crew/**`. Per-task iteration is not in v1; file a follow-up
+   issue if needed.
 3. Regenerates `docs/crew/{account}-optimize.md` and
    `docs/crew/{account}-progression.md` **only when the hash changed**.
 4. Commits the regenerated docs via rebase-before-push (Rule 4).
@@ -338,9 +373,8 @@ officer database and scoring model.
 
 ### Unknown-officer error
 
-```
-ERROR: roster references officer 'X' which is not in data/crew/officers.json.
-Add the officer (PR welcomed) or remove it from the roster.
+```text
+ERROR: roster references officer 'X' which is not in data/crew/officers.json. Add the officer (PR welcomed) or remove it from the roster.
 ```
 
 Source: `src/crew/database.ts` (`UNKNOWN_OFFICER_TEMPLATE`). The officer id
@@ -359,14 +393,15 @@ for any officer (this bumps `last_updated`). Or raise the thresholds via
 
 ### Missing task definition
 
-```
+```text
 ERROR: Missing required --task <id>.
+Usage: optimize-crew --task <id> [--account X | --all] [--top N]
 ```
 
 or (from the task loader):
 
-```
-Could not read task file data/crew/tasks/{id}.yaml: ENOENT
+```text
+ERROR: Could not load task "nope" (data/crew/tasks): Could not read task definition data/crew/tasks/nope.yaml: ENOENT: no such file or directory, open 'data/crew/tasks/nope.yaml'
 ```
 
 Check `ls data/crew/tasks/` for the available ids, or add a new task YAML.
