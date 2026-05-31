@@ -98,16 +98,27 @@ This feature is entirely optional — the core redemption workflow works without
 
 ---
 
-## Crew optimizer (preview)
+## Crew optimizer
 
 Two local CLI skills help inspect crew readiness from `data/crew/` inputs without touching store credentials:
 
 ```bash
-npm run skill:optimize-crew -- --task mining-g3 --account main --top 3
+# Best crew for a task
+npm run skill:optimize-crew -- --account main --task mining-g3 --top 3
+
+# Progression recommendations
 npm run skill:progression -- --account main
 ```
 
-`skill:optimize-crew` writes ranked crews to `docs/crew/{account}-optimize.md`; `skill:progression` writes upgrade recommendations to `docs/crew/{account}-progression.md`. The full operator guide is tracked in [#83](https://github.com/Jamula/stfc/issues/83).
+`skill:optimize-crew` writes ranked crews to `docs/crew/{account}-optimize.md`; `skill:progression` writes upgrade recommendations to `docs/crew/{account}-progression.md`.
+
+A roster maintenance family (`skill:roster status|add|promote|rankup|validate`) keeps `data/crew/roster/{account}.yaml` up to date.
+
+The `optimize-crew.yml` workflow (pending PR #102) fires on push to `data/crew/**` and regenerates `docs/crew/` reports automatically.
+
+v1.5 (iPhone OCR roster refresh) and v2 (read-only Discord `!crew` commands) are in development — see issues [#85](https://github.com/Jamula/stfc/issues/85) and [#91](https://github.com/Jamula/stfc/issues/91).
+
+Full operator guide: **[docs/CREW-OPTIMIZER.md](docs/CREW-OPTIMIZER.md)**.
 
 > A `.github/workflows/optimize-crew.yml` workflow regenerates `docs/crew/*.md` on every push that changes `data/crew/**`.
 
