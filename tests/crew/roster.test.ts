@@ -11,13 +11,39 @@ import {
   upsertRosterOfficer,
 } from "../../src/crew/roster.ts";
 
-const tinyRosterPath = path.join(process.cwd(), "tests/crew/fixtures/tiny-roster.yaml");
+const tinyRosterPath = path.join(process.cwd(), "tests/crew/fixtures/tiny.yaml");
 
 describe("crew roster", () => {
-  it("loads roster fixture", async () => {
+  it("loads roster fixture when account matches filename", async () => {
     const roster = await loadRoster(tinyRosterPath);
     assert.equal(roster.account, "tiny");
     assert.equal(roster.officers.length, 3);
+  });
+
+  it("rejects roster account that does not match filename", async () => {
+    const dir = fs.mkdtempSync(path.join(process.cwd(), "test-tmp-roster-"));
+    try {
+      const mismatchPath = path.join(dir, "example.yaml");
+      fs.writeFileSync(
+        mismatchPath,
+        [
+          "account: demo",
+          "last_updated: 2026-05-31T20:25:00Z",
+          "officers:",
+          "  - id: kirk",
+          "    owned: false",
+          "",
+        ].join("\n"),
+        "utf8",
+      );
+
+      await assert.rejects(
+        () => loadRoster(mismatchPath),
+        /Roster account mismatch .* account 'demo' must match filename 'example'/,
+      );
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it("throws read error for missing roster file", async () => {

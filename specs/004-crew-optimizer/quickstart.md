@@ -14,7 +14,7 @@
 
 The roster file is named after the account: `data/crew/roster/main.yaml`,
 `data/crew/roster/alt.yaml`, etc. The optimizer iterates over every
-file in `data/crew/roster/` (skipping `example.yaml`).
+file in `data/crew/roster/` (skipping `demo.yaml`).
 
 ## 2. Bootstrap an empty roster
 

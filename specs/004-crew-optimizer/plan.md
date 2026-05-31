@@ -28,7 +28,9 @@ network destination.
   `data/crew/knowledge-embeddings.json` (regenerated artifact).
 **Testing**: `node:test` + `tsx` via `tests/index.test.ts` (existing
   pattern). All new test files MUST be imported in `tests/index.test.ts`
-  in the same PR; this is non-negotiable.
+  in the same PR; this is non-negotiable. `tests/crew/realdata.test.ts`
+  is explicitly authorized to read committed `data/crew/**` seed files for
+  T100 real-data schema-drift validation.
 **Target Platform**: GitHub Actions `ubuntu-latest` for CI; macOS/Linux
   developer machines for local CLI.
 **Project Type**: Headless TypeScript CLI (Option 1 — single project).
@@ -125,7 +127,7 @@ data/
     │   └── station-defense.yaml
     ├── roster/
     │   ├── .gitkeep
-    │   └── example.yaml           # NEW (#78) — schema documentation
+    │   └── demo.yaml           # NEW (#78) — schema documentation
     └── knowledge-embeddings.json  # NEW v2 (#93) — regenerated artifact
 
 docs/
@@ -150,7 +152,7 @@ tests/
 │   ├── knowledge.test.ts          # v2
 │   └── fixtures/
 │       ├── tiny-officers.json
-│       ├── tiny-roster.yaml
+│       ├── tiny.yaml
 │       └── tiny-tasks/*.yaml
 ├── skills/
 │   ├── roster.test.ts             # NEW

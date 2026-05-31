@@ -1,25 +1,25 @@
 account: demo
 last_updated: 2026-05-31T20:25:00Z
 staleness_overrides:
-  warn: 7
   error: 14
+  warn: 7
 officers:
-  - id: kirk
-    owned: true
-    level: 60
-    rank: 4
-    promotions: 3
   - id: chen
-    owned: true
     level: 35
-    rank: 2
-    promotions: 1
-  - id: pike
     owned: true
-    level: 45
-    rank: 3
-    promotions: 2
-  - id: seven-of-eleven
-    owned: false
+    promotions: 1
+    rank: 2
   - id: gowron
+    owned: false
+  - id: kirk
+    level: 60
+    owned: true
+    promotions: 3
+    rank: 4
+  - id: pike
+    level: 45
+    owned: true
+    promotions: 2
+    rank: 3
+  - id: seven-of-eleven
     owned: false

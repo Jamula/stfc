@@ -75,6 +75,13 @@ export async function loadRoster(filePath: string): Promise<Roster> {
     );
   }
 
+  const expectedAccount = path.basename(filePath, ".yaml");
+  if (validated.data.account !== expectedAccount) {
+    throw new RosterFileError(
+      `Roster account mismatch in ${filePath}: account '${validated.data.account}' must match filename '${expectedAccount}'`,
+    );
+  }
+
   const roster = withSortedOfficers(validated.data);
   return roster;
 }

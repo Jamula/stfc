@@ -175,10 +175,10 @@ per-phase test matrix from the source plan (Part 2) is reproduced in
 |---|---|---|
 | Schema | `tests/crew/schemas.test.ts` | zod schemas accept valid examples and reject each malformed case. |
 | Data layer | `tests/crew/database.test.ts`, `tests/crew/roster.test.ts`, `tests/crew/tasks.test.ts` | YAML/JSON round-trip stability, validation error messages, unknown-officer error path. |
-| Real-data validation | `tests/crew/realdata.test.ts` | Validates committed `data/crew/officers.json` + every `data/crew/tasks/*.yaml` + `data/crew/roster/example.yaml` against the schemas. Catches schema drift between code changes and seed data. |
+| Real-data validation | `tests/crew/realdata.test.ts` | Validates committed `data/crew/officers.json` + every `data/crew/tasks/*.yaml` + `data/crew/roster/demo.yaml` against the schemas. Catches schema drift between code changes and seed data. |
 | Engine | `tests/crew/optimizer.test.ts`, `tests/crew/progression.test.ts`, `tests/crew/staleness.test.ts`, `tests/crew/diff.test.ts` | Synergy bonuses, slot legality, scoring determinism, staleness thresholds, diff symmetry. |
 | CLI | `tests/skills/roster.test.ts`, `tests/skills/optimizeCrew.test.ts`, `tests/skills/progression.test.ts` | stdout/stderr/exit-code/YAML side-effects. Temp dirs only — NEVER touches live `data/crew/roster/`. |
-| Fixtures | `tests/crew/fixtures/` | tiny-roster / tiny-officers / tiny-tasks. End-to-end ranked-output assertion. |
+| Fixtures | `tests/crew/fixtures/` | tiny.yaml / tiny-officers / tiny-tasks. End-to-end ranked-output assertion. |
 | Report | `tests/crew/report.test.ts` | Markdown byte-stability for fixed inputs. Snapshot against a checked-in golden. |
 | Pinning (workflow) | `tests/skills/optimizeCrew.test.ts` | Per Rule 3: `on:` triggers, concurrency group, action SHA pins. |
 | OCR (v1.5) | `tests/crew/ocr.test.ts` | Template-matching against fixture screenshots; diff-vs-overwrite logic. |

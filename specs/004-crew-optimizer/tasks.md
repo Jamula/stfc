@@ -92,12 +92,12 @@
 
 | T### | Maps to issue | Scope | Test acceptance |
 |---|---|---|---|
-| T100 | #78 (Scotty) | Data layer: `src/crew/{schemas,database,roster,tasks}.ts` + `data/crew/officers.json` seed (~30–50 officers) + `data/crew/tasks/*.yaml` (4 tasks: `mining-g3`, `hostile-grind`, `armada-25`, `station-defense`) + `data/crew/roster/example.yaml` | `tests/crew/{schemas,database,roster,tasks,realdata}.test.ts`; unknown-officer error path verbatim; wired into `tests/index.test.ts` |
+| T100 | #78 (Scotty) | Data layer: `src/crew/{schemas,database,roster,tasks}.ts` + `data/crew/officers.json` seed (~30–50 officers) + `data/crew/tasks/*.yaml` (4 tasks: `mining-g3`, `hostile-grind`, `armada-25`, `station-defense`) + `data/crew/roster/demo.yaml` | `tests/crew/{schemas,database,roster,tasks,realdata}.test.ts`; unknown-officer error path verbatim; wired into `tests/index.test.ts` |
 | T101 | #79 (Scotty + Bashir review) | Engine: `src/crew/{optimizer,progression,staleness,diff}.ts` + tiny-world fixtures under `tests/crew/fixtures/` | Engine tests + ≥1 fixture end-to-end run; wired into `tests/index.test.ts` |
 | T102 | #80 (Scotty) | `skill:roster` family (5 subcommands) with stable YAML round-trip + auto-bump `last_updated` + temp-dir-scoped CLI tests | Per-subcommand CLI tests + byte-stable round-trip assertion; tests NEVER touch live `data/crew/roster/`; wired into `tests/index.test.ts` |
 | T103 | #81 (Scotty) | `skill:optimize-crew` + `skill:progression`, wired into `src/cli.ts`, honour `runAll` exit-code convention | Per-account iteration + exit-code tests; wired into `tests/index.test.ts` |
 | T104 | #82 (O'Brien) | `.github/workflows/optimize-crew.yml` (no cron, group `stfc-crew-optimizer`, push on `data/crew/**` + `workflow_dispatch`, rebase-before-push) + Rule 3 pinning tests | `tests/skills/optimizeCrew.test.ts` asserts triggers, group, SHA-pinned actions; `pre-commit-checks.mjs` workflow-pinning gate passes |
-| T105 | #83 (Tuvok + Scotty) | Operator docs: `README.md` section, `docs/CREW-OPTIMIZER.md` (incl. `.gitignore` opt-out snippet), `data/crew/roster/example.yaml`, quickstart cross-ref | `example.yaml` validates via T100's real-data test |
+| T105 | #83 (Tuvok + Scotty) | Operator docs: `README.md` section, `docs/CREW-OPTIMIZER.md` (incl. `.gitignore` opt-out snippet), `data/crew/roster/demo.yaml`, quickstart cross-ref | `demo.yaml` validates via T100's real-data test |
 | T106 | #84 (Garak → Kirk → Picard) | v1 reviewer gate: APPROVE comments on every v1 PR per Rule 9b | Verdict comments live on the PRs; issue closes when all linked PRs merged |
 
 ### v1.5 — Discord/OCR (gated on OCR POC)
@@ -132,7 +132,7 @@ When Scotty picks up #78:
    `docs/stfc-game-knowledge.md` section 6. Every tag in the
    `captain_maneuver.tags` and `officer_ability.tags` arrays MUST be a
    member of the locked v1 enum (FR-002).
-3. `data/crew/roster/example.yaml` is the schema-documentation file
+3. `data/crew/roster/demo.yaml` is the schema-documentation file
    that operators copy when bootstrapping. It MUST validate against
    the schema in `tests/crew/realdata.test.ts`.
 4. Tests are wired into `tests/index.test.ts` in the SAME PR (Part 2
