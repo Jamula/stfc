@@ -27,6 +27,8 @@ your own account.
 npm run skill:optimize-crew -- --account demo --task mining-g3
 ```
 
+> Note: `generatedAt` and `stalenessDays` are replaced with placeholders; the actual CLI emits a fresh ISO-8601 timestamp and current staleness value per run.
+
 ```text
 === optimize-crew (task: mining-g3, top 3) ===
 
@@ -35,7 +37,7 @@ Status: ok
 Rank  Score  Captain  Bridge  Below Deck  Rationale
 ----  -----  -------  ------  ----------  ---------
 1     0.00   kirk     chen
-{"skill":"optimize-crew","task":"mining-g3","topN":3,"generatedAt":"2026-05-31T22:31:02.229Z","accounts":[{"account":"demo","status":"ok","stalenessDays":0,"docWrite":"written","docPath":"docs/crew/demo-optimize.md","topCrews":[{"score":0,"captain":"kirk","bridge":["chen"],"belowDeck":[],"rationale":{"tags":[],"factionBonus":0,"synergyBonuses":[]}}]}]}
+{"skill":"optimize-crew","task":"mining-g3","topN":3,"generatedAt":"<timestamp>","accounts":[{"account":"demo","status":"ok","stalenessDays":<N>,"docWrite":"written","docPath":"docs/crew/demo-optimize.md","topCrews":[{"score":0,"captain":"kirk","bridge":["chen"],"belowDeck":[],"rationale":{"tags":[],"factionBonus":0,"synergyBonuses":[]}}]}]}
 ```
 
 ```bash
@@ -242,6 +244,8 @@ npm run skill:optimize-crew -- --all --task hostile-grind
 **Output format:** text table followed by a single-line JSON summary. Example
 from `npm run skill:optimize-crew -- --account demo --task mining-g3`:
 
+> Note: `generatedAt` and `stalenessDays` are replaced with placeholders; the actual CLI emits a fresh ISO-8601 timestamp and current staleness value per run.
+
 ```text
 === optimize-crew (task: mining-g3, top 3) ===
 
@@ -250,7 +254,7 @@ Status: ok
 Rank  Score  Captain  Bridge  Below Deck  Rationale
 ----  -----  -------  ------  ----------  ---------
 1     0.00   kirk     chen
-{"skill":"optimize-crew","task":"mining-g3","topN":3,"generatedAt":"2026-05-31T22:31:02.229Z","accounts":[{"account":"demo","status":"ok","stalenessDays":0,"docWrite":"written","docPath":"docs/crew/demo-optimize.md","topCrews":[{"score":0,"captain":"kirk","bridge":["chen"],"belowDeck":[],"rationale":{"tags":[],"factionBonus":0,"synergyBonuses":[]}}]}]}
+{"skill":"optimize-crew","task":"mining-g3","topN":3,"generatedAt":"<timestamp>","accounts":[{"account":"demo","status":"ok","stalenessDays":<N>,"docWrite":"written","docPath":"docs/crew/demo-optimize.md","topCrews":[{"score":0,"captain":"kirk","bridge":["chen"],"belowDeck":[],"rationale":{"tags":[],"factionBonus":0,"synergyBonuses":[]}}]}]}
 ```
 
 Exit codes:
@@ -288,6 +292,8 @@ npm run skill:progression -- --all
 **Output format:** text table followed by a single-line JSON summary. Example
 from `npm run skill:progression -- --account demo`:
 
+> Note: `generatedAt` and `stalenessDays` are replaced with placeholders; the actual CLI emits a fresh ISO-8601 timestamp and current staleness value per run.
+
 ```text
 === progression ===
 
@@ -297,7 +303,7 @@ Rank  Officer  Priority  Current    Reason
 ----  -------  --------  ---------  ----------------------------------------------------
 1     chen     45.00     L35 R2 P1  Raises hostiles impact while closing level/rank gap.
 2     pike     35.00     L45 R3 P2  Raises hostiles impact while closing level/rank gap.
-{"skill":"progression","generatedAt":"2026-05-31T22:31:02.291Z","accounts":[{"account":"demo","status":"ok","stalenessDays":0,"docWrite":"written","docPath":"docs/crew/demo-progression.md","nextActions":[{"officerId":"chen","priority":45,"reason":"Raises hostiles impact while closing level/rank gap.","level":35,"rank":2,"promotions":1},{"officerId":"pike","priority":35,"reason":"Raises hostiles impact while closing level/rank gap.","level":45,"rank":3,"promotions":2}],"qualitySignals":[{"task_class":"pvp","covered_by_owned":1,"missing_high_value":19,"top_missing_officers":["mccoy","spock","sulu"]},{"task_class":"hostiles","covered_by_owned":2,"missing_high_value":12,"top_missing_officers":["sulu","chang","dajash-tolra"]},{"task_class":"utility","covered_by_owned":1,"missing_high_value":9,"top_missing_officers":["mccoy","spock","uhura"]},{"task_class":"armada","covered_by_owned":0,"missing_high_value":6,"top_missing_officers":["byr-chkelrer","chakotay","dajash-tolra"]},{"task_class":"mining","covered_by_owned":0,"missing_high_value":4,"top_missing_officers":["stonn","t-pring","tom-paris"]},{"task_class":"isolytic","covered_by_owned":0,"missing_high_value":2,"top_missing_officers":["locutus","seven-of-eleven"]}]}]}
+{"skill":"progression","generatedAt":"<timestamp>","accounts":[{"account":"demo","status":"ok","stalenessDays":<N>,"docWrite":"written","docPath":"docs/crew/demo-progression.md","nextActions":[{"officerId":"chen","priority":45,"reason":"Raises hostiles impact while closing level/rank gap.","level":35,"rank":2,"promotions":1},{"officerId":"pike","priority":35,"reason":"Raises hostiles impact while closing level/rank gap.","level":45,"rank":3,"promotions":2}],"qualitySignals":[{"task_class":"pvp","covered_by_owned":1,"missing_high_value":19,"top_missing_officers":["mccoy","spock","sulu"]},{"task_class":"hostiles","covered_by_owned":2,"missing_high_value":12,"top_missing_officers":["sulu","chang","dajash-tolra"]},{"task_class":"utility","covered_by_owned":1,"missing_high_value":9,"top_missing_officers":["mccoy","spock","uhura"]},{"task_class":"armada","covered_by_owned":0,"missing_high_value":6,"top_missing_officers":["byr-chkelrer","chakotay","dajash-tolra"]},{"task_class":"mining","covered_by_owned":0,"missing_high_value":4,"top_missing_officers":["stonn","t-pring","tom-paris"]},{"task_class":"isolytic","covered_by_owned":0,"missing_high_value":2,"top_missing_officers":["locutus","seven-of-eleven"]}]}]}
 ```
 
 Exit codes:
