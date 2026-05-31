@@ -321,3 +321,29 @@ scheduled run; `CODE_ALREADY_USED` responses are expected and harmless.
 | Community database (stfc.space) | <https://stfc.space/> |
 | STFC Fandom Wiki | <https://star-trek-fleet-command.fandom.com/> |
 | Reddit community | <https://www.reddit.com/r/startrekfleetcommand/> |
+
+---
+
+## 14. Community Reference Sheet (Academy / Athena / Duo Waves)
+
+The [`docs/stfc-knowledge/`](./stfc-knowledge/README.md) directory holds
+ingested third-party reference material — every artifact carries a six-field
+`## Lineage` block (Source URL, Source name, Author(s), Captured on,
+License / attribution requirements, Refresh strategy) so provenance is never
+lost.
+
+The first source ingested is a community-maintained Google Sheet covering
+**Starfleet Academy**, **Athena**, **Duo Wave Defense**, the **M91 Refinery**,
+**Independent Archives**, **G5 scrapping**, and **Critical Damage
+Mitigation**, mirrored at
+[`docs/stfc-knowledge/community-reference-sheet/`](./stfc-knowledge/community-reference-sheet/README.md).
+
+- **Authors:** JulesVern, Quasel, BlueMandalorian, and the STFC Officer Tool
+  Discord `#data-collection` community ([invite](https://discord.gg/BRhru6Vcnj)).
+- **Upstream:** <https://docs.google.com/spreadsheets/d/19gxHFoje5GGRWSmE9BtSp97j_zOnMY4jBP9gFr1zi90/edit>
+- **Refresh:** `node scripts/fetch-community-sheet.mjs` (read-only mirror; we
+  never modify the upstream sheet).
+
+Use this section for the **canonical, Scopely-sourced** terminology above and
+the community mirror for **progression numbers, crewing suggestions, and M91
+loop specifics** that aren't published on the official site.
