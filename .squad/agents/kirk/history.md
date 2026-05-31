@@ -146,3 +146,61 @@ for any future `scripts/<vendor>-ops/` wrapper.
   the workflow integration via spawnSync is still possible for end-to-end pin tests.
 
 **2026-05-18T04:00:10Z:** PR #73 merged; exit-code convention restored — see decisions.md (PR #73 → bashir-exit-code-restoration decision)
+
+## 2026-05-31 — PR #75 review: docs/stfc-knowledge ingestion (Picard, closes #74)
+
+**Verdict:** APPROVE ✅ — Comment: https://github.com/Jamula/stfc/pull/75#issuecomment-4587873547
+
+**Scope:** `docs/stfc-knowledge/README.md` (lineage convention), 11 per-tab mirrors under
+`docs/stfc-knowledge/community-reference-sheet/`, `scripts/fetch-community-sheet.mjs`,
+cross-link updates to `README.md` and `docs/stfc-game-knowledge.md`. Docs + scripts only —
+zero `src/` or `.squad/` touches.
+
+**What I checked:**
+
+1. **Fetcher script (`scripts/fetch-community-sheet.mjs`)** — gviz endpoint correctly
+   constructed as `?tqx=out:csv&gid=${tab.gid}` per tab. `TABS` array hardcodes 11 gids
+   with instructions for adding new ones from `/htmlview`. `writeFile` overwrites on every
+   run — correct refresh semantics. Error handling throws on `!res.ok`. No secrets
+   (sheet is public). Uses only `node:fs/promises` and `node:path` (ESM, Node built-ins —
+   no new deps). RFC 4180 CSV parser is inlined — handles quoted fields and escaped quotes.
+
+2. **Lineage convention** — 6 fields present and clear. Convention doc explicitly enumerates
+   "Discord channel snapshots" as a future use case alongside sheet tabs and forum excerpts.
+   Generalises cleanly to #76 (Discord ingestion). Sub-directory naming rule (source name,
+   not topic) is the right call for long-term discoverability.
+
+3. **Per-tab files** — Spot-checked 4/11 (01-intro, 02-sf-academy-building, 04-athena,
+   11-critical-damage-mitigation). All carry 6-field lineage block, tab-specific gid
+   deep-links, full attribution list, and RFC 4180 fenced CSV block. Header generated
+   from constants in the script — attribution cannot accidentally be dropped on refresh.
+
+4. **Cross-links** — README.md tree diagram accurate. `docs/stfc-game-knowledge.md` section 14
+   correctly frames the distinction: Scopely-canonical terminology in the main doc vs
+   community-derived progression/crewing numbers in the mirror. No broken refs.
+
+5. **CI** — 5/5 required checks green: CodeQL ✅, secret scan ✅, npm test ✅ (×3 runners).
+
+**LOW finding (non-blocking, logged in comment):**
+
+- `fetch-community-sheet.mjs` does not check `Content-Type` after the `!res.ok` guard.
+  A rate-limited gviz response (HTML redirect or 429 with HTML body) would silently write
+  HTML into the CSV block. Fix: `if (!res.headers.get('content-type')?.startsWith('text/csv')) throw`.
+
+## Learnings
+
+- **gviz CSV endpoint pattern** (`/gviz/tq?tqx=out:csv&gid=`) is the canonical way to
+  fetch public Google Sheet tabs without OAuth. gids come from the `/htmlview` URL source.
+  This is the reference implementation for any future sheet ingestion in this repo.
+- **Content-Type guard on fetch responses** should be standard in any ingest script that
+  hits a public API endpoint. `!res.ok` alone doesn't catch redirected HTML error pages
+  (e.g., 429 with a body, login redirects). Pattern: check both status AND content-type.
+- **Lineage-from-constants pattern** (generate the 6-field block from TABS constants in
+  the script, not hand-written per-file) is the right design: attribution cannot be
+  silently dropped on a refresh. Future ingest scripts should follow this.
+- **For #76 Discord ingestion:** the `docs/stfc-knowledge/` structure and lineage convention
+  are ready. The sub-directory will be `officer-tool-discord-codes-channel/` or similar
+  (source-named, not topic-named). The lineage convention already names Discord snapshots
+  explicitly — no convention update needed. The fetcher will differ (Discord API or
+  manual snapshot rather than gviz) but the output format (6-field lineage + fenced block)
+  is the same.

@@ -101,3 +101,10 @@ And §9 ¶1:
 **Project implication permanently established:** any future "can we just use a user account / personal token / cookie" question for Discord integration must be answered NO with the §9 citation above. The only sanctioned paths are: (a) Bot whitelist in a server we don't own, requiring admin consent, or (b) Bot in a server we DO own (relay pattern), no third-party consent required. Putting a user token in any project secret (incl. `STFC_ACCOUNTS`) would also require constitution Principle V amendment, which Picard should reject on first principles.
 
 Verdict committed at `.squad/decisions/inbox/uhura-user-token-verdict.md`.
+
+## 2026-05-31: Incoming Work — Issue #76 (Discord Channel Ingestion with 6-Field Lineage)
+
+**Status:** Queued for dispatch  
+**Lineage requirement:** 6-field tracking (source=Discord channel 1115978499400933473, name, authors, captured-on, license, refresh-strategy)
+
+Picard completed #74 (Google Sheet ingestion) with 6-field lineage on all artifacts per user directive (`.squad/decisions/inbox/copilot-directive-20260531T193553Z.md`). Same requirement applies to #76 — Uhura owns Discord channel ingestion. Refer to Picard's `mirror-google-sheet` skill (.squad/skills/mirror-google-sheet/SKILL.md) for the lineage structure and Scribe consolidation pattern. Structure will be similar: `docs/stfc-knowledge/discord-channels/` with 6-field headers on each artifact.
