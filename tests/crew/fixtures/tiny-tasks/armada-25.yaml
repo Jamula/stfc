@@ -1,0 +1,17 @@
+id: armada-25
+name: Tiny Armada 25
+description: Fixture task for armada-25 coverage in the tiny world.
+slots:
+  captain:
+    bda_role: captain
+  officer_a:
+    bda_role: officer
+  officer_b:
+    bda_role: officer
+tag_weights:
+  armada_damage: 9
+  morale_recovery: 2
+synergy_bonus: 4
+constraints:
+  exclude_officers: []
+notes: Fixture-only task definition.
