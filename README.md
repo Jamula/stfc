@@ -98,6 +98,19 @@ This feature is entirely optional — the core redemption workflow works without
 
 ---
 
+## Crew optimizer (preview)
+
+Two local CLI skills help inspect crew readiness from `data/crew/` inputs without touching store credentials:
+
+```bash
+npm run skill:optimize-crew -- --task mining-g3 --account main --top 3
+npm run skill:progression -- --account main
+```
+
+`skill:optimize-crew` writes ranked crews to `docs/crew/{account}-optimize.md`; `skill:progression` writes upgrade recommendations to `docs/crew/{account}-progression.md`. The full operator guide is tracked in [#83](https://github.com/Jamula/stfc/issues/83).
+
+---
+
 ## Project structure
 
 Built with help from [the Squad](docs/squad.md) — an AI team that lives under `.squad/`, managing the roadmap, code review, testing, and documentation. Read the squad page to understand who does what and how to route work.
