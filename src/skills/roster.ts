@@ -225,13 +225,6 @@ async function addCommand(
   }
 
   const rosterPath = path.join(rosterDir, `${account}.yaml`);
-  const rosterData = await loadRoster(rosterPath);
-  const existing = rosterData.officers.find((entry) => entry.id === officer);
-  if (existing && !force) {
-    writer.error(`Officer '${officer}' already exists in account '${account}'. Use --force to overwrite.`);
-    return { result: { error: "officer-exists" }, exitCode: 1 };
-  }
-
   const entry: RosterEntry = {
     id: officer,
     owned: true,
@@ -239,6 +232,29 @@ async function addCommand(
     rank,
     promotions,
   };
+
+  let rosterData: Roster;
+  try {
+    rosterData = await loadRoster(rosterPath);
+  } catch (err) {
+    if (!isMissingRosterFileError(err)) throw err;
+
+    const created: Roster = {
+      account,
+      last_updated: now().toISOString(),
+      officers: [entry],
+    };
+    await saveRoster(created, rosterPath);
+    writer.log(`Created ${rosterPath} with 1 officer.`);
+    return { result: { account, officer, created: true }, exitCode: 0 };
+  }
+
+  const existing = rosterData.officers.find((current) => current.id === officer);
+  if (existing && !force) {
+    writer.error(`Officer '${officer}' already exists in account '${account}'. Use --force to overwrite.`);
+    return { result: { error: "officer-exists" }, exitCode: 1 };
+  }
+
   const next = upsertRosterOfficer(rosterData, entry, now());
   await saveRoster(next, rosterPath);
   writer.log(`Added officer '${officer}' to '${account}'.`);
@@ -403,6 +419,10 @@ function parseRelativeOrAbsolute(raw: string, current: number): number {
 
 function findUnknownOfficerIds(rosterData: Roster, byId: ReadonlyMap<string, unknown>): string[] {
   return rosterData.officers.map((entry) => entry.id).filter((id) => !byId.has(id));
+}
+
+function isMissingRosterFileError(err: unknown): boolean {
+  return err instanceof RosterFileError && /\bENOENT\b/.test(err.message);
 }
 
 function renderTextTable(headers: string[], rows: string[][]): string {

@@ -211,6 +211,73 @@ describe("skill:roster add", () => {
     await assertByteStable(alphaPath);
   });
 
+  it("add bootstraps a missing roster file", async () => {
+    const neoPath = path.join(rosterDir, "neo.yaml");
+    await assert.rejects(() => fs.access(neoPath), /ENOENT/);
+
+    const writer = makeWriter();
+    const { exitCode } = await rosterSkill({
+      argv: ["add", "--account", "neo", "--officer", "kirk"],
+      rosterDir,
+      officerDatabasePath: officersPath,
+      now: () => FIXED_NOW,
+      writer,
+    });
+    assert.equal(exitCode, 0);
+    assert.deepEqual(writer.out, [`Created ${neoPath} with 1 officer.`]);
+    assert.equal(writer.err.length, 0);
+
+    const roster = await loadRoster(neoPath);
+    assert.equal(roster.account, "neo");
+    assert.equal(roster.last_updated, "2026-05-31T21:20:00.000Z");
+    assert.deepEqual(roster.officers, [
+      {
+        id: "kirk",
+        owned: true,
+        level: 1,
+        rank: 1,
+        promotions: 0,
+      },
+    ]);
+    await assertByteStable(neoPath);
+  });
+
+  it("promote, rankup, and validate still ENOENT on missing file", async () => {
+    const ghostPath = path.join(rosterDir, "ghost.yaml");
+    const cases = [
+      {
+        argv: ["promote", "--account", "ghost", "--officer", "kirk", "--level", "+1"],
+        exitCode: 1,
+      },
+      {
+        argv: ["rankup", "--account", "ghost", "--officer", "kirk"],
+        exitCode: 1,
+      },
+      {
+        argv: ["validate", "--account", "ghost"],
+        exitCode: 2,
+      },
+      {
+        argv: ["status", "--account", "ghost"],
+        exitCode: 2,
+      },
+    ];
+
+    for (const { argv, exitCode } of cases) {
+      const writer = makeWriter();
+      const result = await rosterSkill({
+        argv,
+        rosterDir,
+        officerDatabasePath: officersPath,
+        now: () => FIXED_NOW,
+        writer,
+      });
+      assert.equal(result.exitCode, exitCode, argv[0]);
+      assert.match([...writer.err, JSON.stringify(result.result)].join("\n"), /ENOENT/, argv[0]);
+      await assert.rejects(() => fs.access(ghostPath), /ENOENT/);
+    }
+  });
+
   it("is idempotent: second add without --force fails", async () => {
     const writerA = makeWriter();
     const first = await rosterSkill({
