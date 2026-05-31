@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stfc.local/specs/005-web-control-panel/contracts/audit-event.json",
+  "title": "AuditEvent",
+  "description": "Append-only JSONL row recording every write action against the SWA/Functions surface or chat tool surface. Stored under data/audit/*.jsonl. Phase 0 wave 3 — issue #110. REDACTION RULE: prompts, raw errors, args, and payloads MUST NOT appear in this stream.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "ts",
+    "actor",
+    "action",
+    "request_id",
+    "result",
+    "latency_ms",
+    "surface",
+    "workflow",
+    "run_id",
+    "correlation_id",
+    "error_code"
+  ],
+  "properties": {
+    "schema_version": {
+      "description": "Contract version. Consumers MUST reject unknown versions (Kirk #6).",
+      "type": "string",
+      "const": "1"
+    },
+    "ts": {
+      "description": "ISO-8601 UTC timestamp when the event was recorded.",
+      "type": "string",
+      "format": "date-time"
+    },
+    "actor": {
+      "description": "GitHub username (allowlisted operator) who initiated the action.",
+      "type": "string",
+      "minLength": 1
+    },
+    "action": {
+      "description": "Endpoint path (e.g. `/api/ops/redeem`) or chat tool name (e.g. `run_redeem`).",
+      "type": "string",
+      "minLength": 1
+    },
+    "request_id": {
+      "description": "Per-request UUID v4 for log correlation.",
+      "type": "string",
+      "format": "uuid"
+    },
+    "result": {
+      "description": "Coarse outcome of the action.",
+      "type": "string",
+      "enum": ["ok", "denied", "error"]
+    },
+    "latency_ms": {
+      "description": "Server-side processing latency in milliseconds.",
+      "type": "integer",
+      "minimum": 0
+    },
+    "surface": {
+      "description": "Which surface originated the action.",
+      "type": "string",
+      "enum": ["ui", "chat"]
+    },
+    "workflow": {
+      "description": "Workflow name when the action dispatched one; null otherwise. Field MUST be present even when null.",
+      "type": ["string", "null"]
+    },
+    "run_id": {
+      "description": "GitHub Actions run id (as string) when the action dispatched a workflow; null otherwise. Field MUST be present.",
+      "type": ["string", "null"]
+    },
+    "correlation_id": {
+      "description": "Cross-system correlation id (matches run-result.correlation_id when a run was started/adopted); null when not applicable. Field MUST be present.",
+      "type": ["string", "null"]
+    },
+    "error_code": {
+      "description": "Short machine-readable error code (no message text) when result != ok; null otherwise. Field MUST be present.",
+      "type": ["string", "null"]
+    }
+  },
+  "not": {
+    "anyOf": [
+      { "required": ["prompt"] },
+      { "required": ["raw_error"] },
+      { "required": ["args"] },
+      { "required": ["payload"] }
+    ]
+  }
+}

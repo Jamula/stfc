@@ -1,0 +1,128 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stfc.local/specs/005-web-control-panel/contracts/run-result.json",
+  "title": "RunResult",
+  "description": "State-change artifact emitted by redeem.yml, discord-monitor.yml, and refresh-token.yml. Committed under data/runs/*.json when business state changed OR on manual dispatch. Phase 0 wave 3 — issue #110.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "correlation_id",
+    "workflow",
+    "triggered_by",
+    "reason",
+    "started_at",
+    "finished_at",
+    "duration_ms",
+    "conclusion",
+    "business_result"
+  ],
+  "properties": {
+    "schema_version": {
+      "description": "Contract version. Consumers MUST reject unknown versions (Kirk #6).",
+      "type": "string",
+      "const": "1"
+    },
+    "correlation_id": {
+      "description": "Identity. Manual: HMAC-derived from actor+tool+canonical-args+window. Cron: `cron-{run_id}`.",
+      "type": "string",
+      "minLength": 1
+    },
+    "workflow": {
+      "description": "Which workflow produced this artifact.",
+      "type": "string",
+      "enum": ["redeem", "discord-monitor", "refresh-token"]
+    },
+    "triggered_by": {
+      "description": "GitHub username for manual dispatch; the literal string \"schedule\" for cron.",
+      "type": "string",
+      "minLength": 1
+    },
+    "reason": {
+      "description": "Free-form reason supplied with manual dispatch; null for cron.",
+      "type": ["string", "null"]
+    },
+    "started_at": {
+      "description": "ISO-8601 UTC timestamp when the workflow run started.",
+      "type": "string",
+      "format": "date-time"
+    },
+    "finished_at": {
+      "description": "ISO-8601 UTC timestamp when the workflow run finished.",
+      "type": "string",
+      "format": "date-time"
+    },
+    "duration_ms": {
+      "description": "End-to-end run duration in milliseconds.",
+      "type": "integer",
+      "minimum": 0
+    },
+    "conclusion": {
+      "description": "GitHub Actions conclusion at run completion.",
+      "type": "string",
+      "enum": ["success", "failure", "cancelled"]
+    },
+    "business_result": {
+      "description": "Workflow-specific outcome. Shape is selected by `workflow` via the top-level oneOf.",
+      "type": "object"
+    }
+  },
+  "oneOf": [
+    {
+      "properties": {
+        "workflow": { "const": "redeem" },
+        "business_result": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["claimed", "redeemed", "infra_errors"],
+          "properties": {
+            "claimed": { "type": "integer", "minimum": 0 },
+            "redeemed": { "type": "integer", "minimum": 0 },
+            "infra_errors": {
+              "type": "array",
+              "items": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "workflow": { "const": "discord-monitor" },
+        "business_result": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["digests_added", "codes_extracted", "infra_errors"],
+          "properties": {
+            "digests_added": { "type": "integer", "minimum": 0 },
+            "codes_extracted": { "type": "integer", "minimum": 0 },
+            "infra_errors": {
+              "type": "array",
+              "items": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "workflow": { "const": "refresh-token" },
+        "business_result": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["token_refreshed_for", "infra_errors"],
+          "properties": {
+            "token_refreshed_for": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "infra_errors": {
+              "type": "array",
+              "items": { "type": "string" }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

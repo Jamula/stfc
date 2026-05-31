@@ -1,4 +1,251 @@
 <!-- SYNC IMPACT REPORT -->
+Version change: 1.6.0 → 2.0.0 (MAJOR)
+Bump rationale: MAJOR — three backward-incompatible expansions of the
+project's governance posture that ride together as the 005-web-control-
+panel epic (issue #105, epic #104) opens Phase 0:
+
+  (1) Principle IV (Type-Safe Headless TypeScript CLI) gains an
+      explicit carve-out admitting a NEW runtime surface — an Azure
+      Static Web Apps static bundle (Lit + Vite at v2 launch; the
+      framework choice is the Phase 1 plan's, not the constitution's)
+      and its linked Azure Functions API (Node 24, server runtime).
+      v1.x framed the project as headless-CLI-only; v2 explicitly
+      admits a browser-plus-server-API surface alongside it. The CLI
+      runtime obligations from Principles II–III–V remain binding
+      verbatim on `src/`; the SWA + Functions surface has its own
+      typecheck and bundle-budget gates and lives outside
+      `tsconfig.json`'s existing include set.
+
+  (2) Principle I (User Safety & Trust First) gains a new
+      "Untrusted-input surfaces (chat-input addendum)" subsection.
+      Chat input (user messages, retrieved knowledge corpus, recent
+      digests) is declared UNTRUSTED for the purposes of tool
+      dispatch. Any chat-initiated tool call MUST be gated by an
+      HMAC-signed confirmation token bound to a canonical payload
+      (actor, session, tool, args, reason, request_id,
+      idempotency_key); execution MUST reject any mismatch between
+      confirmed payload and executed payload. This is a NEW
+      obligation on any future code path that lets external chat
+      content reach a tool dispatcher. It does NOT apply to the
+      existing cron-driven redeem/refresh/discord-monitor pipelines.
+
+  (3) The Security & Compliance Constraints gain a new uniform
+      workflow-input obligation: every `workflow_dispatch`-eligible
+      workflow that is callable from the SWA control-panel surface
+      (today: `redeem.yml`, `discord-monitor.yml`,
+      `refresh-token.yml`) MUST accept three inputs —
+      `correlation_id`, `triggered_by`, `reason` — defaulting to
+      empty strings so existing `schedule:` cron triggers continue
+      to work without providing them.
+
+Additionally (additive, non-breaking on their own; folded into this
+MAJOR because they ride the same web-control-panel amendment):
+
+  • Principle V (Stateless Operation & Secret Custody) gains a new
+    "Web Control Panel (v2) durable outputs" subsection enumerating
+    three new committed artifact trees: `data/runs/*.json` (per-run
+    state-change-only emission, schema-versioned),
+    `data/audit/*.jsonl` (append-only redacted audit log of every
+    SWA-initiated write call), and `data/digests/*.md` (the
+    existing digest tree, now declared TRACKED rather than ignored
+    — the `data/digests/*.md` line in `.gitignore` is scheduled for
+    removal in the Phase 3 web-control-panel implementation when
+    the chat retrieval / digest reader actually depends on the
+    files being committed; this Phase 0 commit does NOT touch
+    `.gitignore`).
+
+  • Principle V sanctioned-secrets enumeration grows by five
+    entries, all bound to the SWA + Functions runtime ONLY:
+      - `GITHUB_APP_PRIVATE_KEY` — installation-token-minting key
+        for the SWA-installed GitHub App on `Jamula/stfc`. Single
+        installation, scopes `actions:write` + `contents:read`. App
+        private key lives only as a SWA Function app setting;
+        installation tokens minted per request and cached
+        in-Function for at most 50 min (upstream 1 h TTL).
+      - `MODELS_API_TOKEN` — GitHub PAT scoped `models:read` only,
+        used by the SWA Function for GitHub Models inference. MUST
+        be a SEPARATE secret value from `GITHUB_APP_PRIVATE_KEY`.
+      - `GEMINI_API_KEY` — optional fallback key for Gemini Flash
+        when GitHub Models is unavailable.
+      - `SWA_DEPLOYMENT_TOKEN` — SWA deployment token (OR an OIDC
+        federated-credential reference if the Phase 1 deploy
+        contract spike selects OIDC; the choice is the deploy
+        contract's, not the constitution's).
+      - `AZURE_TABLE_CONNECTION_STRING` — connection string for the
+        Azure Table Storage free-tier durable cache used by the
+        refresh-token cooldown (per RD P0.3); SWA Function only.
+    All five live ONLY as SWA Function app settings or as GitHub
+    Actions secrets scoped to the SWA deploy workflow. None of them
+    are sanctioned writers of `STFC_ACCOUNTS`; the two-writer
+    custody rule for `STFC_ACCOUNTS` is unchanged.
+
+  • Security & Compliance Constraints "Outbound network scope" is
+    extended to permit the SWA Function runtime to call two new
+    external LLM hosts:
+      - `https://models.inference.ai.azure.com/...` — GitHub Models
+        inference endpoint, callable from the Function only.
+      - `https://generativelanguage.googleapis.com/...` — Gemini
+        Flash fallback, callable from the Function only.
+    Both new destinations are sanctioned for the SWA Function
+    runtime only. The redemption orchestrator (`src/`), the
+    `discord-monitor` runtime (`src/discord/**`), and the v1.5.0
+    Discord application-metadata ops scripts (the `discord-ops`
+    carve-out under `scripts/`) MUST NOT call either host.
+
+  • Explicit isolation assertions (Principle V, new subsection
+    "Separation between STFC/Discord secrets and the SWA Function
+    runtime"):
+      - "No STFC store JWTs, no `STFC_ACCOUNTS`, no `STFC_EMAIL` /
+        `STFC_PASSWORD` / `cj_pwd` / `STFC_REFRESH_PAT`, and no
+        `DISCORD_BOT_TOKEN` ever cross into the SWA Function
+        runtime. Those secrets live ONLY in GitHub Actions repo
+        secrets and are consumed ONLY by the workflows that
+        Principles III and V already sanction."
+      - "`GITHUB_APP_PRIVATE_KEY` and `MODELS_API_TOKEN` are
+        SEPARATE secret values; provisioning them with the same
+        value is a Principle V violation."
+
+Assembled: 2026-05-31
+Assembled by: Picard (M2 / Engineering Manager) — Phase 0 Wave 1 of
+  the 005-web-control-panel epic (issue #105, epic #104).
+Requested by: Cyrus Jamula
+
+Per-principle change summary:
+  I.    REVISED   — User Safety & Trust First:
+                    New "Untrusted-input surfaces (chat-input
+                    addendum)" subsection. Chat input (user
+                    messages, retrieved corpus, recent digests)
+                    declared UNTRUSTED for tool dispatch;
+                    HMAC-signed confirmation tokens required on
+                    every chat-initiated tool call; execution
+                    MUST reject any mismatch between confirmed
+                    and executed payload. Existing obligations
+                    (token redaction, sanctioned auth surfaces,
+                    bookmarklet review, `redact.ts` contract) are
+                    unchanged.
+  II.   UNCHANGED — Skill-Isolated CLI Architecture
+  III.  UNCHANGED — Resilient Upstream-API Automation
+  IV.   REVISED   — Type-Safe Headless TypeScript CLI:
+                    New "Web Control Panel runtime carve-out"
+                    subsection admitting an SWA static bundle and
+                    a linked Azure Functions API as a NEW runtime
+                    surface alongside the headless CLI. The CLI's
+                    `tsconfig.json` typechecked surface is
+                    unchanged; the SWA bundle and Functions API
+                    live outside `src/` and outside
+                    `tsconfig.json`'s include set, and have their
+                    own typecheck + bundle-budget gates declared
+                    in the Phase 1 plan. Mirrors the v1.5.0
+                    Principle V ops-script carve-out in tone:
+                    narrow, scoped, isolation-by-directory.
+  V.    REVISED   — Stateless Operation & Secret Custody:
+                    Three additions:
+                      • New "Web Control Panel (v2) durable
+                        outputs" subsection enumerating
+                        `data/runs/*.json`, `data/audit/*.jsonl`,
+                        and `data/digests/*.md` (now tracked).
+                      • Sanctioned-secrets enumeration extended
+                        by five SWA-Function-only entries:
+                        `GITHUB_APP_PRIVATE_KEY`,
+                        `MODELS_API_TOKEN`, `GEMINI_API_KEY`,
+                        `SWA_DEPLOYMENT_TOKEN`,
+                        `AZURE_TABLE_CONNECTION_STRING`.
+                      • New "Separation between STFC/Discord
+                        secrets and the SWA Function runtime"
+                        subsection codifying the hard isolation
+                        invariant.
+                    The two-writer custody rule for
+                    `STFC_ACCOUNTS` and the durable-inputs
+                    enumeration for every prior feature are
+                    unchanged.
+  VI.   UNCHANGED — Specification-First Governance
+  VII.  UNCHANGED — Artifact Hygiene
+  VIII. UNCHANGED — Wire-First Discovery
+  IX.   UNCHANGED — Test-First Discipline
+
+Speckit Reviewer Gates: UNCHANGED.
+Security & Compliance Constraints: REVISED — three changes:
+  (a) "Outbound network scope" gains the two LLM hosts
+      (`models.inference.ai.azure.com`,
+      `generativelanguage.googleapis.com`), each scoped to the SWA
+      Function runtime only.
+  (b) New "Workflow-input obligation for dispatch-eligible
+      workflows" bullet: every `workflow_dispatch`-eligible
+      workflow callable from the SWA control panel MUST declare
+      `correlation_id`, `triggered_by`, `reason` inputs (default
+      empty so cron still works); the dispatcher MUST populate
+      all three on every web-initiated run; the audit log under
+      `data/audit/*.jsonl` MUST persist them.
+  (c) "Third-party action pinning" verified-today list will be
+      extended to include the SWA deploy workflow when it lands
+      in Phase 1 (per the deploy-contract issue O'Brien owns); a
+      pinning test will be authored alongside.
+
+Development Workflow: UNCHANGED.
+Governance: UNCHANGED.
+
+Templates re-synced:
+  - .specify/templates/plan-template.md ✅ (Principle I, IV, and
+    V rows updated to reference constitution v2.0.0 and to
+    enumerate the new chat-untrusted addendum, the SWA+Functions
+    runtime carve-out, the three new durable artifact trees, the
+    five new sanctioned secrets, and the two new outbound LLM
+    hosts).
+
+Templates needing re-sync (Rule 1 grep verbatim):
+  $ grep -nE 'STFC_ACCOUNTS|promo-codes\.txt|DISCORD_BOT_TOKEN|data/discord|data/digests|huggingface|discord\.com|data/crew|skill:roster|skill:optimize-crew|optimize-crew\.yml|data/runs|data/audit|GITHUB_APP_PRIVATE_KEY|MODELS_API_TOKEN|GEMINI_API_KEY|SWA_DEPLOYMENT_TOKEN|AZURE_TABLE_CONNECTION_STRING|models\.inference\.ai\.azure\.com|generativelanguage\.googleapis\.com|correlation_id' .specify/templates/*.md
+  Matches (post-update): .specify/templates/plan-template.md
+    Principle I row (chat-untrusted addendum reference)
+    Principle IV row (SWA+Functions carve-out reference)
+    Principle V row (full enumeration of new secrets + artifacts
+      + outbound LLM hosts + workflow-input obligation;
+      constitution version reference updated to v2.0.0)
+  No matches in spec-template.md, tasks-template.md,
+    constitution-template.md, or checklist-template.md → no
+    changes required to those templates.
+
+Cross-artifact follow-ups:
+  - `.gitignore` line `data/digests/*.md` is scheduled for
+    removal in the Phase 3 web-control-panel implementation
+    (when the chat retrieval / digest reader actually depends on
+    the files being committed). This amendment makes the
+    constitutional declaration ("tracked durable artifact")
+    canonical; the implementation step removes the gitignore
+    line. NOT removed in this Phase 0 Wave 1 commit.
+  - The SWA deploy workflow, GitHub App registration, Azure
+    Table cooldown cache, HMAC confirmation-token implementation,
+    and dispatcher `correlation_id` wiring on the three target
+    workflows are all tracked under Phase 1+ of the
+    005-web-control-panel epic (#104). This amendment authorizes
+    the constitutional surfaces those issues will use; it does
+    NOT itself add code or modify any workflow.
+  - The three Known Tensions carried from v1.2.0 (Principle III
+    auth/me overclaim; Principle VII scan-path overclaim;
+    redeem/refresh concurrency lock un-principled) remain
+    unresolved and are preserved verbatim. They are deferred to
+    a subsequent revision.
+  - `package.json`, `README.md`: do not reference constitution
+    version; no update required here.
+
+Cross-check: Principles II, III, VI, VII, VIII, IX, the Speckit
+  Reviewer Gates, Development Workflow, and Governance sections
+  are byte-identical to v1.6.0. Only Principle I (chat-untrusted
+  addendum subsection added), Principle IV (SWA+Functions
+  carve-out subsection added), Principle V (web-control-panel
+  durable outputs subsection added + sanctioned-secrets
+  enumeration extended + STFC-vs-SWA separation subsection
+  added), the Security & Compliance Constraints ("Outbound
+  network scope" extended; new "Workflow-input obligation"
+  bullet added; "Third-party action pinning" note added), the
+  version header, the version footer, and this SIR header were
+  modified.
+
+Prior SIR history: v1.5.0 → v1.6.0 report is retained below and
+  is byte-identical to its previous form.
+<!-- /SYNC IMPACT REPORT -->
+
+
+<!-- SYNC IMPACT REPORT -->
 Version change: 1.5.0 → 1.6.0 (MINOR)
 Bump rationale: MINOR — Principle II gains three new sanctioned skills
 (`skill:roster` with five subcommands, `skill:optimize-crew`,
@@ -233,7 +480,7 @@ Prior SIR history: v1.3.0 → v1.4.0 report is retained in the v1.4.0
 
 # STFC Gift Redeemer Constitution
 
-**Version:** 1.6.0
+**Version:** 2.0.0
 **Ratified:** 2026-05-08
 **Last Amended:** 2026-05-31
 
@@ -279,6 +526,45 @@ this project carries; protecting them is the first obligation of the codebase.
   before it runs. The bookmarklet snippet's expanded source MUST appear in
   `docs/BOOKMARKLET.md` alongside any minified bookmark form so a user can read it
   before pasting.
+
+**Untrusted-input surfaces (chat-input addendum, v2.0.0)**
+
+The Phase 3+ web control panel introduces a new class of input surface
+that is fundamentally less trustworthy than the orchestrator's current
+inputs (env-var secrets, version-controlled config, captured-token
+JWTs). Specifically, the SWA chat endpoint receives three streams that
+MUST be treated as UNTRUSTED for the purposes of dispatching any tool
+call:
+
+- User chat messages (typed in the browser).
+- Retrieved corpus fragments from the indexed knowledge base
+  (`data/digests/*.md`, repo docs, prior `data/runs/*.json`).
+- Recent digest content surfaced into the chat context.
+
+None of these may directly cause a tool dispatch. Any chat-initiated
+tool call (today scoped to the Phase 7 write tools `trigger_redeem`
+and `trigger_discord_monitor`; `refresh-token` is deliberately
+EXCLUDED from chat-initiated dispatch) MUST flow through a
+confirmation gate:
+
+- The Function MUST return a "pending confirmation" response carrying
+  an HMAC-signed confirmation token bound to a canonical payload
+  containing AT MINIMUM: actor (authenticated SWA principal
+  username), session ID, tool name, canonical-serialized arguments,
+  the human-supplied reason string, request ID, and idempotency key.
+- The HMAC key MUST be a SWA-Function-only secret (not exposed to the
+  browser, not logged, not echoed in any response body).
+- Execution MUST refuse to dispatch unless the user re-submits the
+  confirmation token AND the server-recomputed HMAC over the
+  to-be-executed payload matches the signed payload byte-for-byte.
+- Confirmation tokens MUST have a bounded TTL and MUST NOT be
+  replayable across users, sessions, or tool names.
+
+This addendum is binding on any future code path that lets external
+chat content reach a tool dispatcher. It does NOT apply to the
+existing cron-driven redeem / refresh-token / discord-monitor
+pipelines — those run from version-controlled inputs and committed
+secrets only, with no chat surface in the loop.
 
 Rationale: Trust is the product. The previous wording promised the project handled
 *nothing* token-related, which was never true and which masked the real obligations on
@@ -356,6 +642,54 @@ The core application surface is a headless TypeScript Node CLI. Type safety is e
 - Runtime execution uses `tsx` for the skill scripts (`npm run skill:run-all`, `npm run skill:check-auth`, `npm run skill:list-gifts`, `npm run skill:claim-gifts`, `npm run skill:redeem-codes`). Tests use Node's built-in test runner through `node --import tsx --test tests/index.test.ts`.
 - Plain JavaScript helper scripts under `scripts/*.mjs` are outside the `tsconfig.json` TypeScript surface. Changes there MUST be covered by existing tests or by targeted manual/CI verification appropriate to the script; they MUST NOT be represented as TypeScript-compiled production code.
 - This repository currently has no React UI, Shadcn UI, Radix, Tailwind, `src/components/ui/`, `theme.css`, browser-extension directory, `npm run lint`, `npm run build`, or `npm run build:extension` script. Future constitutional text MUST NOT impose those obligations unless the corresponding project surface and scripts are added first.
+
+**Web Control Panel runtime carve-out (Azure Static Web Apps + linked Azure Functions, v2.0.0)**
+
+The v2.0.0 amendment admits a NEW runtime surface alongside the
+headless CLI: a webpage control panel deployed as an Azure Static
+Web App on the free tier, with a linked Azure Functions API. This
+is a narrow, scoped carve-out from the "headless TypeScript Node
+CLI" framing above — it does NOT relax the CLI's own obligations,
+which remain binding verbatim on `src/`.
+
+- The browser bundle (Lit + Vite at v2 launch; the framework choice
+  is the Phase 1 plan's, not the constitution's) lives under a
+  dedicated top-level directory (today: `web/` or `swa/` per the
+  Phase 1 structure decision) and is OUTSIDE the `tsconfig.json`
+  include set documented above. It has its own TypeScript surface,
+  its own typecheck gate, and a bundle-budget CI gate declared in
+  the Phase 1 plan.
+- The Azure Functions API (Node 24 runtime) lives under a
+  dedicated top-level directory (today: `api/` or `swa/api/` per
+  the Phase 1 structure decision) and is also OUTSIDE
+  `tsconfig.json`'s include set above. It has its own typecheck
+  gate and its own test surface.
+- Neither the SWA bundle nor the Functions API may import from
+  `src/`, and neither may be imported by `src/`. The two runtimes
+  are isolated by directory boundary and enforced by their
+  separate `tsconfig.json` files.
+- The SWA bundle MUST NOT carry, request, or forward any
+  STFC/Discord secret from Principle V's sanctioned-secrets
+  enumeration. The Functions API MUST NOT consume any STFC/Discord
+  secret either; see the Principle V "Separation between
+  STFC/Discord secrets and the SWA Function runtime" subsection
+  below for the full isolation invariant.
+- The CLI runtime (`src/`, `tests/`, the `npm run skill:*`
+  scripts, the cron workflows under
+  `.github/workflows/redeem.yml`,
+  `.github/workflows/refresh-token.yml`,
+  `.github/workflows/discord-monitor.yml`) remains the canonical
+  STFC-facing runtime. The SWA + Functions surface is a control
+  and observability layer on top of it; it dispatches the existing
+  workflows via `workflow_dispatch` (per the new workflow-input
+  obligation in Security & Compliance Constraints) but does NOT
+  reimplement any STFC or Discord behavior.
+- `npm run typecheck` for `src/` is unchanged. Adding `web/` or
+  `api/` directories does NOT extend the existing `tsc --noEmit`
+  command's scope; those directories have their own typecheck
+  invocations declared in their respective `package.json` or
+  build configuration. Future amendments may consolidate the
+  typecheck gates once the surfaces stabilize.
 
 Rationale: The build surface should match the code that exists. A strict TypeScript CLI with `tsx` execution and `tsc --noEmit` checking is enough for this project; invented UI/extension rules create false gates and distract from the actual runtime risks.
 
@@ -461,6 +795,46 @@ sanctioned surfaces below; every other surface is treated as a leak.
   None of these files contain secrets, JWTs, account material, game-
   state credentials, or screenshot bytes (no screenshot is ever
   committed; v1.5 OCR keeps image bytes in runner tmpfs only).
+- The `web-control-panel` runtime (v2.0.0; SWA + linked Functions
+  under `web/` and `api/` per the Phase 1 structure decision)
+  additionally produces the following committed durable outputs.
+  None contain secrets, JWTs, account material, prompt content, or
+  user PII; they contain workflow metadata, redacted run summaries,
+  and tool-call audit trails only:
+  - `data/runs/*.json` — per-workflow-run summary records emitted
+    on a state-change-only basis (the workflow commits the run
+    record only when business state actually changed;
+    `workflow_dispatch`-initiated manual runs always commit one).
+    Schema-versioned (`schema_version` field, starting at `"1"`)
+    per the v1 JSON Schema at
+    `specs/005-web-control-panel/contracts/run-result.json`.
+    Writers: `.github/workflows/redeem.yml`,
+    `.github/workflows/discord-monitor.yml`, and
+    `.github/workflows/refresh-token.yml` via a shared emitter
+    step. Purpose: durable run log that the SWA control panel
+    reads (via GitHub raw + ETag) to render status without
+    scraping the live STFC store.
+  - `data/audit/*.jsonl` — append-only redacted audit log of every
+    SWA-initiated write call (tool dispatch, confirmation
+    acceptance, refresh-token request). One JSON object per line,
+    schema-versioned (`schema_version` field, starting at `"1"`)
+    per the v1 JSON Schema at
+    `specs/005-web-control-panel/contracts/audit-event.json`.
+    Writer: the SWA Function audit emitter, which commits via the
+    same App installation token that dispatches the underlying
+    workflow. Records MUST pass through the `redact.ts` contract
+    (Principle I) before commit. Purpose: immutable forensic
+    record of who triggered what, when, and why.
+  - `data/digests/*.md` — daily digest tree, already produced by
+    the `discord-monitor` skill (see the bullet above) and as of
+    v2.0.0 declared TRACKED rather than ignored. The
+    `data/digests/*.md` line in `.gitignore` is scheduled for
+    removal in the Phase 3 web-control-panel implementation when
+    the chat retrieval / digest reader actually depends on the
+    files being committed; this v2.0.0 amendment does NOT itself
+    modify `.gitignore`.
+  No other `data/` subtree is sanctioned for the web-control-panel
+  runtime.
 - These are the *only* additional durable inputs and outputs the project
   recognizes.
 - A rerun after a partial failure MUST be safe: per-account failure does not block
@@ -486,6 +860,42 @@ skills carry. The current enumeration is:
   above. `DISCORD_BOT_TOKEN` is NOT a sanctioned writer of `STFC_ACCOUNTS`
   and is explicitly excluded from the Token Capture Custody surface
   (see below).
+- **Web Control Panel (v2) secrets (SWA Function runtime only):** the
+  v2.0.0 amendment introduces five secrets bound to the SWA + linked
+  Functions runtime under `web/` and `api/`. None of them are
+  sanctioned writers of `STFC_ACCOUNTS`; none of them appear in
+  `src/`, in any `npm run skill:*` script, or in the cron workflows
+  under `.github/workflows/redeem.yml`, `refresh-token.yml`, or
+  `discord-monitor.yml`:
+  - `GITHUB_APP_PRIVATE_KEY` — RSA private key for the
+    installation-token-minting GitHub App. Single installation on
+    `Jamula/stfc`, scopes `actions:write` and `contents:read`.
+    Stored ONLY as a SWA Function app setting; never copied into
+    GitHub Actions repo secrets or `.env`. Installation tokens are
+    minted per request and cached in-Function for at most 50 min
+    (upstream 1 h TTL).
+  - `MODELS_API_TOKEN` — GitHub PAT with scope `models:read` ONLY,
+    used by the SWA Function for GitHub Models inference calls.
+    MUST be a SEPARATE secret value from `GITHUB_APP_PRIVATE_KEY`;
+    provisioning both with the same value is a Principle V
+    violation. Stored only as a SWA Function app setting.
+  - `GEMINI_API_KEY` — optional Gemini Flash fallback key, used by
+    the SWA Function when GitHub Models is unavailable. Stored
+    only as a SWA Function app setting.
+  - `SWA_DEPLOYMENT_TOKEN` — Azure Static Web Apps deployment
+    token consumed by the SWA deploy workflow under
+    `.github/workflows/` (exact filename TBD by the Phase 1
+    deploy-contract spike; O'Brien may instead select an OIDC
+    federated-credential reference, in which case
+    `SWA_DEPLOYMENT_TOKEN` is not provisioned and the deploy
+    workflow uses the OIDC path). Stored as a GitHub Actions repo
+    secret, consumed only by the SWA deploy workflow.
+  - `AZURE_TABLE_CONNECTION_STRING` — connection string for the
+    Azure Table Storage free-tier table that backs the
+    refresh-token cooldown cache (per the Phase 4 atomic
+    check-and-set design). Stored only as a SWA Function app
+    setting; consumed only by Function handlers that read/write
+    the cooldown table.
 
 Secrets MAY live in:
 
@@ -615,6 +1025,43 @@ that would call a Discord REST endpoint other than `/users/@me` or
 `/applications/@me`, or would introduce a new outbound destination or
 a new secret, requires a constitutional amendment — this carve-out
 authorizes only the two endpoints named here.
+
+**Separation between STFC/Discord secrets and the SWA Function runtime (v2.0.0)**
+
+A hard invariant the v2.0.0 architecture relies on: the secrets that
+drive the STFC and Discord runtimes never cross into the SWA + linked
+Functions runtime, and vice versa. Specifically:
+
+- No STFC store JWT, no `STFC_ACCOUNTS`, no `STFC_EMAIL`, no
+  `STFC_PASSWORD` / `cj_pwd`, no `STFC_REFRESH_PAT`, and no
+  `DISCORD_BOT_TOKEN` MAY be provisioned as a SWA Function app
+  setting.
+- No SWA Function handler MAY read those secrets from any source
+  (env var, GitHub API, GitHub Actions cache, blob storage).
+- No SWA / Function HTTP response MAY return those secrets in any
+  form, masked or otherwise.
+- The SWA control panel triggers redeem / discord-monitor /
+  refresh-token work EXCLUSIVELY by dispatching the existing GitHub
+  Actions workflows via `workflow_dispatch`, using the installation
+  token minted from `GITHUB_APP_PRIVATE_KEY`. The workflows
+  themselves continue to consume the STFC/Discord secrets from
+  GitHub Actions repo secrets, on the runner, never exposed to the
+  SWA Function.
+- Conversely, the five SWA-Function-only secrets enumerated above
+  (`GITHUB_APP_PRIVATE_KEY`, `MODELS_API_TOKEN`, `GEMINI_API_KEY`,
+  `SWA_DEPLOYMENT_TOKEN`, `AZURE_TABLE_CONNECTION_STRING`) MUST
+  NOT appear in `src/`, in any `npm run skill:*` script, or in any
+  of the cron workflows under `.github/workflows/redeem.yml`,
+  `refresh-token.yml`, or `discord-monitor.yml`.
+- `GITHUB_APP_PRIVATE_KEY` and `MODELS_API_TOKEN` MUST be
+  provisioned with DIFFERENT secret values; sharing a value
+  between them is a Principle V violation.
+
+Rationale: The web control panel and the STFC orchestrator share a
+repo but have disjoint blast radii. Codifying the secret-set
+disjointness as a constitutional invariant means any future PR
+that tries to bridge the two runtimes is a visible governance
+change rather than incremental drift.
 
 ### VI. Specification-First Governance
 
@@ -830,7 +1277,43 @@ cannot enforce on its own.
   scripts are NOT part of the monitor runtime, MUST live outside `src/`,
   and MUST redact `DISCORD_BOT_TOKEN` from every error path per FR-012.
   This is the only authorized write traffic to Discord; the read-only
-  constraint on the monitor runtime is preserved.**
+  constraint on the monitor runtime is preserved.** The SWA Function
+  runtime (v2.0.0; lives under `api/` per the Phase 1 structure
+  decision, NOT in `src/`) additionally calls two LLM inference hosts:
+  `https://models.inference.ai.azure.com/...` (GitHub Models, primary)
+  and `https://generativelanguage.googleapis.com/...` (Gemini Flash,
+  fallback). Both are sanctioned for the SWA Function runtime ONLY;
+  the redemption orchestrator (`src/`), the `discord-monitor` runtime
+  (`src/discord/**`), and any `scripts/discord-ops/` ops script MUST
+  NOT call either host. The SWA Function MAY additionally call the
+  GitHub REST API (`https://api.github.com/...`) for installation-
+  token minting and `workflow_dispatch` dispatch using the
+  installation token derived from `GITHUB_APP_PRIVATE_KEY`, and MAY
+  read repo-raw content from `https://raw.githubusercontent.com/...`
+  for the run-status feed (per RD P0.1 ETag design). Any other
+  outbound destination from the SWA Function MUST be added by
+  constitutional amendment.
+- **Workflow-input obligation for dispatch-eligible workflows
+  (v2.0.0).** Every `workflow_dispatch`-eligible workflow that is
+  callable from the SWA control-panel surface (today:
+  `.github/workflows/redeem.yml`,
+  `.github/workflows/discord-monitor.yml`, and
+  `.github/workflows/refresh-token.yml`) MUST declare three
+  `workflow_dispatch.inputs`: `correlation_id` (string, default
+  `""`), `triggered_by` (string, default `""`), and `reason`
+  (string, default `""`). Defaults are empty so that `schedule:`
+  cron triggers continue to work without providing them. The
+  dispatcher in the SWA Function MUST populate all three on every
+  web-initiated run; the audit log under `data/audit/*.jsonl` MUST
+  persist them; workflows MAY surface them in the Job Summary;
+  cron runs naturally show empty strings. This obligation does NOT
+  apply to workflows that are not dispatch-eligible from the SWA
+  surface (e.g., the `squad-*.yml` family, `optimize-crew.yml`,
+  `test.yml`, `squad-test-gate.yml`, `squad-artifact-hygiene.yml`).
+  Wiring the three target workflows is tracked under Phase 1+ of
+  the 005-web-control-panel epic (#104); this constitutional
+  obligation lands in v2.0.0, the per-workflow YAML changes land
+  with the dispatcher PRs.
 - **Secret hygiene in artifacts.** Specs, plans, tasks, PR descriptions, and other
   committed artifacts MUST NOT contain real JWTs, real account names, real player IDs,
   or unsanitized API responses. Principle VII covers this obligation; automated
@@ -1001,4 +1484,4 @@ reality, or it must be updated — never left as a zombie.
 - **Resolution scheduled:** v1.3.0
 - **Tracking:** `.squad/decisions/inbox/v1.3.0-backlog.md`
 
-**Version**: 1.6.0 | **Ratified**: 2026-05-08 | **Last Amended**: 2026-05-31
+**Version**: 2.0.0 | **Ratified**: 2026-05-08 | **Last Amended**: 2026-05-31

@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stfc.local/specs/005-web-control-panel/contracts/chat-tool-call.json",
+  "title": "ChatToolCall",
+  "description": "Canonical chat tool-call payload presented to the user for confirmation and bound by HMAC (RD P1.9) for execution in Phase 7. Phase 0 wave 3 — issue #110. The HMAC over this payload ensures the executed payload cannot be substituted for the confirmed one.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "tool_name",
+    "args",
+    "actor",
+    "session_id",
+    "request_id",
+    "reason",
+    "idempotency_key",
+    "issued_at",
+    "ttl_seconds"
+  ],
+  "properties": {
+    "schema_version": {
+      "description": "Contract version. Consumers MUST reject unknown versions (Kirk #6).",
+      "type": "string",
+      "const": "1"
+    },
+    "tool_name": {
+      "description": "Registered tool name to invoke (e.g. `run_redeem`, `run_discord_monitor`, `run_refresh_token`). Validated against the tool registry at execution time.",
+      "type": "string",
+      "minLength": 1
+    },
+    "args": {
+      "description": "Canonical (sorted-keys) tool arguments object. Hashed into idempotency_key.",
+      "type": "object"
+    },
+    "actor": {
+      "description": "GitHub username (allowlisted operator) who initiated the chat tool call.",
+      "type": "string",
+      "minLength": 1
+    },
+    "session_id": {
+      "description": "Chat session identifier this confirmation belongs to.",
+      "type": "string",
+      "minLength": 1
+    },
+    "request_id": {
+      "description": "Per-request UUID v4 for log correlation.",
+      "type": "string",
+      "format": "uuid"
+    },
+    "reason": {
+      "description": "Free-form user-supplied reason captured in the confirm modal; surfaced in audit + run-result.",
+      "type": "string"
+    },
+    "idempotency_key": {
+      "description": "HMAC of actor + tool_name + canonical-args + 5-minute window. Deterministic dedup key (RD P0.3).",
+      "type": "string",
+      "minLength": 1
+    },
+    "issued_at": {
+      "description": "ISO-8601 UTC timestamp when the confirmation token was issued.",
+      "type": "string",
+      "format": "date-time"
+    },
+    "ttl_seconds": {
+      "description": "Seconds until the confirmation token expires. Default 60, min 5, max 300.",
+      "type": "integer",
+      "minimum": 5,
+      "maximum": 300,
+      "default": 60
+    }
+  }
+}
