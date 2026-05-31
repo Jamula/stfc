@@ -1,0 +1,23 @@
+id: armada-25
+name: Level 25 Armada
+description: Coordinated armada damage and survivability for alliance runs.
+slots:
+  captain:
+    bda_role: captain
+  officer_a:
+    bda_role: officer
+  officer_b:
+    bda_role: officer
+tag_weights:
+  armada_damage: 9
+  armada_mitigation: 7
+  morale_recovery: 2
+synergy_bonus: 6
+faction_bonus:
+  federation: 1
+  klingon: 1
+  romulan: 1
+constraints:
+  exclude_officers: []
+notes: |
+  Favors armada specialists and stable faction squads.

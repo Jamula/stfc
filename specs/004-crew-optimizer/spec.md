@@ -24,7 +24,7 @@ workflow report) is downstream of having an optimizer that produces stable,
 explainable rankings.
 
 **Independent Test**: With the tiny-world fixture (`tests/crew/fixtures/`
-— `tiny-roster.yaml` + `tiny-officers.json` + `tiny-tasks/*.yaml`),
+— `tiny.yaml` + `tiny-officers.json` + `tiny-tasks/*.yaml`),
 running `optimize-crew --account fixture --task tiny-mining` returns a
 deterministic ranked list whose top entry matches the golden output. Re-run
 yields byte-identical results.

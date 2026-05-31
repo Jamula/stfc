@@ -1,0 +1,19 @@
+id: mining-g3
+name: G3 Mining Run
+description: Standard tritanium and dilithium pull across G3 nodes.
+slots:
+  captain:
+    bda_role: captain
+  officer_a:
+    bda_role: officer
+  officer_b:
+    bda_role: officer
+tag_weights:
+  mining_rate: 10
+  cargo_capacity: 4
+  warp_range: 1
+synergy_bonus: 5
+constraints:
+  exclude_officers: []
+notes: |
+  Baseline mining configuration. Warp range is a tie-breaker for deep-node access.

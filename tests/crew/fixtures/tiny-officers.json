@@ -1,0 +1,56 @@
+[
+  {
+    "id": "kirk",
+    "name": "James T. Kirk",
+    "faction": "federation",
+    "synergy_groups": ["enterprise_crew"],
+    "captain_maneuver": {
+      "text": "Morale grants crew-wide offensive momentum.",
+      "tags": ["morale_recovery", "pvp_damage"]
+    },
+    "officer_ability": {
+      "text": "Raises group damage while morale is active.",
+      "tags": ["pvp_damage"]
+    },
+    "bda_role": "captain",
+    "rank_curve": "back_loaded",
+    "added_in_patch": "M90",
+    "source": "hand-curated from docs/stfc-game-knowledge.md + community knowledge"
+  },
+  {
+    "id": "chen",
+    "name": "Cadet Chen",
+    "faction": "federation",
+    "synergy_groups": ["hostile_grind_early", "cadet_crew"],
+    "captain_maneuver": {
+      "text": "Mitigates hostile energy-weapon pressure.",
+      "tags": ["hostile_mitigation"]
+    },
+    "officer_ability": {
+      "text": "Bridge survivability bonus against hostiles.",
+      "tags": ["hostile_mitigation"]
+    },
+    "bda_role": "officer",
+    "rank_curve": "linear",
+    "added_in_patch": "M90",
+    "source": "hand-curated from docs/stfc-game-knowledge.md + community knowledge"
+  },
+  {
+    "id": "spock",
+    "name": "Spock",
+    "faction": "federation",
+    "synergy_groups": ["enterprise_crew"],
+    "captain_maneuver": {
+      "text": "Reinforces shields and tactical consistency.",
+      "tags": ["pvp_mitigation", "morale_recovery"]
+    },
+    "officer_ability": {
+      "text": "Improves bridge performance and defense.",
+      "tags": ["pvp_mitigation"]
+    },
+    "bda_role": "either",
+    "rank_curve": "front_loaded",
+    "added_in_patch": "M90",
+    "source": "hand-curated from docs/stfc-game-knowledge.md + community knowledge"
+  }
+]
