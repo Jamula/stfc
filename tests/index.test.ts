@@ -30,6 +30,7 @@ import "./digest/health-remediation.test.ts";
 import "./skills/discordMonitor.test.ts";
 import "./skills/roster.test.ts";
 import "./skills/optimizeCrew.test.ts";
+import "./skills/optimizeCrewWorkflow.test.ts";
 import "./skills/progression.test.ts";
 import "./scripts/pre-commit.test.ts";
 import "./scripts/pre-push.test.ts";

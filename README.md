@@ -109,6 +109,8 @@ npm run skill:progression -- --account main
 
 `skill:optimize-crew` writes ranked crews to `docs/crew/{account}-optimize.md`; `skill:progression` writes upgrade recommendations to `docs/crew/{account}-progression.md`. The full operator guide is tracked in [#83](https://github.com/Jamula/stfc/issues/83).
 
+> A `.github/workflows/optimize-crew.yml` workflow regenerates `docs/crew/*.md` on every push that changes `data/crew/**`.
+
 ---
 
 ## Project structure
