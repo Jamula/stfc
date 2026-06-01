@@ -78,6 +78,7 @@ import "./crew/handlers/officers.test.ts";
 import "./crew/handlers/dispatch.test.ts";
 import "./crew/knowledge.test.ts";
 import "./crew/handlers/knowledge.test.ts";
+import "./skills/knowledgeRebuild.test.ts";
 import "./skills/swaDeploy.test.ts";
 import "./skills/swaProject.test.ts";
 import "./web/shell.test.ts";

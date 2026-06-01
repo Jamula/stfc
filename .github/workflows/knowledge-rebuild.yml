@@ -1,0 +1,64 @@
+# Push-on-change knowledge-embedding rebuilder.
+#
+# Triggered whenever knowledge source files change (e.g. after a game-data
+# update) or manually via workflow_dispatch. Runs the embedding pipeline and
+# commits the updated knowledge-embeddings.json back to the branch.
+#
+# Push-on-change only — no periodic cron. The pipeline is pure-compute +
+# a single file write and finishes in seconds.
+name: Rebuild knowledge embeddings
+
+on:
+  push:
+    paths:
+      - "docs/stfc-game-knowledge.md"
+      - "data/crew/officers.json"
+      - "data/crew/tasks/**"
+  workflow_dispatch: {}
+
+permissions:
+  # `write` so the post-run step can commit knowledge-embeddings.json back
+  # to the repo using the default GITHUB_TOKEN.
+  contents: write
+
+# Opt into the Node 24 runtime for actions/* internals (default June 2026).
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+# Distinct from stfc-gift-redeemer, stfc-crew-optimizer, and
+# stfc-knowledge-monitor — knowledge rebuild does not share the git-push
+# lock with those workflows.
+concurrency:
+  group: stfc-knowledge-rebuild
+  cancel-in-progress: false
+
+jobs:
+  rebuild:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.0
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4.4.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run crew:knowledge:rebuild
+
+      - name: Commit knowledge embeddings (if changed)
+        if: always()
+        run: |
+          set -euo pipefail
+          if [ -z "$(git status --porcelain data/crew/knowledge-embeddings.json)" ]; then
+            echo "No embeddings changed."
+            exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- data/crew/knowledge-embeddings.json
+          git commit -m "chore(crew): regen knowledge embeddings [skip ci]"
+          git pull --rebase origin "$GITHUB_REF_NAME" || true
+          git push origin "HEAD:$GITHUB_REF_NAME"
