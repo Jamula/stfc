@@ -94,7 +94,8 @@ describe("crew knowledge — chunking", () => {
     assert.ok(hostiles, "expected a Hostiles chunk");
     assert.equal(hostiles!.source, "docs/synthetic.md");
     assert.equal(hostiles!.startLine, 3);
-    assert.ok(hostiles!.endLine >= hostiles!.startLine);
+    // ## Hostiles is line 3; ## Mining starts at line 7 → Hostiles section ends at line 6.
+    assert.equal(hostiles!.endLine, 6);
   });
 
   it("splits oversized markdown sections with overlap", () => {
@@ -246,6 +247,13 @@ describe("crew knowledge — retrieval", () => {
       /Hostile|hostile/.test(top.chunk.text),
       `expected hostile-related top hit, got: ${top.chunk.text.slice(0, 80)}`,
     );
+    // Verify descending score ordering across all returned hits.
+    for (let i = 0; i + 1 < hostileHits.length; i++) {
+      assert.ok(
+        hostileHits[i]!.score >= hostileHits[i + 1]!.score,
+        `expected hit[${i}].score (${hostileHits[i]!.score.toFixed(4)}) >= hit[${i + 1}].score (${hostileHits[i + 1]!.score.toFixed(4)})`,
+      );
+    }
 
     const miningHits = await retrieve("mining rate cargo capacity", cache, createHashedEmbedder(), 1);
     assert.equal(miningHits.length, 1);

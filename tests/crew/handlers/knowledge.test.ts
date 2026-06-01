@@ -97,6 +97,7 @@ describe("crew knowledge handler", () => {
     );
     assert.match(ok, /top 2|#2 —/);
 
+    // out-of-range high (> 5)
     await assert.rejects(
       () =>
         handleKnowledge(
@@ -106,6 +107,27 @@ describe("crew knowledge handler", () => {
       /Invalid `--top` value/,
     );
 
+    // out-of-range low (< 1)
+    await assert.rejects(
+      () =>
+        handleKnowledge(
+          makeCommand("knowledge", { _: "mining", _0: "mining", top: "0" }),
+          makeDeps(cache),
+        ),
+      /Invalid `--top` value/,
+    );
+
+    // non-integer string (not "true")
+    await assert.rejects(
+      () =>
+        handleKnowledge(
+          makeCommand("knowledge", { _: "mining", _0: "mining", top: "abc" }),
+          makeDeps(cache),
+        ),
+      /Invalid `--top` value/,
+    );
+
+    // bare flag (no value)
     await assert.rejects(
       () =>
         handleKnowledge(
