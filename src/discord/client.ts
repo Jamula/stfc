@@ -1,4 +1,4 @@
-// T024 [US1] — Discord REST client (read-only).
+// T024 [US1] — Discord REST client.
 //
 // We use a thin custom fetch wrapper rather than @discordjs/rest so:
 //   - the `fetchImpl` injection seam mirrors `src/api/client.ts`, which keeps
@@ -16,6 +16,7 @@ import { redactString } from "../lib/redact.ts";
 import {
   BotIdentitySchema,
   DiscordMessageArraySchema,
+  DiscordMessageSchema,
   type BotIdentity,
   type DiscordMessage,
 } from "./schemas.ts";
@@ -25,6 +26,7 @@ const ENV_VAR = "DISCORD_BOT_TOKEN";
 export const DISCORD_API_BASE = "https://discord.com/api/v10";
 const USER_AGENT = "STFC-Discord-Monitor (https://github.com/Jamula/stfc, 0.1.0)";
 const DEFAULT_TIMEOUT_MS = 10_000;
+type DiscordHttpMethod = "GET" | "POST";
 
 // ── Typed errors ────────────────────────────────────────────────────────────
 
@@ -167,13 +169,31 @@ export class DiscordClient {
     return parsed.data;
   }
 
+  async postMessage(channelId: string, content: string): Promise<DiscordMessage> {
+    const path = `/channels/${channelId}/messages`;
+    const json = await this.requestJson("POST", path, { content });
+    const parsed = DiscordMessageSchema.safeParse(json);
+    if (!parsed.success) {
+      throw new SchemaMismatchError(
+        redactString(
+          `POST ${path} schema mismatch: ${parsed.error.message}`,
+        ),
+      );
+    }
+    return parsed.data;
+  }
+
   // ── Internals ────────────────────────────────────────────────────────────
 
-  private async requestJson(method: "GET", path: string): Promise<unknown> {
+  private async requestJson(
+    method: DiscordHttpMethod,
+    path: string,
+    body?: unknown,
+  ): Promise<unknown> {
     let retries = 0;
     let transientRetries = 0;
     for (;;) {
-      const res = await this.attempt(method, path);
+      const res = await this.attempt(method, path, body);
       const status = res.status;
 
       if (status === 200) {
@@ -245,18 +265,25 @@ export class DiscordClient {
     }
   }
 
-  private async attempt(method: "GET", path: string): Promise<Response> {
+  private async attempt(
+    method: DiscordHttpMethod,
+    path: string,
+    body?: unknown,
+  ): Promise<Response> {
     const url = `${this.baseUrl}${path}`;
     const signal = AbortSignal.timeout(this.timeoutMs);
+    const headers: Record<string, string> = {
+      // Bot token MUST be sent with the `Bot ` prefix per Discord docs.
+      Authorization: `Bot ${this.token}`,
+      Accept: "application/json",
+      "User-Agent": USER_AGENT,
+    };
+    if (body !== undefined) headers["Content-Type"] = "application/json";
     try {
       return await this.fetchImpl(url, {
         method,
-        headers: {
-          // Bot token MUST be sent with the `Bot ` prefix per Discord docs.
-          Authorization: `Bot ${this.token}`,
-          Accept: "application/json",
-          "User-Agent": USER_AGENT,
-        },
+        headers,
+        body: body === undefined ? undefined : JSON.stringify(body),
         signal,
       });
     } catch (err) {
@@ -272,7 +299,7 @@ export class DiscordClient {
 
   private async parseJson(
     res: Response,
-    method: "GET",
+    method: DiscordHttpMethod,
     path: string,
   ): Promise<unknown> {
     const contentType = res.headers.get("content-type") ?? "";

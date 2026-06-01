@@ -54,6 +54,25 @@ export const DiscordAllowlistSchema = z
 export type DiscordAllowlistEntry = z.infer<typeof DiscordAllowlistEntrySchema>;
 export type DiscordAllowlist = z.infer<typeof DiscordAllowlistSchema>;
 
+// ── Feature 004: command-channels.json ───────────────────────────────────────
+
+export const CommandChannelAllowlistEntrySchema = z
+  .object({
+    guild_id: SnowflakeSchema,
+    channel_id: SnowflakeSchema,
+    account: z.string().min(1).optional(),
+    notes: z.string().min(1).optional(),
+  })
+  .strict();
+
+export const CommandChannelAllowlistSchema = z.array(
+  CommandChannelAllowlistEntrySchema,
+);
+
+export type CommandChannelAllowlistEntry = z.infer<
+  typeof CommandChannelAllowlistEntrySchema
+>;
+
 // ── Entity 6: cursors.json ──────────────────────────────────────────────────
 
 export const IngestionCursorSchema = z
@@ -220,6 +239,7 @@ export type ClassifierModel = z.infer<typeof ClassifierModelSchema>;
 export const DiscordMessageSchema = z
   .object({
     id: SnowflakeSchema,
+    guild_id: SnowflakeSchema.optional(),
     channel_id: SnowflakeSchema,
     content: z.string(),
     timestamp: z.string(),

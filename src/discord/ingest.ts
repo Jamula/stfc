@@ -30,6 +30,7 @@ import type {
   BotIdentity,
   ChannelErrorReason,
   DiscordAllowlist,
+  DiscordMessage,
   IngestedMessage,
   IngestionCursorMap,
   RunHealth,
@@ -87,21 +88,23 @@ const PAGE_LIMIT = 100;
 
 /** Minimal client surface ingest needs. Real implementation: DiscordClient;
  *  tests inject a structural stub. */
+export interface IngestDiscordMessage {
+  id: string;
+  guild_id?: string;
+  channel_id: string;
+  content: string;
+  timestamp: string;
+  edited_timestamp?: string | null;
+  author: { id: string; username: string; bot?: boolean };
+  type?: number;
+}
+
 export interface IngestClient {
   getMe(): Promise<unknown>;
   getChannelMessages(
     channelId: string,
     opts: { after?: string; limit?: number },
-  ): Promise<
-    Array<{
-      id: string;
-      channel_id: string;
-      content: string;
-      timestamp: string;
-      edited_timestamp?: string | null;
-      author: { id: string; username: string; bot?: boolean };
-    }>
-  >;
+  ): Promise<IngestDiscordMessage[]>;
 }
 
 export interface IngestOptions {
@@ -111,6 +114,7 @@ export interface IngestOptions {
 
 export interface IngestOutput {
   messages: IngestedMessage[];
+  discordMessages: DiscordMessage[];
   newCursors: IngestionCursorMap;
   health: Partial<RunHealth>;
   /** Feature 003 (T014/T015): validated bot identity from GET /users/@me.
@@ -141,6 +145,7 @@ export async function ingestDiscord(
   const enabled = allowlist.entries.filter((e) => e.enabled);
 
   const messages: IngestedMessage[] = [];
+  const discordMessages: DiscordMessage[] = [];
   const newCursors: IngestionCursorMap = { ...cursors };
   const channelsErrored: RunHealth["channelsErrored"] = [];
   let channelsRead = 0;
@@ -155,7 +160,9 @@ export async function ingestDiscord(
       );
 
       for (const m of msgs) {
-        messages.push(toIngested(m, entry.serverId, entry.channelLabel));
+        const enriched = { ...m, guild_id: entry.serverId };
+        discordMessages.push(enriched as DiscordMessage);
+        messages.push(toIngested(enriched, entry.serverId, entry.channelLabel));
       }
 
       if (lastMessageId !== undefined) {
@@ -185,6 +192,7 @@ export async function ingestDiscord(
   }
   return {
     messages,
+    discordMessages,
     newCursors,
     botIdentity,
     health: {
@@ -291,7 +299,7 @@ function compareSnowflakes(a: string, b: string): number {
 }
 
 function toIngested(
-  m: Awaited<ReturnType<IngestClient["getChannelMessages"]>>[number],
+  m: IngestDiscordMessage,
   guildId: string,
   channelLabel: string,
 ): IngestedMessage {
