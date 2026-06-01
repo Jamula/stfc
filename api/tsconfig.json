@@ -9,10 +9,10 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "outDir": "dist",
-    "rootDir": "src",
+    "rootDir": ".",
     "paths": {
       "@stfc/contracts/*": ["../shared/contracts/*"]
     }
   },
-  "include": ["src/**/*.ts"]
+  "include": ["src/**/*.ts", "_lib/**/*.ts"]
 }
