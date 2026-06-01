@@ -43,7 +43,14 @@ jobs:
 
       - run: npm ci
 
-      - run: npm run skill:optimize-crew -- --all
+      - name: Optimize crew for each task
+        run: |
+          set -euo pipefail
+          for yaml in data/crew/tasks/*.yaml; do
+            id="${yaml%.yaml}"
+            id="${id#data/crew/tasks/}"
+            npm run skill:optimize-crew -- --task "$id" --all
+          done
 
       - run: npm run skill:progression -- --all
 

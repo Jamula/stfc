@@ -98,10 +98,13 @@ describe(".github/workflows/optimize-crew.yml", () => {
     assert.strictEqual(workflow.permissions.contents, "write");
   });
 
-  it("runs `npm run skill:optimize-crew -- --all`", () => {
+  it("runs skill:optimize-crew once per task with --task <id>", () => {
+    const loopStep = runBlocks.find(
+      (block) => block.includes("npm run skill:optimize-crew") && block.includes("--task"),
+    );
     assert.ok(
-      runBlocks.includes("npm run skill:optimize-crew -- --all"),
-      "workflow must invoke skill:optimize-crew with --all",
+      loopStep !== undefined,
+      "workflow must invoke skill:optimize-crew with --task per discovered task",
     );
   });
 
