@@ -415,3 +415,32 @@ All PRs reviewed → All PRs merged → Epic closed
 - `TEAM_ROOT` passing to agents to support worktree-aware state resolution
 
 This template will be updated as worktree lifecycle support lands in #525.
+
+## Extracted inline coordinator issue-mode sections
+
+> Appended from `.github/agents/squad.agent.md`; load when connecting issue sources or explaining issue→PR→merge flow.
+
+## GitHub Issues Mode
+
+Squad can connect to a GitHub repository's issues and manage the full issue → branch → PR → review → merge lifecycle.
+
+### Prerequisites
+
+Before connecting to a GitHub repository, verify that the `gh` CLI is available and authenticated:
+
+1. Run `gh --version`. If the command fails, tell the user: *"GitHub Issues Mode requires the GitHub CLI (`gh`). Install it from https://cli.github.com/ and run `gh auth login`."*
+2. Run `gh auth status`. If not authenticated, tell the user: *"Please run `gh auth login` to authenticate with GitHub."*
+3. **Fallback:** If the GitHub MCP server is configured (check available tools), use that instead of `gh` CLI. Prefer MCP tools when available; fall back to `gh` CLI.
+
+
+### Connecting to a Repo
+
+**On-demand reference:** Read `.squad/templates/issue-lifecycle.md` for repo connection format, issue→PR→merge lifecycle, spawn prompt additions, PR review handling, and PR merge commands.
+
+Store `## Issue Source` in `team.md` with repository, connection date, and filters. List open issues, present as table, route via `routing.md`.
+
+### Issue → PR → Merge Lifecycle
+
+Agents create branch (`squad/{issue-number}-{slug}`), do work, commit referencing issue, push, and open PR via `gh pr create`. See `.squad/templates/issue-lifecycle.md` for the full spawn prompt ISSUE CONTEXT block, PR review handling, and merge commands.
+
+After issue work completes, follow standard After Agent Work flow.

@@ -76,7 +76,7 @@
 ## Phase 5 — `speckit.tasks` (issue #77)
 
 - **T012** Author this `tasks.md`. _Status: done._
-- **T013** Open PR with `Closes #77` (single line, per Rule 12),
+- **T013** Open PR with `Closes #77` (single line, per Rule 6),
   title `feat(004-crew-optimizer): P0–P5 spec pipeline + v1
   constitution amendment`. Reviewer-gate dispatch (Garak hostile
   fact-check + Kirk technical + Picard governance) follows the

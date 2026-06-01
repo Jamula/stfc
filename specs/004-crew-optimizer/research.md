@@ -183,7 +183,7 @@ per-phase test matrix from the source plan (Part 2) is reproduced in
 | Pinning (workflow) | `tests/skills/optimizeCrew.test.ts` | Per Rule 3: `on:` triggers, concurrency group, action SHA pins. |
 | OCR (v1.5) | `tests/crew/ocr.test.ts` | Template-matching against fixture screenshots; diff-vs-overwrite logic. |
 | Discord ingestion (v1.5) | `tests/discord/imageAttachments.test.ts` | Mocked REST client; content-type filter; CDN download to tmpfs. |
-| PR-opening (v1.5) | `tests/skills/rosterSync.test.ts` | Mocked `gh` CLI; branch name; PR body; `Closes #N` line emission per Rule 12. |
+| PR-opening (v1.5) | `tests/skills/rosterSync.test.ts` | Mocked `gh` CLI; branch name; PR body; `Closes #N` line emission per Rule 6. |
 | Command parser (v2) | `tests/discord/commandParser.test.ts` | `!crew` prefix; allowlist; rate-limit; help output. |
 | Command handlers (v2) | `tests/crew/commandHandlers.test.ts` | One test per verb; mocked roster/DB; Discord-output snapshots. |
 | Knowledge (v2) | `tests/crew/knowledge.test.ts` | Chunking determinism; embedding cache invalidation; top-k similarity ordering. |
