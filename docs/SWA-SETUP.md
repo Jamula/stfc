@@ -231,3 +231,67 @@ After completing steps 1–5:
 - `.github/workflows/swa-deploy.yml` — deploy + preview workflow
 - `staticwebapp.config.json` — route rules + security headers
 - `scripts/azure/create-swa.sh` — idempotent resource creation script
+
+---
+
+## Authorization configuration
+
+The control panel uses a **two-layer authorization model** (threat-model S-1, E-1):
+
+1. **SWA route gate** — `staticwebapp.config.json` requires `allowedRoles: ["stfc_operator"]`.
+   This is the outer gate; users without the role cannot reach any route.
+2. **Function-side env-var allowlist** — every Azure Function handler calls
+   `requireAllowedUser(req)` from `api/src/_lib/auth.ts` as its first statement.
+   This re-validates the SWA-injected `X-MS-CLIENT-PRINCIPAL` header against an
+   explicit username allowlist, providing defence-in-depth against forged principals.
+
+### Required Function app settings
+
+Set these in Azure Portal → Static Web Apps → `stfc-control-panel` → **Configuration**,
+or via `az staticwebapp appsettings set`:
+
+| Setting | Type | Description |
+|---|---|---|
+| `SQUAD_ALLOWED_USERS` | Comma-separated GitHub usernames | Users allowed to access the API (e.g. `cyrusjamula,teammate`). Must include every operator invited via SWA role management. |
+| `SQUAD_OWNER` | Single GitHub username | The owner with elevated privileges (refresh-token, owner-only UI). Must be `cyrusjamula`. |
+
+```bash
+az staticwebapp appsettings set \
+  --name stfc-control-panel \
+  --resource-group stfc-control-panel-rg \
+  --setting-names \
+    SQUAD_ALLOWED_USERS="cyrusjamula" \
+    SQUAD_OWNER="cyrusjamula"
+```
+
+For local development, add these to `api/local.settings.json` (git-ignored):
+```json
+{
+  "IsEncrypted": false,
+  "Values": {
+    "SQUAD_ALLOWED_USERS": "cyrusjamula",
+    "SQUAD_OWNER": "cyrusjamula"
+  }
+}
+```
+
+### CI gate
+
+`scripts/ci/check-api-auth.mjs` (wired into `npm test`) fails the build if any
+Azure Functions HTTP handler file does not import and call `requireAllowedUser` or
+`requireOwner`. This prevents accidentally shipping unauthenticated endpoints.
+
+To opt a handler out (e.g. a public health-check endpoint), add:
+```typescript
+// @auth-anonymous-justification: <reason>
+```
+
+### Error mapping
+
+Handlers catch auth errors using `errorResponse(err)` from `api/src/_lib/respond.ts`:
+
+| Error | HTTP status |
+|---|---|
+| `UnauthorizedError` (missing/malformed principal) | 401 |
+| `ForbiddenError` (not in allowlist / not owner) | 403 |
+| Any other error | 500 (no details leaked) |
