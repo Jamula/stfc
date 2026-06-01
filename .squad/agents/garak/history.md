@@ -35,3 +35,15 @@ Recommended Bashir (test/contract expert) not Scotty (per reviewer-lockout).
 
 **Lesson:** Contract enforcement gates data-layer stability. The three violations were inter-related (filename→account→serialization invariants). Kirk's architecture review missed these because they're not architectural—they're data-contract and test-contract bugs. Garak's role as fact-checker is essential on data-driven features.
 - Phase 0 shipped (PR #111, e5e26e4)
+
+---
+
+**[2026-06-01T03:14Z] PR1 Cleanup Cycle Concluded**
+
+- PR #128 merged (03:03Z)
+- 3 PRs merged total (PR #125, #126, #128)
+- 3 worktrees swept + removed (stfc-118, stfc-121, stfc-cleanup-docs)
+- Decision inbox merged (7 files → decisions.md)
+- Scribe finalization completed; all .squad/ logs written
+
+Status: COMPLETE

@@ -1566,3 +1566,869 @@ preserved here so the next improve cycle does not re-litigate them.
 
 ---
 
+**CHANGES_REQUESTED** ⚠️ — Garak (hostile fact-check v4.1)
+
+Requested by: Cyrus Jamula  
+Reviewed artifact: `/home/node/.copilot/session-state/f1073669-1239-486e-a66b-7c51b041eb2d/plan.md`  
+Live repo: `/workspaces/stfc`  
+Date: 2026-06-01
+
+## Verdict
+
+v4.1 fixes several v3 arithmetic failures, but it still contains live-repo falsehoods and internal contradictions. The biggest remaining problems: `decisions.md` heading counts are no longer 12/63, Rule 23 is both deferred and included, template counts still say “7” in execution todos, and the `_archive/` string remains despite the requested zero-reference grep.
+
+## Numbered verification results
+
+### 1. decisions.md entry counts — FAILED
+
+Claim under review: `12 H1 top-level entries / 63 H2-H3 subsections` post-merge.
+
+Commands/results:
+
+```bash
+grep -c '^# ' .squad/decisions.md
+# 19
+
+grep -cE '^(##|###) ' .squad/decisions.md
+# 101
+
+wc -c .squad/decisions.md
+# 90482 .squad/decisions.md
+```
+
+The size is roughly the claimed `~90,000 B`, but the requested heading-count commands do not support 12/63.
+
+### 2. Item 1 stretch-section byte math — VERIFIED
+
+Heading bounds:
+
+```bash
+grep -nE '^#{2,3} .*(Per-Agent Model|Client Compatibility|MCP Integration)' .github/agents/squad.agent.md
+# 355:### Per-Agent Model Selection
+# 458:### Client Compatibility
+# 503:### MCP Integration
+```
+
+Byte ranges to the next sibling heading:
+
+```bash
+sed -n '355,457p' .github/agents/squad.agent.md | wc -c
+# 7458
+
+sed -n '458,502p' .github/agents/squad.agent.md | wc -c
+# 3725
+
+sed -n '503,537p' .github/agents/squad.agent.md | wc -c
+# 2103
+```
+
+These match v4.1’s ~7.5 KB, ~3.7 KB, and ~2.1 KB within ±10%.
+
+### 3. decisions.md archival today — PARTIALLY VERIFIED
+
+Live sample supports “0 entries today” because the first 10 `^# ` entries all date to 2026-05-31, less than 7 days before CURRENT_DATETIME 2026-06-01.
+
+Command/result excerpt:
+
+```bash
+python3 - <<'PY'
+from pathlib import Path
+import re
+lines=Path('.squad/decisions.md').read_text().splitlines()
+entries=[(i+1,l) for i,l in enumerate(lines) if l.startswith('# ')]
+for n,(start,head) in enumerate(entries[:10],1):
+    end=(entries[n][0]-1) if n < len(entries) else len(lines)
+    block='\n'.join(lines[start-1:end])
+    dates=[]
+    for m in re.finditer(r'2026-[0-9]{2}-[0-9]{2}(?:T[0-9:.-]+Z?)?', block):
+        dates.append(m.group(0))
+    print(f'{n}. line {start}: {head}')
+    print('   dates:', ', '.join(dict.fromkeys(dates)) or 'NONE')
+PY
+# 1. line 3: # Uhura PR #102 fix — Structural workflow pin tests
+#    dates: 2026-05-31
+# 2. line 28: # Uhura PR #103 docs alignment decision
+#    dates: 2026-05-31
+# 3. line 34: # Decision: Constitution v2.0.0 amendment (Phase 0 Wave 1)
+#    dates: 2026-05-31T21:52:57
+# 4. line 139: # Picard — Phase 0 Wave 2: 005-web-control-panel speckit opened
+#    dates: 2026-05-31T22:40:48
+# 5. line 218: # Decision — PR #111 governance review (Picard)
+#    dates: 2026-05-31T23:11Z
+# 6. line 284: # Kirk — Phase 0 wave 3 contract schemas v1 (issue #110)
+#    dates: 2026-05-31T22:40:48
+# 7. line 357: # Decision Note: Rules 14–18 codified in copilot-instructions
+#    dates: 2026-05-31T22:40:48
+# 8. line 396: # Garak threat model note — 005 web control panel
+#    dates: 2026-05-31T22:40:48
+# 9. line 414: # Decision Note: Phase 0 Platform Spike (#109)
+#    dates: 2026-05-31T22:49:27, 2026-05-31T22:49Z
+# 10. line 480: # Bashir QA Review — PR #111 Contract Schemas v1
+#     dates: 2026-05-31T23:09, 2026-05-31T23:08:49
+```
+
+However, v4.1 still contradicts itself at line 151: “archive only the actually-eligible entries today (likely 2–4 of 12 top-level entries)”. That conflicts with line 171 and PR2 line 417 saying expected 0 entries today.
+
+### 4. Scribe verbatim preservation — VERIFIED AS PROPOSED NEW BEHAVIOR, NOT CURRENT STATE
+
+Current Scribe charter does not require verbatim preservation:
+
+```bash
+grep -nEi 'verbatim|history-archive|summar|history\.md|archive' .squad/agents/scribe/charter.md
+# 17:- **Orchestration logs and session summaries** — `.squad/log/*`, `.squad/orchestration-log/*`
+# 18:- **Agent history archiving** — when an agent's `history.md` grows oversized, Scribe rotates and archives it
+# 51:- **Reads:** `.squad/decisions/inbox/*.md`, `.squad/agents/*/history.md`, `.squad/log/*`
+# 52:- **Writes:** `.squad/decisions.md`, `.squad/log/*`, `.squad/orchestration-log/*`, `.squad/agents/*/history.md`
+# 58:None. Scribe has no voice. Commit messages are formulaic: `docs(squad): merge decision inbox`, `docs(squad): archive kirk history`. No opinions, no commentary, no user-facing output.
+```
+
+v4.1 correctly says this is new behavior and says it requires a Scribe charter amendment + spawn-template update. It does not amend the charter in the live repo; it only plans to.
+
+### 5. Rule-number references — VERIFIED, WITH 21 RESERVED-SLOT REFERENCES TO HANDLE
+
+Commands/results:
+
+```bash
+grep -rnE '\bRule\s+([0-9]+)\b' .squad/ .github/ .copilot/ specs/ tests/ 2>/dev/null | wc -l
+# 325
+
+grep -rnE '\bRule\s+(12|20)\b' .squad/ .github/ .copilot/ specs/ tests/ 2>/dev/null | wc -l
+# 21
+```
+
+References to numbers v4.1 would turn into RESERVED pointers:
+
+```text
+.squad/log/2026-06-01-ralph-cycle.md:29 Rule 12
+.squad/orchestration-log/2026-05-18T00-tuvok.md:18 Rule 12
+.squad/agents/obrien/charter.md:90 Rule 12
+.squad/agents/obrien/history.md:41 Rule 12
+.squad/skills/audit-wip-fanout/SKILL.md:84 Rule 12
+.squad/skills/swa-auth-shape-review/SKILL.md:90 Rule 12/15/16
+.squad/skills/speckit-pipeline-driver/SKILL.md:142 Rule 12
+.squad/decisions-archive.md:2143 Rule 12
+.squad/decisions-archive.md:3205 Rule 12
+.squad/decisions.md:191 Rule 12
+.squad/decisions.md:559 Rule 20
+.squad/decisions.md:594 Rule 20
+.squad/decisions.md:746 Rule 12
+.squad/decisions.md:901 Rule 12
+.squad/decisions.md:905 Rule 12
+.squad/decisions.md:914 Rule 12
+.squad/decisions.md:938 Rule 20
+.squad/decisions.md:1091 Rule 12
+specs/004-crew-optimizer/plan.md:240 Rule 12
+specs/004-crew-optimizer/tasks.md:79 Rule 12
+specs/004-crew-optimizer/research.md:186 Rule 12
+```
+
+v4.1’s no-renumbering approach avoids numeric orphaning, but its own gate is necessary: references to Rule 12/20 that should point at merged Rule 6/13 remain live today.
+
+### 6. Template inventory — PARTIALLY VERIFIED
+
+Live inventory matches the 5 NEW / 3 EXTEND assertion:
+
+```bash
+ls -1 .squad/templates/
+# casting
+# casting-history.json
+# casting-policy.json
+# casting-reference.md
+# ...
+# issue-lifecycle.md
+# ...
+# plugin-marketplace.md
+# ...
+
+for f in init-mode.md prd-intake.md human-members.md copilot-agent.md reviewer-lockout.md; do [ -e .squad/templates/$f ] && echo "$f exists" || echo "$f missing"; done
+# init-mode.md missing
+# prd-intake.md missing
+# human-members.md missing
+# copilot-agent.md missing
+# reviewer-lockout.md missing
+
+for f in casting-reference.md plugin-marketplace.md issue-lifecycle.md; do [ -e .squad/templates/$f ] && echo "$f exists" || echo "$f missing"; done
+# casting-reference.md exists
+# plugin-marketplace.md exists
+# issue-lifecycle.md exists
+```
+
+But v4.1 still contains stale “7” wording:
+
+```bash
+grep -nE '7 target|7 NEW|5 NEW|3 EXISTING' /home/node/.copilot/session-state/f1073669-1239-486e-a66b-7c51b041eb2d/plan.md
+# 374: confirm 7 target files don't exist
+# 375: Create 7 NEW template files: init-mode.md, prd-intake.md, human-members.md, copilot-agent.md, reviewer-lockout.md
+# 403: create 5 NEW templates ..., extend 3 templates ...
+```
+
+The repo facts are fixed; the plan text is not fully fixed.
+
+### 7. Rule-count contradictions — FAILED
+
+v4.1 says there is one canonical statement, but contradictory count/scope claims remain:
+
+```bash
+grep -nE '21→|21 →|slots 1|substantive|Rule 23|Rules 22|Rule 22|RESERVED|18 rules' /home/node/.copilot/session-state/f1073669-1239-486e-a66b-7c51b041eb2d/plan.md
+# 37: v4 includes adopting both [Rules 22+23] as part of the same cleanup PR
+# 39: v4 commits to 21→18
+# 65: Consolidate ... from 21 → 18 rules
+# 71: Adopt Picard's Rules 22 + 23
+# 126: slots 1–22 exist ... Rule 23 deferred ... Substantive rules = 20
+# 139: Rule 23 DEFERRED ... Rule 23 ships in PR3
+# 271: Rule 23 DEFERRED
+# 380: Apply 2 merges ... + add Rules 22+23
+# 392: PR 1 ... Rules 22/23
+# 404: +22 only — NOT 23
+# 430: PR3 ... add Rule 23 ... Not part of cleanup scope
+```
+
+The canonical line itself is arithmetically coherent. The artifact around it is not.
+
+### 8. 10 moved sections — VERIFIED
+
+Command/results:
+
+```bash
+awk 'NR>=98 && NR<=107 && /^\|/ {c++} END {print c}' /home/node/.copilot/session-state/f1073669-1239-486e-a66b-7c51b041eb2d/plan.md
+# 10
+
+grep -nE '7 conditionally|7 .*sections|10 sections|Move 10|move 10|10 trigger' /home/node/.copilot/session-state/f1073669-1239-486e-a66b-7c51b041eb2d/plan.md
+# 35: v3 said ... 10 sections, but 7 of those target files don't exist ...
+# 377: Move 10 sections to templates + add trigger detection lines
+# 390: Manually verify 10 trigger strings load the right template
+# 403: ... modularize squad.agent.md (move 10 sections ...)
+```
+
+I found no surviving “7 sections” claim. The surviving “7” problem is template-file count, covered above.
+
+### 9. `_archive/` opt-out grep — FAILED
+
+Command/result:
+
+```bash
+grep -n '_archive' /home/node/.copilot/session-state/f1073669-1239-486e-a66b-7c51b041eb2d/plan.md
+# 236:- **No `_archive/` moves.** Per user v2 decision.
+```
+
+The requested zero-reference grep is not clean.
+
+### 10. History sizes after compaction — VERIFIED, WITH ONE STALE TABLE ELSEWHERE
+
+Current history sizes:
+
+```bash
+wc -c .squad/agents/uhura/history.md .squad/agents/picard/history.md .squad/agents/garak/history.md .squad/agents/obrien/history.md .squad/agents/tuvok/history.md
+# 15199 .squad/agents/uhura/history.md
+# 12767 .squad/agents/picard/history.md
+#  2264 .squad/agents/garak/history.md
+#  9040 .squad/agents/obrien/history.md
+#  4877 .squad/agents/tuvok/history.md
+# 44147 total
+```
+
+These support Item 4’s rounded values: Uhura 15.1 KB, Picard 12.8 KB, Garak 2.3 KB, O'Brien 9.0 KB, Tuvok 4.9 KB.
+
+But the problem-statement table still has stale pre-compaction values:
+
+```bash
+grep -nE '13,029|12,032|12,267|11,188|15,124|15.1 KB|12.8 KB|2.3 KB|9.0 KB|4.9 KB' /home/node/.copilot/session-state/f1073669-1239-486e-a66b-7c51b041eb2d/plan.md
+# 52: Uhura 15,124 B, Garak 13,029 B, Picard 12,032 B, O'Brien 12,267 B, Tuvok 11,188 B
+# 209: uhura/history.md (15.1 KB ...)
+# 210: picard/history.md (12.8 KB) + garak/history.md (2.3 KB)
+# 211: obrien/history.md (9.0 KB), tuvok/history.md (4.9 KB)
+```
+
+The after-compaction claim is true; the artifact still contains a false older history-size row.
+
+### 11. Rule 22 + Rule 23 source — VERIFIED
+
+Commands/results:
+
+```bash
+grep -nE 'Rule 22|Rule 23|picard-squad-improve|Picard.*improve|improve-cycle' .squad/decisions.md
+# 1282:Two proposed new rules (Rule 22, Rule 23) and one new reusable skill
+# 1297:### Rule 22. Fresh worktrees require `npm ci` before any commit
+# 1352:### Rule 23. `specs/NNN-feature/plan.md` must be a self-contained repo artifact, never a placeholder pointing to session-state
+```
+
+The entry begins at `.squad/decisions.md:1275` as `2026-06-01: Squad improve cycle — proposed rule amendments` by Picard.
+
+### 12. worktree-preflight skill not yet existing — VERIFIED
+
+Command/result:
+
+```bash
+ls .squad/skills/worktree-preflight/ 2>&1 || true
+# ls: cannot access '.squad/skills/worktree-preflight/': No such file or directory
+```
+
+### 13. `specs/005-web-control-panel/plan.md` placeholder — VERIFIED
+
+Command/result:
+
+```bash
+cat specs/005-web-control-panel/plan.md
+# # Plan: 005-web-control-panel
+#
+# **Status:** Placeholder — plan lives in session state pending
+# `/speckit.plan` migration in a Phase 0 follow-up issue.
+#
+# **Source of truth (v3 plan):**
+# `~/.copilot/session-state/d40435a0-d735-463b-887e-e5f586f7369b/plan.md`
+```
+
+This is exactly the placeholder Rule 23 would forbid.
+
+## Other problem-statement checks
+
+Commands/results:
+
+```bash
+wc -c < .github/agents/squad.agent.md
+# 84943
+
+grep -cE '^## |^### ' .github/agents/squad.agent.md
+# 60
+
+wc -c < .github/copilot-instructions.md
+# 28416
+
+grep -cE '^## [0-9]+' .github/copilot-instructions.md
+# 21
+
+wc -l -c .squad/agents/obrien/charter.md
+# 119 6479 .squad/agents/obrien/charter.md
+
+find .copilot/skills -mindepth 1 -maxdepth 1 -type d | wc -l
+# 11
+
+find .squad/skills -mindepth 1 -maxdepth 1 -type d | wc -l
+# 22
+```
+
+These table claims are verified.
+
+## Final count
+
+8 verified, 5 failed/partial (3 failed, 2 partially verified). Verdict: **CHANGES_REQUESTED**.
+# Kirk Review — PR #125: docs/SWA-INVITATION-RUNBOOK.md
+
+**Date:** 2026-06-01T02:47:54Z  
+**Reviewer:** Kirk (Lead / Code Reviewer)  
+**PR:** https://github.com/Jamula/stfc/pull/125  
+**Closes:** #118 (squad:bashir + squad:obrien)  
+**Verdict:** APPROVE ✅  
+**Comment:** https://github.com/Jamula/stfc/pull/125#issuecomment-4589190167
+
+---
+
+## What was reviewed
+
+| File | Change |
+|---|---|
+| `docs/SWA-INVITATION-RUNBOOK.md` | ADDED — 360 lines, 10 sections |
+| `docs/SWA-SETUP.md` | MODIFIED — §5 placeholder replaced with CLI snippet + cross-ref |
+
+---
+
+## Detailed findings
+
+### 1. Auth helper claims vs. live code — PASS ✅
+
+Every function name, error message string, and behavioral claim in §6b was
+cross-referenced against `api/src/_lib/auth.ts` (introduced by commit b0cb61c,
+issue #117 / PR #124 wave).
+
+**Error string matches (exact):**
+- `"No valid authentication principal"` — `UnauthorizedError` constructor, auth.ts line 89. ✅
+- `"User \"<login>\" is not in the allowed list"` — `ForbiddenError` in requireAllowedUser, auth.ts line 96. ✅
+- `"User \"<login>\" does not have role \"stfc_operator\""` — `ForbiddenError` in requireRole, auth.ts line 134. ✅
+
+**Behavioral claims:**
+- `requireAllowedUser` trims whitespace: line 93 `.map((u) => u.trim())` ✅
+- Empty allowlist → 403: line 95 `allowlist.length === 0` check ✅
+- `parsePrincipal` returns null on missing header: line 69 `if (!header) return null` ✅
+- `requireOwner` calls `requireAllowedUser` first: line 113 `principal ?? requireAllowedUser(req)` ✅
+
+### 2. SQUAD_ALLOWED_USERS two-gate model — PASS ✅
+
+The runbook correctly describes both gates:
+1. SWA route gate (`staticwebapp.config.json` → `allowedRoles: ["stfc_operator"]`)
+2. Function-side env-var allowlist (`requireAllowedUser` → `SQUAD_ALLOWED_USERS`)
+
+Grep confirms `SQUAD_ALLOWED_USERS` is consumed only in `api/src/_lib/auth.ts` and
+referenced in `tests/api/auth.test.ts`. The runbook's §4 procedure (view + update via
+`az staticwebapp appsettings`) is the correct mechanism for managing this env-var on
+the Azure-hosted Function.
+
+Runbook correctly warns: "Both gates must be updated together" — matches the auth
+architecture.
+
+### 3. Azure CLI command syntax — PASS (unverified against live az, correct per docs) ✅
+
+`az` CLI is not available in this Codespace, so syntax was cross-checked against
+published Azure CLI documentation.
+
+**`az staticwebapp users invite` flags:**
+- `--authentication-provider GitHub` ✅ (matches SWA GitHub OAuth config)
+- `--user-details "$INVITEE_GITHUB_LOGIN"` ✅ (GitHub login, case-sensitive)
+- `--roles stfc_operator` ✅ (custom role name)
+- `--invitation-expiration-in-hours 168` ✅ (max = 168h on Free tier, documented)
+- `--domain "https://${SWA_HOST}"` ✅ (required for cookie scoping)
+
+**JMESPath queries:**
+- §6a: `[?roles[?contains(@,'stfc_operator')]].{login:displayName, roles:roles}` — correct filter. Minor: `contains(@,'stfc_operator')` is substring match not equality; `@ == 'stfc_operator'` would be stricter. In practice harmless given current role namespace (no role name contains `stfc_operator` as a substring other than itself).
+- §7a: `[].{login:displayName, roles:join(',',roles), userId:id}` — `join` is valid JMESPath. ✅
+
+**`az staticwebapp appsettings` queries:**
+- §4: `--query "[?name=='SQUAD_ALLOWED_USERS']" -o tsv` — valid but produces multi-column table. §8 troubleshooting uses `--query "[?name=='SQUAD_ALLOWED_USERS'].value"` which is cleaner. Inconsistency is cosmetic only.
+
+**`az staticwebapp users update --roles ""`:**
+- Documented pattern for clearing custom roles. Known minor variation: some Azure CLI versions parse empty string inconsistently; `az staticwebapp users delete` is a harder fallback. Runbook could benefit from a one-line fallback note but this is LOW.
+
+### 4. PR #124 forward-reference — PASS ✅
+
+PR #124 was still OPEN at review time. However:
+- `api/src/_lib/auth.ts` already exists on this branch (git log confirms commit b0cb61c from issue #117 wave, which is part of PR #124's scope).
+- The runbook explicitly names PR #124 in §10 cross-references: "auth contract that this runbook's §6b verification steps are written against."
+- The §6b verification table is accurate against the live code — the forward-reference is honest and documented.
+
+This is the correct way to handle a runbook that documents helpers from an in-flight PR.
+
+### 5. Rule 15 (Tests section) — PASS ✅
+
+`## Tests` states: "No test changes — documentation-only PR. Behaviour covered by
+existing SWA auth tests at `tests/api/auth.test.ts` (introduced in PR #124 / issue
+#117)."
+
+This is correct. `tests/api/auth.test.ts` exists and covers `requireAllowedUser`,
+`requireOwner`, and `SQUAD_ALLOWED_USERS` parsing (confirmed via grep). No test
+changes required for a docs-only PR.
+
+### 6. Rule 16 (Docs section) — SELF-SATISFYING ✅
+
+The PR is itself the documentation for #118. `## Docs` section lists both the new file
+and the updated file. Self-satisfying by definition.
+
+### 7. SWA-SETUP.md §5 update — PASS ✅
+
+The Wave 4 `⚠️ issue #118` placeholder is replaced with:
+- A readable note directing operators to the full runbook
+- A quick CLI snippet for initial bootstrap (matches §2a of the runbook verbatim)
+- A cross-reference warning about updating `SQUAD_ALLOWED_USERS`
+- A cap note with §7 cross-ref
+
+The snippet is accurate and self-contained for first-boot.
+
+### 8. Threat-model alignment — PASS ✅
+
+§9 table maps S-1, S-2, E-1, E-2 to runbook sections. Cross-checked:
+- S-1 (stale invitation): §2 explicit login targeting + §6 verification + §7b revocation ✅
+- S-2 (forged principal): §6b 401-path diagnosis + §8 missing header section ✅
+- E-1 (role leak → API access): §4 two-gate update + §6b error mapping ✅
+- E-2 (non-owner refresh-token): §6b documents expected 403 for owner-only endpoints ✅
+
+---
+
+## LOW findings (no fix needed before merge)
+
+| # | Location | Finding | Severity |
+|---|---|---|---|
+| L1 | §7b | `--roles ""` empty-string arg has minor CLI-version sensitivity; add fallback note to `az staticwebapp users delete` for hard-removal. | LOW |
+| L2 | §6a JMESPath | `contains(@,'stfc_operator')` is substring match; `@ == 'stfc_operator'` more precise. | LOW / cosmetic |
+| L3 | §4 appsettings query | Multi-column `-o tsv` output; §8 uses cleaner `.value` projection consistently. Nit. | LOW / cosmetic |
+
+None of L1–L3 block merge.
+
+---
+
+## Auto-merge eligibility
+
+- All required CI checks GREEN at review time.
+- Docs-only PR — Garak hard-gate on `src/` does not fire.
+- No constitution touch — Picard governance gate not required.
+- Kirk APPROVE + green CI → eligible for immediate auto-merge per Rule 7.
+
+**Recommend: merge without waiting for additional review.**
+# Kirk — Technical correctness review: Squad Cleanup Plan v4.1
+
+**APPROVE WITH NOTES** 🟢⚠️ — Kirk (technical correctness)
+
+**Requested by:** cyrusjamula (v4.1 squad review pass — second pass after v3)
+**Plan artifact:** `/home/node/.copilot/session-state/f1073669-1239-486e-a66b-7c51b041eb2d/plan.md`
+**Date:** 2026-06-01T02:39:00Z
+**Files inspected:** plan.md (v4.1, 443 lines), copilot-instructions.md (all 21 rules verified), squad.agent.md (spawn template @ L820–845, Scribe allowed paths @ L902 & ownership table @ L972), 14 external Rule-N references across `.squad/`, `.copilot/`, `specs/`, my prior v3 review @ decisions.md L888–1110.
+
+---
+
+## Prior-v3 blocker re-verification
+
+### F1 (Rule 6+12 trigger axis) — ✅ FIXED
+
+v4.1 Item 2 renames Rule 6 to "**PR shipping hygiene**" with (6a) PR-body authoring close-keywords and (6b) merge-time ritual. The plan explicitly mandates *"lead sentence must say the rule covers BOTH PR-create AND merge-time obligations"* (line 132). A coordinator authoring a PR body will reach 6a via the section header. Trigger-axis mismatch resolved.
+
+### F2 (Rule 21 standalone) — ✅ FIXED
+
+v4.1 Item 2 line 134: *"STANDALONE — DO NOT GROUP. Per Kirk F2 + Picard Finding 1: environment-agnostic security boundary. Renames to 'Credential hygiene — refuse-and-rotate' for clarity."* Rule 21 stays out of the Codespaces cluster. Resolved.
+
+### F3 (Vague PRD / marketplace triggers) — ✅ FIXED (with one phrasing note)
+
+v4.1 line 103 specifies three concrete triggers for PRD intake: literal substring `here's the PRD/spec`, regex `read\s+the\s+(prd|spec)\s+at\s+(\S+)`, and a long-paste heuristic with required keywords. Line 102 adds an explicit error-catch trigger for plugin marketplace (`ENOTFOUND|ETIMEDOUT|403`). Both fixes address the original blocker.
+
+**Achievability of regex triggers from coordinator (the user's specific question):** ✓ achievable. The LLM coordinator is not a regex engine — these are pattern *signals* for the LLM to recognize in user messages. The LLM is good at fuzzy semantic matching of the form *"does the user message contain something that looks like `read the PRD at <path>`?"*. The smoke-test approach (scripted prompt, observe which file the coordinator reads) is the **only** validation possible here — there's no programmatic introspection of the coordinator's reasoning. This is acceptable.
+
+**Minor phrasing note (non-blocking):** the inline `/.../i` regex notation in line 103 could be misread by an implementer as "compile and run this regex," when the intent is "recognize this pattern." Recommend rephrasing as *"semantic pattern: `read the PRD at <path>`"* in the final squad.agent.md trigger comment. Not blocking — Kirk's review of the eventual PR will catch any literal-regex-execution attempt.
+
+---
+
+## v4.1-specific findings (newly introduced)
+
+### Finding 1 — P0#1 "rule-count math" fix is INCOMPLETE ⚠️ MINOR BLOCKER
+
+The canonical statement at line 126 is internally correct: *"slots 1–22 exist; Rules 12 and 20 RESERVED; Substantive rules = 20 (originals 1–21 minus 2 merged + 1 new Rule 22); of the original 1–21, 19 substantive remain."* I walked the math: 21 originals − 2 merged (12→6, 20→13) = 19; + Rule 22 = 20 substantive across 22 slots. ✓
+
+**But two other places in the same plan still state the OLD wrong number "21 → 18":**
+
+- **Goal #2 (line 65):** *"Consolidate `copilot-instructions.md` from 21 → 18 rules"*
+- **v3→v4 changelog item 12 (line 39):** *"v4 commits to **21→18** (3 consolidations: 6+12 grouped, 9a+9b kept paired, 13+20 grouped …)"* — also factually wrong by its own logic, since 9a+9b are *already* one Rule 9 in the current file, not a fresh consolidation.
+
+An implementer reading Goal #2 would aim for 18 rules, contradicting Item 2's canonical 20. P0#1 was supposed to make this the ONE canonical statement — it didn't propagate.
+
+**Fix (one-line each):**
+- Line 65 → *"Consolidate `copilot-instructions.md` from 21 originals to 20 substantive rules across 22 slots (Rules 12 and 20 become RESERVED pointers; Rule 22 added)"*
+- Line 39 → *"v3 said '21→14', '21→16', '21→17' in different places. v4.1 commits to the canonical Item 2 statement: **22 slots, 20 substantive, 19 of originals 1–21 remain after 2 real consolidations (6+12, 13+20). 9a+9b were never separate rules; they are already paired as Rule 9.**"*
+
+This is minor (one number, two locations) but I'm flagging it because the same class of inconsistency was the original P0#1 issue and v4.1 explicitly claims it's fixed.
+
+### Finding 2 — Rule renumbering safety: ✅ external references will resolve correctly
+
+I spot-checked 14 external `Rule N` references found by grep:
+
+| Ref site | Rule cited | Will resolve after RESERVED-stub mechanism? |
+|---|---|---|
+| `obrien/charter.md:90` *"per line in PR bodies (Rule 12)"* | 12 → 6 | ✓ stub redirects |
+| `obrien/history.md:41` *"Rule 12: one Closes #N per line"* | 12 → 6 | ✓ stub redirects |
+| `.copilot/skills/dispatch-precheck/SKILL.md:42` *"Repo Rule 6"* | 6 (unchanged) | ✓ |
+| `.squad/skills/audit-wip-fanout/SKILL.md:84` *"per Rule 12"* | 12 → 6 | ✓ stub redirects |
+| `specs/004-crew-optimizer/plan.md:240` *"per Rule 12"* | 12 → 6 | ✓ stub redirects |
+| `.squad/skills/swa-auth-shape-review/SKILL.md:90` *"{Rule 12/15/16 compliance}"* | 12 → 6 | ✓ stub redirects |
+| `.squad/decisions.md:559` *"Rule 20 — Codespaces idle-timeout"* | 20 → 13 | ✓ stub redirects |
+| `obrien/charter.md:35` *"the Codespaces token-scope gotcha (Rule 13)"* | 13 (unchanged) | ✓ |
+
+The RESERVED-stub mechanism is the correct, lowest-risk approach. Existing refs keep working; readers who click through the stub land on the merged rule. Approved.
+
+**Sub-note on the grep gate (Item 2, line 143–147):** the plan also commits to *updating* external refs from RESERVED numbers (12, 20) to merged numbers (6, 13). This is **belt-and-suspenders work that the RESERVED stub already obviates** — the references resolve correctly via the stub without rewriting. The plan should either (a) drop the update step and rely on stubs (saves churn across `.squad/`, `.copilot/`, `specs/`, `tests/`), or (b) keep the update step but rationalize it as *"freshness/clarity, not correctness — stubs would work either way."* Currently the plan reads as if the update is *required* for correctness, which is misleading.
+
+### Finding 3 — Item 4 Scribe behavior change is compatible with existing allowed-paths ✅
+
+Verified `history-archive.md` is already in Scribe's commit allow-list:
+- `squad.agent.md:902` GIT COMMIT step: *"allowed paths (decisions.md, decisions-archive.md, agents/{name}/**history.md, agents/{name}/history-archive.md**, log/*, orchestration-log/*)"*
+- `squad.agent.md:972` ownership table: *"`.squad/agents/{name}/history-archive.md` | Derived / append-only. Archived history entries. | Scribe"*
+
+The new verbatim-then-summarize behavior (Item 4, line 175–179) writes to a path Scribe already owns. No Task-7 GIT COMMIT change needed. Approved.
+
+### Finding 4 — Item 7 INPUT ARTIFACTS standardization is a CONVENTION, not enforcement ⚠️ ACKNOWLEDGE
+
+Existing spawn template (`squad.agent.md:826`):
+```
+INPUT ARTIFACTS: {list exact file paths to review/modify}
+```
+
+Proposed v4.1 standardization: prefix each path with `READ:` / `MODIFY:` / `CREATE:`. These are **human-readable hints the receiving LLM agent interprets as natural-language directives** — there is no parser, no enforcement layer that prevents an agent from modifying a `READ:`-prefixed file. The convention's value is documentary clarity, not correctness enforcement.
+
+This is fine, but the plan should be explicit: *"This is a documentation convention to help receiving agents understand intent. It is not parsed or enforced by tooling. Compliance is by agent goodwill; reviewer gates remain the actual safety net."* Add to Item 7 #1 line 243 to set correct expectations.
+
+### Finding 5 — Trigger smoke-tests (gate 2): 8/10 are directly testable; 2 are contrived ⚠️ ACKNOWLEDGE
+
+Walking the 10 triggers in gate 2 (lines 290–299):
+
+| # | Trigger | Testable by? | Verdict |
+|---|---|---|---|
+| 1 | team.md missing / Members empty | `mv .squad/team.md /workspaces/stfc/.squad/team.md.bak` then run coordinator | ✓ direct |
+| 2 | `.squad/casting/` missing | `mv .squad/casting /workspaces/stfc/.squad/casting.bak` | ✓ direct |
+| 3 | User says "add a designer" | Type the message | ✓ direct |
+| 4 | **Universe exhausted on next allocation** | Need to seed `.squad/casting/registry.json` with a full universe before the test | ⚠️ contrived setup but achievable |
+| 5 | User pastes PRD signal | Type the message (3 variants) | ✓ direct |
+| 6 | User says "add Brady as human" | Type the message | ✓ direct |
+| 7 | User says "add @copilot" | Type the message | ✓ direct |
+| 8 | User says "pull issues from owner/repo" | Type the message | ✓ direct |
+| 9 | Reviewer comment contains CHANGES_REQUESTED | Need a posted PR comment OR coordinator prompted with synthetic comment | ⚠️ semi-contrived; degrades to "imagine reviewer just posted X" |
+| 10 | **Plugin marketplace op fails with ENOTFOUND/ETIMEDOUT/403** | Need to point marketplace config at a dead host, or stub | ⚠️ contrived setup but achievable |
+
+Items 4 and 10 require state setup that's annoying but doable. Item 9 is the weakest — the test reduces to *"coordinator, suppose CHANGES_REQUESTED just landed; what do you load?"* which is a degraded smoke-test (the *real* trigger is event-driven from gh-comment polling).
+
+**Recommendation:** add a one-line note to gate 2 acknowledging that items 4, 9, 10 use seeded state or synthetic scenarios, not natural triggering. Smoke-testing them this way is honest; calling it "verified by manual smoke-test" without that caveat overstates the rigor.
+
+### Finding 6 — PR1 vs PR2 placement of worktree-preflight skill ✅ correct in PR1
+
+PR1 (docs trim) creating `.squad/skills/worktree-preflight/SKILL.md` is correct. Skills are reusable patterns stored as inert files — they're docs in shape, not dynamic state. PR1's character is "new/modified prompt/template/rule files;" SKILL.md fits. PR2's character is "transformed agent state files" (decisions.md tagging, history re-summarization, charter trims). SKILL.md is greenfield content, not transformed state. ✓ Placement correct.
+
+### Finding 7 — Validation gate 3 (`rule-reference-check.yml`) is UNDERSPECIFIED ⚠️ NEEDS CONCRETE CHECK LOGIC
+
+Plan line 303: *"CI gate via a new `.github/workflows/rule-reference-check.yml`."*
+
+The plan doesn't say what the workflow actually does. The grep command in Item 2 (lines 144–147) gives the inputs:
+```bash
+grep -rnE '\bRule\s+(6|9|11|12|13|15|16|20|21)\b' .squad/ .github/ .copilot/ specs/ tests/ 2>/dev/null
+```
+…but the workflow needs a **failure condition** to be runnable as CI. Concretely:
+
+- **What does "fail the build" mean here?** Possible interpretations:
+  - (a) Fail if any file references a number that *no longer has a substantive rule body* (i.e., 12 or 20) without an adjacent "see Rule N" pointer.
+  - (b) Fail if any of Rules 1–22 is referenced from outside copilot-instructions.md AND the referenced number doesn't exist as a slot.
+  - (c) Just print the grep output as a warning, never fail.
+
+The plan needs to pick one and write the bash. As written, an implementer would have to invent the failure logic, which is exactly the kind of ambiguity that produces a workflow nobody trusts.
+
+**Suggested check (interpretation (a), which matches the v4.1 RESERVED-stub model):**
+```bash
+# Fail if any file references Rule 12 or Rule 20 without an adjacent
+# "see Rule 6" / "see Rule 13" disambiguator.
+violations=$(grep -rnE '\bRule\s+(12|20)\b' .squad/ .github/ .copilot/ specs/ tests/ 2>/dev/null \
+  | grep -vE 'see Rule (6|13)' \
+  | grep -vE 'RESERVED — see Rule' || true)
+if [ -n "$violations" ]; then
+  echo "::error::Unguided RESERVED-rule reference (see Rule 12→6, Rule 20→13):"
+  echo "$violations"
+  exit 1
+fi
+```
+Or, if Item 2's grep-and-update step is kept (Finding 2 sub-note), then the check is simpler: fail if `\bRule\s+(12|20)\b` appears anywhere outside copilot-instructions.md.
+
+Pick one and commit the bash in the plan before execution.
+
+---
+
+## Items 1–10 from the prompt — quick verdicts
+
+| # | Question | Verdict |
+|---|---|---|
+| 1 | F1 fix complete? | ✅ Yes — coordinator authoring PR body lands on subsection 6a |
+| 2 | F2 fix verified? | ✅ Yes — Rule 21 standalone |
+| 3 | F3 triggers achievable from coordinator prompt? | ✅ Yes — LLM treats them as semantic patterns; smoke-test is the only valid validation |
+| 4 | Rule-count math sound? | ⚠️ Canonical statement is correct (20 substantive across 22 slots); Goal #2 and v3→v4 changelog still say "21→18" — **propagate fix (Finding 1)** |
+| 5 | Renumbering safety preserves external refs? | ✅ Yes — RESERVED stubs route correctly. Recommend dropping the redundant update-refs step OR rationalizing it as "freshness, not correctness" (Finding 2 sub-note) |
+| 6 | Item 4 Scribe behavior compatible? | ✅ Yes — `history-archive.md` already in allowed paths |
+| 7 | INPUT ARTIFACTS prefix convention parseable? | ⚠️ Convention-only, NOT enforced. Acceptable; add explicit note (Finding 4) |
+| 8 | Trigger smoke-tests all achievable? | ⚠️ 8/10 direct; 2/10 require state seeding; 1/10 (CHANGES_REQUESTED) degrades to synthetic scenario (Finding 5) |
+| 9 | PR1 vs PR2 placement of worktree-preflight skill? | ✅ PR1 is correct — it's a new doc, not transformed state |
+| 10 | Validation gate 3 workflow runnable? | ⚠️ Plan specifies the grep INPUTS but not the failure CONDITION; needs concrete bash before execution (Finding 7) |
+
+---
+
+## Summary of blockers vs non-blockers
+
+| # | Finding | Severity | Blocking? |
+|---|---|---|---|
+| v4.1-1 | P0#1 rule-count fix incomplete — Goal #2 and changelog still say "21 → 18" | Minor | **Yes (one-line fix; mechanically prevents shipping wrong header count)** |
+| v4.1-2 | Renumbering safety verified; grep-update step is redundant with RESERVED stubs but not harmful | Low | No — clarify or drop |
+| v4.1-3 | Scribe history-archive.md path already allowed | — | n/a (verification only) |
+| v4.1-4 | INPUT ARTIFACTS prefix is convention, not enforcement | Low | No — add explicit note |
+| v4.1-5 | 3 trigger smoke-tests are contrived/synthetic | Low | No — acknowledge in gate 2 |
+| v4.1-6 | Worktree-preflight skill correctly placed in PR1 | — | n/a (verification only) |
+| v4.1-7 | rule-reference-check.yml needs concrete failure-condition bash | Medium | No — implementer can write it, but plan should specify which interpretation |
+
+---
+
+## Recommendation
+
+**APPROVE WITH NOTES** 🟢⚠️
+
+v4.1 successfully addresses all three of my v3 BLOCKING findings (F1, F2, F3). The remaining issues are polish — none compromise technical correctness of the consolidation logic itself.
+
+**One minor blocker before PR opens:** Propagate the canonical "20 substantive rules across 22 slots" statement to Goal #2 (line 65) and the v3→v4 changelog item 12 (line 39). Two one-line edits. This is the same class of inconsistency P0#1 claimed to fix, and the implementer would otherwise read three different rule-count targets in the same document.
+
+**Recommended polish before PR opens** (any of these can also be caught at PR review time):
+- Item 2: rationalize the grep-update step as "clarity" vs. dropping it; the RESERVED stubs already work (Finding 2).
+- Item 7 #1: add one sentence that INPUT ARTIFACTS prefixes are convention, not enforcement (Finding 4).
+- Gate 2: one-line acknowledgement that triggers 4, 9, 10 use seeded/synthetic state (Finding 5).
+- Gate 3: commit the actual bash logic for `rule-reference-check.yml` (Finding 7) — interpretation (a) above is suggested.
+
+If the one-line rule-count propagation is done in v4.2 (or fixed at PR open), my lane is clear. Picard and Garak still need to sign off on their lanes independently.
+
+Ship it once the rule-count number is consistent everywhere.
+# Decision: worktree-preflight skill + routing.md additions (squad cleanup PR1)
+
+**By:** O'Brien (DevOps/Platform)
+**Date:** 2026-06-01
+**Session:** f1073669-1239-486e-a66b-7c51b041eb2d (cleanup plan v4.2 PR1)
+**Status:** STAGED — awaiting PR1 commit (Scribe to merge this entry)
+
+---
+
+## Decision 1: Skill confidence level = medium
+
+Picard's improve-cycle bar for inclusion is "≥ 2 independent observations OR
+single observation with severe blast radius." The worktree-preflight pattern
+was observed in two independent contexts on 2026-06-01:
+
+1. O'Brien PR #118 — `json-schema-to-typescript` missing in `/workspaces/stfc-p1`
+   despite being in `package.json`. Stale symlinked `node_modules`.
+2. Picard P1 fanout triage — independently forward-flagged the same risk to
+   Wave 4 #121 (Scotty) in the same session.
+
+Two observations, same date → confidence `medium` (not `high` because both
+happened in one session; would need 30-day recurrence or a second independent
+session to reach `high`). This matches Picard's improve-cycle write-up at
+`decisions.md` lines 1297–1313.
+
+## Decision 2: Cross-device symlink fallback documented in skill, not rule
+
+Rule 22 (`copilot-instructions.md`) does not mention cross-device symlink
+failures because that's a platform implementation detail, not a behavioral
+obligation. The skill carries the fallback procedure. This keeps the rule
+scannable and the skill operational.
+
+## Decision 3: routing.md drop-box section explicitly includes Rule 2 constraint
+
+The new "Drop-box pattern" section in `routing.md` explicitly states that
+`.squad/` files must NOT be staged or committed by non-Scribe agents (Rule 2).
+This was omitted from the original `squad.agent.md` description of the pattern
+and has caused confusion in past sessions (agents staging `.squad/` files in
+their own commits). Routing.md is more likely to be read by new agent spawns
+than `squad.agent.md`.
+
+## Decision 4: INPUT ARTIFACTS section is cross-reference only (P1#5)
+
+Per plan v4.2 P1#5 fix: the full `INPUT ARTIFACTS` specification lives in
+`squad.agent.md` (the spawn template). `routing.md` carries only a quick-reference
+table showing the verb prefixes. This avoids duplication and prevents drift
+between the two documents.
+
+---
+
+## Files created/modified
+
+| File | Action | Lines |
+|---|---|---|
+| `.squad/skills/worktree-preflight/SKILL.md` | CREATED | ~175 lines |
+| `.squad/routing.md` | MODIFIED (appended 4 sections) | 97 → 190 lines |
+| `.squad/agents/obrien/history.md` | MODIFIED (appended learnings) | +~55 lines |
+
+Both skill and routing files staged:
+```bash
+git add -- .squad/skills/worktree-preflight/SKILL.md
+git add -- .squad/routing.md
+```
+
+history.md and this inbox file are NOT staged (Rule 2 — Scribe owns `.squad/` commits).
+# Picard — Squad System Cleanup Plan v4.1 Review
+
+**Date:** 2026-06-01T02:39:00Z
+**Reviewer:** Picard (scope/governance lane only)
+**Artifact:** Squad System Cleanup Plan v4.1
+**Session:** `f1073669-1239-486e-a66b-7c51b041eb2d/plan.md`
+**Prior pass:** v3 — APPROVE WITH NOTES, 7 findings (decisions.md lines 1219–1270)
+
+---
+
+**APPROVE** ✅ — Picard (scope/governance)
+
+v4.1 cleanly addresses every blocking item from my v3 review (Findings 1, 2, 3, 4) and integrates rubber-duck P0×3 + P1×7 fixes without scope creep. The 2-PR split, Rule 23 deferral, and reviewer-lane boilerplate together produce a governance posture I'm comfortable signing for. Two minor notes below; neither blocks.
+
+I am intentionally silent on technical correctness (Kirk's lane) and consolidation fidelity (Garak's lane).
+
+---
+
+## Findings (in the order requested)
+
+### 1. Scope discipline — has cleanup absorbed governance-amendment scope?
+
+**Verdict: PASS.** Rule 23 is properly deferred to its own PR3 (Item 8 + Q1 row + Execution sequence PR3 section all consistent). v4.1 explicitly flags the deferral rationale: Rule 23 needs `.specify/templates/plan-template.md` edits which validation gate 6 forbids. That's the correct read of the boundary. Rule 22 (npm ci in fresh worktrees) is a `copilot-instructions.md`-only change with a companion skill — that is squarely in the cleanup envelope and is acceptable scope. No other rule or governance amendment has been smuggled in.
+
+### 2. Priority sequencing — PR1 → PR2 → PR3 split
+
+**Verdict: PASS.** The cut between PR1 (`squad.agent.md` + `copilot-instructions.md` + routing + Rule 22 + `worktree-preflight` skill — all coordinator/rules surface, requires session restart) and PR2 (decisions/histories/charters/skill INDEX — state cleanup, no restart) is well-chosen along the restart-required axis. The `worktree-preflight` skill is correctly bucketed in PR1: it's a *companion to Rule 22* (which lands in PR1) and skills are coordinator-surface state, not the "agent histories / decisions / charters" state cluster that PR2 owns. If it lived in PR2 it would orphan Rule 22 until PR2 merged. PR3 (Rule 23) properly deferred.
+
+### 3. Constitution/governance boundary — any accidental `.specify/` pull-in?
+
+**Verdict: PASS.** Validation gate 6 explicitly forbids `.specify/memory/constitution.md` and `.specify/templates/plan-template.md` edits. I cross-checked all 8 work items, the 9-step PR1 sequence, and the 12-step PR2 sequence for any `.specify/` touch: none. The only adjacency is Item 8's plan migration to `specs/squad-system-cleanup/plan.md` — that's a NEW directory under `specs/`, not under `.specify/`. The boundary holds. (Rule 23, which *would* require `.specify/templates/plan-template.md` edits, is correctly deferred to PR3.)
+
+### 4. Reviewer panel composition — Tuvok-as-advisory revisit?
+
+**Verdict: APPROVE-WITH-NOTE (non-blocking).** My v3 Finding 6 dismissed Tuvok advisory because "charter-skeleton is simple." v4.1 has changed the editorial volume meaningfully: 5 NEW templates (init-mode, prd-intake, human-members, copilot-agent, reviewer-lockout) + 3 EXTENDs + 2 NEW INDEX.md files + a new worktree-preflight SKILL.md. That's genuine editorial surface area where Tuvok's docs eye would help (consistent heading conventions, cross-link integrity, voice).
+
+**Note (non-blocking):** I'd accept adding Tuvok as advisory on PR1's editorial surface (templates + skill + routing additions) without it being a gate. The default panel as written (Picard/Kirk/Garak gating + Scribe advisory for Item 3) is acceptable. If the user wants the lighter panel, ship it; if they want belt-and-suspenders editorial review, fold Tuvok in. My call: ship as written; add Tuvok if PR1's editorial diff comes back uneven.
+
+### 5. In-flight Wave 4 conflict (#118 O'Brien, #121 Scotty)
+
+**Verdict: PASS.** Verified by `git diff main...squad/118-invitation-runbook --name-only` and same for `121`. Both worktrees touch `api/`, `scripts/`, `docs/SWA-*`, `shared/contracts/`, `specs/005-web-control-panel/`, `staticwebapp.config.json`, and `.github/workflows/swa-deploy.yml`. Cleanup targets `.squad/`, `.github/agents/squad.agent.md`, `.github/copilot-instructions.md`, `.copilot/`, and `specs/squad-system-cleanup/` (a new dir). **Zero file overlap.** Cleanup PRs and Wave 4 PRs can land in either order without merge conflicts. The plan's Out-of-band section claim is verified.
+
+### 6. Standing-verdicts schema — is excluding Kirk from migration correct?
+
+**Verdict: CHANGES NEEDED (small).** v4.1 has an internal inconsistency I want resolved before PR2 merges:
+
+- **Item 4 schema annotation** says: `Standing verdicts / prior approvals ← NEW, GOVERNANCE ROLES ONLY (Picard, Garak, **Kirk**)`
+- **v4.1 changelog P1#4** says: `Picard/Garak get schema migration (add Standing-verdicts section if absent) only. O'Brien/Tuvok deferred.` (Kirk not mentioned.)
+- **Validation gate 5** says: `verify Standing verdicts section is present for Picard, **Garak, Kirk**`
+- **Todo `summarize-histories-new-schema`** says: `Re-summarize uhura, picard, obrien with new schema; update tuvok+garak`. (Kirk again not mentioned, and obrien is named here despite the P1#4 fix saying obrien is deferred.)
+
+Two cleanup actions needed before PR2 opens:
+
+1. **Kirk inclusion:** my Finding 3 rationale (a respawned reviewer must not contradict prior verdicts) applies to Kirk identically — Kirk is the technical reviewer gate. If Kirk has a `history.md`, add the empty `### Standing verdicts / prior approvals` section header (no backfill needed if there are no prior verdicts to record). If Kirk has no `history.md` yet, encode the schema requirement into the Scribe template so the section appears the first time Scribe writes it.
+2. **Resolve the obrien todo contradiction:** the `summarize-histories-new-schema` todo names `obrien` as a re-summarize target, but P1#4 fix says "O'Brien/Tuvok deferred." Pick one (I'd defer obrien per P1#4) and align both surfaces.
+
+Neither is hard to fix; both should land in the v4.1 → v4.2 patch before PR2 opens. Does **not** block PR1.
+
+### 7. Reviewer-lane PR-body boilerplate — does the PR1/PR2 assignment line up with my authority?
+
+**Verdict: PASS.** Mapped against my charter:
+
+- **PR1 step 7** assigns Picard to "Items 2+8" — Item 2 (rule consolidation, governance surface) and Item 8 (Rule 22 adoption + deferring Rule 23, governance call). Both squarely in my lane. ✓
+- **PR2 step 10** assigns Picard to "Items 3+5+7" — Item 3 (decisions.md tagging policy, governance), Item 5 (charter standardization, scope+governance), Item 7 (routing + inter-agent comms, governance). All squarely in my lane. ✓
+- Item 1 (modularization triggers) correctly goes to Kirk only (technical accuracy of trigger detection); I have no business there.
+- Item 4 (history schema) correctly assigned to Kirk (technical structure) — my Finding 3 was about *adding* the section; the schema-mechanics review is Kirk's.
+
+The assignments respect the charter boundaries. No turf encroachment in either direction.
+
+### 8. Q1 default flip (1 PR → 2 PRs) — governance-acceptable?
+
+**Verdict: PASS.** Two-PR shape is governance-superior here, for three reasons:
+
+1. **Rubber-stamp protection:** Garak found 11 findings on the v3 single-PR diff. That's strong empirical evidence the diff was too broad for honest review. Splitting along the restart-axis cuts each reviewer's surface area roughly in half per PR.
+2. **Restart axis is naturally split:** PR1 changes require coordinator restart; PR2 changes don't. Bundling forces a restart on changes that didn't need one and delays restart on changes that did.
+3. **Speed cost is real but bounded:** 2 PRs ≈ 2× review/merge cycles. For a cleanup feature with non-blocking-on-user-flow scope, that cost is acceptable. If this were blocking the web-control-panel epic I'd lean atomic; it isn't.
+
+The plan correctly flags the reversal at approval time (P2#1 fix). User remains free to override to single-PR if they value atomicity over rubber-stamp protection. Both options are governance-acceptable; default B is the right default.
+
+---
+
+## Cross-check: prior v3 findings closure
+
+| v3 Finding | v4.1 disposition | Verdict |
+|---|---|---|
+| F1 — Rule 21 standalone | Item 2 table row explicitly STANDALONE — DO NOT GROUP | ✅ Closed |
+| F2 — Scribe dry-run mandatory for Item 3 | Validation gate 4 + Item 3 mechanism step 1 + Q2 row default = Scribe advisory | ✅ Closed |
+| F3 — Standing verdicts section for governance roles | Schema added (Item 4); see Finding 6 above for Kirk inclusion gap | ⚠️ Mostly closed (1 inconsistency to fix) |
+| F4 — Reviewer-lane PR description requirement | Item 7 #4 boilerplate + PR1 step 7 + PR2 step 10 + validation gate 7 | ✅ Closed |
+| F5 — O'Brien Collaboration preserve | Item 5 trim rule + explicit O'Brien protection bullet (preserve ML/workflow-pin/workflow-step splits) | ✅ Closed |
+| F6 — 3-reviewer panel + Scribe advisory | Q2 default B = exactly this | ✅ Closed (with Finding 4 above as soft revisit) |
+| F7 — Restart boundary | Item 8 + validation gate 8 + Out-of-band section | ✅ Closed |
+
+---
+
+## Recommendation
+
+**APPROVE.** Proceed to user approval. One non-blocking patch is required before PR2 opens (Finding 6 — Kirk inclusion + obrien todo contradiction). PR1 may proceed without that patch since Standing-verdicts work lives in PR2.
+
+If the user wants extra editorial coverage on PR1's template + skill diff, fold Tuvok in as advisory (Finding 4 note). Otherwise ship the 3-reviewer panel as written.
+
+— Picard
+# Scotty decision — PR #126 azure functions dependency placement
+
+- **Date:** 2026-06-01
+- **Context:** PR #126 added `api/src/runs/index.ts` and `api/src/audit-events/index.ts` importing `@azure/functions`. CI runs `npm test` from repo root, and tests import handlers directly from `api/src/**`.
+- **Decision:** Add `@azure/functions` to root `package.json` dependencies (matching `api/package.json` `^4.0.0`) so root test/module resolution can load API handlers.
+- **Why:** Root test bootstrap resolves imports through root `node_modules`; `api/package.json` alone is insufficient in current install topology.
+- **Outcome:** Module-load failure (`ERR_MODULE_NOT_FOUND`) is removed without changing endpoint code or test wiring.
+# Tuvok cleanup Phase B stretch audit
+
+Date: 2026-06-01
+
+Decision: Extracted `Client Compatibility` from `.github/agents/squad.agent.md` to `.squad/templates/vscode-adaptations.md` because the load trigger is concrete: `runSubagent` or `agent` tool detection / non-CLI Copilot surface.
+
+Skipped for now:
+- `Per-Agent Model Selection`: it is consulted before every spawn and no approved target template exists yet; moving it risks hiding cost/quality defaults from the coordinator hot path.
+- `MCP Integration`: `.squad/templates/mcp-config.md` currently covers configuration/authentication, not coordinator routing/degradation. Extracting without first extending that template would lose operational guidance.
+---

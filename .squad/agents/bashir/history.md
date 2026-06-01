@@ -41,3 +41,15 @@ Approved. Merged as eb2fd9d.
 
 **Lesson:** Shared helper (`writeCrewDocIfChanged`, `parseSelector`, `resolveRosterFiles`) tested through one skill (optimizeCrew) is sufficient when the other skill (progression) already exercises the same code paths via its own integration tests. No gap in coverage despite Gap 9 not having a symmetric test in progression.test.ts.
 - Phase 0 shipped (PR #111)
+
+---
+
+**[2026-06-01T03:14Z] PR1 Cleanup Cycle Concluded**
+
+- PR #128 merged (03:03Z)
+- 3 PRs merged total (PR #125, #126, #128)
+- 3 worktrees swept + removed (stfc-118, stfc-121, stfc-cleanup-docs)
+- Decision inbox merged (7 files → decisions.md)
+- Scribe finalization completed; all .squad/ logs written
+
+Status: COMPLETE

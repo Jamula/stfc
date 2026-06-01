@@ -36,3 +36,15 @@
 
 ## 2026-06-01T01:25:00Z — Wave 3 close-out + Wave 4 fanout audit (Picard triage)
 PR #124 (auth.ts + shell) open on `squad/005-phase1-dashboard`. Picard triage identifies Wave 4 #118 + #121 parallel-safe, queued for dispatch post-Kirk review gate.
+
+---
+
+**[2026-06-01T03:14Z] PR1 Cleanup Cycle Concluded**
+
+- PR #128 merged (03:03Z)
+- 3 PRs merged total (PR #125, #126, #128)
+- 3 worktrees swept + removed (stfc-118, stfc-121, stfc-cleanup-docs)
+- Decision inbox merged (7 files → decisions.md)
+- Scribe finalization completed; all .squad/ logs written
+
+Status: COMPLETE

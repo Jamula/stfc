@@ -72,3 +72,15 @@ Coordinated Phase 1 fan-out (Tuvok constitution v1.5.0, Scotty script, Bashir te
 
 ## 2026-06-01T01:25:00Z — Wave 3 close-out + Wave 4 fanout audit
 Wave 1–2 committed (#113–#116). Wave 3 close-out (#117 auth + #119 shell + #120 ETag + #122 contracts) ready for Kirk review on PR #124. Wave 4 fanout: #118 (your runbook) + #121 (Scotty routes) queued; both dispatch after Wave 3 PR gate, parallel-safe to each other.
+
+---
+
+**[2026-06-01T03:14Z] PR1 Cleanup Cycle Concluded**
+
+- PR #128 merged (03:03Z)
+- 3 PRs merged total (PR #125, #126, #128)
+- 3 worktrees swept + removed (stfc-118, stfc-121, stfc-cleanup-docs)
+- Decision inbox merged (7 files → decisions.md)
+- Scribe finalization completed; all .squad/ logs written
+
+Status: COMPLETE

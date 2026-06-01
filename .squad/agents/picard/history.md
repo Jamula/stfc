@@ -133,3 +133,15 @@ New skill at `.squad/skills/audit-wip-fanout/SKILL.md` codifying the "audit unco
 ## 2026-06-01T02:22:04Z — Squad improve cycle delivery: Rules 22, 23, worktree-preflight skill
 
 Ran full improve cycle analyzing friction patterns from 2026-05-31 → 2026-06-01. Proposed 2 new rules (Rule 22: worktree npm ci preflight; Rule 23: plan.md durability in repo, not session-state) and 1 new skill (worktree-preflight ritual codification). No amendments to Rules 1–21 — existing rule set is sound. Delivered as DRAFT proposal in decisions/inbox/ awaiting user approval before Tuvok implementation. Also flagged 6 findings on cleanup-plan v3 (Rule 21 misclassification, Scribe dry-run gate, history schema, reviewer lanes, charter trim, panel composition).
+
+---
+
+**[2026-06-01T03:14Z] PR1 Cleanup Cycle Concluded**
+
+- PR #128 merged (03:03Z)
+- 3 PRs merged total (PR #125, #126, #128)
+- 3 worktrees swept + removed (stfc-118, stfc-121, stfc-cleanup-docs)
+- Decision inbox merged (7 files → decisions.md)
+- Scribe finalization completed; all .squad/ logs written
+
+Status: COMPLETE

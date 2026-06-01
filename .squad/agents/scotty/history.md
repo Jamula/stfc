@@ -128,3 +128,15 @@ Both PRs required non-Scotty revisions (bootstrap path + validation + fixtures).
 - **Wave 3 close-out pattern (auth + frontend split):** Keep cross-agent WIP in two commits by ownership boundaries (`#117` auth/lib+docs+CI gate first, `#119` web shell+bundle gate second). If `tests/ci` holds mixed ownership files, stage individual test files (and fixtures) intentionally before commit to avoid cross-issue bleed.
 - **Worktree commit-message gotcha:** In git worktrees, `.git` is a file, not a directory. Write `git commit -F` message files in repo root (for example `.gitmsg*.txt`), not under `.git/`.
 - **Web test portability in monorepo-ish layout:** If root CI runs `npm ci` only once, nested `web/` toolchains are absent. Web smoke tests should self-bootstrap (`npm ci` in `web/` when `node_modules/.bin/vite` is missing) so they pass both in local worktrees and clean CI runners.
+
+---
+
+**[2026-06-01T03:14Z] PR1 Cleanup Cycle Concluded**
+
+- PR #128 merged (03:03Z)
+- 3 PRs merged total (PR #125, #126, #128)
+- 3 worktrees swept + removed (stfc-118, stfc-121, stfc-cleanup-docs)
+- Decision inbox merged (7 files → decisions.md)
+- Scribe finalization completed; all .squad/ logs written
+
+Status: COMPLETE
