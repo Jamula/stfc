@@ -71,4 +71,6 @@ import "./skills/swaProject.test.ts";
 import "./web/shell.test.ts";
 import "./ci/check-bundle-budget.test.ts";
 import "./api/auth.test.ts";
+import "./api/runs-endpoint.test.ts";
+import "./api/audit-events-endpoint.test.ts";
 import "./ci/check-api-auth.test.ts";
