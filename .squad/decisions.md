@@ -515,3 +515,91 @@ items above. Not a Phase 0 blocker.
 - Rule 7 auto-merge gate still applies but treats local-test-green as equivalent to CI-green when CI cannot run
 - Merge command: `gh pr merge <N> --squash --delete-branch --admin` if `--auto` is blocked by missing required checks
 - Document local test output in the PR body or merge comment for audit
+# Uhura decision note — crew v2 parser (#91)
+
+Date: 2026-05-31
+Issue: #91 (`crew-15-v2-parser`)
+
+## Non-trivial calls
+
+1. **Command allowlist is optional/missing-safe.**
+   - `data/discord/command-channels.json` is the operator-specific real file and is not committed.
+   - The loader returns `[]` when missing, so command parsing no-ops gracefully while the existing promo-code allowlist remains a hard requirement.
+
+2. **Merged ingest, separated processing.**
+   - The monitor merges promo-code channels and command channels only for REST polling.
+   - Promo-code extraction/tip classification still run only on original promo-code channels, preventing command-only channels from contaminating digests or redeemer inputs.
+
+3. **Rate-limit precedence.**
+   - Per-channel limit: 10 commands/minute.
+   - Per-user limit: 5 commands/minute.
+   - Channel limit is checked first, then user limit; rejected commands are not registered into either rolling window.
+
+4. **Silent rate-limit behavior.**
+   - Rate-limited commands are logged locally but receive no Discord reply, matching the issue requirement and Discord command convention.
+
+5. **Handler seam for #92.**
+   - Future handlers should plug in behind `processCrewCommands()` / `handleCrewCommand()` in `src/discord/crewCommandParser.ts`.
+   - The consumed shape is `CrewCommand { subcommand, args, raw, message }`; positional args are exposed as `_`, `_0`, `_1`, while flags drop the `--` prefix.
+
+### 2026-06-01T00:58:00Z: Chronicle learnings — operational rollup
+**By:** cyrusjamula (via Copilot Coordinator)
+**What:** Consolidated learnings from `/chronicle improve`, `/chronicle tips`, and `/chronicle cost-tips` runs on 2026-06-01.
+**Why:** Captured for team memory so future coordinators apply these as operational defaults.
+
+---
+
+## A. New copilot-instructions.md rules (added this session, awaiting commit)
+
+Three rules added to `.github/copilot-instructions.md` (Rules #19–#21, file grew 504→623 lines):
+
+1. **Rule 19 — Sequence shorthand `"X, Y, Z, ..."` is inclusive.** Triggered by the redeem-cron round-trip in session `0a6be0be` where the agent read `"10, 20, 30, ..."` as excluding `:00`. Default to `*/N` (inclusive) for cron-style sequences.
+2. **Rule 20 — Codespaces idle-timeout is the keepalive answer.** Use `gh codespace edit --idle-timeout 240m` or the standalone `squad watch` CLI. Never propose `systemd`, `tmux`, `screen`, or cron-keepalive — they don't apply to the Codespaces runtime.
+3. **Rule 21 — Refuse-and-rotate protocol for credentials pasted into chat.** Codified from incidents in session `63fb899e` (Discord client secret pasted verbatim). Any credential pattern → refuse to echo/log/persist, treat as compromised, instruct rotation, never request the value again.
+
+**Action:** Commit `.github/copilot-instructions.md` to main alongside this directive.
+
+---
+
+## B. Cost-discipline findings (14-day analysis)
+
+Empirical spend breakdown across 50 STFC CLI sessions:
+
+| Model | Input tokens | I/O ratio | Notes |
+|---|---|---|---|
+| `claude-opus-4.7-1m-internal` | **236.7M** | 181:1 | Coordinator main sessions — 3× the next biggest |
+| `claude-sonnet-4.6` | 44.6M | 107:1 | Code subagents |
+| `claude-haiku-4.5` | 30.9M | 104:1 | Scribe + docs |
+| `gpt-5.5` | 26.9M | 83:1 | Diverse-perspective reviews |
+| `gpt-5.3-codex` | 16.2M | 126:1 | Heavy code gen |
+
+**Hotspot:** Session `0a6be0be` (253 min, "Update Redeem Gift Timing" → crew optimizer pivot) burned **172.9M input tokens — 73% of all 1M-context spend in 14 days**. Average 308K input/turn, peak 892K. Root cause: topic pivots mid-session keeping stale context alive across unrelated work.
+
+**Proposed defaults — TO BE ADOPTED:**
+
+1. **Pin coordinator to `claude-sonnet-4.6` (or standard `claude-opus-4.7`), NOT `claude-opus-4.7-1m-internal`, via `.squad/config.json` `defaultModel`.** Only escalate to 1M when an actual single turn approaches 200K. The 1M variant averages 7× more input tokens per turn purely because it doesn't pressure context eviction.
+2. **`/new` on every topic pivot.** If the new task wouldn't cite the previous one in a PR description, it doesn't belong in the same context. A `/new` at turn 2 of session `0a6be0be` (when the crew-optimizer pivot started) would have saved ~20M input tokens.
+3. **"status check" → Direct Mode on Haiku.** Session `21121d6b` ran 180:1 ratio (19.7M input for 109K output). Future status-check responses MUST be Direct Mode and SHOULD run on `claude-haiku-4.5`.
+4. **Trim squad.agent.md dead weight.** Init Mode Phase 1/2 (~110 lines), Casting Universe Allowlist + Migration (~50 lines), and Casting State Files schemas are never read in a configured repo. Gate behind on-demand pattern (already used for `casting-reference.md`). Estimated savings: 15–20% off every coordinator turn.
+5. **Meta/analytical slash commands (`/chronicle*`, `/research*`, `/audit*`) MUST NOT inherit the full `squad.agent.md` system prompt.** They're standalone analyses, not orchestration tasks. Drop from ~30K input/turn to ~5K. Implementation: when authoring future custom slash commands in `.github/prompts/`, exclude the squad agent_instructions block.
+
+---
+
+## C. User-workflow preferences (`/chronicle tips`)
+
+Operational habits the user should consider; not blocking but worth proactive suggestion:
+
+1. **Most-typed phrase is `"status check"` (11×/14d).** Candidate for `manage_schedule` (scheduled prompt every 5m) — doubles as Codespaces keepalive activity (Rule 20).
+2. **Recurring rituals — `"Ralph, go"`, `"merge to main and sync"`, `"ship it"` — belong as custom slash commands** in `.github/prompts/*.prompt.md`. The full Rule 6 ship-it ritual deserves a `/ship` command.
+3. **Prefer `write_agent` over a fresh `task` spawn** for non-lockout follow-ups to a just-finished agent. In session `0a6be0be`, 73 `task` calls vs 6 `write_agent` — most of those were probably over-spawning.
+4. **Detached background bash (`mode: "async", detach: true`)** for long fleet runs that may outlast Codespaces 240-min timeout. Zero uses in window.
+
+---
+
+## Next-action checklist (for future Coordinator)
+
+- [ ] Commit `.github/copilot-instructions.md` with Rules #19–#21
+- [ ] Add `defaultModel: "claude-sonnet-4.6"` to `.squad/config.json` (or open an issue to confirm)
+- [ ] Open governance issue for squad.agent.md trim (Init/Casting on-demand gating)
+- [ ] Open governance issue for meta-slash-command prompt template (excludes squad.agent.md)
+- [ ] Update Response Mode Selection in squad.agent.md so `"status check"` Direct Mode includes "use haiku for this output"
