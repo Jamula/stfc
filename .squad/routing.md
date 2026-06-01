@@ -95,3 +95,96 @@ gh issue create -t "Should we cap parallel redemptions per account?" \
 10. **Bashir reviewer-gate escalation (2026-05-18, audit #63)** — when Bashir rejects a PR on coverage grounds (per `bashir/charter.md:17`), the Coordinator routes the revision to a **different** agent per the Reviewer Rejection Protocol. If the coverage gap is in product code → Scotty/Uhura; if it's in test infrastructure (workflows, test runner config, pin tests) → O'Brien. The original author does not get to "just add the tests themselves" — that defeats the reviewer-lockout.
 11. **Discord direction precedence (2026-05-18, audit #67)** — for work under `src/discord/`: architecture and refactor decisions route to **Kirk** (module boundaries, contract shapes, dependency choices); integration / protocol / Discord-API-shape work routes to **Uhura** (auth flow, message-format parsing, rate-limit handling). When in doubt, Kirk decides whose work it is; Picard handles cross-cutting scope.
 12. **Kirk-as-author-and-reviewer mitigation (2026-05-18, audit #68)** — when a PR implements a design Kirk authored (decision attributable to Kirk in `decisions.md` or `decisions/inbox/`), the PR review MUST include **Garak co-review** alongside Kirk's technical review. This prevents the Rule 7 auto-merge gate from firing on Kirk-approves-Kirk's-own-call. Kirk's APPROVE alone does NOT satisfy the gate; Garak's independent APPROVE is also required. (See `kirk/charter.md` — Tuvok handling the charter-side edit in parallel.)
+
+---
+
+## Common ambiguity resolutions
+
+Cases the team has actually hit where routing was disputed or unclear. Use this
+table to resolve ambiguity without escalating to Picard every time.
+
+| Conflict signal | Routing | Source rule |
+|---|---|---|
+| Workflow YAML change AND a pin test that references it | **O'Brien** owns both — workflow + pin test ship in one atomic commit | Rule 3 |
+| STFC API change AND a workflow that triggers it | **Split:** Uhura owns STFC API code; O'Brien owns the workflow YAML. Coordinate on interface; commit separately per charter boundary | Ownership table (routing.md §Routing Table) |
+| Documentation update AND capability it describes | **Split:** Tuvok for editorial/structural pass; capability owner for content accuracy. Tuvok does not ship content changes outside their charter | Rule 16 |
+| Secret rotation / new secret needed | **Coordinator refuses to echo/persist the value.** Owner runs `gh secret set <NAME>` from their **local terminal** (never pasted into chat). Coordinator provides the command; does not execute it on behalf of the user | Rule 21 |
+| Speckit phase boundary commit | **Implementer auto-commits at each phase boundary** — NOT the user, NOT the Coordinator. User typing `speckit.git.commit` mid-flight is a Rule 5 violation — log it and self-correct on next phase | Rule 5 |
+
+---
+
+## Drop-box pattern
+
+Agents write decisions and findings to `.squad/decisions/inbox/{agent}-{slug}.md`
+rather than directly editing `.squad/decisions.md`. **Scribe** reads the inbox on
+its next session and merges entries into `decisions.md`. Agents read the consolidated
+`decisions.md` at the start of each spawn.
+
+**Why:** `decisions.md` is written by Scribe only, which prevents concurrent write
+conflicts when multiple agents are running in parallel worktrees. The inbox acts as
+a write-safe drop box with at-most-once delivery semantics.
+
+**Pattern:**
+```bash
+# Agent writes a decision (non-Scribe agents):
+cat > .squad/decisions/inbox/obrien-worktree-preflight.md << 'EOF'
+**Decision:** <one-line summary>
+**By:** O'Brien · 2026-06-01
+**Context:** <brief why>
+**Outcome:** <what was decided>
+EOF
+# Do NOT stage or commit .squad/ paths (Rule 2 — Scribe owns those commits)
+
+# Scribe merges on next session:
+# reads .squad/decisions/inbox/*.md, appends to decisions.md, deletes inbox files
+```
+
+**Key constraint (Rule 2):** agents MUST leave `.squad/` files uncommitted. Scribe
+commits them in a separate session. Never `git add .squad/` or use a broad glob that
+sweeps Scribe-owned files.
+
+---
+
+## INPUT ARTIFACTS convention (cross-reference)
+
+Spawn prompts use an `INPUT ARTIFACTS` block to declare what the agent should read,
+modify, or create. The canonical format and full specification live in the spawn
+template area of `.github/agents/squad.agent.md`.
+
+**Quick reference — verb prefixes (one path per line, no prose):**
+
+```
+INPUT ARTIFACTS:
+- READ:   /workspaces/stfc-cleanup-docs/.squad/decisions.md
+- MODIFY: /workspaces/stfc-cleanup-docs/.squad/routing.md
+- CREATE: /workspaces/stfc-cleanup-docs/.squad/skills/worktree-preflight/SKILL.md
+```
+
+Agents may always additionally read their own `history.md` and `decisions.md`
+without explicit listing — those are implicit inputs for every spawn.
+
+---
+
+## Reviewer-lane PR-body boilerplate
+
+For multi-item PRs, declare reviewer lanes explicitly in the PR body so each
+reviewer knows their scope and does not duplicate or miss work.
+
+```markdown
+## Reviewer lanes
+- **Kirk** (technical correctness): Items {N1, N2}
+- **Picard** (scope/governance): Items {N3, N4}
+- **Garak** (hostile fact-check): consolidation fidelity, all items
+
+Each reviewer signs off only their lane. Do NOT approve outside lane.
+```
+
+**Usage notes:**
+- Replace `{N1, N2}` etc. with the actual item numbers from the plan.
+- If all items are in one lane, still declare it explicitly — it signals intentional
+  scoping, not an oversight.
+- Verdicts are posted via `gh pr comment` with a greppable `**APPROVE** ✅` /
+  `**CHANGES_REQUESTED** ⚠️` header (Rule 9b). Not via `gh pr review`.
+- The Rule 7 auto-merge gate reads these comment headers. Both required gates
+  (Kirk technical + Garak adversarial for `feat(*) src/` PRs) must show APPROVE
+  before auto-merge fires.

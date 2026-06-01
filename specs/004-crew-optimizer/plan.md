@@ -237,7 +237,7 @@ deviation from the existing patterns.
 | 4 | Rule 1 plan-template re-sync grep | Pending |
 | 5 | `speckit.analyze` → cross-artifact consistency | Pending |
 | 6 | `speckit.tasks` → `tasks.md` | Pending |
-| 7 | Push + open PR with `Closes #77` (single line, per Rule 12) | Pending |
+| 7 | Push + open PR with `Closes #77` (single line, per Rule 6) | Pending |
 
 Per `.github/copilot-instructions.md` Rule 5, each phase ends with its
 own `feat(004-crew-optimizer): Phase N — {name} (T{XXX}–T{YYY})` commit.

@@ -81,7 +81,7 @@ For each untouched issue, determine:
 Write triage to `.squad/decisions/inbox/picard-p1-fanout-triage.md` with:
 - Current state table (committed / uncommitted / untouched)
 - Plan.md ownership summary + shared-file callouts
-- Wave close-out plan (owner, files to commit, PR Closes list per Rule 12)
+- Wave close-out plan (owner, files to commit, PR Closes list per Rule 6)
 - Wave 4 fanout table (issue | owner | worktree | files | parallel-safe?)
 - Risk callouts (anything needing Kirk or Picard escalation)
 - One-line recommendation

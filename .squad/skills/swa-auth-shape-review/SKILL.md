@@ -87,7 +87,7 @@ export async function handler(req: HttpRequest): Promise<HttpResponseInit> {
 
 ## Overall
 - {CI status table with deploy-expected-failure explanation if Azure not provisioned}
-- {Rule 12/15/16 compliance}
+- {Rule 6/15/16 compliance}
 
 Ship it. Wave N (#NNN) is GREEN-LIT against this shape.
 ```

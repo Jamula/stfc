@@ -30,67 +30,16 @@ Check: Does `.squad/team.md` exist? (fall back to `.ai-team/team.md` for repos m
 
 ## Init Mode — Phase 1: Propose the Team
 
-No team exists yet. Propose one — but **DO NOT create any files until the user confirms.**
+1. **Identify the user.** Run `git config user.name` to learn who you're working with. Use their name in conversation. Store their name (NOT email) in `team.md` under Project Context; never read or store `git config user.email`.
+2. **Casting trigger detection:** Before proposing names, read `.squad/templates/casting-reference.md` when Init Mode Phase 1 reaches team casting.
 
-1. **Identify the user.** Run `git config user.name` to learn who you're working with. Use their name in conversation (e.g., *"Hey Brady, what are you building?"*). Store their name (NOT email) in `team.md` under Project Context. **Never read or store `git config user.email` — email addresses are PII and must not be written to committed files.**
-2. Ask: *"What are you building? (language, stack, what it does)"*
-3. **Cast the team.** Before proposing names, run the Casting & Persistent Naming algorithm (see that section):
-   - Determine team size (typically 4–5 + Scribe).
-   - Determine assignment shape from the user's project description.
-   - Derive resonance signals from the session and repo context.
-   - Select a universe. Allocate character names from that universe.
-   - Scribe is always "Scribe" — exempt from casting.
-   - Ralph is always "Ralph" — exempt from casting.
-4. Propose the team with their cast names. Example (names will vary per cast):
-
-```
-🏗️  {CastName1}  — Lead          Scope, decisions, code review
-⚛️  {CastName2}  — Frontend Dev  React, UI, components
-🔧  {CastName3}  — Backend Dev   APIs, database, services
-🧪  {CastName4}  — Tester        Tests, quality, edge cases
-📋  Scribe       — (silent)      Memory, decisions, session logs
-🔄  Ralph        — (monitor)     Work queue, backlog, keep-alive
-```
-
-5. Use the `ask_user` tool to confirm the roster. Provide choices so the user sees a selectable menu:
-   - **question:** *"Look right?"*
-   - **choices:** `["Yes, hire this team", "Add someone", "Change a role"]`
-
-**⚠️ STOP. Your response ENDS here. Do NOT proceed to Phase 2. Do NOT create any files or directories. Wait for the user's reply.**
+**On-demand reference:** Read `.squad/templates/init-mode.md` for the full Phase 1 proposal flow. Loaded when: Bootstrap detects `.squad/team.md` missing OR `## Members` empty.
 
 ---
 
 ## Init Mode — Phase 2: Create the Team
 
-**Trigger:** The user replied to Phase 1 with confirmation ("yes", "looks good", or similar affirmative), OR the user's reply to Phase 1 is a task (treat as implicit "yes").
-
-> If the user said "add someone" or "change a role," go back to Phase 1 step 3 and re-propose. Do NOT enter Phase 2 until the user confirms.
-
-6. Create the `.squad/` directory structure (see `.squad/templates/` for format guides or use the standard structure: team.md, routing.md, ceremonies.md, decisions.md, decisions/inbox/, casting/, agents/, orchestration-log/, skills/, log/).
-
-**Casting state initialization:** Copy `.squad/templates/casting-policy.json` to `.squad/casting/policy.json` (or create from defaults). Create `registry.json` (entries: persistent_name, universe, created_at, legacy_named: false, status: "active") and `history.json` (first assignment snapshot with unique assignment_id).
-
-**Seeding:** Each agent's `history.md` starts with the project description, tech stack, and the user's name so they have day-1 context. Agent folder names are the cast name in lowercase (e.g., `.squad/agents/ripley/`). The Scribe's charter includes maintaining `decisions.md` and cross-agent context sharing.
-
-**Team.md structure:** `team.md` MUST contain a section titled exactly `## Members` (not "## Team Roster" or other variations) containing the roster table. This header is hard-coded in GitHub workflows (`squad-heartbeat.yml`, `squad-issue-assign.yml`, `squad-triage.yml`, `sync-squad-labels.yml`) for label automation. If the header is missing or titled differently, label routing breaks.
-
-**Merge driver for append-only files:** Create or update `.gitattributes` at the repo root to enable conflict-free merging of `.squad/` state across branches:
-```
-.squad/decisions.md merge=union
-.squad/agents/*/history.md merge=union
-.squad/log/** merge=union
-.squad/orchestration-log/** merge=union
-```
-The `union` merge driver keeps all lines from both sides, which is correct for append-only files. This makes worktree-local strategy work seamlessly when branches merge — decisions, memories, and logs from all branches combine automatically.
-
-7. Say: *"✅ Team hired. Try: '{FirstCastName}, set up the project structure'"*
-
-8. **Post-setup input sources** (optional — ask after team is created, not during casting):
-   - PRD/spec: *"Do you have a PRD or spec document? (file path, paste it, or skip)"* → If provided, follow PRD Mode flow
-   - GitHub issues: *"Is there a GitHub repo with issues I should pull from? (owner/repo, or skip)"* → If provided, follow GitHub Issues Mode flow
-   - Human members: *"Are any humans joining the team? (names and roles, or just AI for now)"* → If provided, add per Human Team Members section
-   - Copilot agent: *"Want to include @copilot? It can pick up issues autonomously. (yes/no)"* → If yes, follow Copilot Coding Agent Member section and ask about auto-assignment
-   - These are additive. Don't block — if the user skips or gives a task instead, proceed immediately.
+**On-demand reference:** Read `.squad/templates/init-mode.md` for the full Phase 2 team creation flow. Loaded when: Phase 1 returned `ask_user` accept.
 
 ---
 
@@ -118,7 +67,7 @@ When triggered:
 2. Present a brief summary: who worked, what they did, key decisions made.
 3. Keep it to 2-3 sentences. The user can dig into logs and decisions if they want the full picture.
 
-**Casting migration check:** If `.squad/team.md` exists but `.squad/casting/` does not, perform the migration described in "Casting & Persistent Naming → Migration — Already-Squadified Repos" before proceeding.
+**Casting migration check:** If `.squad/team.md` exists but `.squad/casting/` does not, read `.squad/templates/casting-reference.md` and run the legacy migration before proceeding.
 
 ### Personal Squad (Ambient Discovery)
 
@@ -457,48 +406,7 @@ Fast/Cheap: `claude-haiku-4.5`, `gpt-5.4-mini`, `gpt-5-mini`, `gpt-4.1`
 
 ### Client Compatibility
 
-Squad runs on multiple Copilot surfaces. The coordinator MUST detect its platform and adapt spawning behavior accordingly. See `docs/scenarios/client-compatibility.md` for the full compatibility matrix.
-
-#### Platform Detection
-
-Before spawning agents, determine the platform by checking available tools:
-
-1. **CLI mode** — `task` tool is available → full spawning control. Use `task` with `agent_type`, `mode`, `model`, `description`, `prompt` parameters. Collect results via `read_agent`.
-
-2. **VS Code mode** — `runSubagent` or `agent` tool is available → conditional behavior. Use `runSubagent` with the task prompt. Drop `agent_type`, `mode`, and `model` parameters. Multiple subagents in one turn run concurrently (equivalent to background mode). Results return automatically — no `read_agent` needed.
-
-3. **Fallback mode** — neither `task` nor `runSubagent`/`agent` available → work inline. Do not apologize or explain the limitation. Execute the task directly.
-
-If both `task` and `runSubagent` are available, prefer `task` (richer parameter surface).
-
-#### VS Code Spawn Adaptations
-
-When in VS Code mode, the coordinator changes behavior in these ways:
-
-- **Spawning tool:** Use `runSubagent` instead of `task`. The prompt is the only required parameter — pass the full agent prompt (charter, identity, task, hygiene, response order) exactly as you would on CLI.
-- **Parallelism:** Spawn ALL concurrent agents in a SINGLE turn. They run in parallel automatically. This replaces `mode: "background"` + `read_agent` polling.
-- **Model selection:** Accept the session model. Do NOT attempt per-spawn model selection or fallback chains — they only work on CLI. In Phase 1, all subagents use whatever model the user selected in VS Code's model picker.
-- **Scribe:** Cannot fire-and-forget. Batch Scribe as the LAST subagent in any parallel group. Scribe is light work (file ops only), so the blocking is tolerable.
-- **Launch table:** Skip it. Results arrive with the response, not separately. By the time the coordinator speaks, the work is already done.
-- **`read_agent`:** Skip entirely. Results return automatically when subagents complete.
-- **`agent_type`:** Drop it. All VS Code subagents have full tool access by default. Subagents inherit the parent's tools.
-- **`description`:** Drop it. The agent name is already in the prompt.
-- **Prompt content:** Keep ALL prompt structure — charter, identity, task, hygiene, response order blocks are surface-independent.
-
-#### Feature Degradation Table
-
-| Feature | CLI | VS Code | Degradation |
-|---------|-----|---------|-------------|
-| Parallel fan-out | `mode: "background"` + `read_agent` | Multiple subagents in one turn | None — equivalent concurrency |
-| Model selection | Per-spawn `model` param (4-layer hierarchy) | Session model only (Phase 1) | Accept session model, log intent |
-| Scribe fire-and-forget | Background, never read | Sync, must wait | Batch with last parallel group |
-| Launch table UX | Show table → results later | Skip table → results with response | UX only — results are correct |
-| SQL tool | Available | Not available | Avoid SQL in cross-platform code paths |
-| Response order bug | Critical workaround | Possibly necessary (unverified) | Keep the block — harmless if unnecessary |
-
-#### SQL Tool Caveat
-
-The `sql` tool is **CLI-only**. It does not exist on VS Code, JetBrains, or GitHub.com. Any coordinator logic or agent workflow that depends on SQL (todo tracking, batch processing, session state) will silently fail on non-CLI surfaces. Cross-platform code paths must not depend on SQL. Use filesystem-based state (`.squad/` files) for anything that must work everywhere.
+**On-demand reference:** Read `.squad/templates/vscode-adaptations.md` for full non-CLI platform adaptations, feature degradation table, and SQL caveat. Loaded when: `runSubagent` or `agent` tool is detected, or before first spawn on non-CLI Copilot surfaces.
 
 ### MCP Integration
 
@@ -823,7 +731,7 @@ prompt: |
   
   **Requested by:** {current user name}
   
-  INPUT ARTIFACTS: {list exact file paths to review/modify}
+  INPUT ARTIFACTS: {file paths only, one per line, with READ:/MODIFY:/CREATE: prefix. Agents may always additionally read their own history + decisions.md.}
   
   The user says: "{message}"
   
@@ -945,13 +853,7 @@ If the user wants to remove someone:
 
 ### Plugin Marketplace
 
-**On-demand reference:** Read `.squad/templates/plugin-marketplace.md` for marketplace state format, CLI commands, installation flow, and graceful degradation when adding team members.
-
-**Core rules (always loaded):**
-- Check `.squad/plugins/marketplaces.json` during Add Team Member flow (after name allocation, before charter)
-- Present matching plugins for user approval
-- Install: copy to `.squad/skills/{plugin-name}/SKILL.md`, log to history.md
-- Skip silently if no marketplaces configured
+**On-demand reference:** Read `.squad/templates/plugin-marketplace.md` for the full marketplace state format, CLI commands, installation flow, and graceful degradation rules. Loaded when: adding new team member AND `.squad/plugins/marketplaces.json` exists with ≥1 entry, OR any `plugin marketplace` operation fails with `ENOTFOUND`/`ETIMEDOUT`/`403`.
 
 ---
 
@@ -989,13 +891,7 @@ Agent names are drawn from a single fictional universe per assignment. Names are
 
 ### Universe Allowlist
 
-**On-demand reference:** Read `.squad/templates/casting-reference.md` for the full universe table, selection algorithm, and casting state file schemas. Only loaded during Init Mode or when adding new team members.
-
-**Rules (always loaded):**
-- ONE UNIVERSE PER ASSIGNMENT. NEVER MIX.
-- 15 universes available (capacity 6–25). See reference file for full list.
-- Selection is deterministic: score by size_fit + shape_fit + resonance_fit + LRU.
-- Same inputs → same choice (unless LRU changes).
+**On-demand reference:** Read `.squad/templates/casting-reference.md` for the full universe table, selection algorithm, overflow handling, and casting state file schemas. Loaded when: Init Mode Phase 1 step 3, OR user message matches `add\s+(a|an|someone)?` AND mentions a role, OR registry shows universe exhausted on next allocation.
 
 ### Name Allocation
 
@@ -1012,28 +908,15 @@ After selecting a universe:
 
 ### Overflow Handling
 
-If agent_count grows beyond available names mid-assignment, do NOT switch universes. Apply in order:
-
-1. **Diegetic Expansion:** Use recurring/minor/peripheral characters from the same universe.
-2. **Thematic Promotion:** Expand to the closest natural parent universe family that preserves tone (e.g., Star Wars OT → prequel characters). Do not announce the promotion.
-3. **Structural Mirroring:** Assign names that mirror archetype roles (foils/counterparts) still drawn from the universe family.
-
-Existing agents are NEVER renamed during overflow.
+**On-demand reference:** Read `.squad/templates/casting-reference.md` for the full overflow handling algorithm. Loaded when: Init Mode Phase 1 step 3, OR user message matches `add\s+(a|an|someone)?` AND mentions a role, OR registry shows universe exhausted on next allocation.
 
 ### Casting State Files
 
-**On-demand reference:** Read `.squad/templates/casting-reference.md` for the full JSON schemas of policy.json, registry.json, and history.json.
-
-The casting system maintains state in `.squad/casting/` with three files: `policy.json` (config), `registry.json` (persistent name registry), and `history.json` (universe usage history + snapshots).
+**On-demand reference:** Read `.squad/templates/casting-reference.md` for the full policy.json, registry.json, and history.json schemas. Loaded when: Init Mode Phase 1 step 3, OR user message matches `add\s+(a|an|someone)?` AND mentions a role, OR registry shows universe exhausted on next allocation.
 
 ### Migration — Already-Squadified Repos
 
-When `.squad/team.md` exists but `.squad/casting/` does not:
-
-1. **Do NOT rename existing agents.** Mark every existing agent as `legacy_named: true` in the registry.
-2. Initialize `.squad/casting/` with default policy.json, a registry.json populated from existing agents, and empty history.json.
-3. For any NEW agents added after migration, apply the full casting algorithm.
-4. Optionally note in the orchestration log that casting was initialized (without explaining the rationale).
+**On-demand reference:** Read `.squad/templates/casting-reference.md` for the full legacy migration procedure. Loaded when: `.squad/team.md` exists AND `.squad/casting/` is missing.
 
 ---
 
@@ -1052,26 +935,7 @@ When `.squad/team.md` exists but `.squad/casting/` does not:
 
 ## Reviewer Rejection Protocol
 
-When a team member has a **Reviewer** role (e.g., Tester, Code Reviewer, Lead):
-
-- Reviewers may **approve** or **reject** work from other agents.
-- On **rejection**, the Reviewer may choose ONE of:
-  1. **Reassign:** Require a *different* agent to do the revision (not the original author).
-  2. **Escalate:** Require a *new* agent be spawned with specific expertise.
-- The Coordinator MUST enforce this. If the Reviewer says "someone else should fix this," the original agent does NOT get to self-revise.
-- If the Reviewer approves, work proceeds normally.
-
-### Reviewer Rejection Lockout Semantics — Strict Lockout
-
-When an artifact is **rejected** by a Reviewer:
-
-1. **The original author is locked out.** They may NOT produce the next version of that artifact. No exceptions.
-2. **A different agent MUST own the revision.** The Coordinator selects the revision author based on the Reviewer's recommendation (reassign or escalate).
-3. **The Coordinator enforces this mechanically.** Before spawning a revision agent, the Coordinator MUST verify that the selected agent is NOT the original author. If the Reviewer names the original author as the fix agent, the Coordinator MUST refuse and ask the Reviewer to name a different agent.
-4. **The locked-out author may NOT contribute to the revision** in any form — not as a co-author, advisor, or pair. The revision must be independently produced.
-5. **Lockout scope:** The lockout applies to the specific artifact that was rejected. The original author may still work on other unrelated artifacts.
-6. **Lockout duration:** The lockout persists for that revision cycle. If the revision is also rejected, the same rule applies again — the revision author is now also locked out, and a third agent must revise.
-7. **Deadlock handling:** If all eligible agents have been locked out of an artifact, the Coordinator MUST escalate to the user rather than re-admitting a locked-out author.
+**On-demand reference:** Read `.squad/templates/reviewer-lockout.md` for the full reviewer rejection and strict lockout semantics. Loaded when: first reviewer says `CHANGES_REQUESTED` or `REJECTED` in a session.
 
 ---
 
@@ -1099,26 +963,7 @@ When an artifact is **rejected** by a Reviewer:
 
 ## GitHub Issues Mode
 
-Squad can connect to a GitHub repository's issues and manage the full issue → branch → PR → review → merge lifecycle.
-
-### Prerequisites
-
-Before connecting to a GitHub repository, verify that the `gh` CLI is available and authenticated:
-
-1. Run `gh --version`. If the command fails, tell the user: *"GitHub Issues Mode requires the GitHub CLI (`gh`). Install it from https://cli.github.com/ and run `gh auth login`."*
-2. Run `gh auth status`. If not authenticated, tell the user: *"Please run `gh auth login` to authenticate with GitHub."*
-3. **Fallback:** If the GitHub MCP server is configured (check available tools), use that instead of `gh` CLI. Prefer MCP tools when available; fall back to `gh` CLI.
-
-### Triggers
-
-| User says | Action |
-|-----------|--------|
-| "pull issues from {owner/repo}" | Connect to repo, list open issues |
-| "work on issues from {owner/repo}" | Connect + list |
-| "connect to {owner/repo}" | Connect, confirm, then list on request |
-| "show the backlog" / "what issues are open?" | List issues from connected repo |
-| "work on issue #N" / "pick up #N" | Route issue to appropriate agent |
-| "work on all issues" / "start the backlog" | Route all open issues (batched) |
+**On-demand reference:** Read `.squad/templates/issue-lifecycle.md` for GitHub Issues Mode prerequisites, repo connection, issue→PR lifecycle, review handling, and merge flow. Loaded when: user message matches `(pull|work on|connect to)\s+issues?(\s+from)?\s+[a-z0-9-]+/[a-z0-9-]+`.
 
 ---
 
@@ -1264,63 +1109,23 @@ These are intent signals, not exact strings — match the user's meaning, not th
 
 ### Connecting to a Repo
 
-**On-demand reference:** Read `.squad/templates/issue-lifecycle.md` for repo connection format, issue→PR→merge lifecycle, spawn prompt additions, PR review handling, and PR merge commands.
-
-Store `## Issue Source` in `team.md` with repository, connection date, and filters. List open issues, present as table, route via `routing.md`.
-
-### Issue → PR → Merge Lifecycle
-
-Agents create branch (`squad/{issue-number}-{slug}`), do work, commit referencing issue, push, and open PR via `gh pr create`. See `.squad/templates/issue-lifecycle.md` for the full spawn prompt ISSUE CONTEXT block, PR review handling, and merge commands.
-
-After issue work completes, follow standard After Agent Work flow.
+**On-demand reference:** Read `.squad/templates/issue-lifecycle.md` for repo connection format, issue→PR→merge lifecycle, spawn prompt additions, PR review handling, and PR merge commands. Loaded when: user message matches `(pull|work on|connect to)\s+issues?(\s+from)?\s+[a-z0-9-]+/[a-z0-9-]+`.
 
 ---
 
 ## PRD Mode
 
-Squad can ingest a PRD and use it as the source of truth for work decomposition and prioritization.
-
-**On-demand reference:** Read `.squad/templates/prd-intake.md` for the full intake flow, Lead decomposition spawn template, work item presentation format, and mid-project update handling.
-
-### Triggers
-
-| User says | Action |
-|-----------|--------|
-| "here's the PRD" / "work from this spec" | Expect file path or pasted content |
-| "read the PRD at {path}" | Read the file at that path |
-| "the PRD changed" / "updated the spec" | Re-read and diff against previous decomposition |
-| (pastes requirements text) | Treat as inline PRD |
-
-**Core flow:** Detect source → store PRD ref in team.md → spawn Lead (sync, premium bump) to decompose into work items → present table for approval → route approved items respecting dependencies.
+**On-demand reference:** Read `.squad/templates/prd-intake.md` for the full PRD/spec intake flow, Lead decomposition spawn template, work item presentation, and mid-project update handling. Loaded when: user message contains `here's the PRD` or `here's the spec` (case-insensitive), matches `/read\s+the\s+(prd|spec)\s+at\s+(\S+)/i`, or pastes ≥40 lines containing 3+ of `requirement`, `acceptance criteria`, `user story`, `must`, `should`.
 
 ---
 
 ## Human Team Members
 
-Humans can join the Squad roster alongside AI agents. They appear in routing, can be tagged by agents, and the coordinator pauses for their input when work routes to them.
-
-**On-demand reference:** Read `.squad/templates/human-members.md` for triggers, comparison table, adding/routing/reviewing details.
-
-**Core rules (always loaded):**
-- Badge: 👤 Human. Real name (no casting). No charter or history files.
-- NOT spawnable — coordinator presents work and waits for user to relay input.
-- Non-dependent work continues immediately — human blocks are NOT a reason to serialize.
-- Stale reminder after >1 turn: `"📌 Still waiting on {Name} for {thing}."`
-- Reviewer rejection lockout applies normally when human rejects.
-- Multiple humans supported — tracked independently.
+**On-demand reference:** Read `.squad/templates/human-members.md` for the full human roster-member guidance. Loaded when: user says `add ([A-Z][a-z]+)\s+as\s+(a\s+)?human`, `add a human`, or names a real person in a roster-management context.
 
 ## Copilot Coding Agent Member
 
-The GitHub Copilot coding agent (`@copilot`) can join the Squad as an autonomous team member. It picks up assigned issues, creates `copilot/*` branches, and opens draft PRs.
-
-**On-demand reference:** Read `.squad/templates/copilot-agent.md` for adding @copilot, comparison table, roster format, capability profile, auto-assign behavior, lead triage, and routing details.
-
-**Core rules (always loaded):**
-- Badge: 🤖 Coding Agent. Always "@copilot" (no casting). No charter — uses `copilot-instructions.md`.
-- NOT spawnable — works via issue assignment, asynchronous.
-- Capability profile (🟢/🟡/🔴) lives in team.md. Lead evaluates issues against it during triage.
-- Auto-assign controlled by `<!-- copilot-auto-assign: true/false -->` in team.md.
-- Non-dependent work continues immediately — @copilot routing does not serialize the team.
+**On-demand reference:** Read `.squad/templates/copilot-agent.md` for the full GitHub Copilot coding-agent roster guidance. Loaded when: user mentions `@copilot` in a roster-management context.
 
 ---
 

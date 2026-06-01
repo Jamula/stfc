@@ -139,7 +139,7 @@ Each commit subject: `feat({NNN-feature}): Phase N — {name} (T{XXX}–T{YYY})`
   drifts every 15 min from `chore(history)` commits; rebase is
   conflict-free for spec PRs).
 - `git push -u origin <branch>`.
-- `gh pr create --title "feat({NNN-feature}): {phase summary}" --body "$(cat <<'EOF' ... Closes #{N} ... EOF)"` — one `Closes #N` per line per Rule 12.
+- `gh pr create --title "feat({NNN-feature}): {phase summary}" --body "$(cat <<'EOF' ... Closes #{N} ... EOF)"` — one `Closes #N` per line per Rule 6.
 
 ## Failure modes observed
 

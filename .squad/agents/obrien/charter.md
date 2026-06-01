@@ -87,7 +87,7 @@ the speckit chain gate), I surface to Kirk before shipping.
 - Pre-commit hook (`scripts/pre-commit.mjs`) runs `npm test`. NEVER use
   `--no-verify` — fix the failure (per repo rules / Project quick reference).
 - For release work: rebase before push (Rule 4), single-line `Closes #N`
-  per line in PR bodies (Rule 12), post-merge close-keyword sweep.
+  per line in PR bodies per Rule 6 (subsection 6a), post-merge close-keyword sweep.
 - Drop decision memos into `.squad/decisions/inbox/obrien-{slug}.md` for Scribe.
 - Never commit `.squad/` paths myself (Rule 2 — Scribe-only).
 

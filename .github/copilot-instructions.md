@@ -139,7 +139,44 @@ or any variant during a multi-phase speckit run:
 4. The Coordinator answers in 1 line ("Resuming Phase N at T0XX, dispatching {Agent}")
    and dispatches the implementer in the same response.
 
-## 6. The "ship it" ritual — codify the merge-to-main sequence
+## 6. PR shipping hygiene
+
+Rule 6 covers BOTH PR-create-time obligations (close keywords in body) AND merge-time obligations (rebase → push → merge → cleanup).
+
+### 6a. PR body authoring — per-line close keywords
+
+GitHub's auto-close on merge **does not reliably parse multi-issue close lists** like
+`Closes #48, #49`. Observed on 2026-05-17: PR #54 said `Closes #48, #49` — only #48
+auto-closed; #49 stayed open and required manual `gh issue close 49`.
+
+**Required PR body format:**
+
+```markdown
+Closes #48
+Closes #49
+Closes #50
+```
+
+Never `Closes #48, #49, #50` on one line. The comma-list parses inconsistently —
+sometimes the second issue closes, sometimes it doesn't. Per-line is the only
+reliable form.
+
+**Post-merge sweep (belt and suspenders):** when a PR merges, parse its body for
+`Closes #N` references and verify each is `state: CLOSED`:
+
+```bash
+gh pr view <N> --json body --jq '.body' \
+  | grep -oE 'Closes #[0-9]+' \
+  | grep -oE '[0-9]+' \
+  | while read issue; do
+      state=$(gh issue view "$issue" --json state --jq '.state')
+      [ "$state" = "OPEN" ] && gh issue close "$issue" --comment "Closed by PR #<N> (squash merge)"
+    done
+```
+
+Run this as part of subsection 6b merge-time ritual.
+
+### 6b. Merge-time ritual
 
 Past sessions show the user typing *"merge to main and sync"*, *"push to origin / merge
 to main / sync to main"*, and *"yes merge tge branch to main"* repeatedly (9+ times in
@@ -341,40 +378,14 @@ is a structured trigger for deep-research mode, not a free-form question.
 Do NOT treat `Researching:` as a normal request. The user expects the full pipeline
 (research → synthesize → review → file) in one continuous session, not piecemeal.
 
-## 12. PR body close keywords — one `Closes #N` per line
+## 12. RESERVED — see Rule 6
 
-GitHub's auto-close on merge **does not reliably parse multi-issue close lists** like
-`Closes #48, #49`. Observed on 2026-05-17: PR #54 said `Closes #48, #49` — only #48
-auto-closed; #49 stayed open and required manual `gh issue close 49`.
+This rule's content was consolidated into Rule 6 ("PR shipping hygiene") on 2026-06-01.
+The per-line `Closes #N` close-keyword format is now subsection 6a of Rule 6.
 
-**Required PR body format:**
+## 13. Codespaces operational gotchas
 
-```markdown
-Closes #48
-Closes #49
-Closes #50
-```
-
-Never `Closes #48, #49, #50` on one line. The comma-list parses inconsistently —
-sometimes the second issue closes, sometimes it doesn't. Per-line is the only
-reliable form.
-
-**Post-merge sweep (belt and suspenders):** when a PR merges, parse its body for
-`Closes #N` references and verify each is `state: CLOSED`:
-
-```bash
-gh pr view <N> --json body --jq '.body' \
-  | grep -oE 'Closes #[0-9]+' \
-  | grep -oE '[0-9]+' \
-  | while read issue; do
-      state=$(gh issue view "$issue" --json state --jq '.state')
-      [ "$state" = "OPEN" ] && gh issue close "$issue" --comment "Closed by PR #<N> (squash merge)"
-    done
-```
-
-Run this as part of the Rule 6 ship-it ritual.
-
-## 13. CodeQL alerts API 403 in Codespaces — token scope, not Advanced Security
+### 13a. CodeQL alerts API 403 — token scope diagnosis
 
 When `gh api repos/{owner}/{repo}/code-scanning/alerts` returns
 `403 Advanced Security must be enabled` **from inside a Codespace**, the diagnosis is
@@ -406,6 +417,42 @@ token just can't see it.
 The `gh auth refresh --hostname github.com -s security_events` workaround **does not
 work** inside Codespaces (the runtime won't let you re-auth the injected token). Don't
 suggest it as a fix; mention only as a diagnostic if needed.
+
+### 13b. Idle-timeout management
+
+Squad routinely fans out 5+ background agents per session, each running 10–30
+minutes. The Codespaces default idle timeout is **30 minutes** of UI inactivity,
+which kills the container mid-fleet and orphans in-flight subagents.
+
+**Observed on 2026-05-31 (session `7c85ff3b`):** user typed
+*"sudo apt install systemd"* trying to install an init system, then clarified
+*"want to keep the codespace / machine active while background agents are running"*.
+`systemd`, `tmux`, `screen`, `nohup`, and cron-keepalive scripts do **NOT** solve
+this — Codespaces shut down based on the runtime's idle heuristic, not on PID 1
+or active TTY sessions.
+
+**The actual fixes, in order of preference:**
+
+1. **Raise the per-user default** (one-time, applies to all Codespaces):
+   - https://github.com/settings/codespaces → **Default idle timeout** → bump to
+     **240 minutes** (the maximum the UI allows).
+2. **Raise the per-Codespace timeout** (this session only):
+   ```bash
+   gh codespace edit -c "$CODESPACE_NAME" --idle-timeout 240m
+   ```
+3. **For fully unattended monitoring after the board clears**, use the standalone
+   watchdog from a local machine (NOT inside the Codespace):
+   ```bash
+   npx @bradygaster/squad-cli watch --interval 10
+   ```
+
+**Do NOT propose:** installing `systemd`, running `screen`/`tmux` sessions, a
+background `while true; do sleep 60; done` loop, a self-pinging cron, or any
+"keepalive" trick that pretends activity. The runtime is the authority and these
+either no-op or get killed with the container.
+
+If 240 min isn't enough for a single fleet run, **split the work** across two
+sessions rather than fighting the timeout.
 
 ## 14. gh-issues-driven workflow
 
@@ -502,43 +549,12 @@ fit), ask once via `ask_user` rather than guessing.
 This rule also applies to non-cron sequences: *"port 8080, 8081, 8082, ..."* means
 "the contiguous range starting from 8080", not "exactly these three ports".
 
-## 20. Codespaces idle-timeout is the keepalive answer — not `systemd`, `tmux`, `screen`, or cron-keepalive
+## 20. RESERVED — see Rule 13
 
-Squad routinely fans out 5+ background agents per session, each running 10–30
-minutes. The Codespaces default idle timeout is **30 minutes** of UI inactivity,
-which kills the container mid-fleet and orphans in-flight subagents.
+This rule's content was consolidated into Rule 13 ("Codespaces operational gotchas") on 2026-06-01.
+The Codespaces idle-timeout guidance is now subsection 13b of Rule 13.
 
-**Observed on 2026-05-31 (session `7c85ff3b`):** user typed
-*"sudo apt install systemd"* trying to install an init system, then clarified
-*"want to keep the codespace / machine active while background agents are running"*.
-`systemd`, `tmux`, `screen`, `nohup`, and cron-keepalive scripts do **NOT** solve
-this — Codespaces shut down based on the runtime's idle heuristic, not on PID 1
-or active TTY sessions.
-
-**The actual fixes, in order of preference:**
-
-1. **Raise the per-user default** (one-time, applies to all Codespaces):
-   - https://github.com/settings/codespaces → **Default idle timeout** → bump to
-     **240 minutes** (the maximum the UI allows).
-2. **Raise the per-Codespace timeout** (this session only):
-   ```bash
-   gh codespace edit -c "$CODESPACE_NAME" --idle-timeout 240m
-   ```
-3. **For fully unattended monitoring after the board clears**, use the standalone
-   watchdog from a local machine (NOT inside the Codespace):
-   ```bash
-   npx @bradygaster/squad-cli watch --interval 10
-   ```
-
-**Do NOT propose:** installing `systemd`, running `screen`/`tmux` sessions, a
-background `while true; do sleep 60; done` loop, a self-pinging cron, or any
-"keepalive" trick that pretends activity. The runtime is the authority and these
-either no-op or get killed with the container.
-
-If 240 min isn't enough for a single fleet run, **split the work** across two
-sessions rather than fighting the timeout.
-
-## 21. Refuse-and-rotate protocol for credentials pasted into chat
+## 21. Credential hygiene — refuse-and-rotate
 
 Any string matching a credential pattern that appears in user input MUST be
 treated as **compromised the moment it left its source system** and the agent
@@ -592,6 +608,59 @@ e.g. *"User leaked DISCORD_CLIENT_SECRET on 2026-05-18; rotated at HH:MM UTC;
 new value set via `gh secret set` from local terminal"*. The value itself is
 never logged. This log entry is fine in `.squad/decisions/inbox/` because
 it's an operational record, not the secret.
+
+## 22. Fresh worktrees require `npm ci` before any commit
+
+When `git worktree add` creates a new worktree at `/workspaces/stfc-<N>`, the
+`node_modules/` directory inside that worktree is typically a **symlink** to
+the main checkout's `node_modules/`. If `package.json` has gained a
+dependency since the main checkout was last installed against it — or if the
+symlink target is otherwise stale — the worktree will fail the pre-commit
+hook (`npm test`) with a missing-module error. The failure is silent until
+the first commit attempt and looks like a real test break.
+
+**Observed on 2026-06-01 (O'Brien P1 #118 invitation runbook PR):** worktree
+`/workspaces/stfc-p1` was missing `json-schema-to-typescript` despite the
+package being in `package.json`. The epic branch had been in a "broken
+pre-commit state" before #118's author ran `npm ci` manually. Picard's
+parallel P1 fanout triage (same date) explicitly forward-flagged the same
+risk to Wave 4 #121 (Scotty): *"should confirm `npm ci` is already done
+on their worktree before committing."*
+
+**Required after every `git worktree add` (and before any commit attempt in a worktree):**
+
+```bash
+# In the new worktree, before staging anything:
+cd <worktree-path>
+ls -la node_modules 2>/dev/null | head -1     # detect symlink (lrwxrwxrwx) vs real dir
+npm ci                                         # idempotent; refreshes whether symlink or not
+npm test                                       # confirm the pre-commit gate passes BEFORE adding work
+```
+
+`npm ci` is idempotent and cheap (~5–15s when cache is warm). Running it
+proactively is far cheaper than discovering the failure at pre-commit time
+when you have uncommitted work to protect.
+
+**Symptom-to-cause table** for diagnosing failed pre-commit in a worktree:
+
+| Symptom | Likely cause |
+|---|---|
+| `Cannot find module 'xxx'` and `xxx` is in package.json | Stale symlinked `node_modules`; run `npm ci` |
+| `Cannot find module 'xxx'` and `xxx` is NOT in package.json | Real test break — fix the test |
+| Pre-commit passes once, fails on next commit | Background process modified `node_modules`; `npm ci` to reset |
+
+**Cross-reference:** Rule 18 (Fleet + worktree execution) covers shared-file
+ownership in worktrees; this rule covers dependency state inside worktrees.
+Together they're the worktree-mode preflight contract.
+
+**Evidence:**
+- `.squad/decisions/inbox/obrien-p1-118-invitation-runbook.md` (2026-06-01T01:40Z) — observed failure + diagnosis
+- `.squad/agents/picard/history.md` (2026-06-01T01:22:44Z, P1 fanout triage) — forward flag to next Wave-4 author
+
+**Cross-reference impact:**
+- `.squad/skills/worktree-preflight/SKILL.md` — NEW skill codifies the preflight ritual
+- `.squad/skills/audit-wip-fanout/SKILL.md` — should link to worktree-preflight at the wave-dispatch step
+- `.squad/agents/obrien/charter.md` — DevOps owns worktree provisioning concerns; add a one-line ownership note if charter is otherwise being edited (do NOT touch the charter solely for this)
 
 ## Project quick reference
 

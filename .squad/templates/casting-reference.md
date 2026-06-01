@@ -102,3 +102,44 @@ Runtime location: `.squad/casting/history.json`
   }
 }
 ```
+
+## Extracted inline coordinator casting sections
+
+> Appended from `.github/agents/squad.agent.md`; load during casting, overflow, state-file setup, or legacy migration.
+
+### Universe Allowlist
+
+**On-demand reference:** Read `.squad/templates/casting-reference.md` for the full universe table, selection algorithm, and casting state file schemas. Only loaded during Init Mode or when adding new team members.
+
+**Rules (always loaded):**
+- ONE UNIVERSE PER ASSIGNMENT. NEVER MIX.
+- 15 universes available (capacity 6–25). See reference file for full list.
+- Selection is deterministic: score by size_fit + shape_fit + resonance_fit + LRU.
+- Same inputs → same choice (unless LRU changes).
+
+
+### Overflow Handling
+
+If agent_count grows beyond available names mid-assignment, do NOT switch universes. Apply in order:
+
+1. **Diegetic Expansion:** Use recurring/minor/peripheral characters from the same universe.
+2. **Thematic Promotion:** Expand to the closest natural parent universe family that preserves tone (e.g., Star Wars OT → prequel characters). Do not announce the promotion.
+3. **Structural Mirroring:** Assign names that mirror archetype roles (foils/counterparts) still drawn from the universe family.
+
+Existing agents are NEVER renamed during overflow.
+
+### Casting State Files
+
+**On-demand reference:** Read `.squad/templates/casting-reference.md` for the full JSON schemas of policy.json, registry.json, and history.json.
+
+The casting system maintains state in `.squad/casting/` with three files: `policy.json` (config), `registry.json` (persistent name registry), and `history.json` (universe usage history + snapshots).
+
+### Migration — Already-Squadified Repos
+
+When `.squad/team.md` exists but `.squad/casting/` does not:
+
+1. **Do NOT rename existing agents.** Mark every existing agent as `legacy_named: true` in the registry.
+2. Initialize `.squad/casting/` with default policy.json, a registry.json populated from existing agents, and empty history.json.
+3. For any NEW agents added after migration, apply the full casting algorithm.
+4. Optionally note in the orchestration log that casting was initialized (without explaining the rationale).
+

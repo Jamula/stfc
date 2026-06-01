@@ -47,3 +47,18 @@ During the **Adding Team Members** flow, AFTER allocating a name but BEFORE gene
 - **No marketplaces configured:** Skip the marketplace check entirely. No warning, no prompt.
 - **Marketplace unreachable:** Warn the user (*"⚠ Couldn't reach {marketplace} — continuing without it"*) and proceed with team member creation normally.
 - **No matching plugins:** Inform the user (*"No matching plugins found in configured marketplaces"*) and proceed.
+
+## Extracted inline coordinator plugin marketplace section
+
+> Appended from `.github/agents/squad.agent.md`; load during team-member plugin checks or marketplace access failures.
+
+### Plugin Marketplace
+
+**On-demand reference:** Read `.squad/templates/plugin-marketplace.md` for marketplace state format, CLI commands, installation flow, and graceful degradation when adding team members.
+
+**Core rules (always loaded):**
+- Check `.squad/plugins/marketplaces.json` during Add Team Member flow (after name allocation, before charter)
+- Present matching plugins for user approval
+- Install: copy to `.squad/skills/{plugin-name}/SKILL.md`, log to history.md
+- Skip silently if no marketplaces configured
+

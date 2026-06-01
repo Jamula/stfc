@@ -188,7 +188,7 @@ clarification answer is the v3 plan's deferred-decision default.
   in a separate session.
 - **Rule 5:** Phase-boundary commit at the end of wave 2 (one bundled
   PR per the 004 precedent). Not deferring to end-of-session.
-- **Rule 12:** `Closes #106` on its own line in the commit body.
+- **Rule 6:** `Closes #106` on its own line in the commit body.
 - **Rule 4:** Worktree branch tracking `origin/squad/005-phase0-governance`;
   no `main` rebase required (working in a feature worktree per
   `/workspaces/stfc-p0`).
@@ -556,7 +556,7 @@ Issue: #91 (`crew-15-v2-parser`)
 Three rules added to `.github/copilot-instructions.md` (Rules #19–#21, file grew 504→623 lines):
 
 1. **Rule 19 — Sequence shorthand `"X, Y, Z, ..."` is inclusive.** Triggered by the redeem-cron round-trip in session `0a6be0be` where the agent read `"10, 20, 30, ..."` as excluding `:00`. Default to `*/N` (inclusive) for cron-style sequences.
-2. **Rule 20 — Codespaces idle-timeout is the keepalive answer.** Use `gh codespace edit --idle-timeout 240m` or the standalone `squad watch` CLI. Never propose `systemd`, `tmux`, `screen`, or cron-keepalive — they don't apply to the Codespaces runtime.
+2. **Rule 13 — Codespaces idle-timeout is the keepalive answer.** Use `gh codespace edit --idle-timeout 240m` or the standalone `squad watch` CLI. Never propose `systemd`, `tmux`, `screen`, or cron-keepalive — they don't apply to the Codespaces runtime.
 3. **Rule 21 — Refuse-and-rotate protocol for credentials pasted into chat.** Codified from incidents in session `63fb899e` (Discord client secret pasted verbatim). Any credential pattern → refuse to echo/log/persist, treat as compromised, instruct rotation, never request the value again.
 
 **Action:** Commit `.github/copilot-instructions.md` to main alongside this directive.
@@ -591,7 +591,7 @@ Empirical spend breakdown across 50 STFC CLI sessions:
 
 Operational habits the user should consider; not blocking but worth proactive suggestion:
 
-1. **Most-typed phrase is `"status check"` (11×/14d).** Candidate for `manage_schedule` (scheduled prompt every 5m) — doubles as Codespaces keepalive activity (Rule 20).
+1. **Most-typed phrase is `"status check"` (11×/14d).** Candidate for `manage_schedule` (scheduled prompt every 5m) — doubles as Codespaces keepalive activity (Rule 13).
 2. **Recurring rituals — `"Ralph, go"`, `"merge to main and sync"`, `"ship it"` — belong as custom slash commands** in `.github/prompts/*.prompt.md`. The full Rule 6 ship-it ritual deserves a `/ship` command.
 3. **Prefer `write_agent` over a fresh `task` spawn** for non-lockout follow-ups to a just-finished agent. In session `0a6be0be`, 73 `task` calls vs 6 `write_agent` — most of those were probably over-spawning.
 4. **Detached background bash (`mode: "async", detach: true`)** for long fleet runs that may outlast Codespaces 240-min timeout. Zero uses in window.
@@ -743,7 +743,7 @@ Commit 2 — Scotty's #119:
 - `web/index.html`, `web/src/main.ts`, `web/vite.config.ts`
 
 **PR target:** Open PR `squad/005-phase1-dashboard → main`  
-**Closes (per Rule 12 — one per line):**
+**Closes (per Rule 6 — one per line):**
 ```
 Closes #113
 Closes #114
@@ -898,11 +898,11 @@ Final count: **7 verified claims, 11 failed or unsupported claims**.
 
 ---
 
-## F1 — Rule 12 trigger timing is mis-stated; the 6+12 merge groups by the wrong axis ⚠️ BLOCKING
+## F1 — Rule 6 trigger timing is mis-stated; the 6+12 merge groups by the wrong axis ⚠️ BLOCKING
 
 **Plan line 94:** *"These both fire at merge-time and belong together."*
 
-This is factually incorrect. Rule 12's primary obligation fires at **PR-create time**
+This is factually incorrect. Rule 6's primary obligation fires at **PR-create time**
 when writing the PR body (`Closes #48\nCloses #49` — one per line). The post-merge
 sweep is the belt-and-suspenders fallback, not the main trigger. Rule 6 fires at
 **merge time**. Grouping them under a header named "Merge/ship ritual" with
@@ -911,7 +911,7 @@ assembling a PR body will not load a section named "merge/ship ritual" because t
 session hasn't reached merge-time yet.
 
 **Fix:** Either (a) rename the consolidated rule to "PR shipping hygiene" (captures
-both PR-create and merge-time obligations neutrally), or (b) keep Rule 12 standalone
+both PR-create and merge-time obligations neutrally), or (b) keep Rule 6 standalone
 with its current position so the trigger name matches the action. If consolidating,
 the lead sentence must say the rule covers *both* PR authoring AND merge-time steps —
 not just merge.
@@ -935,7 +935,7 @@ equally. The rule's body confirms this: the observed incidents were session-leve
 An agent running in plain CLI mode who receives a pasted PAT would not scan
 "Codespaces operational gotchas" — it would miss Rule 21 entirely.
 
-Rule 13 (CodeQL 403 → token scope) and Rule 20 (idle-timeout) are genuinely
+Rule 13a (CodeQL 403 → token scope) and Rule 13b (idle-timeout) are genuinely
 Codespaces-specific. Rule 21 is not.
 
 **Fix:** Keep Rules 13 + 20 together as "Codespaces operational gotchas." Extract Rule 21
@@ -1088,7 +1088,7 @@ No change needed. Recorded for completeness.
 
 | # | Finding | Severity | Blocking? |
 |---|---|---|---|
-| F1 | Rule 12 trigger timing mis-stated; consolidation name masks PR-create obligation | High | **Yes** |
+| F1 | Rule 6 trigger timing mis-stated; consolidation name masks PR-create obligation | High | **Yes** |
 | F2 | Rule 21 is not Codespaces-specific; hiding it in "Codespaces gotchas" causes misses | High | **Yes** |
 | F3 | Two on-demand triggers too vague to fire reliably (PRD, plugin-marketplace) | Medium | **Yes** |
 | F4 | Restart boundary rationale wrong for coordinator (correct for workers) | Low | No — fix PR copy only |
