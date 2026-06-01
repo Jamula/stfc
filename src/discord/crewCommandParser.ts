@@ -1,4 +1,15 @@
 import type { CommandChannelAllowlistEntry, DiscordMessage } from "./schemas.ts";
+import {
+  handleBest,
+  handleExplain,
+  handleOfficers,
+  handleProgression,
+  handleRosterShow,
+  handleStatus,
+  handleSynergy,
+  handleTasks,
+} from "../crew/handlers/index.ts";
+import { formatHandlerError } from "../crew/handlers/shared.ts";
 
 const PREFIX = "!crew";
 const WINDOW_MS = 60_000;
@@ -22,6 +33,18 @@ export interface CrewCommandProcessStats {
   processed: number;
   rateLimited: number;
 }
+
+export type CrewCommandHandler = (command: CrewCommand) => Promise<string>;
+export type CrewCommandHandlerKey =
+  | "best"
+  | "status"
+  | "progression"
+  | "explain"
+  | "synergy"
+  | "tasks"
+  | "officers"
+  | "rosterShow";
+export type CrewCommandHandlerMap = Record<CrewCommandHandlerKey, CrewCommandHandler>;
 
 export interface CrewCommandRateLimitResult {
   allowed: boolean;
@@ -56,14 +79,14 @@ export class CrewCommandRateLimiter {
 
 export const CREW_COMMAND_HELP = [
   "**STFC crew commands**",
-  "- `!crew best <task> [--account X]` — coming in #92",
-  "- `!crew status [--account X]` — coming in #92",
-  "- `!crew progression [--account X]` — coming in #92",
-  "- `!crew explain <officer>` — coming in #92",
-  "- `!crew synergy <group>` — coming in #92",
-  "- `!crew tasks` — coming in #92",
-  "- `!crew officers [--owned]` — coming in #92",
-  "- `!crew roster show [--account X]` — coming in #92",
+  "- `!crew best <task> --account X [--top N]` — recommend a crew for a task",
+  "- `!crew status --account X` — roster health summary",
+  "- `!crew progression --account X` — progression gaps and next actions",
+  "- `!crew explain <officer> --account X` — officer detail lookup",
+  "- `!crew synergy <group> --account X` — synergy group membership",
+  "- `!crew tasks --account X` — known optimization tasks",
+  "- `!crew officers --account X [--owned] [--faction X]` — officer inventory",
+  "- `!crew roster show --account X` — roster inventory",
   "- `!crew knowledge <q>` — coming in #93",
   "- `!crew help` — this command",
   "",
@@ -95,9 +118,30 @@ export function parseCrewCommand(
   };
 }
 
-export function handleCrewCommand(command: CrewCommand): string {
+const DEFAULT_CREW_COMMAND_HANDLERS: CrewCommandHandlerMap = {
+  best: handleBest,
+  status: handleStatus,
+  progression: handleProgression,
+  explain: handleExplain,
+  synergy: handleSynergy,
+  tasks: handleTasks,
+  officers: handleOfficers,
+  rosterShow: handleRosterShow,
+};
+
+export async function handleCrewCommand(
+  command: CrewCommand,
+  handlers: CrewCommandHandlerMap = DEFAULT_CREW_COMMAND_HANDLERS,
+): Promise<string> {
   if (command.subcommand.toLowerCase() === "help") return CREW_COMMAND_HELP;
-  return `Subcommand '${command.subcommand}' not yet implemented. See \`!crew help\` for what's coming.`;
+  const handler = resolveCrewCommandHandler(command, handlers);
+  if (!handler) return "Unknown command. Try !crew help.";
+
+  try {
+    return await handler(command);
+  } catch (err) {
+    return `Error: ${formatHandlerError(err)}`;
+  }
 }
 
 export async function processCrewCommands(
@@ -108,6 +152,7 @@ export async function processCrewCommands(
     now?: Date | (() => Date);
     rateLimiter?: CrewCommandRateLimiter;
     logger?: (message: string) => void;
+    handlers?: CrewCommandHandlerMap;
   } = {},
 ): Promise<CrewCommandProcessStats> {
   const rateLimiter = options.rateLimiter ?? new CrewCommandRateLimiter();
@@ -136,11 +181,38 @@ export async function processCrewCommands(
       continue;
     }
 
-    await responder.postMessage(message.channel_id, handleCrewCommand(command));
+    const output = await handleCrewCommand(command, options.handlers);
+    await responder.postMessage(message.channel_id, output);
     stats.processed++;
   }
 
   return stats;
+}
+
+function resolveCrewCommandHandler(
+  command: CrewCommand,
+  handlers: CrewCommandHandlerMap,
+): CrewCommandHandler | undefined {
+  switch (command.subcommand.toLowerCase()) {
+    case "best":
+      return handlers.best;
+    case "status":
+      return handlers.status;
+    case "progression":
+      return handlers.progression;
+    case "explain":
+      return handlers.explain;
+    case "synergy":
+      return handlers.synergy;
+    case "tasks":
+      return handlers.tasks;
+    case "officers":
+      return handlers.officers;
+    case "roster":
+      return command.args._0?.toLowerCase() === "show" ? handlers.rosterShow : undefined;
+    default:
+      return undefined;
+  }
 }
 
 export function isCommandChannelAllowed(

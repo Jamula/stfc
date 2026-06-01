@@ -117,20 +117,20 @@ describe("processCrewCommands", () => {
     assert.equal(stats.rateLimited, 1);
   });
 
-  it("returns !crew help with every planned v2 verb", () => {
+  it("returns !crew help with every planned v2 verb", async () => {
     const parsed = parseCrewCommand(message("!crew help"), allowlist);
     assert.ok(parsed);
-    const reply = handleCrewCommand(parsed);
+    const reply = await handleCrewCommand(parsed);
     assert.equal(reply, CREW_COMMAND_HELP);
     for (const expected of [
-      "!crew best <task> [--account X]",
-      "!crew status [--account X]",
-      "!crew progression [--account X]",
-      "!crew explain <officer>",
-      "!crew synergy <group>",
-      "!crew tasks",
-      "!crew officers [--owned]",
-      "!crew roster show [--account X]",
+      "!crew best <task> --account X [--top N]",
+      "!crew status --account X",
+      "!crew progression --account X",
+      "!crew explain <officer> --account X",
+      "!crew synergy <group> --account X",
+      "!crew tasks --account X",
+      "!crew officers --account X [--owned] [--faction X]",
+      "!crew roster show --account X",
       "!crew knowledge <q>",
       "!crew help",
       "docs/CREW-OPTIMIZER.md",
@@ -139,12 +139,12 @@ describe("processCrewCommands", () => {
     }
   });
 
-  it("returns the not-yet-implemented stub for non-help subcommands", () => {
-    const parsed = parseCrewCommand(message("!crew best mining"), allowlist);
+  it("returns the unknown-command fallback for unsupported subcommands", async () => {
+    const parsed = parseCrewCommand(message("!crew nope"), allowlist);
     assert.ok(parsed);
     assert.equal(
-      handleCrewCommand(parsed),
-      "Subcommand 'best' not yet implemented. See `!crew help` for what's coming.",
+      await handleCrewCommand(parsed),
+      "Unknown command. Try !crew help.",
     );
   });
 });
