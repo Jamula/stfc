@@ -129,7 +129,33 @@ describe("crew knowledge — chunking", () => {
     const chunks = chunkTask("data/tasks/synthetic.yaml", "id: synthetic\nname: foo\n");
     assert.equal(chunks.length, 1);
     assert.equal(chunks[0]!.startLine, 1);
-    assert.equal(chunks[0]!.endLine, 3);
+    // trailing newline trimmed → 2 physical content lines
+    assert.equal(chunks[0]!.endLine, 2);
+  });
+
+  it("chunkTask endLine regression: trailing newline must not inflate line count", () => {
+    // Build a 23-line content string — mirrors armada-25.yaml which Garak found was
+    // cited as L1-L24 due to the off-by-one.
+    const lines23 = Array.from({ length: 23 }, (_, i) => `line: ${i + 1}`);
+    const withTrailing = lines23.join("\n") + "\n";   // POSIX file: ends with \n
+    const withoutTrailing = lines23.join("\n");        // file without trailing newline
+
+    const chunksWith = chunkTask("data/tasks/armada-like.yaml", withTrailing);
+    const chunksWithout = chunkTask("data/tasks/armada-like.yaml", withoutTrailing);
+
+    assert.equal(chunksWith.length, 1, "expected one chunk with trailing newline");
+    assert.equal(chunksWithout.length, 1, "expected one chunk without trailing newline");
+
+    // Both variants must agree on end line = 23 (the last non-empty line).
+    assert.equal(chunksWith[0]!.endLine, 23, "trailing-newline variant: endLine must be 23, not 24");
+    assert.equal(chunksWithout[0]!.endLine, 23, "no-trailing-newline variant: endLine must be 23");
+
+    // The two representations must produce identical chunk shapes.
+    assert.equal(
+      chunksWith[0]!.endLine,
+      chunksWithout[0]!.endLine,
+      "trailing-newline and no-trailing-newline must yield the same endLine",
+    );
   });
 });
 
@@ -159,21 +185,21 @@ describe("crew knowledge — embedder + cache invalidation", () => {
     assert.equal(cacheNeedsRebuild(null, hash), true);
     assert.equal(
       cacheNeedsRebuild(
-        { model: "model-a", chunkerVersion: CHUNKER_VERSION, sourcesHash: hash, generatedAt: "", chunks: [] },
+        { model: "model-a", chunkerVersion: CHUNKER_VERSION, sourcesHash: hash, chunks: [] },
         hash,
       ),
       false,
     );
     assert.equal(
       cacheNeedsRebuild(
-        { model: "model-a", chunkerVersion: CHUNKER_VERSION, sourcesHash: "OTHER", generatedAt: "", chunks: [] },
+        { model: "model-a", chunkerVersion: CHUNKER_VERSION, sourcesHash: "OTHER", chunks: [] },
         hash,
       ),
       true,
     );
     assert.equal(
       cacheNeedsRebuild(
-        { model: "model-a", chunkerVersion: "v0-stale", sourcesHash: hash, generatedAt: "", chunks: [] },
+        { model: "model-a", chunkerVersion: "v0-stale", sourcesHash: hash, chunks: [] },
         hash,
       ),
       true,

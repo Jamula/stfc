@@ -2,7 +2,6 @@
   "model": "hashed-bow-v1",
   "chunkerVersion": "v1",
   "sourcesHash": "ab7ceeddc01ac64e60efd42dd11ee0bed7b1454a9b2efedab6bf8f13b2c7a918",
-  "generatedAt": "2026-06-01T05:09:54.423Z",
   "chunks": [
     {
       "source": "docs/stfc-game-knowledge.md",
@@ -28231,7 +28230,7 @@
     {
       "source": "data/crew/tasks/armada-25.yaml",
       "startLine": 1,
-      "endLine": 24,
+      "endLine": 23,
       "text": "id: armada-25\nname: Level 25 Armada\ndescription: Coordinated armada damage and survivability for alliance runs.\nslots:\n  captain:\n    bda_role: captain\n  officer_a:\n    bda_role: officer\n  officer_b:\n    bda_role: officer\ntag_weights:\n  armada_damage: 9\n  armada_mitigation: 7\n  morale_recovery: 2\nsynergy_bonus: 6\nfaction_bonus:\n  federation: 1\n  klingon: 1\n  romulan: 1\nconstraints:\n  exclude_officers: []\nnotes: |\n  Favors armada specialists and stable faction squads.",
       "embedding": [
         0,
@@ -28623,7 +28622,7 @@
     {
       "source": "data/crew/tasks/hostile-grind.yaml",
       "startLine": 1,
-      "endLine": 20,
+      "endLine": 19,
       "text": "id: hostile-grind\nname: Hostile Grinding\ndescription: Sustained hostile farming with mitigation and crit pressure.\nslots:\n  captain:\n    bda_role: captain\n  officer_a:\n    bda_role: officer\n  officer_b:\n    bda_role: officer\ntag_weights:\n  hostile_mitigation: 8\n  hostile_crit: 6\n  pvp_mitigation: 1\nsynergy_bonus: 4\nconstraints:\n  exclude_officers: []\nnotes: |\n  Prioritizes survivability first, then hostile clear speed.",
       "embedding": [
         0,
@@ -29015,7 +29014,7 @@
     {
       "source": "data/crew/tasks/mining-g3.yaml",
       "startLine": 1,
-      "endLine": 20,
+      "endLine": 19,
       "text": "id: mining-g3\nname: G3 Mining Run\ndescription: Standard tritanium and dilithium pull across G3 nodes.\nslots:\n  captain:\n    bda_role: captain\n  officer_a:\n    bda_role: officer\n  officer_b:\n    bda_role: officer\ntag_weights:\n  mining_rate: 10\n  cargo_capacity: 4\n  warp_range: 1\nsynergy_bonus: 5\nconstraints:\n  exclude_officers: []\nnotes: |\n  Baseline mining configuration. Warp range is a tie-breaker for deep-node access.",
       "embedding": [
         0,
@@ -29407,7 +29406,7 @@
     {
       "source": "data/crew/tasks/station-defense.yaml",
       "startLine": 1,
-      "endLine": 20,
+      "endLine": 19,
       "text": "id: station-defense\nname: Station Defense\ndescription: Defensive bridge setup for base defense and raid deterrence.\nslots:\n  captain:\n    bda_role: captain\n  officer_a:\n    bda_role: officer\n  officer_b:\n    bda_role: officer\ntag_weights:\n  station_defense: 10\n  pvp_mitigation: 6\n  repair_cost: 2\nsynergy_bonus: 3\nconstraints:\n  exclude_officers: []\nnotes: |\n  Optimizes for staying power and repair efficiency during repeated hits.",
       "embedding": [
         0,

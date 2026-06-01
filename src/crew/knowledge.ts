@@ -52,7 +52,6 @@ export interface KnowledgeCache {
   model: string;
   chunkerVersion: string;
   sourcesHash: string;
-  generatedAt: string;
   chunks: EmbeddedChunk[];
 }
 
@@ -245,7 +244,10 @@ function findOfficerEndLine(lines: string[], fromIdx: number): number {
 
 /** Each task YAML is small (< 30 lines); emit one chunk per file. */
 export function chunkTask(source: string, content: string): KnowledgeChunk[] {
-  const lineCount = content.split("\n").length;
+  // trimEnd() removes any trailing newline before splitting so length equals
+  // the physical last non-empty line number (POSIX files end with \n, giving
+  // an extra empty element without the trim — see regression test).
+  const lineCount = content.trimEnd().split("\n").length;
   const trimmed = content.trim();
   if (trimmed.length === 0) return [];
   return [{ source, startLine: 1, endLine: lineCount, text: trimmed }];
@@ -380,7 +382,8 @@ export async function buildCache(
 ): Promise<KnowledgeCache> {
   const modelId = opts.modelId ?? DEFAULT_MODEL_ID;
   const embedder = opts.embedder ?? createHashedEmbedder();
-  const now = opts.now ?? (() => new Date());
+  // opts.now is retained in BuildOptions for call-site compatibility but is
+  // no longer used now that generatedAt has been removed from the artifact.
 
   const chunks = buildChunks(inputs);
   const embeddedChunks: EmbeddedChunk[] = [];
@@ -393,7 +396,6 @@ export async function buildCache(
     model: modelId,
     chunkerVersion: CHUNKER_VERSION,
     sourcesHash: hashSources(inputs, modelId),
-    generatedAt: now().toISOString(),
     chunks: embeddedChunks,
   };
 }
