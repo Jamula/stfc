@@ -2,6 +2,7 @@ import type { CommandChannelAllowlistEntry, DiscordMessage } from "./schemas.ts"
 import {
   handleBest,
   handleExplain,
+  handleKnowledge,
   handleOfficers,
   handleProgression,
   handleRosterShow,
@@ -43,7 +44,8 @@ export type CrewCommandHandlerKey =
   | "synergy"
   | "tasks"
   | "officers"
-  | "rosterShow";
+  | "rosterShow"
+  | "knowledge";
 export type CrewCommandHandlerMap = Record<CrewCommandHandlerKey, CrewCommandHandler>;
 
 export interface CrewCommandRateLimitResult {
@@ -87,7 +89,7 @@ export const CREW_COMMAND_HELP = [
   "- `!crew tasks --account X` — known optimization tasks",
   "- `!crew officers --account X [--owned] [--faction X]` — officer inventory",
   "- `!crew roster show --account X` — roster inventory",
-  "- `!crew knowledge <q>` — coming in #93",
+  "- `!crew knowledge <q> [--top N]` — semantic search over the game knowledge base",
   "- `!crew help` — this command",
   "",
   "Full operator guide: `docs/CREW-OPTIMIZER.md`",
@@ -127,6 +129,7 @@ const DEFAULT_CREW_COMMAND_HANDLERS: CrewCommandHandlerMap = {
   tasks: handleTasks,
   officers: handleOfficers,
   rosterShow: handleRosterShow,
+  knowledge: handleKnowledge,
 };
 
 export async function handleCrewCommand(
@@ -210,6 +213,8 @@ function resolveCrewCommandHandler(
       return handlers.officers;
     case "roster":
       return command.args._0?.toLowerCase() === "show" ? handlers.rosterShow : undefined;
+    case "knowledge":
+      return handlers.knowledge;
     default:
       return undefined;
   }

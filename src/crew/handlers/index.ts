@@ -1,5 +1,6 @@
 export { handleBest } from "./best.ts";
 export { handleExplain } from "./explain.ts";
+export { handleKnowledge } from "./knowledge.ts";
 export { handleOfficers } from "./officers.ts";
 export { handleProgression } from "./progression.ts";
 export { handleRosterShow } from "./rosterShow.ts";
