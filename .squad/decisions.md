@@ -2948,3 +2948,536 @@ against committed files. Added as `check:contracts` npm script. Exits 1 on any m
 - If a schema adds a new `oneOf` discriminant pattern, `detectDiscriminant()` in the
   generator handles it automatically.
 - `@stfc/contracts/*` path alias is already wired in root, api, and web tsconfigs.
+# Kirk — Architecture doc organisation
+
+- **By:** Kirk
+- **Date:** 2026-06-01
+- **Status:** Proposed canonical pattern
+
+## Decision
+
+`docs/ARCHITECTURE.md` is the **canonical system architecture map**. It is
+deliberately a MAP (pointers to per-subsystem docs), not a REPLACEMENT for
+them.
+
+## Organising rules
+
+1. **One §3.N per subsystem**, with consistent sub-headings: entrypoint,
+   exit/contract semantics, modules table, scheduling/trigger, links to
+   per-subsystem docs.
+2. **Per-subsystem deep detail stays in its own doc** (`docs/SWA-SETUP.md`,
+   `docs/SWA-INVITATION-RUNBOOK.md`, `docs/CREW-OPTIMIZER.md`,
+   `docs/DISCORD-BOT-SETUP.md`, `docs/SETUP.md`, `docs/squad.md`,
+   `docs/stfc-game-knowledge.md`, `docs/stfc-knowledge/`). The
+   architecture doc cross-references; it does not duplicate.
+3. **Behavioural claims are cited** with `path:line` or
+   `specs/NNN-feature/<artifact>.md` references. Uncited claims are
+   flagged "TODO: verify" with the file someone should read.
+4. **Mermaid diagrams** are limited to 1 topology + 2-3 sequence flows.
+   More diagrams = more drift risk; pick the most cross-cutting flows
+   only.
+5. **§7 Known gaps** is mandatory — captures Wave-N defers, in-flight
+   PRs, unprovisioned secrets, and known doc/code drift. Most valuable
+   section for a returning maintainer.
+6. **§8 How to change safely** cites the 22 repo rules by number rather
+   than restating them — keeps `.github/copilot-instructions.md` as the
+   single source of truth.
+
+## Why
+
+A canonical architecture doc is a permanent invitation to drift. Three
+forcing functions minimise that:
+
+- **Cross-reference over duplicate** — pointers age well, prose does not.
+- **Cite file:line** — makes the doc auditable against the live tree;
+  any reader can ground-truth a claim with one click.
+- **Explicit §7 gaps** — a doc that tells you what NOT to trust is more
+  honest than one that pretends to be complete.
+
+## Implications
+
+- When a subsystem's behaviour changes, update its OWN doc and adjust
+  only the pointer/synopsis in `docs/ARCHITECTURE.md` — do not edit the
+  per-subsystem body in two places.
+- When a new subsystem is added, append a new `§3.N` entry following
+  the template (entrypoint / contract / modules / scheduling / doc
+  links), update §1 topology + table, add a §6 reference row.
+- Drift detection: if a `path:line` citation no longer matches the
+  cited file, the doc is stale — fix it immediately.
+
+## Scope
+
+Architecture-doc maintenance specifically. Other docs (per-subsystem,
+operator runbooks, spec artefacts) follow their own conventions.
+
+# Kirk — Triage memo: Issue #92 (crew v2 read-only command handlers)
+
+**Date:** 2026-06-01T04:05Z
+**Author:** Kirk (Lead/Architect)
+**Issue:** [#92 — crew[v2]: Implement read-only command handlers](https://github.com/Jamula/stfc/issues/92)
+**Depends on:** #91 (closed — PR #123 shipped `crewCommandParser.ts`)
+**Owners (per label):** Scotty (squad:scotty) + Uhura (squad:uhura)
+**Mode:** READ-ONLY triage. No source files created or modified.
+
+---
+
+## 1. Handler inventory (8 verbs)
+
+Every handler is a pure function of `(CrewCommand, deps)` → `string` (Discord-formatted markdown). The dispatch shell already lives at `src/discord/crewCommandParser.ts:98` (`handleCrewCommand`) and currently returns a stub for every non-`help` verb. This issue replaces those stubs with real implementations that delegate into `src/crew/**`.
+
+| # | Verb | Existing helpers used | New code? | Complexity | Suggested module |
+|---|---|---|---|---|---|
+| 1 | `best <task> [--account X] [--top N]` | `loadOfficerDatabase`, `loadRoster`, `loadTask`, `optimizeCrew`, `evaluateStaleness` | Discord formatter for `OptimizeCrewResult` (truncate to top 1–3 for chat) | **L** | `src/crew/handlers/best.ts` |
+| 2 | `status [--account X]` | `loadOfficerDatabase`, `loadRoster`, `evaluateStaleness`, `validateRosterOfficerIds` | Roster summary formatter (account, age, owned count, unknown-officer count, staleness banner) | **M** | `src/crew/handlers/status.ts` |
+| 3 | `progression [--account X]` | `loadOfficerDatabase`, `loadRoster`, `analyzeProgression`, `evaluateStaleness` | Discord formatter for `ProgressionAnalysis` (top-N from each of the 4 sections; truncate aggressively) | **L** | `src/crew/handlers/progression.ts` |
+| 4 | `explain <officer>` | `loadOfficerDatabase`, `database.byId.get` | Per-officer detail card (name, faction, captain maneuver text+tags, ability text+tags, synergy groups, source citation) | **S** | `src/crew/handlers/explain.ts` |
+| 5 | `synergy <group>` | `loadOfficerDatabase` (filter by `synergy_groups.includes(group)`) | Group membership list + "0 members found" fallback | **S** | `src/crew/handlers/synergy.ts` |
+| 6 | `tasks` | `loadTaskDefinitions` | Bullet list of `{id, name, description?}` from `data/crew/tasks/*.yaml` | **S** | `src/crew/handlers/tasks.ts` |
+| 7 | `officers [--owned] [--faction X]` | `loadOfficerDatabase`, `loadRoster` (only if `--owned`) | Sorted officer list; with `--owned` cross-ref with roster; **needs pagination — Discord 2000-char limit will bite at 30–50 officers** | **M** | `src/crew/handlers/officers.ts` |
+| 8 | `roster show [--account X]` | `loadRoster`, `evaluateStaleness` | Account + last_updated + officer table (id, level, rank, promotions, owned) | **M** | `src/crew/handlers/rosterShow.ts` |
+
+**Verdict:** Zero genuinely new domain logic. Every handler is `load → call existing pure helper → format`. The novelty is **only** in Discord-formatted output rendering and `--account` resolution glue. All 8 handlers can be implemented without touching `src/crew/optimizer.ts`, `progression.ts`, `roster.ts`, `staleness.ts`, `tasks.ts`, or `database.ts`.
+
+---
+
+## 2. Parallel decomposition (Scotty + Uhura)
+
+Per `.squad/routing.md`: Scotty owns TypeScript/CLI/build (and historically the `src/crew/**` engine namespace via #78–#83); Uhura owns Discord integration (and shipped the #91 parser).
+
+**Recommended split — by handler boundary, not by file:**
+
+| Agent | Handlers | Files owned | Why |
+|---|---|---|---|
+| **Scotty** | `best`, `status`, `progression`, `rosterShow` | `src/crew/handlers/{best,status,progression,rosterShow}.ts` | Heavy `src/crew/` engine reuse (optimizer, progression, staleness). Scotty already authored those engines and knows the shapes cold. |
+| **Uhura** | `explain`, `synergy`, `tasks`, `officers` | `src/crew/handlers/{explain,synergy,tasks,officers}.ts` + dispatcher wire-up in `src/discord/crewCommandParser.ts` | Lightweight DB/task lookups (no optimizer); Uhura also owns the Discord seam (parser, dispatch), so she finishes by wiring all 8 into `handleCrewCommand`. |
+
+**Shared-file conflict surface (Drop-Box Pattern per squad.agent.md):**
+
+| File | Both agents touch? | Mitigation |
+|---|---|---|
+| `src/discord/crewCommandParser.ts` (`handleCrewCommand` dispatch) | **YES — single switch statement** | Uhura owns this file. Scotty exports his 4 handler functions from `src/crew/handlers/index.ts`; Uhura imports + wires the dispatch table in the **same PR last commit**. No concurrent edits. |
+| `src/crew/handlers/index.ts` (barrel) | **YES — both add exports** | Append-only — each agent appends their own block. Trivial merge resolution; alphabetical sort enforced. |
+| `tests/crew/handlers/*.test.ts` | NO — per-handler test files | Disjoint files. No conflict. |
+| `tests/index.test.ts` (import wiring per Rule 15-equivalent) | **YES — both append imports** | Append-only at the bottom of the imports block. Alphabetical sort. Drop-Box pattern. |
+| `src/crew/handlers/types.ts` (shared `HandlerDeps`, `HandlerContext`) | **YES, but seeded once** | Recommendation: Uhura seeds this file in her first commit (since she owns the parser seam). Scotty consumes it. No concurrent edits. |
+
+**Decomposition is clean.** No two agents need to edit the same function body. The only true conflict surface is the dispatch switch in `crewCommandParser.ts`, which Uhura owns end-to-end.
+
+---
+
+## 3. Test coverage strategy
+
+Per `tasks.md` T301: `tests/crew/commandHandlers.test.ts` per verb + integration test via the parser. Per `tests/index.test.ts` convention, every new test file must be imported in the same PR.
+
+**Recommended layout:**
+
+```
+tests/crew/handlers/
+├── best.test.ts          # tiny-world fixture from tests/crew/fixtures/
+├── status.test.ts        # stub roster + staleness assertions
+├── progression.test.ts   # tiny-world fixture
+├── explain.test.ts       # one known officer + one missing officer
+├── synergy.test.ts       # one populated group + one empty group
+├── tasks.test.ts         # loads from data/crew/tasks/ (real data test)
+├── officers.test.ts      # --owned and bare; assert pagination boundary
+└── rosterShow.test.ts    # stub roster fixture; staleness banner assertion
+
+tests/discord/
+└── crewCommandHandlers.integration.test.ts   # parse → dispatch → response, end-to-end
+```
+
+**Per-handler unit test contract (~30–50 LOC each):**
+1. **Golden-output snapshot** — exact-string match for one canonical input. Spec acceptance criterion explicitly demands byte-stable goldens (`User Story 6 — Independent Test`).
+2. **Edge case** — missing officer (`explain`), empty group (`synergy`), stale roster (`status`/`rosterShow`/`best`/`progression`), unknown task (`best`), unknown account (all account-flagged verbs).
+3. **No file-system writes** — handlers are read-only; assert via mocked deps where possible. Reuse `tests/crew/fixtures/tiny-officers.json` + `tiny.yaml` + `tiny-tasks/*.yaml`.
+
+**Integration test (single file, ~80 LOC):**
+- Construct a `DiscordMessage` for each verb.
+- Run through `parseCrewCommand` + new `handleCrewCommand`.
+- Assert the dispatched output is non-empty and contains the verb-specific marker (e.g. `**Top crews**` for `best`, `**Officer:**` for `explain`).
+- Smoke-asserts the dispatch table is wired; does NOT re-verify per-handler correctness (covered by unit tests).
+
+**Wire into `tests/index.test.ts`** in the same PR. Non-negotiable per `tasks.md` T301 closing criterion.
+
+---
+
+## 4. PR shipping shape
+
+**Recommendation: ONE PR.** Title: `feat(crew): v2 read-only command handlers (closes #92)`. Branch: `squad/92-crew-v2-handlers`.
+
+**Why ONE:**
+- The dispatch switch in `handleCrewCommand` flips from "all stubs" to "all live" atomically. A split that leaves 4 handlers stubbed mid-merge ships a half-working `!crew help` listing — confusing for the operator.
+- All 8 handlers share the same `HandlerDeps` shape; defining that once in a single PR avoids two parallel branches re-litigating the contract.
+- The total diff is bounded: ~8 handler files × ~50 LOC + 8 test files × ~40 LOC + dispatcher wire-up + barrel + integration test ≈ **~900 LOC**. That is below the 1.5kLOC threshold where Kirk normally recommends splitting (cleanup PR1 retro, Apr 2026).
+- Single integration test surface — splitting would force the second PR to retest the parser/dispatch path that the first PR already covered. Wasted code.
+- Rollback: one revert closes the whole feature cleanly. Two PRs leaves the dispatcher in a half-rewritten state.
+
+**Why NOT split (rejected):**
+- A 4-handler-at-a-time split would land "4 live verbs + 4 stubs" intermediate states on `main`. Help text already lists all 8 as "coming in #92" — partial landings would lie to operators.
+- The Rule 5 (phase-boundary commits) discipline already gives us internal checkpoints inside the PR without splitting it.
+
+**Internal phase-boundary commits inside the PR (per Rule 5):**
+1. `feat(crew): Phase 1 — handler scaffolding + HandlerDeps (T301)` (Uhura: types + barrel + dispatcher stub edits)
+2. `feat(crew): Phase 2 — Scotty handlers (best/status/progression/rosterShow)` (Scotty: 4 handlers + 4 tests)
+3. `feat(crew): Phase 3 — Uhura handlers (explain/synergy/tasks/officers)` (Uhura: 4 handlers + 4 tests)
+4. `feat(crew): Phase 4 — dispatch wire-up + integration test` (Uhura: switch table + integration test + `tests/index.test.ts` imports)
+
+Each phase commits before the next agent picks up. If interrupted, resume per Rule 5 from the most recent `feat(crew): Phase N` subject.
+
+---
+
+## 5. Worktree setup (Rule 22 precondition)
+
+```bash
+# From /workspaces/stfc (main checkout)
+git fetch origin
+git worktree add /workspaces/stfc-92 -b squad/92-crew-v2-handlers origin/main
+
+# In the new worktree, before staging anything (Rule 22)
+cd /workspaces/stfc-92
+ls -la node_modules 2>/dev/null | head -1   # detect symlink vs real dir
+npm ci                                       # idempotent; refreshes either way
+npm test                                     # confirm pre-commit gate is green BEFORE adding work
+```
+
+**Pre-commit hook:** `scripts/pre-commit.mjs` runs `npm test`. **Never** `--no-verify`. Per `.github/copilot-instructions.md` Project quick reference: full suite is ~2s, so the gate is cheap.
+
+**Single test file iteration:** `node --import tsx --test tests/crew/handlers/best.test.ts` (faster than full suite during dev).
+
+**Typecheck:** `npm run typecheck` before pushing.
+
+---
+
+## 6. Pre-dispatch unknowns (questions for the user, with suggested defaults)
+
+The spec is silent on a few operational details. I recommend **defaulting** as listed and surfacing only if the user objects in review:
+
+| # | Question | Suggested default | Source of ambiguity |
+|---|---|---|---|
+| Q1 | **Output format** — Discord embed (rich, requires API change to `CrewCommandResponder.postMessage`) or plain markdown string? | **Plain markdown** (bold, fenced code blocks, bullet lists). Reason: existing `CrewCommandResponder.postMessage(channelId, content: string)` signature only supports string content. Adding embed support is out of scope and would touch the parser PR's surface. | Spec says "Discord-formatted response"; existing API is string-only. |
+| Q2 | **Default account when `--account` omitted** — error? loop all accounts (verbose)? use first roster file alphabetically? per-channel mapping? | **Error** with a helpful message: `"--account required. Available: main, alt1, alt2."` (lists discovered roster files). Reason: per-channel-to-account mapping would need a new schema in `command-channels.json` (deferred to a follow-up); looping is too verbose for Discord. | Spec example shows `--account main` always supplied but doesn't define no-flag behaviour. |
+| Q3 | **Output length cap** — Discord message limit is 2000 chars. `officers` (no flag) on a 50-officer DB will exceed it. | **Truncate at 1900 chars + "… (N more — use `--owned` or `--faction X` to filter)" footer.** Avoid silent truncation; never paginate to multiple messages (rate-limit risk). | Spec is silent. |
+| Q4 | **`best` default `--top`** — engine default is 3; in chat that produces a long message. | **Default `--top 1` for chat; allow `--top 3` opt-in.** Spec User Story 6 example doesn't pin a number; engine CLI default is 3. | Spec example shows `!crew best mining-g3` (no top). |
+| Q5 | **`synergy <group>` — exact match or fuzzy?** | **Exact case-insensitive snake_case match.** No fuzzy matching (matches the parser's "deterministic / no surprises" stance from #91 review). | Spec says `synergy <group>`; group ids in `officers.json` are snake_case. |
+| Q6 | **`explain <officer>` — id or name lookup?** | **Id (kebab-case) first; fallback to case-insensitive name match if id miss.** Most operators will type `!crew explain kirk`, not `!crew explain "James T. Kirk"`. | Spec says `explain <officer>` without specifying id vs name. |
+| Q7 | **Rate-limit message visibility** — current parser silently swallows rate-limited commands. Should the handlers surface "rate limited" back to the user? | **No.** Keep parser behaviour as-is (silent). This was Kirk's #91 review verdict and not in scope of #92. | Spec User Story 6 AC#4 says "ignored and a single ephemeral rate-limit notice" — parser PR deferred the "ephemeral notice" half; do not retrofit here. |
+
+**My recommendation:** Treat Q1–Q5 as Kirk's-call defaults (state them in the PR body); flag Q6 + Q7 as explicit "decision recorded" notes in the PR body inviting Picard override during reviewer lane. None of these block dispatch.
+
+**Genuinely novel work flag (per "If the spec calls for something genuinely novel" constraint):** None detected. Every verb maps to a 1–3 line call into an existing helper plus formatting. If Q1 flips to "must be Discord embeds", that becomes novel (new `CrewCommandResponder` API surface) — escalate to user before starting.
+
+---
+
+## 7. Reviewer-lane proposal (post-PR-open)
+
+Per the cleanup-PR1 routing boilerplate and `.squad/routing.md`:
+
+| Reviewer | Lane | What they check |
+|---|---|---|
+| **Garak** | Hostile fact-check | (1) Does each handler's output actually cite what the engine returns, or does it embellish? (2) Are the rationale strings stable across re-runs (deterministic ordering, not Map iteration order)? (3) Does `progression` actually use the engine, or does it hand-roll a parallel algorithm that drifts? Verdict via `gh pr comment` (Rule 9b: single-maintainer repo). |
+| **Kirk** | Technical correctness | (1) Engine reuse — no logic duplicated. (2) Type safety: `HandlerDeps` shape, no `any`. (3) Pure functions: handlers must not touch disk except via the injected `load*` helpers (testability). (4) Output length cap actually enforced (Q3 default). (5) Dispatcher switch is exhaustive (TS `never` check). Verdict via `gh pr comment`. |
+| **Bashir** | Test coverage adequacy | (1) Every verb has a golden snapshot. (2) Edge cases: missing officer / unknown task / stale roster / empty group all covered. (3) Integration test asserts dispatch is wired for all 8 verbs (not just one). (4) `tests/index.test.ts` imports the new files. Verdict via `gh pr comment`. |
+| **Picard** | Scope/governance | (1) No constitution amendment required (handlers live in already-sanctioned `src/crew/**` namespace per v1 amendment). (2) PR body has per-line `Closes #92` (Rule 6a). (3) No new outbound network destinations introduced (it's pure compute). (4) Q6 + Q7 defaults acceptable. Verdict via `gh pr comment`. |
+
+**Merge gate:** Per Rule 7, ALL of {Garak APPROVE, Kirk APPROVE, Picard APPROVE, Bashir APPROVE} + CI green → Coordinator auto-merges without asking. No governance carve-out (no constitution edit).
+
+**Tuvok:** No editorial pass needed unless docs are added. Per Rule 16, if any handler exposes a flag not documented in `docs/CREW-OPTIMIZER.md`, the same PR must extend that doc. If it does, route docs review to Tuvok.
+
+---
+
+## 8. Summary for the coordinator
+
+- **8 handlers, all backed by existing `src/crew/**` helpers.** Zero new domain logic; novelty is Discord-output rendering + account resolution glue.
+- **Parallel-safe split:** Scotty (best/status/progression/rosterShow) + Uhura (explain/synergy/tasks/officers + dispatch wire-up). Sole shared file is the dispatcher in `crewCommandParser.ts`, owned end-to-end by Uhura.
+- **Single PR** on `squad/92-crew-v2-handlers` from main, four phase-boundary commits per Rule 5.
+- **Worktree:** `/workspaces/stfc-92`, fresh `npm ci` required (Rule 22).
+- **Open questions:** 7 small operational defaults (Q1–Q7 above). All have suggested Kirk's-call defaults; only Q1 (embed vs string) and Q6 (id vs name lookup) are worth surfacing to the user before dispatch. The rest are safe to land with the PR and revise in reviewer comments.
+- **Reviewers when PR opens:** Garak (hostile fact-check) → Kirk (correctness) → Bashir (coverage) → Picard (scope). No constitution amendment, so no Tuvok unless docs change.
+
+Ready for the implementer round.
+
+— Kirk
+
+# Picard — Backlog triage + worktree fan-out plan
+
+**Author:** Picard (M2/EM)
+**Date:** 2026-06-01T04:57Z
+**Requested by:** Cyrus Jamula (via Copilot Ralph Round 5)
+**Mode:** READ-ONLY triage; no worktrees created, no implementers spawned
+**Coverage:** 12 open issues, 2 open PRs (#129 in review, #96 draft stub)
+
+---
+
+## TL;DR
+
+- **12 open issues; 0 dispatchable RIGHT NOW** without waiting for an in-flight gate.
+- **PR #129 (issue #92) is fully green + MERGEABLE** — only Garak's hostile-fact-check verdict outstanding. As soon as it merges, **#93 unblocks** and becomes the lead Batch 2 dispatch.
+- **Two external blockers need user action in parallel** (Rule 21 — user-local terminal only): #127 (Azure OIDC secrets) and #85 (20 real game screenshots).
+- **Recommended posture:** hold; ask user the two unblocker questions; dispatch #93 the moment PR #129 merges.
+
+---
+
+## 1. Backlog classification (all 12 open issues)
+
+| Status | Issue | Title (short) | Owner(s) | Blocker | Action |
+|---|---|---|---|---|---|
+| 🟡 IN-FLIGHT | #92 | crew[v2] read-only handlers | Uhura+Scotty | PR #129 review (Garak pending) | monitor; do NOT touch |
+| ⏳ DEPENDS-ON | #93 | crew[v2] knowledge embedding pipeline + `!crew knowledge` handler | Uhura+Scotty | #92 (PR #129) merge | queue for Batch 2 |
+| ⏳ DEPENDS-ON | #94 | crew[v2] knowledge-rebuild workflow + Rule 3 pin tests | O'Brien | #93 (artifact shape must exist) | queue for Batch 3 |
+| ⏳ DEPENDS-ON | #95 | crew[v2] operator docs + reviewer gates | Tuvok + Garak/Kirk/Picard | #93 + #94 (surface area to document) | queue for Batch 4 |
+| ⛔ EXTERNAL-BLOCKER | #85 | crew[v1.5] OCR POC spike on 20 screenshots | Uhura | **needs 20 real game screenshots from user** | ASK USER |
+| ⏳ DEPENDS-ON | #86 | crew[v1.5] POC gate decision | Picard (me) | #85 measurements | queue for Batch 5 |
+| ⏳ DEPENDS-ON | #87 | crew[v1.5] constitution amendment | Tuvok | #86 PASS | queue for Batch 6 |
+| ⏳ DEPENDS-ON | #88 | crew[v1.5] image-attachment ingest + ocr.ts + roster-sync.yml | Uhura+Scotty+O'Brien | #87 | queue for Batch 6 |
+| ⏳ DEPENDS-ON | #89 | crew[v1.5] OCR + Discord transport operator docs | Tuvok | #88 | queue for Batch 7 |
+| ⏳ DEPENDS-ON | #90 | crew[v1.5] reviewer gates | Garak/Kirk/Picard | #88 + #89 PRs | queue for Batch 7 |
+| ⛔ EXTERNAL-BLOCKER | #127 | Provision Azure OIDC secrets for SWA deploy | Picard (me) + O'Brien | **user-only `gh secret set` from local terminal per Rule 21** | ASK USER |
+| ⏳ DEPENDS-ON | #112 | Epic: 005-web-control-panel Phase 1 | Picard | only #127 left open from epic; auto-closes when #127 closes | track only |
+| ⛔ EXTERNAL-BLOCKER | #76 | Ingest STFC Discord channel #1115978499400933473 | Kirk+O'Brien | **bot lacks guild membership in `639255937869152267`** | ASK USER for invite path |
+
+**Dependency-chain sanity check (verified against live `gh` state):**
+- #91 (parser, dep for #92) — ✅ CLOSED 2026-06-01T01:17Z
+- #84 (v1 reviewer gates, dep for #85) — ✅ CLOSED 2026-05-31T22:49Z
+- #74 (sheet ingest, dep for #76) — ✅ CLOSED 2026-05-31T19:43Z
+
+No stale dependencies in any body. All blocker assertions in the issue bodies remain accurate as of 04:57Z.
+
+---
+
+## 2. Parallel-safe fan-out groups
+
+Within the crew[v2] track, the next two dispatches (#93 and #94) are **parallel-safe across worktrees** once #93's interface lands (i.e., the embedding-artifact path is defined). They have:
+- **Different lead owners** (Uhura/Scotty vs O'Brien)
+- **Different file scopes** (`src/crew/knowledge.ts` + `data/crew/knowledge-embeddings.json` vs `.github/workflows/knowledge-rebuild.yml` + pin tests)
+- **Different test files** (`tests/crew/knowledge*.test.ts` vs `tests/skills/knowledgeRebuild*.test.ts`)
+
+The **only shared file** is `tests/index.test.ts` (master barrel). Per the `audit-wip-fanout` skill: serialize barrel edits — the second PR to land rebases over the first.
+
+Within the crew[v1.5] track, #88 spans three owners (Uhura+Scotty+O'Brien) and is best handled in a **single worktree with a coordinated implementer trio**, not three separate worktrees — they share `src/crew/`, `tests/index.test.ts`, and the new `roster-sync.yml` cross-references.
+
+---
+
+## 3. Recommended fan-out batches
+
+| Batch | Trigger | Dispatch | Worktrees added | Cap check |
+|---|---|---|---|---|
+| **1 (NOW)** | — | **Nothing autonomous.** Hold for PR #129 + ask user on #127 and #85. | 0 | 2 active (`stfc`, `stfc-76`, `stfc-92`) → 3, ≤4 ✅ |
+| **2** | PR #129 merges (likely <1h — green + auto-merge will fire on Garak APPROVE) | Spawn Uhura+Scotty pair on **#93** in `/workspaces/stfc-93` | +1 | 3 active (`stfc-92` removed) ≤4 ✅ |
+| **3** | #93 PR opens (artifact shape stable) | Spawn O'Brien on **#94** in `/workspaces/stfc-94` | +1 | 4 active ≤4 ✅ (cap hit — no more new worktrees) |
+| **4** | #94 PR opens | Spawn Tuvok on **#95** docs in main (no worktree — docs only); reviewer gates fire on #93/#94/#95 | +0 | 4 active |
+| **5** | User provides 20 screenshots → #85 closes | Spawn Uhura on **#86** gate prep in main; if PASS → unblock #87–#90 cascade | +0 | within cap |
+| **6** | #86 PASS | Spawn Tuvok on **#87** constitution amendment (small PR in main); then **#88** trio in `/workspaces/stfc-88` | +1 (after Batch 3 worktrees retire) | manage cap |
+| **7** | #88 PR opens | Tuvok #89 docs; reviewer gates #90 | +0 | within cap |
+| **8** | User provisions Azure secrets → #127 closes | O'Brien verifies SWA deploy; close #112 epic | +0 | within cap |
+
+**Concurrency rule applied:** ≤4 active worktrees. Batches 2+3 use 2 new worktrees; we wait for one to retire (PR merge + sweep + remove per Rule 8) before adding another.
+
+---
+
+## 4. Worktree allocation table (proposed)
+
+| Worktree path | Branch | Issue(s) | Status | Notes |
+|---|---|---|---|---|
+| `/workspaces/stfc` | `main` | (coordinator base) | EXISTING — keep | clean; Tuvok docs / reviewer comments happen here |
+| `/workspaces/stfc-76` | `squad/76-ingest-discord-channel` | #76 | EXISTING — KEEP frozen | blocked on guild access; do not work, do not remove (preserves draft PR #96 context) |
+| `/workspaces/stfc-92` | `squad/92-crew-v2-handlers` | #92 | EXISTING — REMOVE after PR #129 merge | per Rule 8: sweep `.squad/` artifacts → `git worktree remove --force` |
+| `/workspaces/stfc-93` | `squad/93-crew-v2-knowledge` | #93 | **PROPOSED** Batch 2 | run `worktree-preflight` skill (npm ci) on creation; effort M (3–5 files src + ~3 test files + embeddings artifact + tests/index.test.ts) |
+| `/workspaces/stfc-94` | `squad/94-crew-v2-knowledge-rebuild` | #94 | **PROPOSED** Batch 3 | run `worktree-preflight`; effort S (1 workflow yaml + ~1 pin test file + tests/index.test.ts append); Rule 3 grep on creation |
+| `/workspaces/stfc-88` | `squad/88-crew-v15-ocr-impl` | #88 | **PROPOSED** Batch 6 | trio worktree (Uhura+Scotty+O'Brien); effort L; only after #86 PASS |
+
+**File-scope sanity (no cross-worktree conflicts in Batch 2 + 3):**
+
+| File | #93 | #94 | Resolution |
+|---|---|---|---|
+| `src/crew/knowledge.ts` | ✅ new | — | #93 owns |
+| `data/crew/knowledge-embeddings.json` | ✅ new (committed artifact) | reads | #93 defines shape; #94 reads schema |
+| `.github/workflows/knowledge-rebuild.yml` | — | ✅ new | #94 owns |
+| `tests/index.test.ts` | append | append | **SERIALIZE** — second PR rebases over first (per `audit-wip-fanout` skill) |
+| `tests/skills/discordMonitor.test.ts` | — | possibly grep-touched | Rule 3 grep before edits |
+| `docs/CREW-OPTIMIZER.md` | — | — | reserved for #95 (Tuvok) |
+
+---
+
+## 5. Recommended action for Coordinator
+
+### 5a. Dispatch NOW (Batch 1)
+
+**Nothing autonomous.** The two highest-priority actionable items both depend on user action or a near-imminent PR merge.
+
+### 5b. Queue (Batches 2–8 via session SQL todos)
+
+Track in SQL with dependencies — Coordinator should `INSERT INTO todos` for each batch with `depends_on` chain so they auto-fire as gates clear.
+
+### 5c. **STOP AND ASK USER (two parallel asks)**
+
+Use `ask_user` (or direct chat) with these two questions, **both at the same time** (independent unblockers):
+
+1. **#127 — Azure OIDC secrets (Phase 1 epic deploy verification):**
+   > Please run from your **local terminal** (Rule 21 — never paste values in chat):
+   > ```bash
+   > gh secret set AZURE_CLIENT_ID     --repo Jamula/stfc
+   > gh secret set AZURE_TENANT_ID     --repo Jamula/stfc
+   > gh secret set AZURE_SUBSCRIPTION_ID --repo Jamula/stfc
+   > ```
+   > Reply "secrets set" when done; I will close #127 and #112 epic.
+
+2. **#85 — OCR POC screenshots (unlocks the entire crew[v1.5] cascade #85→#86→#87→#88→#89→#90):**
+   > Can you provide 20 real STFC game screenshots covering officer roster screens (varied resolutions / iPhone framings if you have them)? Drop them in a folder, share a path or zip. Once Uhura has them, the POC spike runs in ~1 session and the gate decision (#86) follows immediately.
+
+3. **#76 (lower urgency — long-blocked already):**
+   > The bot still lacks membership in guild `639255937869152267`. If the invite path opened up since 2026-05-31, let me know; otherwise we leave #76 + draft PR #96 frozen.
+
+### 5d. Auto-fire watch
+
+When PR #129 merges (CI green + auto-merge enabled — likely <1h):
+1. Remove `/workspaces/stfc-92` worktree per Rule 8 (sweep `.squad/` first).
+2. Create `/workspaces/stfc-93` + `squad/93-crew-v2-knowledge`; run `worktree-preflight` skill.
+3. Dispatch Uhura (Discord/API lead) + Scotty (TS/CLI) as a coordinated pair against #93.
+4. Set up next gate: when #93 PR opens, dispatch O'Brien on #94 in `/workspaces/stfc-94`.
+
+---
+
+## 6. Risks + mitigations
+
+| Risk | Mitigation |
+|---|---|
+| **Worktree sprawl** — multiple ranks of crew[v1.5] + crew[v2] worktrees could pile up | Hard cap ≤4 active concurrent worktrees; new worktrees only after a PR merges + sweep + remove per Rule 8 |
+| **`tests/index.test.ts` merge conflict** (#93 vs #94) | Second PR rebases over first; per `audit-wip-fanout` skill — only ONE PR appends barrel imports per wave |
+| **PR #129 review-loop drag** (Bashir CR fix still in flight per context) | Don't start #93 work until #129 actually MERGES (not just APPROVED). Wait for `gh pr view 129 --json state --jq '.state'` = `MERGED`. |
+| **#94 starting before #93 stabilizes** — workflow rebuilds an artifact whose shape isn't final yet | Strict gate: #94 worktree creation only after #93's PR is OPEN and the embedding-artifact JSON schema is committed to the #93 branch |
+| **Restart required if PR #128 (cleanup) work re-touched** — self-development rule | None of these batches touch `squad.agent.md` / `.specify/memory/constitution.md` / `.squad/rules/`. Safe. |
+| **Stale `stfc-76` worktree as long-lived "park"** | Document it as "frozen by design pending guild access" in this memo; don't auto-prune. Re-evaluate weekly. |
+| **#127 secret provisioning never happens** → #112 epic stays open indefinitely | Acceptable. Epic closes itself on #127 close; no other Phase 1 work pending. |
+
+---
+
+## 7. Skill usage on this triage
+
+- ✅ Read `.copilot/skills/dispatch-precheck/SKILL.md` — applied state-checks on all dependency issues (#91, #84, #74) to confirm blocker assertions are current.
+- ✅ Read `.squad/skills/audit-wip-fanout/SKILL.md` — applied serialization rule for `tests/index.test.ts` across #93/#94; cross-cutting file pre-resolution.
+- ✅ Read `.squad/skills/worktree-preflight/SKILL.md` — embedded `npm ci` step into Batch 2/3/6 spawn instructions; satisfies Rule 22.
+- ✅ Read `.squad/routing.md` — used to confirm O'Brien owns #94 (workflow YAML), Tuvok owns #89/#95 (docs), Uhura+Scotty on #92/#93 per crew-optimizer routing.
+
+---
+
+## 8. One-line recommendation
+
+**Hold all autonomous dispatch; ask user the two Rule-21 unblocker questions (#127 secrets + #85 screenshots) in parallel NOW; the moment PR #129 merges, sweep `stfc-92`, then spawn `/workspaces/stfc-93` for the Uhura+Scotty knowledge-pipeline pair on #93. Everything else queues behind that.**
+
+— Picard, 2026-06-01T04:57Z
+# Picard → Tuvok — HF carve-out follow-up after PR #130
+
+**Date:** 2026-06-01
+**From:** Picard (scope/governance reviewer)
+**To:** Tuvok (governance/constitution steward)
+**Re:** Scotty's parked question at `.squad/decisions/inbox/scotty-issue-93-constitution-q.md`
+**Urgency:** non-blocking — PR #130 ships with NO amendment needed.
+
+## TL;DR
+
+PR #130 (issue #93) landed under the existing HF carve-out without an amendment because the
+committed embeddings artifact uses the deterministic on-runner `hashed-bow-v1` embedder
+(no network), and `createMiniLMEmbedder` is dead-code under the default config. **This
+note is the follow-up routing for the standing question about whether to broaden the
+carve-out for a future MiniLM switch.**
+
+## Picard's recommendation: Option (A), separate amendment track
+
+Scotty offered (A) broaden carve-out, (B) keep hashed-fallback as permanent, (C) something
+else. Recommend **(A)** when (and only when) someone actually proposes flipping the runtime
+default to MiniLM. Rationale:
+
+1. The hashed-bow-v1 embedder is a fine retrieval substrate for the current 76-chunk
+   corpus, but it will degrade as the corpus grows (semantic similarity is approximated
+   only by token co-occurrence in the hashed feature space). MiniLM produces materially
+   better top-k ordering on free-form natural-language queries — which is the entire
+   point of #93's freeform Q&A surface.
+2. The carve-out broadening is mechanically the same shape as the existing classifier
+   carve-out: new `config/knowledge-model.json` with a pinned SHA-256, scoped to the
+   `discord-monitor` skill only, integrity-checked on cache miss. The amendment template
+   already exists (see the v1.6.0 / v2.0.0 amendments for prior art on adding a
+   sanctioned `huggingface.co` purpose).
+3. Option (B) — permanent hashed fallback — locks us into degraded retrieval quality
+   and means we shipped 100% of the MiniLM plumbing for nothing. Wasteful.
+
+## What this note does NOT do
+
+- Does NOT propose the amendment now. PR #130 doesn't need it.
+- Does NOT assign a new issue. If/when a future ticket proposes flipping the default to
+  MiniLM, that ticket should be filed with `squad:tuvok` + an amendment-track label, and
+  the new `config/knowledge-model.json` + SHA pin must land in the same PR.
+- Does NOT change the scope of #93, #94, or #95. Those three issues do NOT depend on the
+  amendment.
+
+## Action requested from Tuvok
+
+Acknowledge this recommendation (or counter-propose) and park until/unless someone files
+the "switch knowledge embedder to MiniLM" ticket. No PR-blocking work.
+
+— Picard
+# Scotty — issue #93 — constitution question (non-blocking)
+
+**Date:** 2026-06-01
+**From:** Scotty (TypeScript/CLI engineer, M2)
+**To:** Tuvok (governance/constitution steward)
+**Re:** Knowledge-base embedding pipeline (PR for issue #93)
+**Urgency:** non-blocking — implementation has shipped without depending on HF network egress.
+
+## Context
+
+PR for #93 adds `src/crew/knowledge.ts` + `src/crew/handlers/knowledge.ts` + a
+committed embeddings artifact at `data/crew/knowledge-embeddings.json`. The
+default embedder used by the rebuild CLI and the committed artifact is a
+deterministic SHA-256-based feature-hashing fallback (`hashed-bow-v1`,
+384-dim) — **no network egress**. The real `Xenova/all-MiniLM-L6-v2` pipeline
+is implemented (`createMiniLMEmbedder`) but is opt-in via
+`STFC_KNOWLEDGE_MODEL=minilm` and never called by the default code path,
+tests, CI, or the runtime handler against the committed artifact.
+
+## Question
+
+The constitution sanctions `huggingface.co` egress only for the
+`discord-monitor` skill's tier-2 zero-shot classifier
+(`.specify/memory/constitution.md` ~lines 1262–1265, "purpose: one-time
+download of classifier model weights, integrity-checked against the SHA-256
+pinned in `config/classifier-model.json`"). The carve-out is scoped to the
+classifier and references its specific SHA-pinned config.
+
+If/when we want to switch the runtime embedder from the hashed fallback to
+real MiniLM (which lives behind the same `!crew knowledge` handler routed
+inside the `discord-monitor` skill runtime), should the carve-out be:
+
+- **A.** Broadened to cover any MiniLM-class feature-extraction model used
+  inside the `discord-monitor` skill, with the same SHA-pin requirement and
+  a new `config/knowledge-model.json`; or
+- **B.** Kept as-is, with `!crew knowledge` permanently using the on-runner
+  hashed-fallback embedder (current state) and any future MiniLM use
+  triggering a separate amendment proposal; or
+- **C.** Something else (e.g. precompute query embeddings at build time and
+  ship a query-encoder service — probably not feasible for free-form Q&A)?
+
+## What I did (current PR)
+
+- Implemented embedder as a pluggable interface, defaulted to
+  `createHashedEmbedder()` (no network).
+- Committed `data/crew/knowledge-embeddings.json` built with the hashed
+  embedder (`model: "hashed-bow-v1"`, 76 chunks).
+- The MiniLM code path is dead-code in the default config; reviewers can
+  confirm by grepping for `STFC_KNOWLEDGE_MODEL`.
+- No constitution amendment proposed in this PR.
+
+## Recommended follow-up
+
+If Tuvok prefers (A), file a separate amendment-track issue/PR; the
+`createMiniLMEmbedder` plumbing is ready and a model-config + SHA pin is
+the only missing piece. If (B), keep things as they are.
+
+— Scotty
+# Uhura decision: crew v2 dispatcher seam
+
+Date: 2026-06-01T04:10Z
+Issue: #92
+
+- `handleCrewCommand` is now async and owns handler dispatch/error wrapping; `processCrewCommands` only handles parse/rate-limit/post sequencing.
+- Handler failures are converted to `Error: {message}` before calling `CrewCommandResponder.postMessage`, preserving the existing string-only Discord responder surface.
+- The barrel exposes all 8 handler names as static exports after Scotty's handler commit landed; Uhura only edited the barrel and dispatcher, not Scotty's handler bodies.

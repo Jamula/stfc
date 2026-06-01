@@ -160,4 +160,10 @@ Participated in:
 - LOW: bundle-budget unit ambiguity (80 KiB vs 80 KB). Fix: add comment
 
 **Next:** Await Wave 4 scope definition (#121); api/ layout consolidation gate.
+## 2026-06-01 — PR #129 shipped: crew[v2] read-only handlers (issue #92)
+
+**Co-author:** Uhura-1 (phase-1 dispatcher scaffolding, phase-3+ handlers)
+**Phase 2:** Scotty authored best, status, progression, rosterShow handlers (4 handlers using existing src/crew/** engine helpers)
+**Cross-squad notes:** Uhura locked out by Garak CR (output determinism guarantee needed); Uhura issued fix; Garak re-verified and approved. All reviewers cleared: Kirk ✅+📝 (wrote skill), Bashir ✅, Picard ✅.
+**Outcome:** PR merged 05:43Z. Handlers ready. Next dispatch: #93 (knowledge pipeline) unblocks when PR#129 users confirms (parallel user-action gate: #127 secrets, #85 screenshots).
 

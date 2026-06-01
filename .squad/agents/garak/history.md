@@ -83,4 +83,13 @@ Participated in:
 Findings routed to follow-up issue #136 (non-Tuvok, Lockout label).
 
 **Decision:** PR #133 remains OPEN pending #136 completion before merge.
+## 2026-06-01 — Hostile fact-check review (three-PR cycle): PRs #129, #130, #132
+
+**PR #129 (crew[v2] read-only handlers):** Initial question: Does handler output exactly cite engine returns or embellish? Uhura issued fix guaranteeing deterministic output matching engine shape. Garak re-verified post-fix. ✅ APPROVE.
+
+**PR #130 (crew[v2] knowledge embedding + handler):** Initial question: Is embedder deterministic? Is MiniLM code dead? Coordinator clarified PR body; Garak re-verified (STFC_KNOWLEDGE_MODEL env gated, dead-code in default config). ✅ APPROVE.
+
+**PR #132 (knowledge-rebuild workflow + Rule 3 pinning tests):** No security findings. Workflow permissions appropriate. ✅ APPROVE.
+
+**Result:** All three PRs shipped with zero security violations. Two re-verify cycles (Uhura, Coordinator clarification) addressed all Garak questions. Smooth shipping sequence.
 

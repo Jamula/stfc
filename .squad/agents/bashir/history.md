@@ -2,6 +2,25 @@
 
 > Archived entries (prior to 2026-05-31) are in `history-archive.md`.
 
+## 2026-06-01 — Pinning Test Coverage Review: PR #132 (knowledge-rebuild workflow, issue #94)
+
+Reviewed O'Brien's 17-test pinning suite in `tests/skills/knowledgeRebuild.test.ts` against Rule 3 requirements.
+
+**All mandatory surfaces covered:** push trigger paths (exact `deepStrictEqual` on array), `workflow_dispatch` presence, no-cron guard, concurrency group name, both action SHAs (exact hash), `permissions: contents: write`, npm command string, commit message format, staged file path, and rebase-before-push pattern (pull + push).
+
+**Structure clean:** YAML library (`yaml` package) used throughout — assertions operate on parsed structure, not raw strings. Comments in the workflow cannot satisfy or spoof pins. Dynamic `for...of usesSteps` loop auto-covers any newly added `uses:` action.
+
+**Two non-pinned guards noted (non-blocking, consistent with sibling tests):**
+- `cancel-in-progress: false` — sibling tests (discordMonitor, redeemCodes, optimizeCrewWorkflow) also omit this pin.
+- `if: always()` on the commit step — behavioral guard, not pinned by convention.
+
+**Suite result:** 999/999 pass. Count matches PR claim (+17 from 982 baseline). APPROVED.
+
+**Lesson — push-on-change workflow pinning checklist:**
+For push-on-change (non-cron) workflows, the full pinning surface is: (1) trigger paths exact array, (2) absence of `schedule`, (3) concurrency group name, (4) action SHAs via regex + exact value, (5) permissions scope, (6) command string, (7) commit message, (8) staged path, (9) rebase-before-push pattern. Items *not* conventionally pinned in this repo: `cancel-in-progress`, `timeout-minutes`, `if:` conditions on individual steps.
+
+---
+
 ## 2026-05-31 — Data Layer Test Coverage Review
 
 Reviewed PR #98 test coverage against the data-layer task specification (T100–T304 test matrix in `.squad/decisions.md`).
@@ -98,4 +117,38 @@ Participated in:
 All tests passing. No regressions detected. Test suite now covers crew v2 iteration pattern (per-crew single pass, prior per-task removed).
 
 **Next phase:** Awaiting Rule-reference CI workflow (#137) scoped discovery.
+---
+
+## 2026-06-01 — Test Coverage Review: PR #130 (crew v2 knowledge pipeline, issue #93)
+
+Reviewed Scotty's embedding-based `!crew knowledge` implementation. Suite was 982 tests, 0 fail entering review.
+
+**Gaps found (3) — reviewer-own-fix applied (commit `659a4f7`):**
+
+1. **`--top` missing two rejection branches** (`tests/crew/handlers/knowledge.test.ts`):
+   `parseTop` has four error paths; only two were tested (`> MAX_TOP` via "10", bare flag via "true"). Missing: `parsed < 1` ("0") and `!Number.isInteger(NaN)` ("abc"). Both added.
+
+2. **Top-k ordering not explicitly asserted** (`tests/crew/knowledge.test.ts`):
+   Test checked `hits[0]` was domain-relevant but never compared `hits[0].score >= hits[1].score`. A reversed sort order would not be caught. Added descending-score loop assertion.
+
+3. **Markdown chunk `endLine` not verified by line math** (`tests/crew/knowledge.test.ts`):
+   Assertion was `endLine >= startLine` (trivially true). `## Hostiles` starts L3; next heading at L7 → endLine must be 6. Tightened to `endLine === 6`.
+
+**All 7 checklist items passed after fix. PR approved.**
+
+**Pattern — embedding pipeline test gaps:**
+Embedding/retrieval pipelines tend to miss three specific coverage areas that surface on review:
+1. **Boundary values for integer CLI flags**: authors test the happy path and one out-of-range direction; they miss `< min` (zero), non-integer strings, and bare-flag.
+2. **Ordering properties**: tests verify "best result is relevant" but omit the sort invariant (`hits[i].score >= hits[i+1].score`). A sort regression passes unless the top result is affected by coincidence.
+3. **Line-math endLine for heading-based chunkers**: startLine is usually tested because it's the anchor; endLine is checked only with `>=` unless explicitly named. Test the exact value using the fixture's known section boundaries.
+
+## 2026-06-01 — Multi-PR test coverage review: PRs #129, #130, #132 (issues #92, #93, #94)
+
+**PR #129 (crew[v2] read-only handlers):** Every verb has golden snapshot, edge cases covered (missing officer, empty group, stale roster, unknown task, unknown account), integration test wired for all 8 handlers, tests/index.test.ts imports. ✅ APPROVE (no rework).
+
+**PR #130 (crew[v2] knowledge embedding + handler):** Embedder interface tested with mocked deps, golden-snapshot for knowledge handler, staleness edge case covered, tests/index.test.ts imports. ✅ APPROVE (no rework).
+
+**PR #132 (knowledge-rebuild workflow + Rule 3 pinning tests):** New pin test suite for knowledge-rebuild.yml; existing discordMonitor.test.ts grep verified per Rule 3 before edits; 17 new assertions all green. ✅ APPROVE (no rework).
+
+**Smooth cycle:** All three PRs merged in sequence 05:43–05:46Z. No test coverage rework required from implementers.
 
