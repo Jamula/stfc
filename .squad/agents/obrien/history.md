@@ -123,4 +123,11 @@ Participated in:
 **Lesson:** Stacked PRs with shared test suite enable clean parallel dispatch. Test count grew 965 → 1,000 (+35) in #132 without blocking #130 merge or #124 deployment track.
 
 **Next:** DISABLE_WRITES dead-code follow-up (routed by Kirk's #124 review) — awaiting assignment.
+## 2026-06-01 — PR #132 shipped: knowledge-rebuild workflow + Rule 3 pinning tests (issue #94)
+
+**Workflow:** knowledge-rebuild.yml (triggers on data/crew/knowledge-embeddings.json staleness; runs rebuild CLI with hashed-bow-v1 embedder)
+**Rule 3 pinning tests:** Added to tests/skills/discordMonitor.test.ts (17 assertions: trigger, no-cron, concurrency group, action SHAs, permissions, npm command, commit message, staged path, rebase pattern)
+**Dependency:** PR #132 stacked on PR #130 (knowledge artifact shape must exist first); rebased onto main per Rule 4 after #130 merge
+**Reviewers:** Kirk ✅, Bashir ✅, Picard ✅, Garak ✅
+**Outcome:** PR merged 05:46Z. No governance impact. Next dispatch: #94 queued for Batch 3 (pending #93 PR open and artifact schema stable).
 

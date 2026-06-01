@@ -61,4 +61,28 @@ Participated in:
 - LOW: EXCLUDE_SEGMENTS recursion footgun. Route: Uhura
 
 **Next:** #137 and #138 scoped discovery; grep-gate contract clarification.
+### Reviewer-Own-Fix Dispatch: PR #130 (Garak CR, 2026-06-01)
+
+**Pattern:** Co-owner dispatched to fix locked-out author's (Scotty) PR under Reviewer Rejection Lockout.
+
+**Fixes applied (commit ef15f87):**
+1. `chunkTask` off-by-one: `content.trimEnd().split("\n").length` — trailing `\n` on POSIX files inflated line count by 1. Verified: armada-25.yaml now cites L1-L23 (was L1-L24).
+2. Removed `generatedAt` from `KnowledgeCache` interface and `buildCache` return. `--force` rebuilds now byte-deterministic (SHA-verified). `now` param retained in `BuildOptions` to avoid breaking call sites.
+3. Regression test added — two 23-line fixtures (with/without trailing `\n`) both assert `endLine=23`.
+4. Three `cacheNeedsRebuild` test fixtures had `generatedAt: ""` excess property — removed.
+
+**Learnings:**
+- When taking reviewer-own-fix ownership: check grep output carefully — `generatedAt` appears in ~15 locations across the codebase; scope the fix ONLY to the affected module (`src/crew/knowledge.ts`).
+- Pre-commit hook runs full test suite; the off-by-one fix breaks an existing test assertion (`endLine: 3` → `endLine: 2` for a 2-line YAML with trailing `\n`). Always audit existing test fixtures when fixing line-number math.
+- Byte-determinism claim: removing a timestamp field is the cleanest approach; git commit metadata is a sufficient audit trail.
+
+## 2026-06-01 — PR #129 shipped: crew[v2] read-only command handlers (issue #92)
+
+**Co-author:** Scotty-2 (phase-2 handlers: best, status, progression, rosterShow)
+**Phase 1:** Uhura seeded dispatcher scaffolding + HandlerDeps interface
+**Phase 3:** Uhura implemented explain, synergy, tasks, officers handlers (4 handlers with light fixtures)
+**Phase 4:** Uhura wired dispatcher table + integration test + tests/index.test.ts imports
+**CR loop:** Garak raised hostility check on output determinism (guarantee output exactly cites engine returns). Uhura fixed. Garak re-verified and approved.
+**Reviewers:** Kirk ✅+📝 (embedded pipeline-review skill), Bashir ✅, Picard ✅, Garak ✅ (re-verified).
+**Outcome:** PR merged 05:43Z. Next: #93 dispatch (knowledge embedding pipeline + handler) — Uhura + Scotty pair on squad/93-crew-v2-knowledge when user confirms.
 

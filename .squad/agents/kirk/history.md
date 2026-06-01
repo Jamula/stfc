@@ -1,16 +1,16 @@
-# Kirk — History
+# Kirk — Technical Architecture Lead & Reviewer
 
-> Append-only log of substantive technical decisions, architectural calls, and lessons learned. Scribe-owned commits.
+> Entries prior to 2026-06-01 archived to `history-archive.md` (348 lines, 37KB).
 
-## 2026-06-01 — PR #123 review: !crew command parser, Phase 19 (closes #91)
+## 2026-06-01 — Multi-PR technical review + triage: PRs #129, #130, #132; Issue #92
 
-**Verdict:** APPROVE ✅ — Comment: https://github.com/Jamula/stfc/pull/123#issuecomment-4588860690
+**PR #129 (crew[v2] read-only handlers):** Engine reuse verified (no logic duplicated across 8 verbs); type safety enforced (HandlerDeps shape, no any); pure functions confirmed (no disk writes except via injected load* helpers); output length cap verified; dispatcher switch exhaustive with TS never check. ✅ APPROVE (no rework). Wrote `.squad/skills/embedding-pipeline-review/SKILL.md` post-PR.
 
-**Author:** Uhura. **Branch:** `squad/91-v2-parser`.
+**PR #130 (crew[v2] knowledge embedding + handler):** Embedder interface sound (pluggable default=hashed-bow-v1); MiniLM plumbing complete but opt-in (STFC_KNOWLEDGE_MODEL env gated, dead-code in default); staleness evaluation correct; deterministic output. ✅ APPROVE (no rework).
 
-**Scope:** New `src/discord/crewCommandParser.ts` (229 LOC) + `tests/discord/crewCommandParser.test.ts` (150 LOC) + `data/discord/command-channels.json.example`. Edits to `schemas.ts`, `state.ts`, `ingest.ts`, `client.ts`, `discordMonitor.ts`, `tests/index.test.ts`. +556/-30.
+**PR #132 (knowledge-rebuild workflow + Rule 3 pinning tests):** O'Brien's pin test suite verified. ✅ APPROVE (no rework).
 
-**What I checked (pattern for parser + rate-limiter + monitor-integration PRs):**
+**Issue #92 triage:** 8-handler inventory, parallel-safe Scotty/Uhura split, test-coverage strategy, reviewer-lane matrix, internal phase-boundary commits per Rule 5. Triage memo exported to decisions inbox for Batch 2 #93 dispatch prep.
 
 1. **Scope isolation** — the critical invariant: promo-code extraction must not see command-channel messages. Verified by checking that `codeChannelIds` is built from `allowlist.entries` (original promo channels only), not from the merged `ingestAllowlist`. `codeMessages` then filters `ingestedMessages` against this set. Command messages pass through `processCrewCommands` separately. Fully isolated.
 2. **Rate limiter rolling-window semantics** — `pruneWindow` rebuilds the value array on every call (filter + set), keeping per-key arrays bounded. Rejected commands return before `push`, so they don't count against limits. Both channel (10) and user (5) windows independent.
@@ -63,16 +63,20 @@
 
 ## 2026-06-01T01:25:00Z — Wave 3 close-out + Wave 4 fanout audit (Picard triage)
 PR #124 (auth.ts + shell) open on `squad/005-phase1-dashboard`. Picard triage identifies Wave 4 #118 + #121 parallel-safe, queued for dispatch post-Kirk review gate.
+**Smooth cycle:** Three PRs merged 05:43–05:46Z with zero technical rework.
 
 ---
 
-**[2026-06-01T03:14Z] PR1 Cleanup Cycle Concluded**
+## Archived Learnings
 
-- PR #128 merged (03:03Z)
-- 3 PRs merged total (PR #125, #126, #128)
-- 3 worktrees swept + removed (stfc-118, stfc-121, stfc-cleanup-docs)
-- Decision inbox merged (7 files → decisions.md)
-- Scribe finalization completed; all .squad/ logs written
+**See `history-archive.md` for:**
+- PR #123 review (crew parser, Phase 19)
+- Architecture-doc decision (canonical system map)
+- Data-layer schema review (PR #98)
+- Test-first discipline notes
+- Engine-reuse patterns
+- Parser edge-case verification
+- And 320+ more lines of technical decisions (2026-05-18 through 2026-05-31)
 
 Status: COMPLETE
 **Scope:** `scripts/discord-ops/set-discord-app-metadata.mjs` (546 LOC, zero new deps) +
