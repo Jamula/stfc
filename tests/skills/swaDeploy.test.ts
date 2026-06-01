@@ -102,9 +102,11 @@ describe("swa-deploy.yml / contract pinning (T-SWA-001)", () => {
   });
 
   it("AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_SUBSCRIPTION_ID are wired from secrets (OIDC)", () => {
-    assert.match(yaml, /AZURE_TENANT_ID:\s*\$\{\{\s*secrets\.AZURE_TENANT_ID\s*\}\}/);
-    assert.match(yaml, /AZURE_CLIENT_ID:\s*\$\{\{\s*secrets\.AZURE_CLIENT_ID\s*\}\}/);
-    assert.match(yaml, /AZURE_SUBSCRIPTION_ID:\s*\$\{\{\s*secrets\.AZURE_SUBSCRIPTION_ID\s*\}\}/);
+    // azure/login uses kebab-case input names (tenant-id, client-id, subscription-id)
+    // not screaming-snake env vars — match the actual YAML keys.
+    assert.match(yaml, /tenant-id:\s*\$\{\{\s*secrets\.AZURE_TENANT_ID\s*\}\}/);
+    assert.match(yaml, /client-id:\s*\$\{\{\s*secrets\.AZURE_CLIENT_ID\s*\}\}/);
+    assert.match(yaml, /subscription-id:\s*\$\{\{\s*secrets\.AZURE_SUBSCRIPTION_ID\s*\}\}/);
   });
 
   it("repo_token wired from secrets.GITHUB_TOKEN (PR comment support)", () => {

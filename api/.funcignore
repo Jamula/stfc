@@ -1,0 +1,9 @@
+# Paths excluded from Azure Functions deployment bundle.
+# local.settings.json holds secrets — never deploy it.
+.git*
+.vscode
+local.settings.json
+*.test.ts
+*.spec.ts
+node_modules
+dist

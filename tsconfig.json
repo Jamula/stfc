@@ -22,7 +22,10 @@
     "skipLibCheck": true,
     "noEmit": true,
     "resolveJsonModule": true,
-    "forceConsistentCasingInFileNames": true
+    "forceConsistentCasingInFileNames": true,
+    "paths": {
+      "@stfc/contracts/*": ["./shared/contracts/*"]
+    }
   },
   "include": [
     "src/cli.ts",
@@ -32,7 +35,8 @@
     "src/skills/**/*.ts",
     "src/telemetry/**/*.ts",
     "tests/**/*.ts",
-    "src/crew/**/*.ts"
+    "src/crew/**/*.ts",
+    "shared/contracts/**/*.ts"
   ],
   "exclude": [
     "node_modules",
