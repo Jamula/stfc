@@ -95,6 +95,34 @@ describe("crew handler: best", () => {
     }
   });
 
+  it("returns user-friendly error when task-class arg is omitted", async () => {
+    const world = createFixtureWorld();
+    try {
+      await withCrewEnv(world, async () => {
+        await assert.rejects(
+          () => handleBest(command({ account: "tiny" })),
+          /Missing required <task-class>\. Usage: `!crew best <task-class> --account <name> \[--top N\]`\./,
+        );
+      });
+    } finally {
+      world.cleanup();
+    }
+  });
+
+  it("returns user-friendly error when task-class is unknown", async () => {
+    const world = createFixtureWorld();
+    try {
+      await withCrewEnv(world, async () => {
+        await assert.rejects(
+          () => handleBest(command({ _0: "klingon-diplomacy", account: "tiny" })),
+          /Could not read task definition .*klingon-diplomacy\.yaml: .*no such file/i,
+        );
+      });
+    } finally {
+      world.cleanup();
+    }
+  });
+
   it("throws a missing-account error listing discovered roster files", async () => {
     const world = createFixtureWorld();
     try {

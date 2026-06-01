@@ -25,6 +25,22 @@ describe("crew synergy handler", () => {
     assert.equal(output, "**Synergy:** `unknown_group` — tiny\n0 members found.");
   });
 
+  it("returns user-friendly error when group arg is omitted", async () => {
+    await assert.rejects(
+      () => handleSynergy(makeCommand("synergy", { account: "tiny" }), makeDeps()),
+      /Usage: !crew synergy <snake_case_group> --account X/,
+    );
+  });
+
+  it("returns user-friendly error when group not in officers.json", async () => {
+    const output = await handleSynergy(
+      makeCommand("synergy", { _: "nonexistent_group", _0: "nonexistent_group", account: "tiny" }),
+      makeDeps(),
+    );
+
+    assert.equal(output, "**Synergy:** `nonexistent_group` — tiny\n0 members found.");
+  });
+
   it("rejects non-snake_case group names", async () => {
     await assert.rejects(
       () => handleSynergy(makeCommand("synergy", { _: "enterprise crew", _0: "enterprise", account: "tiny" }), makeDeps()),

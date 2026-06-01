@@ -19,6 +19,24 @@ describe("crew explain handler", () => {
     assert.match(output, /\*\*Officer:\*\* Spock \(`spock`\)/);
   });
 
+  it("returns user-friendly error when officer arg is omitted", async () => {
+    await assert.rejects(
+      () => handleExplain(makeCommand("explain", { account: "tiny" }), makeDeps()),
+      /Usage: !crew explain <officer> --account X/,
+    );
+  });
+
+  it("returns user-friendly error when officer id/name not found", async () => {
+    await assert.rejects(
+      () =>
+        handleExplain(
+          makeCommand("explain", { _: "kirk-does-not-exist", _0: "kirk-does-not-exist", account: "tiny" }),
+          makeDeps(),
+        ),
+      /Officer 'kirk-does-not-exist' not found\./,
+    );
+  });
+
   it("requires an explicit account and lists discovered roster files", async () => {
     await assert.rejects(
       () => handleExplain(makeCommand("explain", { _: "kirk", _0: "kirk" }), makeDeps()),
