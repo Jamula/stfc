@@ -41,8 +41,11 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    # Skip the deploy step for closed PRs (teardown only).
-    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.action != 'closed')
+    # Skip when OIDC secrets are not yet provisioned (secrets absent = empty string).
+    # Also skip for closed-PR events (teardown job handles those).
+    if: >-
+      secrets.AZURE_CLIENT_ID != '' &&
+      (github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.action != 'closed'))
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.0
         with:
@@ -70,7 +73,8 @@ jobs:
   teardown:
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    if: github.event_name == 'pull_request' && github.event.action == 'closed'
+    # Skip teardown too when OIDC secrets are absent — no SWA environment was created.
+    if: secrets.AZURE_CLIENT_ID != '' && github.event_name == 'pull_request' && github.event.action == 'closed'
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.0
 

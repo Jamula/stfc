@@ -117,4 +117,15 @@ describe("swa-deploy.yml / contract pinning (T-SWA-001)", () => {
     assert.match(yaml, /app_location:\s*web/);
     assert.match(yaml, /api_location:\s*api/);
   });
+
+  it("deploy and teardown jobs are gated on AZURE_CLIENT_ID being set (secret-presence guard)", () => {
+    // Both jobs must skip gracefully when OIDC secrets are not yet provisioned,
+    // so a missing-secret state produces `skipped` rather than `failure`.
+    // See fix(deploy) commit — PR #124 unblocker.
+    assert.match(
+      yaml,
+      /secrets\.AZURE_CLIENT_ID\s*!=\s*''/,
+      "deploy/teardown jobs must gate on secrets.AZURE_CLIENT_ID != '' so unprovisioned secrets skip rather than fail",
+    );
+  });
 });

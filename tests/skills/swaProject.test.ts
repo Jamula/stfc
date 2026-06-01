@@ -4,6 +4,10 @@
 // (swa-deploy.yml app_location/api_location/output_location) and by Wave 3
 // agents (Scotty #119/#120, Uhura #117) are present and have the right shape.
 //
+// Note: swa-deploy.yml is gated on secrets.AZURE_CLIENT_ID != '' so it skips
+// rather than fails when OIDC secrets are not yet provisioned (PR #124 fix).
+// Contract pinning for that guard lives in tests/skills/swaDeploy.test.ts.
+//
 // If any assertion here fails, the scaffolding has drifted from the contract.
 
 import { describe, it } from "node:test";
