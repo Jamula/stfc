@@ -2432,3 +2432,519 @@ Skipped for now:
 - `Per-Agent Model Selection`: it is consulted before every spawn and no approved target template exists yet; moving it risks hiding cost/quality defaults from the coordinator hot path.
 - `MCP Integration`: `.squad/templates/mcp-config.md` currently covers configuration/authentication, not coordinator routing/degradation. Extracting without first extending that template would lose operational guidance.
 ---
+
+---
+
+# Garak hostile fact-check — PR #124 Phase 1 Wave 3
+
+**Date:** 2026-06-01  
+**Verdict:** CHANGES_REQUESTED ⚠️  
+**Scope:** PR #124, branch `squad/005-phase1-dashboard`, live worktree `/workspaces/stfc-p1`.
+
+## Numbered verification results
+
+1. Branch/sync: PASS — `git branch --show-current` returned `squad/005-phase1-dashboard`; `git pull --rebase origin squad/005-phase1-dashboard` was already up to date.
+2. Test-count claim: FAIL/STALE — live worktree reports `tests 906`, `pass 906`, `fail 0`; PR body says “All 905 tests”. Earlier run before staged deploy-guard changes showed 905 passing.
+3. Typecheck: PASS — `npm run typecheck` exited 0.
+4. `tests/api/auth.test.ts`: PASS — parses base64 `x-ms-client-principal` (`tests/api/auth.test.ts:64-77`) and asserts roles (`:236-255`).
+5. `tests/ci/`: PARTIAL — missing-auth and bundle-budget fixtures exist, but first-statement enforcement is untested and unenforced.
+6. `tests/web/`: PASS — static Lit checks plus Vite build and bundle budget smoke (`tests/web/shell.test.ts:103-172`).
+7. Rule 15 Tests section: FAIL — body omits added/modified tests: `tests/api/github-raw.test.ts`, `tests/contracts/types-sync.test.ts`, `tests/skills/swaConfig.test.ts`, `tests/skills/swaDeploy.test.ts`, `tests/skills/swaProject.test.ts`, and `tests/skills/discordMonitor.test.ts`.
+8. Docs: PARTIAL — `docs/SWA-SETUP.md:237-297` documents auth/env/roles; `quickstart.md:3-24` and `shared/contracts/README.md:6-7` are stale.
+9. Picard triage claim: FAIL — `.squad/decisions/inbox/picard-p1-fanout-triage.md` missing.
+10. Kirk review claim: PASS — PR comments include `**APPROVE** ✅ — Kirk (code review)` for auth shape.
+11. Close keywords: PASS — `Closes #113`, `#114`, `#115`, `#116`, `#117`, `#119`, `#120`, and `#122` are one per line.
+12. Plan Phase 1 section: UNVERIFIABLE — `specs/005-web-control-panel/plan.md` is a placeholder and contains no Phase 1 section.
+13. Auth header parsing: PASS — `api/src/_lib/auth.ts:67-73` uses `x-ms-client-principal` and base64 JSON parsing.
+14. `SQUAD_ALLOWED_USERS`: PASS — `requireAllowedUser` checks the env allowlist (`api/src/_lib/auth.ts:91-99`).
+15. `requireOwner`: FAIL/PARTIAL — optional `principal` skips `requireAllowedUser` (`api/src/_lib/auth.ts:112-114`).
+16. Grep gate first statement: FAIL — script only looks for `requireAllowedUser(` or `requireOwner(` anywhere (`scripts/ci/check-api-auth.mjs:106-110`). Bypass probe with `const log = console.log;` before auth exited 0.
+17. Grep gate CI wiring: FAIL — workflows run `npm test`; tests run fixtures, not default `node scripts/ci/check-api-auth.mjs` against real `api/src`.
+18. Bundle budget: PASS — `npm run build:web` succeeded; script measured 7.7 KB gzip vs 80 KB; recursive gzip total 7904 bytes. RAG JSON excluded because only `.js` files are collected.
+19. SWA deny-by-default: PASS — `staticwebapp.config.json:10-16` protects `/api/*` and SPA routes with `stfc_operator`; `/.auth/*` remains anonymous.
+20. Digest unignore: PASS — `.gitignore` no longer ignores digest Markdown; workflow stages `data/digests`; `tests/skills/discordMonitor.test.ts:535-548` pins the workflow behavior.
+21. Shared contracts: PASS with docs caveat — generated banners present; `npm run check:contracts` passed; `npm run build:contracts` left no diff; README remains stale.
+22. Deploy failure: FAIL — `gh pr checks 124` shows `deploy fail`; log: `Login failed ... Not all values are present. Ensure 'client-id' and 'tenant-id' are supplied.` Local worktree contains staged guard changes not authored by Garak; they are not a green PR check until committed/pushed.
+
+## Findings
+
+1. **P0 — Auth gate is not enforcing the stated invariant.** Presence-anywhere regex plus fixture-only CI allows pre-auth executable statements and does not scan future real handlers.
+2. **P0 — Deploy CI red from unfulfilled Azure-secret contract.** The deploy workflow requires OIDC secrets before provisioning is complete. Skip gracefully when absent or provision secrets before requiring the check.
+3. **P1 — `requireOwner` optional principal bypasses allowlist.** Remove the parameter, make it private/internal, or re-check the allowlist when a principal is supplied.
+4. **P1 — PR body/test inventory stale.** Update test count and Rule 15 test list after late changes.
+5. **P1 — Plan/docs stale.** Move the binding Phase 1 plan into repo or stop claiming it is fact-checkable there; update quickstart and shared contract README.
+
+## Worktree note
+
+During review, staged changes appeared in `.github/workflows/swa-deploy.yml` and `tests/skills/swaDeploy.test.ts` adding an `AZURE_CLIENT_ID` presence guard. Garak did not stage, commit, or author these code changes. They should be reviewed as part of the next pushed revision.
+# Kirk → team: auth-gate hardening decisions (PR #124 Garak rejection-fix)
+
+**Date:** 2026-06-01T03:30:00Z
+**Author:** Kirk
+**Scope:** Two architectural choices made under reviewer-rejection lockout.
+
+## Decision 1 — `requireOwner` defence-in-depth: chose approach (c)
+
+Garak P1#15 flagged: `requireOwner(req, principal?)` could be bypassed by supplying any Principal whose `userDetails === SQUAD_OWNER`, skipping the allowlist gate.
+
+**Considered:**
+- **(a) Remove optional parameter.** Forces re-parse every call. Simplest.
+- **(b) Brand the Principal type.** `requireAllowedUser` returns `AllowedPrincipal` (branded); `requireOwner(req, principal: AllowedPrincipal)`. Compile-time bypass-impossible.
+- **(c) Always re-validate supplied principal against the allowlist.** Optional arg remains a parse-fast-path; security re-check runs unconditionally.
+
+**Chose (c).** Rationale:
+1. **Preserves the documented chained pattern** from `.squad/skills/swa-auth-shape-review/SKILL.md` Wave-N callout #3: "If the handler needs both allowlist + owner checks, call `requireAllowedUser` once and pass the result to `requireOwner(req, principal)`." Removing the optional (a) would break this without a meaningful security gain.
+2. **Branded types (b) add a public type and ceremony for marginal benefit.** With one auth source (`requireAllowedUser`) and one consumer (`requireOwner`), the runtime re-check (env-var split + `Array.includes`) is microseconds — well below any branding overhead.
+3. **Defence-in-depth is the explicit threat-model posture** (S-1, S-2, E-1). A second runtime check on the supplied principal IS the defence-in-depth pattern, not a workaround.
+
+**Implementation:** Extracted private `assertInAllowlist(principal)` helper. Both `requireAllowedUser` (after parsing) and `requireOwner` (when caller supplies a principal) route through it. See `api/src/_lib/auth.ts:79-122`.
+
+**Test contract added:** `re-validates a supplied principal against SQUAD_ALLOWED_USERS (no bypass)` in `tests/api/auth.test.ts` — synthesises a Principal whose `userDetails === SQUAD_OWNER` but is NOT on the allowlist; asserts `ForbiddenError(403)` with diagnostic message identifying the allowlist as the rejecting gate.
+
+**Consequence for Wave 4 handlers (#121):** the chained pattern still works exactly as documented in the skill. No handler refactor required. Performance unchanged for the supplied-principal path (avoids re-parse).
+
+## Decision 2 — Position-aware grep gate: kept JS, added AST-lite walker
+
+Garak P0#1 flagged: `check-api-auth.mjs` was a presence check, not a first-statement check, despite the docstring claiming the latter.
+
+**Considered:**
+- Pull in `typescript` as a script dependency and use the compiler API.
+- Add a hand-written AST-lite walker in pure ESM/JS.
+- Soften the docstring to match the presence-only behaviour.
+
+**Chose the hand-written walker.** Rationale:
+1. The TypeScript compiler dependency for one CI script would balloon `node_modules` for marginal correctness gain on a well-bounded grammar.
+2. Azure Functions handlers have exactly three reasonable shapes (`handler: =>`, `function handler`, `const handler = =>`). All are pattern-detectable; a ~150-LOC walker covers them with room for the canonical `try {…}` wrap.
+3. Softening the docstring would have weakened the constitutional defence-in-depth model — and Wave 4 will read this script as the contract for handler structure.
+
+**Implementation:** New `findHandlerBodies` / `findMatchingBrace` / `firstNonTrivialStatement` / `isAuthGuardCall` helpers in `scripts/ci/check-api-auth.mjs`. Conservative fallback to presence-only when no handler body is detected — better a false negative on an unrecognised shape than a false positive that hard-blocks CI on a legit handler.
+
+**Test contract added:** `tests/ci/fixtures/badPosition/handlerLateAuth.ts` — the exact probe Garak described (`const log = console.log;` before `requireAllowedUser`). Also `tests/ci/fixtures/goodTryWrap/` to verify the canonical `try {…} catch (e) { errorResponse(e) }` pattern from the skill still passes.
+
+**Consequence for Wave 4 handlers (#121):** the skill's canonical pattern (line 64–70) is now enforced, not just documented. Any handler that drifts from it will fail CI with a precise diagnostic pointing at the offending first statement. Update `.squad/skills/swa-auth-shape-review/SKILL.md` Wave-N callout #2 ("CI gate checks presence, not position — first-statement placement is manual") in a separate PR — this commit is hardening-only per task scope.
+
+## Follow-ups for Scribe / future work
+
+- Skill update for `.squad/skills/swa-auth-shape-review/SKILL.md` callout #2: gate now enforces position. Out of scope for this hardening commit; will land as a small docs PR.
+- Wave 4 handler dispatch (#121): no shape change required; the chained `requireAllowedUser` → `requireOwner(req, principal)` pattern still works.
+
+—Kirk
+# Kirk — PR #124 review (Phase 1 Wave 3, 005-web-control-panel)
+
+**Date:** 2026-06-01
+**PR:** https://github.com/Jamula/stfc/pull/124
+**Verdict:** APPROVE ✅ (with 4 follow-up findings, none blocking)
+**Comment:** https://github.com/Jamula/stfc/pull/124#issuecomment-4589200978
+**Co-reviewer (parallel hard-gate):** Garak (hostile fact-check pending)
+
+## Scope reviewed
+
+Multi-issue wave bundling 8 concern groups across 57 files (+10,893 / −338, with ~5,111 of those in `package-lock.json`):
+
+| Group | Issue | Files |
+|---|---|---|
+| Auth lib | #117 (Uhura) | `api/src/_lib/auth.ts`, `api/src/_lib/respond.ts` |
+| Grep gate | #117 (Uhura) | `scripts/ci/check-api-auth.mjs` + fixtures |
+| Frontend shell | #119 (Scotty) | `web/` (Lit 3 + Vite 6, 5 stfc-* tab components) |
+| SWA config | #116 (Scotty/O'Brien) | `staticwebapp.config.json` + `web/public/403.html` |
+| SWA bootstrap | #115 (O'Brien) | `scripts/azure/create-swa.sh`, `docs/SWA-SETUP.md` |
+| SWA deploy workflow | #113 (O'Brien) | `.github/workflows/swa-deploy.yml` |
+| Unignore digests | #114 (Scotty) | `.gitignore` + matching `discordMonitor.test.ts` pins |
+| Shared TS contracts | #122 (Uhura) | `shared/contracts/*.ts`, `scripts/build-contracts.mjs`, `scripts/lib/generate-contracts.mjs`, `scripts/ci/check-contracts-types.mjs`, `tests/contracts/types-sync.test.ts` |
+| Bundle budget | #120 (Scotty) | `scripts/ci/check-bundle-budget.mjs`, `web/bundle-budget.json` |
+| github-raw API helper | (foundation for #121) | `api/_lib/github-raw.ts` |
+
+## Local verification
+
+- `npm run typecheck` → clean.
+- `npm test` → 906 pass / 0 fail / 0 skipped (~32s, 233 suites).
+- CI checks: npm test ✅, secrets-scan ✅, CodeQL ✅, deploy ❌ (Azure OIDC secrets missing — O'Brien parallel investigation, not a code regression).
+
+## Key technical observations (validated)
+
+1. **Auth shape is correct.** `parsePrincipal` decodes `x-ms-client-principal` base64 → JSON with full shape validation (`isValidPrincipal` checks every field type, including that `userRoles` is an array of strings). Defensive: returns `null` on absent header, malformed base64, missing fields, mistyped roles. Threat model alignment: S-1/S-2/E-1 (defence-in-depth allowlist), S-4/E-2/E-5 (owner-only via `requireOwner`).
+2. **`requireRole` alone is intentionally NOT accepted by the grep gate.** Forces username allowlist re-check (or owner check) on top of SWA route role. Good belt-and-suspenders.
+3. **SWA config is correctly deny-by-default.** Both `/api/*` and `/*` require `stfc_operator`. Only `/.auth/*` is anonymous, and it correctly precedes `/*` (first-match-wins). 401 redirects to GitHub OAuth entry; 403 rewrites to a CSP-safe static page. 23 contract tests pin every assertion.
+4. **CSP posture is solid.** `script-src 'self'` (no `unsafe-inline`). `style-src 'self' 'unsafe-inline'` — defensible because Lit shadow-root `<style>` fallback (older Safari path that can't use `adoptedStyleSheets`) needs it. `frame-ancestors 'none'`, `X-Frame-Options: DENY`, HSTS with preload, nosniff, strict-origin referrer.
+5. **Deploy workflow is reproducible.** SHA-pinned `azure/login@5324...` + `Azure/static-web-apps-deploy@1a94...`. OIDC federated credential (id-token: write, no long-lived deploy token). Per-PR concurrency group. Teardown job on PR close. `DISABLE_WRITES: "1"` literal in deploy env. All pinned in `swaDeploy.test.ts`.
+6. **Contract generator handles both shapes correctly.** Flat schemas compile directly; discriminated-oneOf schemas (e.g. `run-result.json`) are split into per-branch interfaces + union alias. Banner identifies the source schema. `@stfc/contracts/*` path alias wired in both root + api tsconfigs.
+7. **Frontend shell is minimal and bundle-disciplined.** All 5 tabs use `stfc-*` prefix; root is `stfc-app`; `cssCodeSplit: false` and a separate `lit` vendor chunk match the CSP no-inline-script constraint. Hash-based tab routing keeps Vite's no-router footprint small.
+8. **Pinning-test discipline (Rule 3) honoured.** `discordMonitor.test.ts` updated alongside `.gitignore` digest change. `swaDeploy.test.ts` created alongside `swa-deploy.yml`. `swaConfig.test.ts` created alongside `staticwebapp.config.json`. No drift slipped past the SIR.
+
+## Findings (non-blocking — follow-up issues)
+
+### MEDIUM-1 — Grep gate enforces *presence* not *first statement* (route → Uhura)
+
+`scripts/ci/check-api-auth.mjs` lines 6 and 152 promise "first statement" / "first non-trivial statement" enforcement, but `hasAuthCall` is a plain regex anywhere in the file. A handler could perform arbitrary work — DB calls, third-party fetches, file I/O — before the auth check and still pass the gate.
+
+**Two acceptable fixes:**
+- Tighten the check: parse with TS compiler API (or careful regex) and assert the first non-comment/non-import statement in the exported handler function body is the auth call. Fixture-test it.
+- Soften the docstring: drop the "first statement" language; reframe as a *presence* check that's defence-in-depth on top of the SWA route-level `stfc_operator` gate; document that handlers MUST call the guard before any side effect, but the gate only catches outright omission.
+
+Either is fine. Pick before Wave 4 #121 ships the first real handler, because that handler will be the pattern reference for every future endpoint.
+
+### MEDIUM-2 — Inconsistent `api/` directory layout (route → Scotty)
+
+Two handler-adjacent libraries shipped at two different depths:
+- `api/_lib/github-raw.ts`  (top-level `_lib`)
+- `api/src/_lib/auth.ts`, `api/src/_lib/respond.ts`  (under `src/_lib`)
+
+`api/tsconfig.json` (`rootDir: "src"`, `include: ["src/**/*.ts"]`) does NOT compile `api/_lib/github-raw.ts` via `npm run build:api`. Conversely root tsconfig's `include` adds `api/_lib/**/*.ts` (catches github-raw) but NOT `api/src/_lib/**/*.ts` (auth/respond reach typecheck only via the test import graph). Works today; foot-gun tomorrow.
+
+Wave 4 must pick the canonical layout — `api/<endpoint>/index.ts` + `api/_lib/` (Azure SWA classic) or `api/src/<endpoint>/...` + `api/src/_lib/` (TS-native) — and move the stray file in the same PR. Ideal: first task of #121.
+
+### LOW-1 — `_lib` exclusion in grep gate is a footgun (route → Uhura)
+
+`EXCLUDE_SEGMENTS` in `check-api-auth.mjs` skips any directory literally named `_lib` anywhere in the walk. Accidental `api/src/_lib/admin-endpoint/index.ts` would silently bypass the gate. Exclude only the top-level `api/src/_lib`, not every `_lib` recursively.
+
+### LOW-2 — `DISABLE_WRITES` is currently dead code (route → O'Brien)
+
+Set in deploy env, but no API handler reads it. Ship a tiny `api/src/_lib/kill-switch.ts` helper this wave, or at minimum a TODO note in `respond.ts`, so Wave 4 handler authors don't forget to gate every mutating path on it.
+
+### LOW-3 — Bundle budget unit ambiguity (route → Scotty)
+
+`81920` bytes = 80 KiB (binary), while spec says "≤ 80 KB" (decimal would be 80000). Permissive by ~2.4%. Add a comment to `web/bundle-budget.json` clarifying the convention so a future contributor doesn't "fix" it the wrong way.
+
+### NIT — `toDiscriminantValue` is approximation-only
+
+Used only inside a comment string; comment acknowledges this. Fine.
+
+## Reviewer-rejection lockout assignments
+
+Per charter ("on rejection, names a DIFFERENT agent to revise"), if any finding is upgraded to a blocker:
+- Grep-gate ordering + docstring + `_lib` exclusion → **Uhura** (auth-lib charter holder, #117). NOT the original revision agent.
+- `api/` directory consolidation → **Scotty** (author of the divergence — but the *consolidation* is a fresh task, so this is fine; alternatively give it to Uhura who owns `api/src/_lib`).
+- `DISABLE_WRITES` kill-switch helper → **O'Brien** (deploy-contract owner).
+- Bundle-budget unit comment → **Scotty**.
+
+## Multi-issue bundling pattern — observation
+
+This is the largest single-PR bundle this repo has shipped (8 issues, 57 files, +10.9k LOC). It worked because:
+
+1. **Each concern group has its own test file** (`auth.test.ts`, `check-api-auth.test.ts`, `check-bundle-budget.test.ts`, `swaConfig.test.ts`, `swaDeploy.test.ts`, `swaProject.test.ts`, `web/shell.test.ts`, `types-sync.test.ts`, `github-raw.test.ts`). Reviewer can read one file, run one test, sign off on one concern without context-switching across the whole bundle.
+2. **The `Closes #113 #114 #115 #116 #117 #119 #120 #122` block in the PR body is one-per-line** (Rule 12), so the post-merge sweep will close all eight cleanly.
+3. **Pinning-test discipline held** for both workflow touches (swa-deploy.yml + .gitignore/discord-monitor.yml).
+
+**But** the bundle stresses single-reviewer capacity. For Wave 4, recommend either:
+- Pre-split by concern group (one PR per issue), OR
+- Continue to bundle but pre-assign per-group reviewers in the PR body so Garak/Bashir/Kirk each own a section explicitly rather than re-discovering the boundaries.
+
+## Learnings (to mirror into history.md)
+
+- **Grep-gate-as-contract**: the script's docstring IS the contract; any drift between docstring and behaviour is itself a finding. Always read both the rules statement and the check body.
+- **TS path-alias + multi-tsconfig parity**: when a repo has both a root tsconfig and a sub-project tsconfig, **both** include arrays need to cover every shared library directory, or you get "works because tests reach it" coverage that quietly fails when a non-test consumer is added.
+- **Lit + CSP**: `script-src 'self'` works; `style-src 'self' 'unsafe-inline'` is the standard Lit-with-shadow-DOM concession (adoptedStyleSheets fallback path). Don't try to drop `'unsafe-inline'` for style-src until Safari coverage is verified.
+- **First-statement enforcement is harder than presence enforcement.** A grep gate is a presence check; a "first statement" check requires an AST. Choose the contract that matches the tool, or upgrade the tool.
+- **Largest bundle this repo has shipped held together** because every concern group brought its own test file. The pattern scales as long as test-file boundaries match concern-group boundaries.
+# Decision: SWA Deploy Auth Method — OIDC federation adopted
+
+**Author:** O'Brien
+**Date:** 2026-05-31T23:46:00Z
+**Issue:** #113
+**Commit:** f32585c (feat(005-web-control-panel): SWA deploy contract + deploy workflow + pinning test)
+**Status:** RESOLVED — OIDC federation adopted
+
+---
+
+## Decision
+
+Phase 1 formalizes **OIDC federation** (not deployment token) as the SWA
+deploy authentication method, overriding the Phase 0 spike recommendation.
+
+**Phase 0 spike said:** use deployment token — lower setup complexity for
+a single-maintainer project.
+
+**Phase 1 contract says:** OIDC — no long-lived secret stored in the repo;
+ephemeral JWT issued per run; one-time Azure SP + federated-credential setup
+outweighs the indefinite deployment-token rotation burden.
+
+---
+
+## Rationale
+
+1. **No stored secret.** A deployment token in repo secrets is a long-lived
+   credential that can be leaked via a malicious workflow or a compromised
+   Codespace. OIDC tokens are ephemeral and scoped to the specific workflow run.
+
+2. **Single-maintainer ≠ lower risk.** With one reviewer there is no second
+   set of eyes on secret changes; the blast radius of a leaked token is at
+   least as large as in a team context.
+
+3. **Setup cost is one-time.** Creating an Azure Service Principal, registering
+   a federated credential, and assigning `Website Contributor` RBAC is a ~10
+   minute task paid once. The deployment-token's rotation cost recurs every
+   time the token is suspected compromised.
+
+---
+
+## Fallback documented
+
+If the Azure tenant blocks workload-identity federation (Conditional Access
+policy): swap OIDC steps for `azure_static_web_apps_api_token` deployment-token
+input. Document the downgrade in a new inbox entry.
+
+---
+
+## Artefacts
+
+- `specs/005-web-control-panel/deploy-contract.md`
+- `.github/workflows/swa-deploy.yml`
+- `tests/skills/swaDeploy.test.ts`
+
+---
+
+*Per Rule 2: this file is left uncommitted — Scribe commits .squad/ paths.*
+# O'Brien Decision Drop — PR #124 Azure OIDC deploy failure
+
+**By:** O'Brien (DevOps / Platform Engineer)
+**Date:** 2026-06-01T02:52Z
+**Worktree:** /workspaces/stfc-p1 on branch `squad/005-phase1-dashboard`
+**PR:** https://github.com/Jamula/stfc/pull/124
+**Follow-up issue:** https://github.com/Jamula/stfc/issues/127
+
+## Diagnosis
+
+The `deploy` CI job on PR #124 was failing with:
+```
+Login failed with Error: Using auth-type: SERVICE_PRINCIPAL.
+Not all values are present. Ensure 'client-id' and 'tenant-id' are supplied.
+```
+
+Root cause: **missing repo secrets**. `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, and
+`AZURE_SUBSCRIPTION_ID` were never provisioned. The workflow YAML was structurally
+correct — it correctly used the OIDC form. `azure/login@v3` falls back to
+SERVICE_PRINCIPAL auth and produces a misleading error when OIDC inputs resolve
+to empty strings.
+
+## Remediation chosen: Option B (secret-presence guard)
+
+Commit `84ffe6f` on `squad/005-phase1-dashboard`:
+- Gated both `deploy` and `teardown` jobs on `secrets.AZURE_CLIENT_ID != ''`
+- Updated `tests/skills/swaDeploy.test.ts` with a pin assertion for the guard (Rule 3)
+- Updated `tests/skills/swaProject.test.ts` comment to cross-reference the guard
+  (required because pre-commit `checkWorkflowPinningTests` hooks on ALL referencing files)
+
+Result: deploy and teardown now produce `skipped` instead of `failure` when secrets
+are absent. PR #124 is mergeable. Deploy activates automatically once Picard provisions
+the three secrets.
+
+## Follow-up required: Picard (issue #127)
+
+Issue #127 filed with full checklist:
+1. Create Azure App Registration + federated credentials for `main` push + PR events
+2. `gh secret set AZURE_CLIENT_ID / AZURE_TENANT_ID / AZURE_SUBSCRIPTION_ID` from local terminal
+3. Verify via `gh secret list` (names only)
+4. Trigger manual workflow run to confirm deploy activates
+
+⚠️ Secrets must NEVER be pasted into chat (Rule 21). Only `gh secret set` from operator's local terminal.
+
+## Blocking merge?
+
+No. Kirk and Garak hold the code-review gate. All required CI checks (tests, CodeQL,
+secrets-scan) are green. Deploy is informational / infra until secrets are provisioned.
+
+## Files changed (this decision's commit)
+
+- `.github/workflows/swa-deploy.yml` — secret-presence `if` guard on both jobs
+- `tests/skills/swaDeploy.test.ts` — pin test for guard (Rule 3 same-commit)
+- `tests/skills/swaProject.test.ts` — comment cross-reference (pre-commit hook compliance)
+# Decision note — SWA bootstrap (Wave 2, issue #115)
+
+**Agent:** O'Brien
+**Date:** 2026-05-31T23:55+00:00
+**Status:** COMPLETE (commit `1f4f824`, branch `squad/005-phase1-dashboard`)
+
+---
+
+## What was done
+
+Phase 1 Wave 2 scaffolded the full Azure SWA project structure:
+
+- `web/` — Lit+Vite frontend scaffold (package.json, vite.config.ts, index.html, src/main.ts)
+- `api/` — Azure Functions v4 scaffold (package.json, host.json, local.settings.json.example, .funcignore, tsconfig.json)
+- `shared/contracts/` — empty dir with .gitkeep + README; Wave 3 #122 populates TS types
+- `staticwebapp.config.json` — deny-by-default (all routes require `stfc_operator`; 401 → GitHub login)
+- `scripts/azure/create-swa.sh` — idempotent bootstrap script
+- `docs/SWA-SETUP.md` — full operator runbook
+- Root `package.json` build scripts + `@azure/static-web-apps-cli` devDep
+- Root `tsconfig.json` `@stfc/contracts/*` path alias
+- 817 tests passing (was 770)
+
+## Scope decision (CONFIRM OK)
+
+Creating the actual Azure SWA RESOURCE requires `az login` with real Azure credentials.
+This was deferred to the operator per the task scope call. The `create-swa.sh` script
+handles the creation idempotently when the operator is ready.
+
+`az` CLI is installed in the Codespaces environment but no Azure session was found
+(`az account show` would require interactive login). Script verified readable and
+executable; dry-run was not performed (would require live Azure auth).
+
+## Also fixed (pre-existing bug)
+
+`tests/skills/swaDeploy.test.ts` had a wrong assertion pattern for the OIDC secrets
+check — it matched `AZURE_TENANT_ID: ${{ ... }}` (screaming-snake env-var style) but
+the workflow correctly uses `tenant-id: ${{ ... }}` (kebab-case azure/login input).
+This caused the test to fail silently (it was not in tests/index.test.ts). Fixed and
+added to index as part of this commit.
+
+## Next steps
+
+Wave 3 agents can now work independently:
+- **Uhura** (#117): populate `api/src/functions/auth.ts`
+- **Scotty** (#119): populate `web/src/` Lit components
+- **Scotty** (#120): populate `api/src/functions/github-raw.ts` + shared helpers
+- **Scotty** (#122): generate `shared/contracts/*.ts` from JSON Schemas in specs/
+- **Wave 3 #116**: populate `staticwebapp.config.json` with full role rules
+# Decision: staticwebapp.config.json deny-by-default + stfc_operator role
+
+**Agent:** O'Brien (DevOps)
+**Date:** 2026-06-01T00:00+00:00
+**Issue:** #116
+**Commit:** 2606491
+**Branch:** squad/005-phase1-dashboard
+
+## Decision
+
+Completed `staticwebapp.config.json` with the full Phase 1 Wave 3 role configuration per the v3 plan and Garak's STRIDE threat model.
+
+## What was implemented
+
+### Route configuration
+- `/.auth/*` → `allowedRoles: ["anonymous"]` — SWA login/logout endpoints must always be reachable by unauthenticated users. This route MUST appear before `/*` since SWA uses first-match routing.
+- `/api/*` → `allowedRoles: ["stfc_operator"]` — deny anonymous and authenticated-but-uninvited users from the API surface.
+- `/*` → `allowedRoles: ["stfc_operator"]` — catch-all deny-by-default for all other routes.
+
+### Response overrides
+- **401** → redirect to `/.auth/login/github?post_login_redirect_uri=/` (unauthenticated users are sent to GitHub OAuth, not shown a blank response). Includes `post_login_redirect_uri` so users land back at their target page after login.
+- **403** → rewrite to `/403.html` (static page explaining the stfc_operator role requirement and contact instructions). Status code remains 403.
+
+### Auth identity providers
+- **GitHub-only**: `auth.identityProviders` contains only `github`. No AAD, no anonymous providers, no MSA. This is the pre-configured provider on Free tier — no Standard plan required.
+- `clientIdSettingName: GITHUB_OAUTH_CLIENT_ID` and `clientSecretSettingName: GITHUB_OAUTH_CLIENT_SECRET` reference app settings (not hardcoded in config).
+
+### Security headers (globalHeaders)
+- `Strict-Transport-Security: max-age=31536000; includeSubDomains; preload`
+- `Content-Security-Policy: default-src 'self'; script-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; font-src 'self'; connect-src 'self'; frame-ancestors 'none'`
+  - `style-src 'unsafe-inline'` included because the 403.html uses an inline `<style>` block. If moved to a separate CSS file, this can be tightened.
+  - `frame-ancestors 'none'` duplicates X-Frame-Options: DENY for CSP-aware browsers.
+- `X-Content-Type-Options: nosniff`
+- `X-Frame-Options: DENY`
+- `Referrer-Policy: strict-origin-when-cross-origin`
+- **Removed from skeleton:** `X-XSS-Protection: 1; mode=block` — deprecated in modern browsers and not recommended by OWASP.
+- **Removed from skeleton:** `Permissions-Policy` — not required for Phase 1; can be added later if needed.
+
+### MIME types
+- `.json` → `application/json` — required for the future RAG index endpoint.
+
+### Static error page
+- `web/public/403.html` — minimal, CSP-safe (no `<script>` tags), dark-themed page explaining:
+  - HTTP 403 / Not Authorized
+  - The `stfc_operator` role is required
+  - Contact the operator to be invited
+  - Sign-out link to try a different account
+
+### Tests
+- `tests/skills/swaConfig.test.ts` (T-SWA-003) — 25 contract tests covering all of the above.
+
+## Decisions / tradeoffs
+
+| Area | Decision | Rationale |
+|---|---|---|
+| `style-src 'unsafe-inline'` in CSP | Accepted for Phase 1 | 403.html uses inline `<style>`. Future: extract to `/403.css` and remove `unsafe-inline`. |
+| `Permissions-Policy` removed | Removed (was in skeleton) | Not in the Wave 3 spec; keeps headers minimal; can be added in a hardening pass. |
+| `X-XSS-Protection` removed | Removed (was in skeleton) | Deprecated; can cause XSS in some browsers; OWASP recommends omitting it entirely. |
+| `post_login_redirect_uri=/` | Hardcoded to `/` | SWA does not provide a dynamic `{originalPath}` variable in config-level redirects. `/` is the safe fallback; the SPA router handles the rest. |
+| `frame-ancestors 'none'` | Added to CSP | Belt-and-suspenders with X-Frame-Options: DENY for modern CSP-aware browsers. |
+
+## What is NOT committed
+
+Per Rule 2, this file (`.squad/decisions/inbox/obrien-swa-config.md`) is left **uncommitted** in the worktree. Scribe will commit it in a separate session.
+# Decision note — unignore data/digests/*.md (Issue #114)
+
+**Agent:** O'Brien (DevOps / Platform Engineer)  
+**Date:** 2026-05-31  
+**Branch:** squad/005-phase1-dashboard  
+**Commit:** feat(005-web-control-panel): unignore data/digests + commit-on-write in discord-monitor (Phase 1 wave 1)
+
+## What was done
+
+- Removed `data/digests/*.md` from `.gitignore`. Updated comment to explain
+  constitution v2.0.0 sanctioning.
+- Verified `discord-monitor.yml` already has a commit-on-write step
+  (`git add data/discord data/digests promo-codes.txt`) with retry-once
+  pull --rebase before push. **No changes to the workflow YAML were needed.**
+- Added three new pinning assertions to `tests/skills/discordMonitor.test.ts`
+  (Rule 3 compliance):
+  1. `contents: write` permission is present
+  2. `git add` stages `data/digests`
+  3. Retry-once push pattern (`git pull --rebase` + `git push`) is present
+
+## Observations / surface to Uhura/Scotty
+
+- Digest output path: `src/` currently writes digests to `data/digests/<date>.md`
+  (confirmed by test fixture in discordMonitor.test.ts referencing `digestsDir`).
+  No src/ changes appear needed — the path is already correct.
+- `data/digests/.gitkeep` should remain tracked (and it is — only `*.md` was
+  excluded, never `.gitkeep`).
+
+## Status
+
+✅ Committed and pushed. All 770 tests green, typecheck clean.  
+❌ NOT committed to `.squad/` (Rule 2 — Scribe will commit this file).
+# Decision: json-schema-to-typescript as contract generator (Issue #122)
+
+**Date:** 2026-06-01  
+**Author:** Scotty (Core Dev)  
+**Issue:** #122 — shared/contracts TS types from JSON Schemas  
+**Commit:** 9302288
+
+## Decision
+
+Chose `json-schema-to-typescript` (v15.x) as the generator tool for deriving TypeScript
+types from the Phase 0 JSON Schema contracts.
+
+## Rationale
+
+1. **Battle-tested** — most widely adopted JSON Schema → TS tool in the ecosystem.
+2. **Deterministic output** — ships its own bundled prettier; CI sync gate diffs are
+   stable across runs.
+3. **const/enum support** — emits `schema_version: '1'` as a string literal type, not
+   `string`, satisfying Kirk review #6.
+4. **No bloat** — ajv already in devDeps for runtime validation; this adds only the
+   compile-time generator.
+
+## Run-result discriminated union
+
+`json-schema-to-typescript` produces an intersection type for top-level `oneOf`, which is
+not a proper discriminated union. The generator script (`scripts/lib/generate-contracts.mjs`)
+detects this pattern and builds per-branch schemas, compiles each individually via
+`json-schema-to-typescript`, then emits named interfaces + a union alias:
+
+```
+RedeemRunResult | DiscordMonitorRunResult | RefreshTokenRunResult → RunResult
+```
+
+TypeScript narrows correctly on `result.workflow === 'redeem'`.
+
+## Sync gate
+
+`scripts/ci/check-contracts-types.mjs` regenerates types in-process and string-diffs
+against committed files. Added as `check:contracts` npm script. Exits 1 on any mismatch.
+
+## Files added
+
+- `scripts/lib/generate-contracts.mjs` + `.d.mts` — shared generation logic
+- `scripts/build-contracts.mjs` — build script (`npm run build:contracts`)
+- `scripts/ci/check-contracts-types.mjs` — CI gate (`npm run check:contracts`)
+- `shared/contracts/run-result.ts` — generated
+- `shared/contracts/audit-event.ts` — generated
+- `shared/contracts/chat-tool-call.ts` — generated
+- `tests/contracts/types-sync.test.ts` — generator + gate tests
+
+## Future considerations
+
+- Zod schema codegen is deferred to a later wave per spec.
+- If a schema adds a new `oneOf` discriminant pattern, `detectDiscriminant()` in the
+  generator handles it automatically.
+- `@stfc/contracts/*` path alias is already wired in root, api, and web tsconfigs.

@@ -211,3 +211,5 @@ Plus LOW: bundle-budget unit ambiguity (81920 = 80 KiB vs spec "80 KB" = 80000).
 - **The largest bundle this repo has shipped (8 issues, 57 files, +10.9k LOC) held together** because every concern group brought its own test file. The pattern scales as long as test-file boundaries match concern-group boundaries. For Wave 4, either pre-split by issue OR pre-assign per-group reviewers in the PR body (Garak/Bashir/Kirk each own a section) rather than re-discovering boundaries during review.
 - **Rule 12 (`Closes #N` one-per-line) at scale**: PR #124's 8-issue close block is exactly the right form. Ship-it ritual will close all 8 cleanly with no manual sweep needed.
 - **Multi-issue PR review tactics that worked here**: (1) group files by concern in `gh pr view --json files`, (2) read one test file per concern as the spec, (3) run typecheck + npm test once at the end, (4) cross-check rule disclosures (#15 Tests, #16 Docs, #3 pinning) before verdict. ~45 minutes elapsed for this scope.
+
+- PR #124 merged 2026-06-01T03:55:00Z (Round 2 close-out, 8 issues closed, auth hardening + frontend shell foundation)

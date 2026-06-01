@@ -107,3 +107,5 @@ jobs:
     if: secrets.AZURE_CLIENT_ID != '' && <event conditions>
 ```
 Both jobs (`deploy` + `teardown`) must carry the guard. Skipping only `deploy` while leaving `teardown` ungated would cause `teardown` to fail on PR close when no SWA environment was ever created.
+
+- PR #124 merged 2026-06-01T03:55:00Z (Round 2 close-out, 8 issues closed, auth hardening + frontend shell foundation)

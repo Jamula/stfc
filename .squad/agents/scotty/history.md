@@ -140,3 +140,5 @@ Both PRs required non-Scotty revisions (bootstrap path + validation + fixtures).
 - Scribe finalization completed; all .squad/ logs written
 
 Status: COMPLETE
+
+- PR #124 merged 2026-06-01T03:55:00Z (Round 2 close-out, 8 issues closed, auth hardening + frontend shell foundation)

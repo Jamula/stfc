@@ -52,3 +52,5 @@ Status: COMPLETE
 **Verdict:** CHANGES_REQUESTED ⚠️. The useful attack pattern was to test claimed gates as adversarial contracts, not just read their happy-path fixtures. `check-api-auth` passed a handler that executed code before `requireAllowedUser`, proving the “first statement” claim was prose rather than enforcement.
 
 **Recurring gaps:** PR bodies drifted after late fixes (905 → 906 tests), Rule 15 test inventories omitted whole test families, and repo-facing plan/docs remained placeholders while the PR claimed Phase 1 surfaces had landed. Deploy workflows that require not-yet-provisioned secrets must skip cleanly or they convert an “infra later” promise into a red required check.
+
+- PR #124 merged 2026-06-01T03:55:00Z (Round 2 close-out, 8 issues closed, auth hardening + frontend shell foundation)

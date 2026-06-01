@@ -53,3 +53,33 @@ Approved. Merged as eb2fd9d.
 - Scribe finalization completed; all .squad/ logs written
 
 Status: COMPLETE
+
+---
+
+**[2026-06-01T03:39Z] Garak P1 Surgical Fixes — Wave-Boundary Clarity Pattern**
+
+**Task:** Fix 2 remaining Garak P1 findings on PR #124 (Tuvok reviewer-locked per Rule 2).
+
+**Findings Fixed:**
+- P1#7: PR body test count stale (914 → 918 per Kirk's counter-tests added in interim)
+- P1#8a: Quickstart.md overclaimed `/api/data/*` endpoints shipping in Wave 3; they ship in Wave 4 PR #126 (already merged)
+
+**Implementation:**
+1. Updated PR #124 body via `gh pr edit --body-file` (sed: 914 → 918)
+2. Restructured `specs/005-web-control-panel/quickstart.md` Phase 1 section:
+   - Added Wave 3 subsection (this PR: auth lib, frontend shell, SWA contract)
+   - Added Wave 4 subsection (separate PRs already merged: data-read endpoints PR #126, invitation runbook PR #125)
+   - Moved `/api/data/*` reference to Wave 4 subsection with PR #126 attribution
+
+**Editorial Pattern — Wave-Boundary Clarity:**
+When multiple PRs ship in sequence (same epic, same phase) but land separately (different commits, different reviews), cross-references in quickstart/README must:
+1. Use subsection headers per wave (e.g., "### Wave 3 — Foundation", "### Wave 4 — Capabilities")
+2. Cite PR numbers + merge state alongside features (e.g., "PR #126, merged")
+3. Avoid future-tense claims for features in later waves (e.g., never "will ship" — say "ships" only for current wave)
+
+This prevents re-verification friction: reviewers re-opening PRs weeks later will see feature attribution clearly divorced by wave/PR/commit.
+
+**Commit:** `41b04a1` — docs(005-web-control-panel): clarify Wave 3 vs Wave 4 boundary
+**Status:** COMPLETE — PR #124 CI green, quickstart + PR body now aligned
+
+- PR #124 merged 2026-06-01T03:55:00Z (Round 2 close-out, 8 issues closed, auth hardening + frontend shell foundation)

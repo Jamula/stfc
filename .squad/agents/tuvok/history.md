@@ -103,3 +103,68 @@ put the persona attribution in the commit body (or the
 - Scribe finalization completed; all .squad/ logs written
 
 Status: COMPLETE
+
+---
+
+**[2026-06-01T03:28Z] PR #124 Garak P1 Editorial Fixes**
+
+### Context
+
+Garak's hostile fact-check on PR #124 (Wave 3 auth + frontend shell) flagged 2 stale documentation findings:
+- **P1#7:** PR body test count was 905, live repo now has 914 tests. Also missing test inventory in the `## Tests` section (Rule 15 violation).
+- **P1#8a:** quickstart.md said "Phase 1 will populate this later" despite Phase 1 shipping in PR #124.
+- **P1#8b:** shared/contracts/README.md said "intentionally empty" but Phase 1 shipped with 3 auto-generated contracts.
+
+### Approach
+
+Three surgical edits per Garak's explicit findings (no improvisation):
+
+1. **PR #124 body** — Updated via `gh pr edit 124 --body-file <new-body>`:
+   - Test count: 905 → 914
+   - Added full test inventory to `## Tests` section, mapping new test files to their coverage areas
+   - Kept all other sections unchanged (Summary, Verification, Docs, Reviewers, Closes)
+
+2. **quickstart.md** — Replaced 27-line "will populate later" placeholder with actual Phase 1 capability surface:
+   - 4-item capability list (auth library, frontend shell, data-read endpoints, deployment contract)
+   - Cross-references to docs (SWA-SETUP.md, SWA-INVITATION-RUNBOOK.md, auth.ts)
+   - "Getting started" section with next-phase pointers
+   - Removed the "refer to v3 plan session-specific path" (non-canonical for shipped phase)
+
+3. **shared/contracts/README.md** — Replaced "intentionally empty" boilerplate with actual contract documentation:
+   - Listed 3 auto-generated contracts: chat-tool-call, audit-event, run-result
+   - Documented auto-generated banner language (don't hand-edit)
+   - Added `npm run build:contracts` and `npm run check:contracts` commands
+   - Kept path-alias definitions (unchanged from original)
+
+### Learnings: "will populate later" placeholders in shipped phases
+
+**Pattern:** A docs artifact says "Phase N will populate this" or is marked "intentionally empty" with a task number for a future phase. The phase ships; the docs are never updated.
+
+**Fix checklist for editorial audits after phase ship:**
+1. Search `specs/*/` for "will populate", "Phase N will", "intentionally empty", and "TODO" markers.
+2. For each match, confirm the referenced phase/task:
+   - If the phase shipped → update the docs with actual content.
+   - If the phase is still pending → leave as-is (but update the cross-reference if the task number changed).
+3. For "intentionally empty" specifically: check the referenced task/PR. If it shipped (especially if auto-generation or build steps created content), replace the boilerplate with actual inventory + regeneration docs.
+4. Use the shipped phase's own cross-references (PR#, issue#, file paths) rather than session-specific artifacts (session-state paths).
+
+**Why this matters:** These placeholders trip hostile fact-checks because they signal "work not done" even when it is. They also confuse operators reading the quickstart (does this need setup or not?). A single grep for "will populate\|intentionally empty" post-phase-ship is a fast audit gate.
+
+### Changes
+
+- **PR #124 body:** test count 905→914, added 12-item test inventory
+- **quickstart.md:** 27 lines → ~40 lines, replaced placeholder with Phase 1 capability surface
+- **shared/contracts/README.md:** 24 lines → ~60 lines, replaced empty boilerplate with contract inventory + build/check docs
+- **Commit:** `66a8d61` on `squad/005-phase1-dashboard`
+- **Push:** successful to origin
+
+### Validation
+
+- `git status --short` showed exactly 2 expected file changes (✓)
+- All 914 tests continue to pass after edits (✓)
+- No code files touched; editorial only (✓)
+- Did not collide with Kirk's parallel auth.ts work (✓)
+- Appended to history.md as instructed (this entry)
+
+
+- PR #124 merged 2026-06-01T03:55:00Z (Round 2 close-out, 8 issues closed, auth hardening + frontend shell foundation)
