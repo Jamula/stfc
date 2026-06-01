@@ -30,6 +30,10 @@ import {
   loadDiscordToken,
 } from "../discord/client.ts";
 import { dedup } from "../discord/dedup.ts";
+import {
+  processCrewCommands,
+  type CrewCommandResponder,
+} from "../discord/crewCommandParser.ts";
 import { extractCodesFromMessage } from "../discord/extractor.ts";
 import { evictExpired, recordFailure } from "../discord/cooldown.ts";
 import { ingestDiscord, type IngestClient } from "../discord/ingest.ts";
@@ -37,6 +41,7 @@ import {
   appendCandidate,
   appendTipSeen,
   loadAllowlist,
+  loadCommandChannelAllowlist,
   loadCooldowns,
   loadCursors,
   loadSuppression,
@@ -48,7 +53,10 @@ import {
 } from "../discord/state.ts";
 import type {
   CandidateCode,
+  CommandChannelAllowlistEntry,
   DailyDigest,
+  DiscordAllowlist,
+  DiscordAllowlistEntry,
   IngestedMessage,
   RunHealth,
   SourceRef,
@@ -77,6 +85,7 @@ export interface DiscordMonitorOptions {
   /** Override committed-file paths (cursors, candidates, cooldowns, suppression, allowlist). */
   paths?: {
     allowlist?: string;
+    commandChannels?: string;
     cursors?: string;
     candidates?: string;
     tipsSeen?: string;
@@ -113,6 +122,7 @@ export async function discordMonitor(
   const startedAt = now.toISOString();
 
   const allowlistPath = opts.paths?.allowlist ?? DEFAULT_PATHS.allowlist;
+  const commandChannelsPath = opts.paths?.commandChannels ?? DEFAULT_PATHS.commandChannels;
   const cursorsPath = opts.paths?.cursors ?? DEFAULT_PATHS.cursors;
   const candidatesPath = opts.paths?.candidates ?? DEFAULT_PATHS.candidates;
   const tipsSeenPath = opts.paths?.tipsSeen ?? DEFAULT_PATHS.tipsSeen;
@@ -144,12 +154,17 @@ export async function discordMonitor(
     modelLoaded: { name: "(deferred-T033)", sha256Verified: false, loadMs: 0 },
   };
 
-  // ── Step 1: allowlist ─────────────────────────────────────────────────────
+  // ── Step 1: allowlists ────────────────────────────────────────────────────
   const allowlist = await loadAllowlist(allowlistPath);
-  health.channelsConfigured = allowlist.entries.length;
+  const commandChannels = await loadCommandChannelAllowlist(commandChannelsPath);
+  const ingestAllowlist = withCommandChannels(allowlist, commandChannels, now);
+  const codeChannelIds = new Set(
+    allowlist.entries.filter((entry) => entry.enabled).map((entry) => entry.channelId),
+  );
+  health.channelsConfigured = ingestAllowlist.entries.length;
 
-  if (allowlist.entries.length === 0) {
-    log.info("allowlist empty — graceful no-op (FR-001)");
+  if (ingestAllowlist.entries.length === 0) {
+    log.info("allowlists empty — graceful no-op (FR-001)");
     return finalize({
       health,
       startedAt,
@@ -191,7 +206,7 @@ export async function discordMonitor(
       : new DiscordClient({ token });
 
     try {
-      const ingestOut = await ingestDiscord(allowlist, newCursors, client, runId, now);
+      const ingestOut = await ingestDiscord(ingestAllowlist, newCursors, client, runId, now);
       ingestedMessages = ingestOut.messages;
       newCursors = ingestOut.newCursors;
       botUsername = ingestOut.botIdentity.username;
@@ -204,6 +219,25 @@ export async function discordMonitor(
         botUsername: ingestOut.botIdentity.username,
         botId: ingestOut.botIdentity.id,
       });
+
+      if (commandChannels.length > 0 && ingestOut.discordMessages.length > 0) {
+        if (isCrewCommandResponder(client)) {
+          const commandStats = await processCrewCommands(
+            ingestOut.discordMessages,
+            commandChannels,
+            client,
+            {
+              now,
+              logger: (message) => log.info(message),
+            },
+          );
+          if (commandStats.seen > 0 || commandStats.rateLimited > 0) {
+            log.info({ msg: "crew commands processed", ...commandStats });
+          }
+        } else {
+          log.warn("client cannot post Discord replies; skipping !crew command handling");
+        }
+      }
     } catch (err) {
       if (err instanceof DiscordAuthError) {
         log.error(`Discord auth failed — skipping Discord half. ${redactForLog(err)}`);
@@ -214,8 +248,10 @@ export async function discordMonitor(
       }
     }
 
+    const codeMessages = ingestedMessages.filter((message) => codeChannelIds.has(message.channelId));
+
     // Step 4: extract codes.
-    for (const m of ingestedMessages) {
+    for (const m of codeMessages) {
       const extracted = extractCodesFromMessage(m.contentRaw, {
         channelLabel: m.channelLabel,
       });
@@ -240,7 +276,7 @@ export async function discordMonitor(
     const tipsSeen = await readTipsSeen(tipsSeenPath);
     classifiedTips = [];
 
-    for (const m of ingestedMessages) {
+    for (const m of codeMessages) {
       // Moderation pre-filter (FR-020).
       if (isExcludedByModeration(m.contentNormalized, { channelLabel: m.channelLabel })) {
         health.dropped.moderation++;
@@ -442,6 +478,36 @@ export async function discordMonitor(
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
+
+function isCrewCommandResponder(client: IngestClient): client is IngestClient & CrewCommandResponder {
+  return typeof (client as Partial<CrewCommandResponder>).postMessage === "function";
+}
+
+function withCommandChannels(
+  allowlist: DiscordAllowlist,
+  commandChannels: CommandChannelAllowlistEntry[],
+  now: Date,
+): DiscordAllowlist {
+  const entries: DiscordAllowlistEntry[] = [...allowlist.entries];
+  const seen = new Set(entries.map((entry) => `${entry.serverId}:${entry.channelId}`));
+
+  for (const entry of commandChannels) {
+    const key = `${entry.guild_id}:${entry.channel_id}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    entries.push({
+      serverId: entry.guild_id,
+      serverLabel: `crew-command-${entry.guild_id}`,
+      channelId: entry.channel_id,
+      channelLabel: entry.account ? `crew-command-${entry.account}` : `crew-command-${entry.channel_id}`,
+      addedAt: now.toISOString(),
+      addedBy: "command-channel-allowlist",
+      enabled: true,
+    });
+  }
+
+  return { version: 1, entries };
+}
 
 interface FinalizeArgs {
   health: RunHealth;

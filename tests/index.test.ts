@@ -25,6 +25,7 @@ import "./discord/client-403-subcodes.test.ts";
 import "./discord/ingest-bot-identity.test.ts";
 import "./discord/ingest-401-fastfail.test.ts";
 import "./discord/ingest-remediation.test.ts";
+import "./discord/crewCommandParser.test.ts";
 import "./digest/digest.test.ts";
 import "./digest/health-remediation.test.ts";
 import "./skills/discordMonitor.test.ts";

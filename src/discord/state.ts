@@ -17,6 +17,7 @@ import { promises as fs } from "node:fs";
 import * as path from "node:path";
 import {
   CandidateCodeSchema,
+  CommandChannelAllowlistSchema,
   CooldownEntrySchema,
   CooldownMapSchema,
   DiscordAllowlistSchema,
@@ -24,6 +25,7 @@ import {
   OperatorSuppressionMapSchema,
   TipsSeenLineSchema,
   type CandidateCode,
+  type CommandChannelAllowlistEntry,
   type CooldownMap,
   type DiscordAllowlist,
   type IngestionCursorMap,
@@ -35,6 +37,7 @@ import {
 
 export const DEFAULT_PATHS = {
   allowlist: "config/discord-allowlist.json",
+  commandChannels: "data/discord/command-channels.json",
   cursors: "data/discord/cursors.json",
   candidates: "data/discord/candidates.jsonl",
   tipsSeen: "data/discord/tips-seen.jsonl",
@@ -155,6 +158,20 @@ export async function loadAllowlist(
   if (!parsed.success) {
     throw new AllowlistFileError(
       `Allowlist file ${filePath} failed schema validation: ${parsed.error.message}`,
+    );
+  }
+  return parsed.data;
+}
+
+export async function loadCommandChannelAllowlist(
+  filePath: string = DEFAULT_PATHS.commandChannels,
+): Promise<CommandChannelAllowlistEntry[]> {
+  const raw = await readJsonOrUndefined(filePath);
+  if (raw === undefined) return [];
+  const parsed = CommandChannelAllowlistSchema.safeParse(raw);
+  if (!parsed.success) {
+    throw new StateFileError(
+      `Command-channel allowlist ${filePath} failed schema validation: ${parsed.error.message}`,
     );
   }
   return parsed.data;
