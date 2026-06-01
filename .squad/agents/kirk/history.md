@@ -33,3 +33,6 @@
 - **Rate-limiter sanity checks:** (1) Are values bounded? (values array pruned per call ✅) (2) Are rejected commands NOT registered? (early return before push ✅) (3) Are keys bounded? (NO — potential long-running concern; flag if daemon). (4) Is the window truly rolling, not fixed? (pruneWindow filters `ts > nowMs - WINDOW_MS` ✅ — note `>` not `>=`, so timestamps exactly at the boundary are excluded, which is the correct strict-window semantics).
 - **Optional operator files** (not committed, only `.example` shipped) don't need constitution amendments. The constitution's committed durable-inputs list is for committed files only. `.example` is the discoverable convention.
 - **`withCommandChannels` version field**: when building a new `DiscordAllowlist` from an existing one, carry `allowlist.version` forward rather than hardcoding. Catch this pattern in future allowlist manipulation PRs.
+
+## 2026-06-01T01:25:00Z — Wave 3 close-out + Wave 4 fanout audit (Picard triage)
+PR #124 (auth.ts + shell) open on `squad/005-phase1-dashboard`. Picard triage identifies Wave 4 #118 + #121 parallel-safe, queued for dispatch post-Kirk review gate.

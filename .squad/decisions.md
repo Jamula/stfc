@@ -637,3 +637,176 @@ Operational habits the user should consider; not blocking but worth proactive su
 ## Decision
 
 APPROVE. Architecture is solid, rate limiter correct, scope isolation preserved. Ship to main.
+### 2026-06-01T01:22:44Z: P1 fanout triage
+**By:** Picard
+**Epic:** #112
+**Scope:** 11 issues across 3 implementer agents + 1 epic owner
+
+---
+
+## Current state of stfc-p1 (squad/005-phase1-dashboard)
+
+- **Last commit:** `40ba589` — feat(005-web-control-panel): api/_lib/github-raw.ts with ETag caching (Phase 1 wave 3)
+- **Test suite:** 905/905 passing ✅ (green on uncommitted WIP in place)
+
+### Wave 3 commits already on branch (not yet merged to main)
+
+| Commit | Issue | Subject |
+|---|---|---|
+| `a5db1eb` | #114 | unignore data/digests + commit-on-write in discord-monitor |
+| `f32585c` | #113 | SWA deploy contract + deploy workflow + pinning test |
+| `1f4f824` | #115 | bootstrap SWA project structure api/+web/+shared/ + setup script |
+| `2606491` | #116 | staticwebapp.config.json deny-by-default + stfc_operator role |
+| `9302288` | #122 | shared/contracts TS types generator + sync gate |
+| `40ba589` | #120 | api/_lib/github-raw.ts with ETag caching |
+
+### Wave 3 WIP — uncommitted (issue mapping)
+
+| File(s) | Status | Likely Issue | Agent |
+|---|---|---|---|
+| `api/src/_lib/auth.ts` (139L), `api/src/_lib/respond.ts` (59L) | `??` untracked | **#117** fn-auth-lib | Uhura |
+| `scripts/ci/check-api-auth.mjs` (171L) | `??` untracked | **#117** fn-auth-lib grep gate | Uhura |
+| `tests/api/auth.test.ts` (288L) | `??` untracked | **#117** fn-auth-lib tests | Uhura |
+| `tests/ci/check-api-auth.test.ts` (87L) | `??` untracked | **#117** fn-auth-lib CI test | Uhura |
+| `docs/SWA-SETUP.md` | `M` modified (+64L auth section) | **#117** auth env-var docs | Uhura |
+| `tests/index.test.ts` | `M` modified (+2 import lines) | **#117** test registration | Uhura |
+| `web/src/app.ts` (118L), `web/src/components/*.ts` (5 × 19L) | `??` untracked | **#119** frontend shell | Scotty |
+| `web/bundle-budget.json` | `??` untracked | **#119** bundle budget gate | Scotty |
+| `scripts/ci/check-bundle-budget.mjs` (104L) | `??` untracked | **#119** bundle budget gate | Scotty |
+| `tests/web/shell.test.ts` | `??` untracked | **#119** shell tests | Scotty |
+| `tests/ci/check-bundle-budget.test.ts` | `??` untracked | **#119** budget gate tests | Scotty |
+| `web/index.html` | `M` modified | **#119** Lit shell wiring | Scotty |
+| `web/src/main.ts` | `M` modified | **#119** Lit shell wiring | Scotty |
+| `web/vite.config.ts` | `M` modified | **#119** Vite config | Scotty |
+| `web/package-lock.json` | `??` untracked | **#119** npm installs | Scotty |
+
+**Status verdict:**
+- **#117 (Uhura):** FULLY DONE — all implementation, CI gate, and docs files present; tests green
+- **#119 (Scotty):** FULLY DONE — all frontend shell files present; tests green
+- **#120 (Scotty):** COMMITTED — `40ba589`
+- **#122 (Scotty):** COMMITTED — `9302288`
+- **#113, #114, #115, #116 (O'Brien):** COMMITTED — waves 1–2
+- **#118 (O'Brien):** UNTOUCHED — true Wave 4 candidate
+- **#121 (Scotty):** UNTOUCHED — true Wave 4 candidate
+
+---
+
+## Plan.md ownership findings
+
+`specs/005-web-control-panel/plan.md` is a **placeholder**. The binding v3 plan lives at:
+`~/.copilot/session-state/d40435a0-d735-463b-887e-e5f586f7369b/plan.md`
+
+Ownership derived from the v3 plan + WIP audit:
+
+| Issue | Owner | Key Files |
+|---|---|---|
+| #113 | O'Brien | `.github/workflows/swa-deploy.yml`, `scripts/azure/create-swa.sh`, `tests/skills/swaDeploy.test.ts` |
+| #114 | O'Brien | `.gitignore`, `src/discord/monitor.ts` |
+| #115 | O'Brien | `api/`, `web/`, `shared/` scaffold, `scripts/azure/setup.sh` |
+| #116 | O'Brien | `staticwebapp.config.json`, `web/public/403.html` |
+| #117 | Uhura | `api/src/_lib/auth.ts`, `api/src/_lib/respond.ts`, `scripts/ci/check-api-auth.mjs`, `tests/api/auth.test.ts`, `docs/SWA-SETUP.md` |
+| #118 | O'Brien | `docs/SWA-SETUP.md` (invitation section) |
+| #119 | Scotty | `web/src/`, `web/bundle-budget.json`, `scripts/ci/check-bundle-budget.mjs`, `tests/web/`, `tests/ci/check-bundle-budget.test.ts` |
+| #120 | Scotty | `api/_lib/github-raw.ts`, `tests/api/github-raw.test.ts` |
+| #121 | Scotty | `api/src/` route handlers, `tests/api/` route tests |
+| #122 | Scotty | `shared/`, `scripts/ci/check-contracts-types.mjs` |
+
+### ⚠️ Shared / cross-cutting files (serialization required)
+
+| File | Touched by | Risk |
+|---|---|---|
+| `tests/index.test.ts` | #117 (modified), #121 (will add route test imports) | Merge conflict if both in flight simultaneously |
+| `docs/SWA-SETUP.md` | #117 (auth section, already modified), #118 (invitation section) | #118 must branch from a state where #117's changes are committed, or will conflict |
+| `web/package-lock.json` | #119 (modified), #121 (may need new deps) | If #121 installs Azure Functions SDK additions — potential lock-file conflict |
+
+---
+
+## Wave 3 close-out
+
+**Owner:** Single commit-and-PR agent (recommend: Scotty — most WIP is his; Uhura's work is complete and self-contained)
+
+**Files to commit (two commits, preserving authorship clarity):**
+
+Commit 1 — Uhura's #117:
+- `api/src/_lib/auth.ts`, `api/src/_lib/respond.ts`
+- `scripts/ci/check-api-auth.mjs`
+- `tests/api/auth.test.ts`, `tests/ci/check-api-auth.test.ts`
+- `docs/SWA-SETUP.md`, `tests/index.test.ts`
+
+Commit 2 — Scotty's #119:
+- `web/src/app.ts`, `web/src/components/*.ts`
+- `web/bundle-budget.json`, `web/package-lock.json`
+- `scripts/ci/check-bundle-budget.mjs`
+- `tests/web/shell.test.ts`, `tests/ci/check-bundle-budget.test.ts`
+- `web/index.html`, `web/src/main.ts`, `web/vite.config.ts`
+
+**PR target:** Open PR `squad/005-phase1-dashboard → main`  
+**Closes (per Rule 12 — one per line):**
+```
+Closes #113
+Closes #114
+Closes #115
+Closes #116
+Closes #117
+Closes #119
+Closes #120
+Closes #122
+```
+
+**Reviewer:** Kirk (code correctness on auth.ts pattern — used by all Wave 4 route handlers; pre-approve shape before #121 builds on it)
+
+---
+
+## Wave 4 fanout proposal
+
+| Issue | Owner | Branch | Worktree | Key Files | Parallel-safe? |
+|---|---|---|---|---|---|
+| #118 | O'Brien | `squad/005-p1-118-invitation-runbook` | `/workspaces/stfc-118` | `docs/SWA-SETUP.md` (invitation section) | ⚠️ branch from epic **after #117 committed** (SWA-SETUP.md shared) |
+| #121 | Scotty | `squad/005-p1-121-data-read-endpoints` | `/workspaces/stfc-121` | `api/src/` handlers, `tests/api/` route tests, `tests/index.test.ts` | ⚠️ branch from epic **after Wave 3 committed** (needs `auth.ts`; touches `tests/index.test.ts`) |
+
+Both Wave 4 issues branch off `squad/005-phase1-dashboard` (not `main`), merging back to the epic branch. Once both are merged into the epic branch, one final PR to `main` closes #112.
+
+**Parallel dispatch ruling:** #118 and #121 are parallel-safe relative to each other (no shared files). Both must be serialized AFTER Wave 3 commits land on the epic branch. Dispatch in parallel once the Wave 3 PR is open (they can build against the committed state; they don't need Wave 3 merged to main first).
+
+---
+
+## Risk callouts
+
+1. **Auth lib shape (Kirk call required before Wave 4 dispatch):** `api/src/_lib/auth.ts` is used by every route handler that #121 will write. Kirk should review and approve the `requireAllowedUser` / `requireOwner` pattern in the Wave 3 PR before #121 starts. A shape change post-#121-start = rebase pain across multiple files.
+
+2. **`tests/index.test.ts` contention:** This is the master test import barrel. #121 will add more `import` lines to it. If #118 and #121 are both in flight and both touch this file, they will conflict on merge. **Ruling:** only #121 touches `tests/index.test.ts`; #118's runbook is docs-only and adds no test imports.
+
+3. **plan.md placeholder (scope risk):** The binding v3 plan is in session state, not in the repo. Issue #106 was supposed to migrate it. If the session state is lost, the full 9-phase plan is gone. **Recommend:** Tuvok or O'Brien migrate the v3 plan text into `specs/005-web-control-panel/plan.md` as part of #118 (docs issue) or a separate 5-minute chore. Flag to user.
+
+4. **#112 epic closure:** Epic #112 closes only after all child issues close. Current close-out plan closes 8 of 10 children (#113–#117, #119–#120, #122). Remaining: #118 and #121. Epic stays open through Wave 4. Correct and expected.
+
+5. **No O'Brien worktree for Wave 4 #118:** O'Brien's Wave 4 issue is docs-only. A worktree is appropriate but the work is small (~1 doc section + any runbook checklist). Could be done directly on the epic branch by an agent with a targeted charter rather than a full worktree. Coordinator call.
+
+---
+
+## Recommendation
+
+**Ship Wave 3 first.** The branch is green (905 tests). WIP for #117 and #119 is complete — just needs two commits and a PR. Open the Wave 3 PR, get Kirk's auth.ts review, then dispatch #118 and #121 in parallel from the epic branch in separate worktrees. Wave 4 is 2 issues; Wave 3 PR close unblocks both simultaneously.
+
+**Sequence:**
+1. Commit #117 + #119 WIP on `stfc-p1` → open Wave 3 PR (Closes #113–#117, #119–#120, #122)
+2. Kirk reviews auth.ts shape in Wave 3 PR — single targeted review
+3. Dispatch #118 (O'Brien) + #121 (Scotty) in parallel worktrees from `squad/005-phase1-dashboard`
+4. Merge Wave 3 PR → main; merge #118 + #121 PRs → epic branch → final PR closes #112
+### 2026-06-01T01:28:18.827+00:00 — Scotty Wave 3 close-out (#112 epic)
+
+- **PR:** #124 — https://github.com/Jamula/stfc/pull/124
+- **Branch:** `squad/005-phase1-dashboard`
+- **Commits pushed:**
+  - `b0cb61c` feat(005-web-control-panel): auth lib + CI grep gate (#117)
+  - `d9e3837` feat(005-web-control-panel): Lit+Vite frontend shell + bundle budget gate (#119)
+  - `c05f189` test(005-web-control-panel): bootstrap web deps in shell smoke test
+
+#### Unexpected issues during close-out
+
+1. **Worktree `.git` path nuance:** Initial `git commit -F .git/...` failed because `.git` is a gitdir pointer file in this worktree. Re-ran with repo-local message files (`.gitmsg117.txt`, `.gitmsg119.txt`) and committed successfully.
+2. **CI environment drift for web toolchain:** PR test workflow failed (`vite: not found`) because root `npm ci` does not install `web/` dependencies. Added `c05f189` so `tests/web/shell.test.ts` runs `npm ci` in `web/` when Vite is missing; checks are now re-running on PR #124.
+
+#### Ready for Kirk review
+
+- `api/src/_lib/auth.ts` role/owner enforcement shape is in PR #124 and ready for Kirk's targeted correctness review before Wave 4 #121 route work begins.

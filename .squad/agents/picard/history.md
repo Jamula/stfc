@@ -104,3 +104,32 @@ Each phase's amendment is independent. Filing them as separate PRs (issues #87 v
 New skill at `.squad/skills/speckit-pipeline-driver/SKILL.md` codifying the phase-boundary commit pattern + the Phase 4 live-board lookup + the SIR-vs-pinning-test collision avoidance + the dual version footer.
 
 - Phase 0 shipped (PR #111, 988c302..aeef1b5)
+
+---
+
+## 2026-06-01T01:22:44Z — P1 fanout triage (005-web-control-panel Phase 1)
+
+**Context:** Ralph cycle requested a WIP audit + wave-3-close-out + wave-4-fanout plan for the stfc-p1 worktree.
+
+### P1 epic structure (005-web-control-panel Phase 1)
+
+- **Epic branch:** `squad/005-phase1-dashboard`; worktree at `/workspaces/stfc-p1`
+- **Wave cadence:** Wave 1 (O'Brien infra) → Wave 2 (O'Brien scaffold) → Wave 3 (auth + frontend + contracts + github-raw) → Wave 4 (invitation runbook + data endpoints)
+- **Phase 0 shipped to main** via PR #111 (constitution v2.0.0, spec, contracts, threat model, rules 14–18)
+- **All Phase 1 work accumulates on epic branch first** then merges to main in one PR when Wave 3+4 are done
+
+### Key ownership patterns for this epic
+
+- **O'Brien** owns all `.github/workflows/*.yml`, `staticwebapp.config.json`, `scripts/azure/`, SWA-related docs
+- **Uhura** owns `api/src/_lib/auth.ts`, auth CI gate, auth docs sections
+- **Scotty** owns `web/src/`, `api/_lib/github-raw.ts`, `shared/`, bundle budget gate, data endpoints
+- **`tests/index.test.ts`** is the master test barrel — only ONE issue should touch it per wave to avoid merge conflicts. Typically the last issue in the wave to commit.
+- **`docs/SWA-SETUP.md`** is cross-cutting between Uhura (#117 auth) and O'Brien (#118 invitation). Always serialize: auth section first, invitation section second.
+
+### Plan.md placeholder risk
+
+`specs/005-web-control-panel/plan.md` is a placeholder pointing to session-state. The binding v3 plan lives in session state `d40435a0-d735-463b-887e-e5f586f7369b/plan.md`. If session state is lost, the plan is gone. Flag Tuvok or O'Brien to migrate it into the repo as a doc issue.
+
+### Skill extracted
+
+New skill at `.squad/skills/audit-wip-fanout/SKILL.md` codifying the "audit uncommitted WIP → map to issues → wave-close-out + fanout plan" pattern.
