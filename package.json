@@ -19,6 +19,10 @@
 		"skill:progression": "tsx src/cli.ts progression",
 		"test": "node --import tsx --test tests/index.test.ts",
 		"test:watch": "node --import tsx --test --watch tests/index.test.ts",
+		"build:web": "cd web && npm run build",
+		"build:api": "cd api && npm run build",
+		"build:swa": "npm run build:web && npm run build:api",
+		"dev:swa": "swa start http://localhost:5173 --api-location api",
 		"typecheck": "tsc --noEmit",
 		"capture-token": "node scripts/capture-token.mjs",
 		"playwright:install": "npx playwright install chromium",
@@ -38,6 +42,7 @@
 		"zod": "^3.25.76"
 	},
 	"devDependencies": {
+		"@azure/static-web-apps-cli": "^2.0.9",
 		"@types/node": "^24.0.0",
 		"ajv": "^8.20.0",
 		"ajv-formats": "^3.0.1",

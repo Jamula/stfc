@@ -284,3 +284,11 @@ STFC_ACCOUNTS=[{"name":"main","token":"<JWT>"}]
 ```
 
 then run e.g. `npm run skill:check-auth`. The `.env` file is gitignored.
+
+---
+
+## Control panel
+
+A web-based operator dashboard is in progress under `web/` (frontend) and `api/` (Azure
+Functions). It is deployed as an Azure Static Web App — see **[docs/SWA-SETUP.md](docs/SWA-SETUP.md)**
+for the one-time Azure resource creation runbook and OIDC federation steps.

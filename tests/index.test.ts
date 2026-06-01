@@ -64,3 +64,5 @@ import "./crew/optimizer.test.ts";
 import "./crew/progression.test.ts";
 import "./crew/staleness.test.ts";
 import "./crew/diff.test.ts";
+import "./skills/swaDeploy.test.ts";
+import "./skills/swaProject.test.ts";
