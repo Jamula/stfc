@@ -167,24 +167,40 @@ fall back to deployment-token mode:
 ## 5. Invite the first operator (role assignment)
 
 The SWA uses GitHub OAuth with a custom `stfc_operator` role.
-Roles are assigned via invitation links (Azure Portal only — CLI support
-is limited for the Free tier).
+Roles are assigned via invitation links.
 
-> ⚠️ Wave 4 issue #118 will detail the full operator management workflow.
-> The steps below are for the initial bootstrap.
+> 📖 **Full runbook:** `docs/SWA-INVITATION-RUNBOOK.md` covers the complete
+> operator management lifecycle — generating invitations (CLI + Portal), secure
+> distribution, allowlist updates, access verification, churn management under
+> the 25-user cap, and troubleshooting. Read it before inviting anyone beyond
+> the initial bootstrap.
 
-1. Azure Portal → Static Web Apps → `stfc-control-panel`
-2. **Role Management** → **Invite**
-3. Authentication provider: `GitHub`
-4. GitHub login: `cyrusjamula`
-5. Role: `stfc_operator`
-6. Click **Generate** → copy the invitation URL
-7. Open the invitation URL in a browser and sign in with GitHub
+**Initial bootstrap (quick steps):**
 
-The invitation is single-use. The role persists until revoked.
+```bash
+SWA_HOST=$(az staticwebapp show \
+  --name stfc-control-panel \
+  --resource-group stfc-control-panel-rg \
+  --query defaultHostname -o tsv)
+
+az staticwebapp users invite \
+  --name stfc-control-panel \
+  --resource-group stfc-control-panel-rg \
+  --authentication-provider GitHub \
+  --user-details cyrusjamula \
+  --roles stfc_operator \
+  --invitation-expiration-in-hours 168 \
+  --domain "https://${SWA_HOST}"
+```
+
+Open the printed `invitationUrl` in a browser and sign in with GitHub.
+
+**⚠️ After accepting the invitation, also update `SQUAD_ALLOWED_USERS`**
+(the Function-side allowlist) — see `docs/SWA-INVITATION-RUNBOOK.md §4`.
+Both the SWA role gate AND the env-var allowlist must reflect every operator.
 
 **Invitation cap:** 25 users per app on Free tier (non-binding for this
-use case).
+use case — see `docs/SWA-INVITATION-RUNBOOK.md §7` for cap management).
 
 ---
 
@@ -231,6 +247,7 @@ After completing steps 1–5:
 - `.github/workflows/swa-deploy.yml` — deploy + preview workflow
 - `staticwebapp.config.json` — route rules + security headers
 - `scripts/azure/create-swa.sh` — idempotent resource creation script
+- `docs/SWA-INVITATION-RUNBOOK.md` — full operator invitation + churn management runbook
 
 ---
 
