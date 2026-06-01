@@ -21,6 +21,7 @@ jobs:
         env:
           DAYS: ${{ inputs.older_than_days }}
         run: |
+          [[ "$DAYS" =~ ^[1-9][0-9]*$ ]] || { echo "older_than_days must be a positive integer, got: $DAYS"; exit 1; }
           # Compute cutoff: current time minus N days
           CUTOFF=$(date -u -d "$DAYS days ago" +"%Y-%m-%dT%H:%M:%SZ")
           echo "cutoff=$CUTOFF" >> "$GITHUB_OUTPUT"
@@ -37,18 +38,16 @@ jobs:
           deleted=0
           failed=0
           skipped_active=0
+          already_deleted=0
+          rate_limited=0
+          server_errors=0
           total_found=0
           
           echo "Searching for runs created before: $CUTOFF"
           
           # Enumerate all runs older than cutoff, excluding in-progress/queued
-          gh api --paginate -X GET "repos/${{ github.repository }}/actions/runs" \
-            -f "created=<$CUTOFF" \
-            -f "per_page=100" \
-            --jq '.workflow_runs[] | select(.status != "in_progress" and .status != "queued") | {id, created_at, name, status}' \
-            | while IFS= read -r run_json; do
-            
-            ((total_found++))
+          while IFS= read -r run_json; do
+            total_found=$((total_found + 1))
             
             run_id=$(echo "$run_json" | jq -r '.id')
             created_at=$(echo "$run_json" | jq -r '.created_at')
@@ -58,40 +57,54 @@ jobs:
             # Skip deleting this cleanup workflow's own run (prevent self-decapitation)
             if [ "$run_id" = "$THIS_RUN_ID" ]; then
               echo "⊘ Skipping own run: $run_id ($run_name, $status)"
-              ((skipped_active++))
+              skipped_active=$((skipped_active + 1))
               continue
             fi
             
             # Delete the run
-            if gh api -X DELETE "repos/${{ github.repository }}/actions/runs/$run_id" 2>/dev/null; then
-              ((deleted++))
+            if gh api -X DELETE "repos/${{ github.repository }}/actions/runs/$run_id" >/dev/null 2>&1; then
+              deleted=$((deleted + 1))
               [ $((deleted % 50)) -eq 0 ] && echo "  ✓ Deleted $deleted runs so far..."
             else
-              # Handle 429 rate limit with backoff
-              if [ $((failed % 10)) -eq 0 ]; then
-                echo "⚠ Rate limit or error on run $run_id — sleeping 30s..."
-                sleep 30
-                # Retry once
-                if gh api -X DELETE "repos/${{ github.repository }}/actions/runs/$run_id" 2>/dev/null; then
-                  ((deleted++))
+              echo "⚠ Delete failed for run $run_id — sleeping 5s and retrying once..."
+              sleep 5
+
+              if retry_output="$(gh api -X DELETE "repos/${{ github.repository }}/actions/runs/$run_id" 2>&1)"; then
+                deleted=$((deleted + 1))
+              elif echo "$retry_output" | grep -q "404"; then
+                already_deleted=$((already_deleted + 1))
+                [ $already_deleted -le 5 ] && echo "⊘ Already deleted: $run_id ($run_name, $status)"
+              else
+                failed=$((failed + 1))
+                if echo "$retry_output" | grep -q "429"; then
+                  rate_limited=$((rate_limited + 1))
+                  [ $rate_limited -le 5 ] && echo "✗ Rate limited deleting $run_id ($run_name, $status)"
+                elif echo "$retry_output" | grep -Eq "5[0-9][0-9]"; then
+                  server_errors=$((server_errors + 1))
+                  [ $server_errors -le 5 ] && echo "✗ Server error deleting $run_id ($run_name, $status)"
                 else
-                  ((failed++))
                   [ $failed -le 5 ] && echo "✗ Failed to delete $run_id ($run_name, $status)"
                 fi
-              else
-                ((failed++))
               fi
             fi
             
             # 200ms throttle between requests (rate-limit safe)
             sleep 0.2
-          done
+          done < <(
+            gh api --paginate -X GET "repos/${{ github.repository }}/actions/runs" \
+              -f "created=<$CUTOFF" \
+              -f "per_page=100" \
+              --jq '.workflow_runs[] | select(.status != "in_progress" and .status != "queued" and .status != "waiting") | {id, created_at, name, status}'
+          )
           
           echo ""
           echo "=== Cleanup Summary ==="
           echo "Total found (before cutoff): $total_found"
           echo "Deleted: $deleted"
           echo "Failed: $failed"
+          echo "Already deleted (404): $already_deleted"
+          echo "Rate-limited failures (429): $rate_limited"
+          echo "Server failures (5xx): $server_errors"
           echo "Skipped (own run): $skipped_active"
           
           # Write summary to job output
@@ -101,6 +114,9 @@ jobs:
             echo "- **Total runs found** (created before $CUTOFF): $total_found"
             echo "- **Deleted**: $deleted"
             echo "- **Failed**: $failed"
+            echo "- **Already deleted** (404): $already_deleted"
+            echo "- **Rate-limited failures** (429): $rate_limited"
+            echo "- **Server failures** (5xx): $server_errors"
             echo "- **Skipped** (own run to prevent self-decapitation): $skipped_active"
             echo ""
             echo "Cutoff days: ${{ inputs.older_than_days }}"
