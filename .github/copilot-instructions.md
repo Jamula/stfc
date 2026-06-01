@@ -474,6 +474,125 @@ grep -A 20 'ownership\|shared.file\|Shared File' specs/<NNN>-<feature>/plan.md
 
 If two agents own the same file, serialize their work or split the file boundary before dispatch.
 
+## 19. Sequence shorthand `"X, Y, Z, ..."` is inclusive, not exhaustive
+
+When the user describes a schedule, cron, or any sequence using a partial list ending
+in `...`, they mean "continue this pattern" — they are NOT excluding the unmentioned
+terms at the start of the standard cycle.
+
+**Observed on 2026-05-31 (session `0a6be0be`):** user wrote
+*"start at the 10 mins mark, so 10, 20, 30, ..."*. The agent picked
+`10,20,30,40,50 * * * *` (excluded `:00`). The user immediately corrected
+*"also add the top of the hour"*. The correct read was `*/10 * * * *` —
+which includes `:00, :10, :20, :30, :40, :50`.
+
+**Rule of thumb when interpreting partial sequences:**
+
+| User input | Correct interpretation | Wrong interpretation |
+|---|---|---|
+| `"every 10 mins, so 10, 20, 30, ..."` | `*/10 * * * *` (includes `:00`) | `10,20,30,40,50` (excludes `:00`) |
+| `"every 15 mins, so 15, 30, 45, ..."` | `*/15 * * * *` (includes `:00`) | `15,30,45` (only 3 runs/hour) |
+| `"every 4 hours, so 4, 8, 12, ..."` | `0 */4 * * *` (includes `0:00`) | `0 4,8,12,16,20 * * *` |
+
+**Default to the inclusive `*/N` form** unless the user explicitly says *"skip the
+top of the hour"*, *"only between X and Y"*, or otherwise excludes a value. If the
+interpretation is genuinely ambiguous (e.g. *"every 7 minutes"* — no clean `*/N`
+fit), ask once via `ask_user` rather than guessing.
+
+This rule also applies to non-cron sequences: *"port 8080, 8081, 8082, ..."* means
+"the contiguous range starting from 8080", not "exactly these three ports".
+
+## 20. Codespaces idle-timeout is the keepalive answer — not `systemd`, `tmux`, `screen`, or cron-keepalive
+
+Squad routinely fans out 5+ background agents per session, each running 10–30
+minutes. The Codespaces default idle timeout is **30 minutes** of UI inactivity,
+which kills the container mid-fleet and orphans in-flight subagents.
+
+**Observed on 2026-05-31 (session `7c85ff3b`):** user typed
+*"sudo apt install systemd"* trying to install an init system, then clarified
+*"want to keep the codespace / machine active while background agents are running"*.
+`systemd`, `tmux`, `screen`, `nohup`, and cron-keepalive scripts do **NOT** solve
+this — Codespaces shut down based on the runtime's idle heuristic, not on PID 1
+or active TTY sessions.
+
+**The actual fixes, in order of preference:**
+
+1. **Raise the per-user default** (one-time, applies to all Codespaces):
+   - https://github.com/settings/codespaces → **Default idle timeout** → bump to
+     **240 minutes** (the maximum the UI allows).
+2. **Raise the per-Codespace timeout** (this session only):
+   ```bash
+   gh codespace edit -c "$CODESPACE_NAME" --idle-timeout 240m
+   ```
+3. **For fully unattended monitoring after the board clears**, use the standalone
+   watchdog from a local machine (NOT inside the Codespace):
+   ```bash
+   npx @bradygaster/squad-cli watch --interval 10
+   ```
+
+**Do NOT propose:** installing `systemd`, running `screen`/`tmux` sessions, a
+background `while true; do sleep 60; done` loop, a self-pinging cron, or any
+"keepalive" trick that pretends activity. The runtime is the authority and these
+either no-op or get killed with the container.
+
+If 240 min isn't enough for a single fleet run, **split the work** across two
+sessions rather than fighting the timeout.
+
+## 21. Refuse-and-rotate protocol for credentials pasted into chat
+
+Any string matching a credential pattern that appears in user input MUST be
+treated as **compromised the moment it left its source system** and the agent
+MUST refuse to echo, log, or persist it anywhere.
+
+**Observed on 2026-05-17/18 (session `63fb899e`):** user pasted a Discord
+Client Secret verbatim into chat (turn 8) and offered the bot token (turn 6).
+Both incidents were handled correctly by ad-hoc judgment; this rule codifies
+the response so it's uniform.
+
+**Credential patterns to refuse on sight:**
+
+| Pattern | Examples |
+|---|---|
+| Discord bot token | `OTk…`, `MT…` (long base64) |
+| Discord client secret | 32-char alphanumeric value from Developer Portal |
+| GitHub PAT | `ghp_*`, `gho_*`, `ghu_*`, `ghs_*`, `ghr_*` |
+| OpenAI / Anthropic API key | `sk-*`, `sk-ant-*` |
+| AWS access key | `AKIA*` (paired with secret) |
+| Azure connection string | `DefaultEndpointsProtocol=…AccountKey=…` |
+| Raw JWT | `eyJ…` (three base64 segments separated by `.`) |
+| Generic `*_SECRET` / `*_TOKEN` / `*_KEY` env-var values | (context-detected) |
+
+**Required response when one is detected in the user's message:**
+
+1. **STOP — do not write the value anywhere.** No decision inbox, no agent
+   history, no log, no commit, no echo back in the assistant response, no diff.
+2. **Tell the user the value is compromised** the instant it entered the chat
+   transcript (transcripts persist in the session store, ship to model
+   providers, and may be reviewed for telemetry).
+3. **Provide the rotation path** specific to the credential class:
+   - Discord: https://discord.com/developers/applications/{app-id}/oauth2 →
+     **Reset Secret** (for client secret) or **/bot → Reset Token** (for bot token).
+   - GitHub PAT: https://github.com/settings/tokens → **Delete** the leaked token,
+     create a fresh one.
+   - Repo secret: `gh secret set <NAME>` from the user's *local terminal*
+     (NOT pasted into chat) — see step 4.
+4. **Provide the correct ingestion path** for the new value:
+   ```bash
+   # Run this in YOUR LOCAL TERMINAL — never paste the value into the chat.
+   gh secret set DISCORD_BOT_TOKEN --repo Jamula/stfc
+   # gh prompts for the value with hidden input.
+   ```
+5. **Do NOT request the value again** in any form. If the agent needs to verify
+   the secret is set, use `gh secret list --repo <repo>` (which shows names
+   only, never values).
+
+**Inbox-write exception:** the only piece of information that MAY be logged
+about a leaked secret is the **fact of the leak and the rotation status** —
+e.g. *"User leaked DISCORD_CLIENT_SECRET on 2026-05-18; rotated at HH:MM UTC;
+new value set via `gh secret set` from local terminal"*. The value itself is
+never logged. This log entry is fine in `.squad/decisions/inbox/` because
+it's an operational record, not the secret.
+
 ## Project quick reference
 
 - **Tests:** `npm test` (full suite, ~2s, 90+ tests via node:test/tsx).
