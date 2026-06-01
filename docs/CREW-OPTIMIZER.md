@@ -363,17 +363,16 @@ which accounts regenerated and which were skipped.
 
 ## Discord v2 commands
 
-**Status:** v2 is complete and shipping in PR #92, #93, #94, and #95.
+**Status:** v2 is complete, tracked in issues #92–#95 (shipped via PRs #129, #130, #132; PR #133 pending merge).
 
 Read-only Discord commands reuse the committed crew database, task
 definitions, and roster YAML. Every account-scoped command requires
 `--account X`; if omitted, the bot responds with the discovered roster file
 names.
 
-**Operator note:** All responses are rendered as plain Discord markdown strings
-and truncated to **1900 characters** to fit Discord's message limits. If
+**Operator note:** Responses from `best`, `status`, `progression`, `roster show`, `knowledge`, and `officers` are rendered as plain Discord markdown strings and may be truncated to **1900 characters** to fit Discord's message limits. If
 truncation occurs, the response ends with a footer suggesting you narrow the
-query using available filters (e.g., `--owned`, `--faction`). Output is
+query using available filters (e.g., `--owned`, `--faction`). The `synergy` and `tasks` commands produce fixed-shape output and do not truncate. Output is
 **retrieval-only** — no LLM generation, no speculation; every byte is
 traceable to a committed source.
 
@@ -386,8 +385,8 @@ traceable to a committed source.
 | `progression` | `!crew progression` | `--account X` (req) | 1900-char footer with guidance |
 | `roster show` | `!crew roster show` | `--account X` (req) | 1900-char footer with guidance |
 | `explain` | `!crew explain <officer>` | `--account X` (req); officer id or case-insensitive name | 1900-char limit (single officer fits) |
-| `synergy` | `!crew synergy <group>` | `--account X` (req); exact snake_case group name (case-insensitive input) | 1900-char footer with guidance |
-| `tasks` | `!crew tasks` | `--account X` (req) | 1900-char footer with guidance |
+| `synergy` | `!crew synergy <group>` | `--account X` (req); exact snake_case group name (case-insensitive input) | no truncation (fixed-shape output) |
+| `tasks` | `!crew tasks` | `--account X` (req) | no truncation (fixed-shape output) |
 | `officers` | `!crew officers` | `--account X` (req), `--owned` (opt), `--faction X` (opt) | 1900-char footer **requires** `--owned` or `--faction` to narrow |
 | `knowledge` | `!crew knowledge <query>` | `--top N` (opt, 1–5, def 3) | 1900-char footer with guidance |
 
@@ -407,7 +406,7 @@ Ranks the top N legal crews for a task against your roster.
 - `--top N` (optional): Number of recommendations (1–3, default 1)
 
 **Output:** Numbered crew recommendations with:
-- Score (higher is better; 0.00 is perfect match)
+- Score (higher = better match; 0.00 = no matched signals)
 - Captain, bridge officers, below-deck officers
 - Matched tags and their weights (`tag(+weight)←contributor`)
 - Synergy bonuses and groups
@@ -558,7 +557,7 @@ Query is matched against chunks from:
 - `--top N` (optional): Number of results (1–5, default 3)
 
 **Output:**
-- Per-hit section: score (cosine similarity, 0–1), citation with line range,
+- Per-hit section: score (raw cosine similarity, -1..1), citation with line range,
   and 320-character preview of the matched chunk
 - Citation format: `**source:LX-LY**` (e.g., `**docs/stfc-game-knowledge.md:L42-L58**`)
 - Every byte is traceable to committed source files; no generation
@@ -599,8 +598,8 @@ and embedded knowledge. Built at:
 1. **Push time:** The `knowledge-rebuild.yml` workflow watches the source paths
    and auto-rebuilds on change. Takes ~10 seconds; commits the updated
    `knowledge-embeddings.json` back to the branch.
-2. **Manual rebuild:** Run `npm run crew:knowledge:rebuild` locally to force a
-   rebuild (useful for testing or offline development).
+2. **Manual rebuild:** Run `npm run crew:knowledge:rebuild -- --force` locally to force a
+   rebuild; the bare command skips when sources are unchanged (useful for testing or offline development).
 
 **CLI:** `npm run crew:knowledge:rebuild [--force]`
 
@@ -618,13 +617,13 @@ STFC_KNOWLEDGE_MODEL=minilm npm run crew:knowledge:rebuild    # use MiniLM embed
 
 **Rebuild output:**
 ```
-up-to-date: data/crew/knowledge-embeddings.json (1247 chunks, hash abcd1234…)
+up-to-date: data/crew/knowledge-embeddings.json (<N> chunks, hash abcd1234…)
 ```
 
 or (if changed):
 
 ```
-rebuilt: data/crew/knowledge-embeddings.json (1247 chunks, hash efgh5678…)
+rebuilt: data/crew/knowledge-embeddings.json (<N> chunks, hash efgh5678…)
 ```
 
 **Workflow behavior (`knowledge-rebuild.yml`):**
