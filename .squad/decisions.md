@@ -603,3 +603,37 @@ Operational habits the user should consider; not blocking but worth proactive su
 - [ ] Open governance issue for squad.agent.md trim (Init/Casting on-demand gating)
 - [ ] Open governance issue for meta-slash-command prompt template (excludes squad.agent.md)
 - [ ] Update Response Mode Selection in squad.agent.md so `"status check"` Direct Mode includes "use haiku for this output"
+# Kirk review — PR #123 (Phase 19: !crew command parser, closes #91)
+
+**Date:** 2026-06-01T01:12:43Z  
+**Reviewer:** Kirk (Lead / Architect)  
+**Author:** Uhura  
+**Branch:** `squad/91-v2-parser`  
+**Verdict:** APPROVE ✅  
+**Comment:** https://github.com/Jamula/stfc/pull/123#issuecomment-4588860690
+
+## Summary of what was checked
+
+1. **Scope isolation** — `codeChannelIds` built from original `allowlist.entries`, not the merged `ingestAllowlist`. Promo-code extraction and tip classification cannot be contaminated by command-channel messages. Verified end-to-end in `discordMonitor.ts` lines 161–254.
+2. **Rate limiter correctness** — rolling window pruned on every check; rejected commands not registered (early return before push). Both channel (10/min) and user (5/min) limits tested with deterministic clock.
+3. **Parser edge cases** — word boundary check (`isCrewCommandPrefix`), case sensitivity, quoted args, flag parsing, `--` separator handling.
+4. **Backward compatibility** — `guild_id: optional()` on `DiscordMessageSchema`, `discordMessages` field on `IngestOutput`, `loadCommandChannelAllowlist` returns `[]` on missing file. All additive.
+5. **Constitution** — `data/discord/command-channels.json` not committed (only `.example` ships), so no constitution amendment needed. Docs deferred to #95 (confirmed OPEN).
+6. **CI** — CodeQL + npm test (3 runners) all green.
+
+## LOW findings (non-blocking, passed to Coordinator for tracking)
+
+| # | Finding | Tracking |
+|---|---------|---------|
+| L1 | `CrewCommandRateLimiter` Map keys grow unbounded over lifetime (values stay bounded) — non-issue for per-run model | Note for #92 if daemon model adopted |
+| L2 | `withCommandChannels` hardcodes `version: 1` | Fix to `allowlist.version` at schema v2 |
+| L3 | PR body uses `## Verification` not `## Tests` (Rule 15 heading) | Process note for future phases |
+| L4 | `stats.ignored` inflated by promo-channel messages passed to `processCrewCommands` | Suggest pre-filter in #92 |
+
+## Handler seam assessment
+
+`processCrewCommands(messages, allowlist, responder, options)` and `handleCrewCommand(command) → string` are clean seams for Phase 20 handler plug-in. Consumed shape `CrewCommand { subcommand, args, raw, message }` matches the Uhura decision note. No rework needed for #92.
+
+## Decision
+
+APPROVE. Architecture is solid, rate limiter correct, scope isolation preserved. Ship to main.
