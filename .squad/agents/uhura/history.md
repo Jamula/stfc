@@ -43,3 +43,22 @@
 ---
 
 - PR #124 merged 2026-06-01T03:55:00Z (Round 2 close-out, 8 issues closed, auth hardening + frontend shell foundation)
+
+## 2026-06-01 — Session wrap-up (crew v2 + devcontainer + discoveries)
+
+**Session:** crew-v2-chain-wrapup
+**Role:** Devcontainer + workflow + test strategy
+**Outcome:** Devcontainer scope clarified (#135 merged); 2 follow-up issues filed (#137, #138)
+
+Participated in:
+- PR #135 (devcontainer scope): SWA-aware devcontainer for 005-web-control-panel Phase 0
+- PR #123 (crew command parser): gate + test verification
+- Issue #137 (rule-reference CI workflow): scoped discovery for custom rule tags
+- Issue #138 (trigger-string smoke tests): scoped discovery for rule-driven trigger coverage
+
+**Follow-ups from Kirk's PR #124 review:**
+- MEDIUM: grep gate enforcement (presence vs first-statement). Route: Uhura (clarify docstring or tighten AST check)
+- LOW: EXCLUDE_SEGMENTS recursion footgun. Route: Uhura
+
+**Next:** #137 and #138 scoped discovery; grep-gate contract clarification.
+

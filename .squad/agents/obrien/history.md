@@ -109,3 +109,18 @@ jobs:
 Both jobs (`deploy` + `teardown`) must carry the guard. Skipping only `deploy` while leaving `teardown` ungated would cause `teardown` to fail on PR close when no SWA environment was ever created.
 
 - PR #124 merged 2026-06-01T03:55:00Z (Round 2 close-out, 8 issues closed, auth hardening + frontend shell foundation)
+
+## 2026-06-01 — Session wrap-up (crew v2 chain complete)
+
+**Session:** crew-v2-chain-wrapup
+**Role:** Crew optimization logic + shared dependency orchestration
+**Outcome:** Crew v2 optimization shipped (PR #132); SWA deployment parallel track in #124
+
+Participated in:
+- PR #124 (005-web-control-panel Phase 1 Wave 3): SWA deploy orchestration, parallel OIDC secrets work (Azure action forthcoming)
+- PR #132 (crew-v2-optimization): Primary implementation, refactored crew iteration (per-crew single pass vs prior per-task naive loop)
+
+**Lesson:** Stacked PRs with shared test suite enable clean parallel dispatch. Test count grew 965 → 1,000 (+35) in #132 without blocking #130 merge or #124 deployment track.
+
+**Next:** DISABLE_WRITES dead-code follow-up (routed by Kirk's #124 review) — awaiting assignment.
+

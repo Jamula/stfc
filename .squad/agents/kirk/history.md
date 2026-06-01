@@ -27,6 +27,33 @@
 
 **Handler seam assessment for #92:** `processCrewCommands` / `handleCrewCommand` are clean. `CrewCommand { subcommand, args, raw, message }` is a sufficient interface. Positional args available as `_0`, `_1`, `_`; flags drop `--` prefix. No rework needed for Phase 20 handler wires.
 
+## 2026-06-01 — PR #133 review: crew v2 operator docs (Tuvok, closes #95)
+
+**Verdict:** APPROVE ✅ WITH NOTES — Comment: https://github.com/Jamula/stfc/pull/133#issuecomment-4589964586
+
+**Author:** Tuvok. **Branch:** `squad/95-crew-v2-operator-docs`.
+
+**Scope:** `docs/CREW-OPTIMIZER.md` docs-only expansion (+254 lines). No `src/` or test changes.
+
+**What I checked (docs accuracy review pattern):**
+
+1. **`!crew best`** (`best.ts`) — `--account` required, `--top` 1–3 default 1 via `parseTop`, 1900-char inline `truncateForDiscord` footer. All accurate.
+2. **`!crew knowledge`** (`handlers/knowledge.ts`) — `--top` 1–5 default 3 via `DEFAULT_TOP`/`MAX_TOP`, citation template `` `**${source}:L${startLine}-L${endLine}**` `` matches doc's `**source:LX-LY**`, retrieval-only confirmed. All accurate.
+3. **`!crew synergy`** (`synergy.ts:8`) — regex `/^[a-z0-9]+(?:_[a-z0-9]+)*$/i` with case-insensitive flag + `.toLowerCase()` normalize. Doc claim accurate.
+4. **Knowledge workflow** (`knowledge-rebuild.yml`) — push paths, `workflow_dispatch`, concurrency group, commit message all match exactly. Rebase-before-push step present in workflow but omitted in doc (operator-irrelevant detail).
+5. **Rule 12** — `Closes #95` on its own line at L28 of PR body.
+
+**LOW findings (non-blocking):**
+
+- **`STFC_KNOWLEDGE_MODEL=hashed` implied but not recognized** (`knowledge.ts:535`): code only checks `=== "minilm"`; any other value including unset falls through to hashed embedder. Doc says "Unset or `hashed`" — implies `hashed` is a named sentinel. Fix: doc should say "Unset (default); only `minilm` is a recognized value."
+- **Two distinct truncation footer formats not differentiated** (`shared.ts:86` vs inline `truncateForDiscord`): `officers` uses `truncateLines` → `… (N more — use --owned or --faction X to filter)` (count-aware); all other handlers use `_…output truncated to 1900 chars; narrow the query for full details._`. Doc only shows generic description. Low operator-confusion risk but a gap from the task spec.
+
+## Learnings
+
+- **Docs accuracy review pattern for handler docs:** Cross-check (a) every flag's range + default in the source's `parseX()` function, (b) every template literal that produces user-visible output (especially citation formats), (c) every env var for both its conditional check AND what values actually trigger distinct behavior. Don't trust the doc's enum list — check `===` comparisons in the source.
+- **`truncateLines` vs `truncateForDiscord`:** These two patterns coexist in this repo as of v2. `truncateLines` (shared.ts, used by `officers`) is count-aware and line-granular; the inline `truncateForDiscord` (best, knowledge, progression, rosterShow, status) is char-granular with a generic footer. When documenting command output, distinguish which handler uses which — operators will see different footers.
+- **Env-var recognized-values vs fallthrough:** Code that does `if (env === "foo")` makes `foo` the ONLY recognized value; everything else is a silent default. Doc should not list the default path as a named value unless the code explicitly checks for it. Pattern to catch in future env-var PRs.
+
 ## Learnings
 
 - **Parser PR review pattern:** The key invariant for any monitor-integration parser PR is scope isolation — verify the original channel set is used for existing pipelines, and only the merged/enriched set is used for new pipelines. In this repo, check `codeChannelIds` vs `ingestAllowlist`.
@@ -213,3 +240,23 @@ Plus LOW: bundle-budget unit ambiguity (81920 = 80 KiB vs spec "80 KB" = 80000).
 - **Multi-issue PR review tactics that worked here**: (1) group files by concern in `gh pr view --json files`, (2) read one test file per concern as the spec, (3) run typecheck + npm test once at the end, (4) cross-check rule disclosures (#15 Tests, #16 Docs, #3 pinning) before verdict. ~45 minutes elapsed for this scope.
 
 - PR #124 merged 2026-06-01T03:55:00Z (Round 2 close-out, 8 issues closed, auth hardening + frontend shell foundation)
+
+## 2026-06-01 — Session wrap-up (crew v2 chain + final reviewer batch)
+
+**Session:** crew-v2-chain-wrapup
+**Role:** Code review + scope validation
+**Outcome:** Crew v2 shipped cleanly; operator docs (#133) parked for accuracy fixes (#136)
+
+Code reviews completed this session:
+- PR #129 (crew-v1-rewrite): APPROVE ✅
+- PR #130 (crew-v2-data-layer): APPROVE ✅ + embedding-pipeline-review skill (uncommitted post-merge)
+- PR #132 (crew-v2-optimization): APPROVE ✅
+- PR #123 (crew command parser): APPROVE ✅ — scope isolation verified, rate-limiter semantics sound, parser edge cases clean
+- PR #133 (operator-docs): APPROVE ✅ + 📝 doc-accuracy findings → included in #136 scope
+
+**Stacked PR pattern learning:** After PR #129 squash-merge to main, PR #130 rebased via `git rebase --onto origin/main <PR-#129-base> HEAD` to clean the diff. Same technique applied post-#130 for #132. Clean diffs enabled faster review cycles.
+
+**Kirk history summarized:** Entries prior to 2026-06-01 archived to history-archive.md (9,134 bytes). Current history reset to recent work only.
+
+**Next phase:** Awaiting #136 fix + PR #135 (devcontainer) follow-up.
+

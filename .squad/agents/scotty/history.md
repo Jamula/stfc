@@ -142,3 +142,22 @@ Both PRs required non-Scotty revisions (bootstrap path + validation + fixtures).
 Status: COMPLETE
 
 - PR #124 merged 2026-06-01T03:55:00Z (Round 2 close-out, 8 issues closed, auth hardening + frontend shell foundation)
+
+## 2026-06-01 — Session wrap-up (crew v2 chain + Phase 1 Wave 3)
+
+**Session:** crew-v2-chain-wrapup
+**Role:** Workflow + dependency orchestration
+**Outcome:** Crew v2 shipped cleanly; SWA deploy workflow + config shipped (PR #124)
+
+Participated in:
+- PR #129 (crew-v1-rewrite): dependency reconciliation
+- PR #130 (crew-v2-data-layer): dependency additions (knowledge-rebuild, embedding support)
+- PR #132 (crew-v2-optimization): workflow tuning (crew iteration concurrency)
+- PR #124 (SWA Phase 1 Wave 3): deploy workflow, SHA-pinned actions, OIDC federation, DISABLE_WRITES env
+
+**Follow-ups from Kirk's PR #124 review:**
+- MEDIUM: api/ layout inconsistency (topbar `_lib` vs nested `src/_lib`). Route: Scotty (consolidation task, Wave 4 gate)
+- LOW: bundle-budget unit ambiguity (80 KiB vs 80 KB). Fix: add comment
+
+**Next:** Await Wave 4 scope definition (#121); api/ layout consolidation gate.
+

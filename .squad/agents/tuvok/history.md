@@ -168,3 +168,46 @@ Three surgical edits per Garak's explicit findings (no improvisation):
 
 
 - PR #124 merged 2026-06-01T03:55:00Z (Round 2 close-out, 8 issues closed, auth hardening + frontend shell foundation)
+
+## 2026-06-01 — Issue #95: Crew v2 operator docs (PR #133)
+
+**Context:** v2 crew handlers and knowledge embedding pipeline just merged to main in three PRs (#129, #130, #132). All 9 verbs live on main; knowledge-rebuild.yml workflow auto-triggers on source changes; manual CLI is `npm run crew:knowledge:rebuild` with optional `STFC_KNOWLEDGE_MODEL=minilm` env var.
+
+**Work completed:**
+- Expanded `docs/CREW-OPTIMIZER.md` "Discord v2 commands" section with comprehensive operator reference
+- Added reference table with all 9 handlers, flags, and truncation limits (1900 chars)
+- Wrote detailed subsections per handler (best, status, progression, roster show, explain, synergy, tasks, officers, knowledge)
+- Documented knowledge retrieval, citation format (source:LX-LY), embedding cache, rebuild workflow
+- Added "Knowledge embedding and rebuild" section covering:
+  - Source paths watched by knowledge-rebuild.yml
+  - Manual CLI: `npm run crew:knowledge:rebuild [--force]`
+  - `STFC_KNOWLEDGE_MODEL` env var: default hashed vs opt-in MiniLM
+  - Rebuild workflow trigger, commit-back behavior, output format
+- Updated Roadmap: marked v2 complete, added v3 slash commands as future scope
+
+**Validation:** npm test 1000/1000 green (no test changes; docs-only PR).
+
+**Constitution:** No amendment needed. Knowledge embedding paths (hashed default + opt-in MiniLM) both covered by existing HF carve-out.
+
+**Reviewer gates:** PR #133 awaiting approval from Kirk (technical accuracy), Garak (hostile fact-check), Picard (scope verification).
+
+**Learnings:**
+1. Operator docs for embeddings should be explicit about the two embedder paths (hashed vs MiniLM) and when each is used. The hashed path is fast offline; MiniLM is better semantics but requires network on first run + model download.
+2. Discord truncation at 1900 chars is hard limit in v2 command surface — doc operators on when to expect truncation + how to narrow.
+3. Knowledge citation format (source:LX-LY) is critical for traceability in retrieval-only systems; operators need to see this in every example.
+
+## 2026-06-01 — Session wrap-up (operator docs + follow-up #136)
+
+**Session:** crew-v2-chain-wrapup
+**Role:** Documentation + operator-facing contracts
+**Outcome:** Operator docs drafted (PR #133), parked for accuracy fixes (issue #136)
+
+Participated in:
+- PR #133 (squad/95-crew-v2-operator-docs): CREW-OPTIMIZER.md expansion (+254 lines), operator CLI specs, doc-only scope
+
+**PR #133 status:** OPEN, awaiting #136 fix (routed to non-Tuvok agent per Lockout label)
+- Kirk findings: 2 doc-accuracy issues included in #136 scope
+- Garak findings: 5 doc-accuracy issues primary #136 scope
+
+**Next phase:** After #136 completion, merge #133 to main. Then continue Phase 0 (005-web-control-panel) on stfc-76 worktree.
+

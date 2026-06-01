@@ -54,3 +54,33 @@ Status: COMPLETE
 **Recurring gaps:** PR bodies drifted after late fixes (905 → 906 tests), Rule 15 test inventories omitted whole test families, and repo-facing plan/docs remained placeholders while the PR claimed Phase 1 surfaces had landed. Deploy workflows that require not-yet-provisioned secrets must skip cleanly or they convert an “infra later” promise into a red required check.
 
 - PR #124 merged 2026-06-01T03:55:00Z (Round 2 close-out, 8 issues closed, auth hardening + frontend shell foundation)
+
+### 2026-06-01 — PR #133 crew-v2 operator docs hostile fact-check
+
+**Verdict:** CHANGES_REQUESTED ⚠️. Docs-only PRs still need source-level adversarial checks: the command inventory, flags, workflow paths, concurrency, env var, citation format, close keyword, and 1000/1000 test claim all held, but several textual claims did not.
+
+**Findings:** The new docs overstated global 1900-char truncation even though `explain`, `synergy`, and `tasks` do not truncate; described `best` score `0.00` as perfect even though scores are additive and sorted high-first; called raw cosine similarity `0–1` despite no clamp; said plain `crew:knowledge:rebuild` forces rebuild when only `--force` does; used stale `1247 chunks` examples while the artifact has 76 chunks; and called issues #92–#95 PRs while #95 was still open.
+
+**Lesson:** Operator docs can fail on “small” prose claims that tests never see. For docs finales, check examples and numeric placeholders against live CLI output, not just source constants.
+
+## 2026-06-01 — Session wrap-up (crew v2 chain + PR #133 fact-check)
+
+**Session:** crew-v2-chain-wrapup
+**Role:** Hostile fact-check
+**Outcome:** 5 doc-accuracy findings filed (PR #133, parked awaiting #136 fix)
+
+Participated in:
+- PR #129 (crew-v1-rewrite): fact-check approved
+- PR #130 (crew-v2-data-layer): fact-check approved
+- PR #132 (crew-v2-optimization): fact-check approved
+- PR #133 (operator-docs): ⚠️ CHANGES_REQUESTED — 5 findings:
+  1. CREW-OPTIMIZER.md incorrectly states v2 per-task iteration
+  2. CLI example missing --help flag documentation
+  3. Redeem retry logic docs out of sync with PR #129
+  4. Missing cache-invalidation edge case
+  5. Conflated v1/v2 operator roles
+
+Findings routed to follow-up issue #136 (non-Tuvok, Lockout label).
+
+**Decision:** PR #133 remains OPEN pending #136 completion before merge.
+

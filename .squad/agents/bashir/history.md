@@ -83,3 +83,19 @@ This prevents re-verification friction: reviewers re-opening PRs weeks later wil
 **Status:** COMPLETE — PR #124 CI green, quickstart + PR body now aligned
 
 - PR #124 merged 2026-06-01T03:55:00Z (Round 2 close-out, 8 issues closed, auth hardening + frontend shell foundation)
+
+## 2026-06-01 — Session wrap-up (crew v2 chain complete)
+
+**Session:** crew-v2-chain-wrapup
+**Role:** Test strategy + gate orchestration
+**Outcome:** Final test count 906 → 1,000 (+94 tests shipped across PRs #129, #130, #132)
+
+Participated in:
+- PR #129 (crew-v1-rewrite): +36 tests
+- PR #130 (crew-v2-data-layer): +23 tests
+- PR #132 (crew-v2-optimization): +35 tests
+
+All tests passing. No regressions detected. Test suite now covers crew v2 iteration pattern (per-crew single pass, prior per-task removed).
+
+**Next phase:** Awaiting Rule-reference CI workflow (#137) scoped discovery.
+

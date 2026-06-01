@@ -147,3 +147,45 @@ Ran full improve cycle analyzing friction patterns from 2026-05-31 → 2026-06-0
 Status: COMPLETE
 
 - PR #124 merged 2026-06-01T03:55:00Z (Round 2 close-out, 8 issues closed, auth hardening + frontend shell foundation)
+
+## 2026-06-01T05:59:13Z — PR #133 review: crew v2 docs + final gates (scope/governance)
+
+**Verdict:** APPROVE ✅ — PR ships on merge.
+
+**Summary of findings:**
+- All 8 governance gates pass: acceptance criteria ✅, scope-only docs ✅, no constitution amendment ✅, Rule 12 closes ✅, Rule 15 Tests section ✅, Rule 16 Docs N/A ✅, roadmap accurate ✅, v2 chain complete ✅.
+- v2 chain #91→#92→#93→#94→#95 closes on this merge; all four predecessor PRs are merged.
+- Knowledge embedding docs correctly note hashed bag-of-words default (offline) + optional MiniLM flag; both already HF-carve-out-covered per constitution.
+- Roadmap maintains consistent messaging (v1 ✅ shipped, v1.5 🔬 in development gated on OCR POC, v2 ✅ shipped, v3 📋 future/planned).
+
+**Crew v2 delivery timeline (within this session):**
+- 2026-06-01T02:22:04Z: Identified Batch 4 v2 PRs (#129 handlers, #130 knowledge, #132 workflow, #95 docs) as cleanups.
+- 2026-06-01T03:14Z: PR #124 merged (SWA + auth round 2).
+- 2026-06-01T05:59:13Z: PR #133 approved; ready to ship.
+
+**Status:** v2 backlog is CLEAR. Next blocker on backlog is #112 epic (005-web-control-panel Phase 1), which depends on PR #127 (Azure OIDC).
+
+## 2026-06-01 — Session wrap-up (constitution v2.0.0 + governance reviews)
+
+**Session:** crew-v2-chain-wrapup
+**Role:** Scope validation + governance amendment
+**Outcome:** Constitution v2.0.0 shipped (v1.6.0 amendment), 4 governance issues filed
+
+Participated in:
+- PR #125 (constitution v2.0.0): APPROVE ✅ + self-amendment authored (3 MAJOR changes: SWA surface, untrusted-input class, workflow_dispatch inputs; 5 additive MINOR changes)
+- PR #133 (operator-docs): scope review APPROVE ✅ — 5 new + updated docs, clean alignment
+
+**Constitution v2.0.0 amendments:**
+- Principle IV: new SWA + linked Functions surface (alongside headless CLI)
+- Principle I: chat input declared UNTRUSTED for tool dispatch (HMAC-signed gate required)
+- Security & Compliance Constraints: uniform workflow_dispatch inputs (correlation_id, triggered_by, reason)
+- Plus 5 additive changes (new secrets, durable artifacts, outbound destinations, hard isolation invariants)
+
+**Governance follow-ups filed:**
+- #131 (closed via #125 merge)
+- #136 (operator-docs fixes, routed to Tuvok pending Lockout clear)
+- #137 (rule-reference CI workflow discovery)
+- #138 (trigger-string smoke tests)
+
+**Next:** Phase 0 continuation on stfc-76 (frozen worktree).
+
