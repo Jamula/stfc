@@ -1,8 +1,8 @@
 > Committed copy of v4.2 plan (migrated from session state per plan Item 8). Authoritative source.
 
-# Squad System Cleanup — Implementation Plan v4.1
+# Squad System Cleanup — Implementation Plan v4.2
 
-> **Status:** DRAFT v4.1 · supersedes v3 + v4 · incorporates Garak (11) + Kirk (3) + Picard (7) reviews of v3 + rubberduck-v4 (P0×3, P1×7, P2×3) · awaiting fresh Picard + Kirk + Garak review of v4.1 → user approval
+> **Status:** APPROVED v4.2 · supersedes v3 + v4 + v4.1 · incorporates Garak (11 v3 findings) + Kirk (3 v3 blockers) + Picard (7 v3 notes) + rubberduck-v4 (P0×3, P1×7, P2×3) + Picard-v4.1 (1 fix) + Kirk-v4.1 (1 fix) + Garak-v4.1 (5 fixes) reviews · approved by Cyrus Jamula 2026-06-01 via exit_plan_mode
 >
 > **Requested by:** Cyrus Jamula
 > **Date:** 2026-06-01
