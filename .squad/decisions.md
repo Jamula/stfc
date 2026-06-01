@@ -1,3 +1,5 @@
+> Older entries archived to decisions-archive.md (up to 2026-05-18). See archive for history.
+
 # Uhura PR #102 fix — Structural workflow pin tests
 
 **By:** Uhura
@@ -810,3 +812,757 @@ Both Wave 4 issues branch off `squad/005-phase1-dashboard` (not `main`), merging
 #### Ready for Kirk review
 
 - `api/src/_lib/auth.ts` role/owner enforcement shape is in PR #124 and ready for Kirk's targeted correctness review before Wave 4 #121 route work begins.
+
+**CHANGES REQUESTED** ⚠️ — Garak (hostile fact-check)
+
+Requested by: cyrusjamula  
+Reviewed artifact: `/home/node/.copilot/session-state/63c3014e-bdaa-4ebb-a118-447bc281fe96/plan.md` (v3 cleanup plan)  
+Live repo: `/workspaces/stfc`  
+Timestamp: 2026-06-01T01:55:00Z
+
+## Verdict
+
+This plan assumes its largest savings claims are arithmetically sound and that several existing mechanisms already preserve the invariants it now relies on. They are not, at least not in the live repo. The cleanup direction is sane; the concrete plan is not approval-ready.
+
+## Verified claims
+
+1. **Claim:** `.github/agents/squad.agent.md` is **85 KB / ~60 sections**. **Reality:** `wc -c` reports `84943` bytes and `grep -cE '^## |^### '` reports `60`. Verified.
+2. **Claim:** `.github/copilot-instructions.md` is **28 KB / 21 rules**. **Reality:** `wc -c` reports `28416` bytes and `grep -cE '^## [0-9]+'` reports `21`. Verified.
+3. **Claim:** Histories are near threshold: Uhura 15 KB, Garak 13 KB, Picard 12 KB, O'Brien 12 KB. **Reality:** Uhura `15124`, Garak `13029`, Picard `12032`, O'Brien `12267` bytes. Verified.
+4. **Claim:** O'Brien charter is **119 lines / 6.5 KB**. **Reality:** `wc -l` reports `119`; `wc -c` reports `6479`. Verified. Peer charters are usually 46–69 lines / 2.0–3.9 KB, though Garak is a notable 5.3 KB exception.
+5. **Claim:** Skills inventory is **21 `.squad/skills/` + 11 `.copilot/skills/`**. **Reality:** directory counts are exactly 21 and 11. Verified.
+6. **Claim:** Rubber-duck's Rule 11 basis: **5 user-typed `Researching:` invocations in the last 30 days**. **Reality:** session-store query returned count `5`. Verified.
+7. **Claim:** Agents read `.squad/decisions.md` at spawn. **Reality:** `squad.agent.md` spawn template explicitly says `Read .squad/decisions.md`; Scotty and O'Brien charters also say to read decisions before work. Verified.
+
+## Failed or unsupported claims
+
+1. **Claim:** `.squad/decisions.md` is **43 KB / 65 entries**. **Reality:** size is verified (`42971` bytes), but the entry count is not. Current top-level decision entries are 12 (`grep -cE '^# '`); H2/H3 subsections are 63. Calling this 65 entries conflates subsections with decisions. Surely that was intentional?
+2. **Claim:** Active `decisions.md` contains entries dating back to v1.1.0 / v1.2.0 / pre-2026-05-16. **Reality:** live dates in active `decisions.md` are 2026-05-31 and 2026-06-01; the only v1.2.0 hit is a historical reference inside a 2026-05-31 constitution note. Older material is in archives, not the hot file.
+3. **Claim:** Item 1 saves **~30 KB / ~35%** from `squad.agent.md`. **Reality:** the plan's own move table sums to about **12.6 KB**. Sampling the live section spans yields the same order of magnitude, roughly 12 KB, which is about **14–15%** of 84,943 bytes, not 35%. This misses the stated ≥25% coordinator-input goal.
+4. **Claim:** Item 3 can bring `decisions.md` from **43 KB → ~15 KB**. **Reality:** all active entries are less than 7 days old, so the proposed `>7d AND archive-class` gate moves **0 KB today**. Sampling 10 top-level entries, only 2/10 are clean one-off review/docs notes likely archive-eligible once old; 8/10 are constitutional, standing-rule, current-epic, canonical-pattern, or unresolved-follow-up material. A 65% reduction is not defensible from the sample.
+5. **Claim:** Scribe summarization already preserves full text in `history-archive.md`. **Reality:** existing archive examples (`scotty/history-archive.md`, `picard/history.md`, `bashir/history.md`) show summarized learnings, not full verbatim text. `squad.agent.md` says Scribe should summarize at 15 KB; it does not require full-text preservation. The plan is proposing new behavior while wearing the mask of an existing pattern.
+6. **Claim:** No external code references rule numbers by ID, so renumbering is safe. **Reality:** active files outside `copilot-instructions.md` reference rule numbers: `.squad/routing.md` cites Rule 7 and Rule 9b; O'Brien/Garak charters cite Rules 3/9b/12/13; skills cite Rules 12/15/16; specs and tests also cite rule numbers. Renumbering is unsafe unless those references are updated or made title-based.
+7. **Claim:** The on-demand reference pattern is already in use for `casting-reference.md`, `ceremony-reference.md`, etc. **Reality:** markers exist in `squad.agent.md`, but several targets are missing in the live repo: `ceremony-reference.md`, `ralph-reference.md`, `prd-intake.md`, `human-members.md`, `copilot-agent.md`, `reviewer-lockout.md`, and `init-mode.md`. `casting-reference.md`, `plugin-marketplace.md`, and `issue-lifecycle.md` do exist. Pattern: yes. Fully working inventory: no.
+8. **Claim:** Trigger detection lines in `squad.agent.md` are sufficient. **Reality:** casting has an inline trigger path (`Adding Team Members` says allocate a name; `Casting & Persistent Naming` says load `casting-reference.md`), so that one is plausible. But the current file also has on-demand references to missing files. The trigger pattern only works when the target exists and smoke tests assert the load, which the plan has not yet established.
+9. **Claim:** Item 2 consolidation is consistently **21 → ~16/17 rules**. **Reality:** the plan contradicts itself: section header says `21 → ~16`, outcome says `21 → 17`, and the SQL todo table still says `21 → ~14`. That is not a harmless typo when the work is rule renumbering.
+10. **Claim:** Item 1 moves “7 conditionally-relevant sections.” **Reality:** the move table lists 10 rows, while the problem statement names 7 broad areas. The implementation todo repeats 7. The scope is ambiguous before work starts.
+11. **Claim:** Skills audit has “No `_archive/` moves” per user decision. **Reality:** the risk table still says “Retire means move to `_archive/`, not delete.” That directly conflicts with the v3 opt-out and Item 6 inventory-only approach.
+
+## Estimate checks
+
+- **Item 1 math:** table total is approximately 12.6 KB. Against `squad.agent.md` at 84.9 KB, that is about 15%, not 35%. To reach 30 KB, the plan needs another ~17 KB of specific sections identified, or it must lower the target.
+- **Item 3 sample:** sampled first 10 top-level entries in `decisions.md`:
+  1. Structural workflow pin tests — canonical pattern, retain hot.
+  2. PR #103 docs alignment — one-off docs/PR note, archive-eligible once old/closed.
+  3. Constitution v2.0.0 amendment — constitutional, retain hot.
+  4. 005 speckit opened — current epic context, retain hot.
+  5. PR #111 governance review — one-off PR review, archive-eligible once old/closed.
+  6. Contract schemas v1 — canonical/current epic, retain hot.
+  7. Rules 14–18 codified — standing rules, retain hot.
+  8. Threat model note — current epic/security context, retain hot.
+  9. Platform spike — current epic/canonical platform decisions, retain hot.
+  10. Bashir QA review — includes unresolved follow-up gaps, retain hot.
+
+Result: 0/10 immediately movable by age; about 2/10 eventually archive-class. The proposed 43 KB → 15 KB target needs evidence, not optimism.
+
+## Counterexample to retention classes
+
+**Entry:** `Scotty Wave 3 close-out (#112 epic)` includes “Worktree .git path nuance” and “CI environment drift for web toolchain.” **Reality:** this is an operational incident / tooling-footgun learning: not constitutional, not a standing rule, not an active blocker, not merely a PR verdict, not a canonical architectural pattern, and not simply current epic context. It needs either a seventh class (`operational learning`) or a forced split into one archiveable close-out plus one retained reusable-footgun note.
+
+## Hidden assumptions
+
+- **Assumption:** Scribe's current summarization will preserve full text. **Reality:** no; current mechanism summarizes. Add an explicit implementation requirement for verbatim append/rotation if full text matters.
+- **Assumption:** Renumbering rules is safe. **Reality:** no; active artifacts cite rule numbers. Add a grep-and-update gate, or avoid renumbering.
+- **Assumption:** On-demand templates mostly exist. **Reality:** no; several referenced or proposed templates are missing. Add a preflight target-file checklist before moving content.
+- **Assumption:** Decision archival can shrink the hot file materially now. **Reality:** no; the hot file is recent. Semantic tagging may improve future hygiene, but it will not deliver the stated immediate size win.
+
+## Recommendation
+
+Do **not** proceed to user approval in this form. Correct the size/savings math, fix the stale contradictions, add explicit migration/update gates for rule-number references and missing templates, and downgrade `decisions.md` shrinkage from a promised 65% reduction to an evidence-based hygiene task.
+
+Final count: **7 verified claims, 11 failed or unsupported claims**.
+
+
+---
+
+# Kirk — Technical correctness review: Squad Cleanup Plan v3
+
+**CHANGES REQUESTED** ⚠️ — Kirk (technical correctness)
+
+**Requested by:** cyrusjamula (rubber-duck → squad review pass)
+**Plan artifact:** `/home/node/.copilot/session-state/63c3014e-bdaa-4ebb-a118-447bc281fe96/plan.md`
+**Date:** 2026-06-01T02:06:58Z
+**Files inspected:** `squad.agent.md`, `copilot-instructions.md` (all 21 rules),
+`decisions.md` (5 entries sampled), `.squad/agents/uhura/history.md`,
+`.squad/agents/obrien/history.md + charter.md`, `.squad/templates/` directory.
+
+---
+
+## F1 — Rule 12 trigger timing is mis-stated; the 6+12 merge groups by the wrong axis ⚠️ BLOCKING
+
+**Plan line 94:** *"These both fire at merge-time and belong together."*
+
+This is factually incorrect. Rule 12's primary obligation fires at **PR-create time**
+when writing the PR body (`Closes #48\nCloses #49` — one per line). The post-merge
+sweep is the belt-and-suspenders fallback, not the main trigger. Rule 6 fires at
+**merge time**. Grouping them under a header named "Merge/ship ritual" with
+"close-keyword format" as a subsection causes a predictable miss: a coordinator
+assembling a PR body will not load a section named "merge/ship ritual" because the
+session hasn't reached merge-time yet.
+
+**Fix:** Either (a) rename the consolidated rule to "PR shipping hygiene" (captures
+both PR-create and merge-time obligations neutrally), or (b) keep Rule 12 standalone
+with its current position so the trigger name matches the action. If consolidating,
+the lead sentence must say the rule covers *both* PR authoring AND merge-time steps —
+not just merge.
+
+The subsection structure in the plan is otherwise fine; it's the trigger-name
+mismatch that's the problem.
+
+---
+
+## F2 — Rule 21 is NOT Codespaces-specific; grouping it under "Codespaces gotchas" will hide it in non-Codespaces sessions ⚠️ BLOCKING
+
+**Plan line 96:** *"13 + 20 + 21 → 'Codespaces operational gotchas' … all three are
+'Codespaces runtime quirks the agent needs to handle correctly.'"*
+
+Rule 21 (refuse-and-rotate for credentials pasted into chat) is explicitly
+**environment-agnostic**. Its trigger is: "Any string matching a credential pattern
+that appears in user input" — it fires in CLI, VS Code, GitHub.com, and Codespaces
+equally. The rule's body confirms this: the observed incidents were session-level
+(Discord client secret pasted in turn 8), not Codespaces-specific.
+
+An agent running in plain CLI mode who receives a pasted PAT would not scan
+"Codespaces operational gotchas" — it would miss Rule 21 entirely.
+
+Rule 13 (CodeQL 403 → token scope) and Rule 20 (idle-timeout) are genuinely
+Codespaces-specific. Rule 21 is not.
+
+**Fix:** Keep Rules 13 + 20 together as "Codespaces operational gotchas." Extract Rule 21
+into its own standalone rule titled "Credential hygiene — refuse-and-rotate" (or
+group with another security-adjacent rule if one exists). Do NOT fold it into the
+Codespaces cluster.
+
+---
+
+## F3 — Two on-demand triggers in the modularization table are too vague to fire reliably ⚠️ BLOCKING
+
+**Plan Item 1, trigger table:**
+
+1. **"User pastes spec / says 'here's the PRD'"** → loads `prd-intake.md`. The existing
+   squad.agent.md trigger text (line 1283/1290) is the precise phrase `"read the PRD at
+   {path}"`. The plan's trigger phrase "user pastes spec" is under-specified: any long
+   user message with requirements text could match. The coordinator needs a
+   distinguishable signal (the specific file-path form, or an explicit "here's the PRD"
+   phrasing) or the trigger misfires on normal task descriptions.
+
+2. **"Plugin marketplace configured but unreachable"** → loads `plugin-marketplace.md`.
+   This is a **runtime error state**, not a detectable user-message trigger. The
+   coordinator would need to attempt marketplace access first, catch the failure, then
+   load the template. Without an error-catching hook in the inline stub, the trigger
+   never fires. The validation checklist (gate 2) has no smoke-test for this case.
+
+**Fix:** For the PRD trigger, reuse the exact existing trigger phrase from squad.agent.md
+(the `{path}` pattern) as the primary detector; treat the broader "pastes spec" as
+secondary (only if the message exceeds a threshold length and contains no other
+routing keyword). For the plugin-marketplace trigger, add an explicit error-catch
+pattern to the inline stub ("if marketplace access returns non-2xx, load
+plugin-marketplace.md").
+
+---
+
+## F4 — Restart boundary rationale misstates what re-reads per turn
+
+**Plan lines 238–241 (validation gate 7):**
+*"In-flight agents (currently O'Brien #118 + Scotty #121) complete on the OLD
+squad.agent.md — no mid-flight restart required."*
+
+The spawned agents (O'Brien, Scotty) load their own `charter.md` from disk, NOT
+`squad.agent.md` — so they are genuinely unaffected. But the **coordinator itself**
+re-reads `squad.agent.md` on every turn from disk. If the cleanup PR merges while a
+coordinator session is active, the coordinator's *next turn* picks up the new leaner
+file mid-session. This is the actual restart risk the plan should flag.
+
+The recommendation "Brady must explicitly start a NEW session" is correct, but the
+stated reason ("in-flight agents finish on OLD context") is accurate only for spawned
+workers, not for the coordinator. The coordinator is the component with mid-flight
+exposure.
+
+**Fix:** In the PR body restart notice, be explicit: "Spawned worker agents use their
+own charters and are unaffected. The coordinator re-reads squad.agent.md per turn — if
+you're in an active coordinator session when this PR merges, your next coordinator
+turn will see the new file. Start a fresh session before dispatching new Squad work
+to guarantee a clean context."
+
+This is non-blocking (the advice is still "start a new session") but the PR body
+copy should be accurate.
+
+---
+
+## F5 — Composite decisions.md entries are ambiguous under the per-entry class tagging scheme
+
+**Plan Item 3, mechanism:**
+*"Each decision entry gains a YAML-front-matter tag `class:` … Scribe's archival pass
+moves only entries that are both >{days} AND `class: archive-eligible`."*
+
+Sampling 5 entries from decisions.md:
+
+| Entry | Classification | Ambiguous? |
+|---|---|---|
+| Uhura PR #102 — structural workflow pin tests | Canonical pattern (always hot) | No |
+| Uhura PR #103 — docs alignment | Archive-eligible (one-off verdict, PR merged/closed) | No |
+| Constitution v2.0.0 amendment | Constitutional/charter (always hot) | No |
+| Kirk wave 3 contract schemas v1 | **COMPOSITE** — contains Canonical patterns (auth-first handler, ETag caching) AND per-PR orchestration callouts | Yes |
+| Rules 14–18 codification decision | Standing rules (always hot) | No |
+
+The Kirk wave 3 entry is composite: archive the orchestration callouts, keep the
+canonical patterns. A per-entry `class:` tag can't express this split — it's
+binary (retain-hot vs archive-eligible). The conservative default (`retain-hot`)
+keeps these entries forever.
+
+**Fix:** Add a note to the mechanism: "Entries that are composite (canonical pattern
+content mixed with per-PR callouts) must be edited to split the hot content into a
+new standalone entry before the stale portions are tagged archive-eligible. Flag
+these for manual review in the audit sample — don't just tag the whole entry."
+This is non-blocking if the audit sample catches it.
+
+---
+
+## F6 — Validation gate 2 (trigger smoke-tests) is not mechanically automatable as written
+
+**Plan lines 214–227:** *"Each trigger is verified by a smoke-test (manual scripted
+prompt the coordinator-agent processes; assertion is that the right reference file is
+read)."*
+
+There's no current mechanism to assert which files the coordinator read during a turn.
+This is a human-eyeballed gate, not a CI gate. The plan header frames these as
+"Validation gates" but smoke-testing behavioral triggers requires human orchestration.
+
+**Missing check:** Add an automated grep assertion after each section move:
+```bash
+# Confirm moved section is GONE from squad.agent.md (not duplicated):
+grep -c "Universe Allowlist" .github/agents/squad.agent.md        # must be 0
+grep -c "Phase 2: Create the Team" .github/agents/squad.agent.md  # must be 0 (if moved)
+grep -c "Reviewer Rejection Protocol" .github/agents/squad.agent.md # must be 0
+```
+These ARE CI-automatable and guard against accidental duplication. Add them to the
+mechanical gate (checklist item 1). The behavioral smoke-tests remain human-run.
+
+---
+
+## F7 — O'Brien charter trim (Item 5) is sound; spot-check passes
+
+All four consolidated ownership domains are present and clearly separated:
+- GitHub Actions workflows (`.github/workflows/*.yml`) — 6 lines
+- CI/CD + security toolchain (CodeQL, Dependabot, secrets-check) — 5 lines  
+- Release engineering (`release.yml`, CHANGELOG, tags) — 2 lines
+- ML cache infrastructure (HF cache strategy; coordination split with Uhura) — 3 lines
+
+Plus the Uhura ML-cache boundary is explicitly preserved. The safely cuttable
+blocks without erasing any ownership claim:
+- "Hiring context" paragraph (10 lines) → compress to 2-line footnote
+- "Initial scope at hire" (9 lines) — issue triage from 2026-05-18; those issues have
+  been routed; this block is now stale
+- "Operating rules" rule-number list (8 lines) — redundant with copilot-instructions.md
+  (agents read both files)
+
+Total safe cuts: ~25 lines → 119 → ~94, then normal prose tightening reaches ~70.
+The plan's trim rationale is correct and achievable.
+
+---
+
+## F8 — VS Code template loading: no blocking issue (informational)
+
+The plan's Item 1 concern about "async file loading" in VS Code mode is a non-issue.
+The coordinator reads template files via `view`/`bash` tools synchronously in ALL
+modes — the Client Compatibility section (squad.agent.md line 490–501) only
+restricts the `sql` tool (CLI-only) and spawn-tool parameters. File access is
+mode-agnostic. The existing on-demand reference pattern (casting-reference.md,
+prd-intake.md, issue-lifecycle.md) already proves this works in VS Code.
+
+No change needed. Recorded for completeness.
+
+---
+
+## Summary of blockers vs non-blockers
+
+| # | Finding | Severity | Blocking? |
+|---|---|---|---|
+| F1 | Rule 12 trigger timing mis-stated; consolidation name masks PR-create obligation | High | **Yes** |
+| F2 | Rule 21 is not Codespaces-specific; hiding it in "Codespaces gotchas" causes misses | High | **Yes** |
+| F3 | Two on-demand triggers too vague to fire reliably (PRD, plugin-marketplace) | Medium | **Yes** |
+| F4 | Restart boundary rationale wrong for coordinator (correct for workers) | Low | No — fix PR copy only |
+| F5 | Composite decisions.md entries ambiguous under per-entry class scheme | Low | No — add note, audit catches it |
+| F6 | Trigger smoke-tests aren't CI-automatable; add grep guard for section removal | Low | No — add grep assertions |
+| F7 | O'Brien charter trim sound | — | n/a |
+| F8 | VS Code template loading: no issue | — | n/a |
+
+**Recommendation:** Do NOT proceed to user approval in current form. Three changes are
+required before this plan is technically sound:
+
+1. Fix the Rule 6+12 consolidation to use a trigger-neutral name ("PR shipping hygiene")
+   and correct the stated trigger timing.
+2. Extract Rule 21 from the Codespaces cluster.
+3. Sharpen the two vague on-demand triggers (PRD, plugin-marketplace error-catch).
+
+F4–F6 can be addressed at implementation time with one-line notes in the plan. Return
+to rubber-duck or proceed directly to user approval once F1–F3 are revised.
+
+
+---
+
+# Kirk verdict — PR #124 (Wave 3 auth + frontend shell)
+
+**Date:** 2026-06-01T01:35:03Z
+**Reviewer:** Kirk (Lead / Architect)
+**Author:** Uhura (#117), Scotty (#119, #120, #122), O'Brien (#113, #114, #115, #116)
+**Branch:** `squad/005-phase1-dashboard`
+**Verdict:** **APPROVE** ✅
+**Comment:** https://github.com/Jamula/stfc/pull/124#issuecomment-4588929482
+
+## Auth shape decision (Wave 4 gate)
+
+`api/src/_lib/auth.ts` is approved as the foundation for all Wave 4 (#121) route handlers.
+
+**Public API surface (stable — #121 builds against this):**
+- `parsePrincipal(req: RequestLike): Principal | null` — header decode + shape validation
+- `requireAllowedUser(req): Principal` — throws 401/403 on failure
+- `requireOwner(req, principal?): Principal` — owner-only gate; accepts pre-validated principal
+- `requireRole(req, role): Principal` — role-level check (NOT a username-allowlist check)
+- `UnauthorizedError` (status 401) / `ForbiddenError` (status 403)
+
+## Wave 4 (#121) operational callouts
+
+1. **Primary gate is `requireAllowedUser` or `requireOwner`, NOT `requireRole` alone.** `requireRole` does not verify SQUAD_ALLOWED_USERS. SWA invitation is the first fence; `requireAllowedUser` is the Function-side backstop. Route handlers that use only `requireRole` violate the defense-in-depth model.
+
+2. **CI grep gate enforces presence, not position.** `check-api-auth.mjs` checks that `requireAllowedUser()` is imported AND called. It does not enforce first-statement position. Scotty must manually place the auth call as the first non-trivial statement in each handler.
+
+3. **Canonical handler pattern:**
+   ```ts
+   // @azure/functions import for handler detection
+   import { requireAllowedUser } from "../_lib/auth.ts";
+   import { errorResponse } from "../_lib/respond.ts";
+   
+   export async function handler(req: HttpRequest): Promise<HttpResponseInit> {
+     try {
+       const p = requireAllowedUser(req);   // ← FIRST statement
+       // ... handler logic using p.userDetails
+     } catch (e) {
+       return errorResponse(e);
+     }
+   }
+   ```
+
+## CI verdict
+
+- All quality checks green (npm test 905/905, CodeQL, Squad Artifact Hygiene, Squad Test Gate).
+- Deploy failure: expected — Azure OIDC not provisioned. Not a code regression.
+
+## Kirk-as-author carve-out check
+
+Kirk authored Phase 0 schemas (#110) only. #117 = Uhura, #119/#120/#122 = Scotty, #113–#116 = O'Brien. No carve-out triggered. Kirk is sole reviewer.
+
+## Next action
+
+Wave 4 dispatch cleared. Coordinator may parallel-dispatch #118 (O'Brien) and #121 (Scotty) from `squad/005-phase1-dashboard` per Picard's fanout plan.
+
+
+---
+
+# Decision / Delivery: O'Brien — P1 Wave 4 #118 Invitation Runbook
+
+**Author:** O'Brien (DevOps / Platform Engineer)  
+**Date:** 2026-06-01T01:40:00Z  
+**Issue:** #118 (p1-invitation-runbook)  
+**PR:** #125 (`squad/118-invitation-runbook` → `squad/005-phase1-dashboard`)
+
+---
+
+## What shipped
+
+- **`docs/SWA-INVITATION-RUNBOOK.md`** — new file (~300 lines, 10 sections):
+  1. Overview + two-gate auth model (SWA role + env-var allowlist)
+  2. Prerequisites (az CLI, Azure access, gh CLI)
+  3. Generate invitation (CLI preferred: `az staticwebapp users invite`; Portal fallback)
+  4. Secure distribution (refuse-and-rotate protocol; prohibited + approved channels)
+  5. Post-invite: update `SQUAD_ALLOWED_USERS` allowlist (both gates must sync)
+  6. Invitee acceptance flow
+  7. Verify access (CLI audit + Function-layer 200/401/403 error mapping; cross-ref to `requireAllowedUser`/`requireOwner` from PR #124 / auth.ts)
+  8. Manage churn under the 25-user cap (audit, revoke, re-issue, emergency cap procedure)
+  9. Troubleshooting (propagation lag, missing x-ms-client-principal, browser cookie issues, invitation expiry, Safari ITP, Firefox ETP)
+  10. Threat-model alignment (S-1, S-2, E-1, E-2) + cross-references table
+- **`docs/SWA-SETUP.md`** §5 updated: replaced the `⚠️ Wave 4 issue #118 placeholder` with the CLI invite snippet and a proper cross-reference to the new runbook. Related files section updated.
+
+Tests: docs-only. 905/905 tests pass (pre-commit hook enforced).
+
+---
+
+## Risks / follow-ups
+
+1. **`specs/005-web-control-panel/plan.md` placeholder (Picard flagged):** The binding v3 plan is in session state (`~/.copilot/session-state/d40435a0-d735-463b-887e-e5f586f7369b/plan.md`), not the repo. The invitation runbook content did not fold naturally into `plan.md`. Recommend a separate 5-minute doc-migration chore (open as a new issue, assign Tuvok or O'Brien) before session state expires. If the session state is already gone, the plan is lost — prioritize accordingly.
+
+2. **Pre-existing test failure fixed as a side-effect:** `npm ci` was needed in the worktree to install `json-schema-to-typescript` (in `package.json` but absent from the stale symlinked `node_modules`). The epic branch was in a broken pre-commit state before this PR. Wave 4 #121 (Scotty) should confirm `npm ci` is already done on their worktree before committing.
+
+3. **Merge ordering:** This PR (#125) targets `squad/005-phase1-dashboard`. Coordinator should merge after any Picard/Tuvok docs review. PR #121 (Scotty routes, also Wave 4) is parallel-safe — no shared files.
+
+4. **25-user cap monitoring:** No current monitoring for approaching the cap. If user count grows, consider a GitHub Actions workflow that runs `az staticwebapp users list` on a schedule and alerts via a repo issue. Not in scope for this PR.
+
+---
+
+## Skill extraction
+
+Wrote `.squad/skills/swa-operator-runbook/SKILL.md` (operator runbook structure for SWA features — reusable pattern).
+
+
+---
+
+# Picard — Squad System Cleanup Plan v3 Review
+
+**Date:** 2026-06-01T02:06:58Z
+**Reviewer:** Picard (scope/governance)
+**Artifact:** Squad System Cleanup Plan v3
+**Session:** 63c3014e-bdaa-4ebb-a118-447bc281fe96/plan.md
+
+---
+
+**APPROVE WITH NOTES** ✅+📝 — Picard (scope/governance)
+
+---
+
+## Findings
+
+1. **Rule 21 (credential refusal) is misclassified — must NOT fold into "Codespaces operational gotchas."**
+   Rule 21 (`Refuse-and-rotate protocol for credentials pasted into chat`) is a universal security boundary. It was triggered by a user pasting a Discord Client Secret into chat — not by any Codespaces-specific behavior. The proposed "Rule 13: Codespaces operational gotchas" grouping (token scope diagnosis + idle-timeout + credential refuse-and-rotate) mischaracterizes it and risks agents treating credential refusal as a platform-specific quirk. **Required fix during execution:** Rule 21 keeps its own section (can compress slightly), or joins a "Security boundaries" grouping — never "Codespaces operational gotchas." This is the one consolidation that fails the governance smell test.
+
+2. **Scribe must be consulted before Item 3 (decisions archival) executes — not optional.**
+   Three implementation problems Scribe needs to resolve before bulk archival runs:
+   - The plan's "per-entry YAML-front-matter `class:` tag" mechanism doesn't map to the actual `decisions.md` structure (a single Markdown file with `###` headings, not separate YAML files). Scribe must define the tagging convention.
+   - The "Current epic context" retention class requires a live `gh issue` lookup (is the referenced issue still open?). The archive-eligible "PR merged + closed issue" check has the same dependency. This is non-trivial automation, not a simple tagging heuristic.
+   - The decisions.md problem statement says "65 entries" but the live file has 12 top-level entries (42 KB). The tagging workload is different from what the plan assumes. Scribe dry-running the proposed classification against the actual file before bulk operation is mandatory.
+   Brady's 3-reviewer panel excludes Scribe as a gate reviewer — that's Brady's call and I accept it. But Item 3 execution must be gated on a Scribe dry-run validation (non-blocking to the PR, but must happen before the archival pass runs post-merge).
+
+3. **History summarization schema needs a "Standing verdicts / prior approvals" section for governance agents.**
+   The 5 proposed sections (Active blockers / Permanent facts / Unblock commands / External IDs / Open follow-ups) don't capture reviewer verdicts that remain operative. My history contains an 8-finding "APPROVE WITH CHANGES" on the 005-web-control-panel plan v2. A respawned Picard that doesn't see this verdict could re-review and contradict it. Same risk applies to Garak's hostile fact-check verdicts. **Required addition to Item 4 schema for Picard and Garak histories specifically:** `### Standing verdicts / prior approvals — {artifact}: {verdict summary}, {date}`. Permanent facts won't catch these — verdicts are actions taken, not standing truths.
+
+4. **Single-PR scope: accepted per Brady's call. Execution guard required.**
+   Brady's override of rubber-duck P1#9 is within his authority. I don't contest it. However, the diff will be broad enough to tempt rubber-stamping. **Required in PR description:** explicit reviewer-lane declaration (Kirk: behavior changes Items 1–2; Picard: scope Items 2–3–5–7; Garak: consolidation fidelity all items). Each reviewer signs off only their lane. This is not a plan change — it's an execution constraint the PR author must enforce.
+
+5. **O'Brien charter trim: rationale is sound, but "Collaboration" section is NOT redundant prose.**
+   The plan's trim rule ("cut only duplicated prose") is correct. However, I want to put on record: O'Brien's "Collaboration" section (lines 94–111) encodes the ML cache infra split with Uhura, the workflow-pin test split with Bashir, and the workflow-step split with Scotty. None of these appear in routing.md at this resolution. They are NOT redundant — they are the only contextual "how" documentation of the four-domain consolidation. The trim must preserve them. The plan already says "preserve ownership claims" and I'm satisfied the instruction is protective enough — this finding is an audit marker, not a blocker.
+
+6. **Reviewer panel: accept Brady's call. Recommend Scribe advisory, not formal gate.**
+   Rubber-duck's recommendation to add Scribe (consulted) and Tuvok (consulted) is sound in principle. Tuvok's advisory is genuinely lower priority here — this is cleanup, not new editorial policy, and the plan's charter-skeleton template is simple enough that Kirk's technical eye suffices. Scribe's advisory is covered by Finding 2 above (dry-run gate on Item 3, not panel membership). I accept the 3-reviewer panel as stated. No change required.
+
+7. **Restart boundary: sound. No governance concern.**
+   In-flight Wave 4 (#118 O'Brien, #121 Scotty) completing on old coordinator context is acceptable. The plan's self-development rule and PR body communication are sufficient. No action required from my scope.
+
+---
+
+## Recommendation
+
+Proceed to user approval (final `exit_plan_mode` call) with the following execution-time conditions attached:
+
+- **Blocking during execution:** Finding 1 (Rule 21 grouping) must be corrected before the PR opens.
+- **Gate before post-merge archival runs:** Finding 2 (Scribe dry-run on decisions.md classification).
+- **Required schema addition:** Finding 3 (Standing verdicts section in Picard + Garak history summaries).
+- **PR description requirement:** Finding 4 (reviewer-lane declaration).
+
+Findings 5–7 are advisory only.
+
+
+---
+
+### 2026-06-01: Squad improve cycle — proposed rule amendments
+**By:** Picard (governance), requested by Cyrus Jamula
+**Scope:** Proposed additions/amendments to `.github/copilot-instructions.md`
+**Status:** DRAFT — awaiting user approval before Tuvok applies edits
+
+## Summary
+
+Two proposed new rules (Rule 22, Rule 23) and one new reusable skill
+(`.squad/skills/worktree-preflight/SKILL.md`). No amendments to existing
+Rules 1–21 — the existing rule set held up well against the 2026-05-31 →
+2026-06-01 friction signal. **Note:** This proposal deliberately does NOT
+overlap with the in-flight Squad System Cleanup Plan v3 (which renumbers /
+consolidates Rules 1–21); these new rules attach at the tail (22, 23) and
+will survive whatever consolidation that plan applies. If the cleanup
+plan reshuffles numbering, Tuvok renumbers these in the same pass.
+
+The bar for inclusion this cycle: ≥ 2 independent observations OR a single
+observation with severe blast radius, AND not already covered by Rules 1–21
+or the constitution, AND a specific behavior change agents can adopt.
+
+## Proposed new rules
+
+### Rule 22. Fresh worktrees require `npm ci` before any commit
+
+When `git worktree add` creates a new worktree at `/workspaces/stfc-<N>`, the
+`node_modules/` directory inside that worktree is typically a **symlink** to
+the main checkout's `node_modules/`. If `package.json` has gained a
+dependency since the main checkout was last installed against it — or if the
+symlink target is otherwise stale — the worktree will fail the pre-commit
+hook (`npm test`) with a missing-module error. The failure is silent until
+the first commit attempt and looks like a real test break.
+
+**Observed on 2026-06-01 (O'Brien P1 #118 invitation runbook PR):** worktree
+`/workspaces/stfc-p1` was missing `json-schema-to-typescript` despite the
+package being in `package.json`. The epic branch had been in a "broken
+pre-commit state" before #118's author ran `npm ci` manually. Picard's
+parallel P1 fanout triage (same date) explicitly forward-flagged the same
+risk to Wave 4 #121 (Scotty): *"should confirm `npm ci` is already done
+on their worktree before committing."*
+
+**Required after every `git worktree add` (and before any commit attempt in a worktree):**
+
+```bash
+# In the new worktree, before staging anything:
+cd <worktree-path>
+ls -la node_modules 2>/dev/null | head -1     # detect symlink (lrwxrwxrwx) vs real dir
+npm ci                                         # idempotent; refreshes whether symlink or not
+npm test                                       # confirm the pre-commit gate passes BEFORE adding work
+```
+
+`npm ci` is idempotent and cheap (~5–15s when cache is warm). Running it
+proactively is far cheaper than discovering the failure at pre-commit time
+when you have uncommitted work to protect.
+
+**Symptom-to-cause table** for diagnosing failed pre-commit in a worktree:
+
+| Symptom | Likely cause |
+|---|---|
+| `Cannot find module 'xxx'` and `xxx` is in package.json | Stale symlinked `node_modules`; run `npm ci` |
+| `Cannot find module 'xxx'` and `xxx` is NOT in package.json | Real test break — fix the test |
+| Pre-commit passes once, fails on next commit | Background process modified `node_modules`; `npm ci` to reset |
+
+**Cross-reference:** Rule 18 (Fleet + worktree execution) covers shared-file
+ownership in worktrees; this rule covers dependency state inside worktrees.
+Together they're the worktree-mode preflight contract.
+
+**Evidence:**
+- `.squad/decisions/inbox/obrien-p1-118-invitation-runbook.md` (2026-06-01T01:40Z) — observed failure + diagnosis
+- `.squad/agents/picard/history.md` (2026-06-01T01:22:44Z, P1 fanout triage) — forward flag to next Wave-4 author
+
+**Cross-reference impact:**
+- `.squad/skills/worktree-preflight/SKILL.md` — NEW skill (see "Proposed new skills" below) codifies the preflight ritual
+- `.squad/skills/audit-wip-fanout/SKILL.md` — should add a one-line link to worktree-preflight at the wave-dispatch step
+- `.squad/agents/obrien/charter.md` — DevOps owns worktree provisioning concerns; add a one-line ownership note if charter is otherwise being edited (do NOT touch the charter solely for this)
+
+---
+
+### Rule 23. `specs/NNN-feature/plan.md` must be a self-contained repo artifact, never a placeholder pointing to session-state
+
+`plan.md` is one of the four canonical speckit artifacts (alongside
+`spec.md`, `research.md`, `tasks.md`). It is a **durable, repo-tracked
+input** to the implementation phase. Multiple agents (Picard, Garak, Kirk,
+O'Brien, Scotty, Bashir, reviewers) read it across days or weeks; reviewer
+gates cite it; the rubber-duck checkbox (Rule 17) lives in it.
+
+A `plan.md` whose body is a one-line pointer to
+`~/.copilot/session-state/<uuid>/plan.md` is **not durable** — session-state
+directories are per-machine, per-session, and ephemeral. The binding plan
+disappears the moment the session expires, the Codespace rebuilds, or the
+user switches machines.
+
+**Observed across the 005-web-control-panel epic (2026-05-31 → 2026-06-01):**
+`specs/005-web-control-panel/plan.md` is currently a placeholder pointing
+to `~/.copilot/session-state/d40435a0-d735-463b-887e-e5f586f7369b/plan.md`.
+This was flagged independently by:
+
+1. Picard's P1 fanout triage, 2026-06-01T01:22Z (`.squad/agents/picard/history.md`):
+   *"If session state is lost, the plan is gone. Flag Tuvok or O'Brien to
+   migrate it into the repo as a doc issue."*
+2. O'Brien's #118 invitation runbook PR, 2026-06-01T01:40Z
+   (`.squad/decisions/inbox/obrien-p1-118-invitation-runbook.md`):
+   *"The binding v3 plan is in session state … not the repo. Recommend a
+   separate 5-minute doc-migration chore … before session state expires."*
+3. Scribe's P1 fanout consolidation log, same date
+   (`.squad/orchestration-log/2026-06-01-p1-fanout-triage-scribe.md`):
+   listed as a carried-forward risk.
+
+The pattern recurs because session-state is genuinely convenient during
+rapid plan iteration. The rule is needed because the convenience window
+closes silently and the recovery cost is high (re-deriving a multi-phase
+plan from chat history + commits).
+
+**Required:**
+
+1. Before merging ANY PR that introduces or modifies `specs/NNN-feature/plan.md`,
+   the file MUST contain the actual plan body — not a pointer to
+   `~/.copilot/session-state/*` or any other path outside the repo tree.
+2. CI gate: add a check that greps `specs/*/plan.md` for
+   `session-state` / `.copilot/session-state` and fails the build if any
+   match is found.
+3. If a plan is genuinely still drafting in session-state, the speckit
+   pipeline MUST NOT advance past Phase 0 (governance) until the plan is
+   migrated into the repo. The rubber-duck checkbox (Rule 17) cannot be
+   meaningfully checked against an ephemeral artifact.
+4. Recovery procedure when a placeholder is discovered post-merge:
+   ```bash
+   # If session-state plan still exists, migrate it:
+   cp ~/.copilot/session-state/<uuid>/plan.md specs/<NNN>-<feature>/plan.md
+   git add -- specs/<NNN>-<feature>/plan.md
+   git commit -m "docs(<NNN>-<feature>): migrate plan.md from session-state to repo"
+
+   # If session-state plan is already lost, open an issue with
+   # squad:picard,bug labels: "Reconstruct <NNN>-<feature> plan.md from
+   # commits + history" and treat as a P1 blocker on remaining phases.
+   ```
+
+**Anti-patterns:**
+- ❌ `plan.md` containing only `See ~/.copilot/session-state/<uuid>/plan.md`
+- ❌ `plan.md` containing only a link to a chat URL
+- ❌ Deferring plan migration "for now" with no tracking issue
+- ✅ Full plan body in `plan.md`, with optional `<!-- Originally drafted in session <uuid> on YYYY-MM-DD -->` header comment for provenance
+
+**Cross-reference:**
+- Rule 17 (Rubber-duck multi-phase plans) — the checkbox lives in plan.md; placeholder defeats the gate
+- Constitution Principle VII (Artifact Hygiene) — this rule is the routing/enforcement form of that principle for `specs/*/plan.md`
+
+**Evidence:**
+- `.squad/decisions/inbox/obrien-p1-118-invitation-runbook.md` (2026-06-01) — direct flag
+- `.squad/agents/picard/history.md` (2026-06-01) — independent flag, same date
+- `.squad/orchestration-log/2026-06-01-p1-fanout-triage-scribe.md` — carried-forward risk
+- Live repo: `specs/005-web-control-panel/plan.md` currently is the placeholder
+
+**Cross-reference impact:**
+- `.specify/templates/plan-template.md` — add a header comment in the template explicitly forbidding session-state pointers
+- `.github/workflows/squad-artifact-hygiene.yml` (or similar existing CI gate) — add the `grep` check listed above
+- `.copilot/skills/speckit-pipeline-driver/SKILL.md` (or `.squad/skills/speckit-pipeline-driver/SKILL.md` — whichever holds) — add a Phase-0 pre-flight assertion that `plan.md` is non-empty and contains no `session-state` substring
+- `specs/005-web-control-panel/plan.md` — needs migration as the first application of this rule (open as separate issue, route to Tuvok or O'Brien per O'Brien's recommendation)
+
+## Proposed amendments to existing rules
+
+None. All recently observed friction patterns either (a) trigger no existing
+rule's pattern (covered by Rules 22 and 23 above), (b) are already handled
+by Rules 1–21 as written, or (c) are being addressed by the in-flight
+Squad System Cleanup Plan v3, which should not be pre-empted by amendments
+in this proposal.
+
+## Proposed new skills
+
+### `.squad/skills/worktree-preflight/SKILL.md`
+
+**Purpose:** Codify the worktree-preparation ritual that Rule 22 requires.
+This is the "how" companion to Rule 22's "what." Reusable across every
+fleet-dispatch wave that hands an agent a fresh `/workspaces/stfc-<N>`
+worktree.
+
+**Expected content (one-paragraph contract, full text only on user approval):**
+
+```markdown
+# Worktree Preflight
+
+Use this skill when starting work in a fresh `git worktree` (typically
+`/workspaces/stfc-<issue-number>`) before staging any changes.
+
+## Procedure
+
+1. Confirm working directory: `pwd` matches the expected worktree path.
+2. Confirm branch: `git branch --show-current` matches expected branch.
+3. Inspect `node_modules`:
+   ```bash
+   ls -la node_modules 2>/dev/null | head -1
+   ```
+   If it is a symlink (`lrwxrwxrwx`) or missing, run `npm ci`. If it is a
+   real directory and `git status` shows no `package.json` / `package-lock.json`
+   changes since the symlink target was installed, you may skip `npm ci`.
+4. Run `npm test` once before adding any work. A green run here proves the
+   pre-commit gate will pass. A red run here means something is broken in
+   the base state — fix THAT before adding your work.
+5. Only after steps 1–4 pass should the agent begin staging changes.
+
+## Guardrails
+
+- Do NOT run `npm install` (rewrites `package-lock.json`). Use `npm ci`.
+- Do NOT skip step 4 — discovering a stale base state mid-work is the
+  failure mode this skill prevents.
+- If `npm ci` itself fails, do NOT try to "work around" it. Stop and
+  report — the base worktree is broken and needs O'Brien's attention.
+```
+
+**Why a skill (not just inline in Rule 22):** the procedural ritual is
+~15 lines; embedding it in `copilot-instructions.md` would bloat the rule
+and duplicate content. Rules state the *what* and *why*; skills carry the
+*how*. This matches the pattern already used for `audit-wip-fanout`,
+`speckit-pipeline-driver`, etc.
+
+**Cross-reference impact:**
+- `.squad/skills/audit-wip-fanout/SKILL.md` — add a one-line link in the
+  wave-dispatch step
+- New skill is referenced from Rule 22
+
+## Considered and rejected
+
+The following candidates were considered and did NOT make the bar. Rationale
+preserved here so the next improve cycle does not re-litigate them.
+
+- **CI billing-exhaustion ship path (PR #103 was admin-merged on 2026-05-31 because
+  CI billing limit was reached).** Rule 7 ("CI green" auto-merge gate) cannot fire
+  when CI cannot run at all. Rejected because this is a one-off recovery situation,
+  not a recurring pattern — admin-bypass with documented rationale is the right
+  human-judgment call and codifying it risks normalizing bypass. If it recurs in
+  the next 30 days, revisit.
+
+- **Constitution-amendment pinning-test literal collision (Picard 2026-05-31 SIR
+  trip on `scripts/discord-ops/` literal).** Genuinely actionable, but already
+  going into `.squad/skills/speckit-pipeline-driver/SKILL.md` per Picard's own
+  history note. Skill-level pattern, not rule-level — does not warrant elevation
+  to `copilot-instructions.md`.
+
+- **PR body "## Verification" instead of "## Tests" (Kirk PR #123 L3 finding).**
+  This is enforcement of existing Rule 15, not a new rule. Better solved by
+  the PR-body author adopting the right heading; if it recurs, amend Rule 15
+  with explicit anti-pattern callout.
+
+- **Coordinator re-reads `squad.agent.md` per turn (Kirk cleanup-plan F4).**
+  Meta-mechanics observation, not actionable as a rule. Already going into the
+  in-flight cleanup plan's PR-body restart notice.
+
+- **Composite `decisions.md` entries (canonical pattern + per-PR callout in one
+  block).** Real issue, but actively being addressed by the in-flight Squad
+  System Cleanup Plan v3 (Item 3 + Item 4). Pre-empting it here would create
+  conflicting guidance.
+
+- **Reviewer-lockout rotation extended to Kirk/Garak (currently routing.md
+  §10 only covers Bashir-rejected revisions).** Considered, but rejected because
+  the existing protocol HAS worked correctly in the last two observed lockouts
+  (PR #98 Scotty→Uhura; PR #103 Uhura→Scotty). The rule is already there in
+  practice; making it a top-level `copilot-instructions.md` rule duplicates
+  routing.md without adding new behavior. If it starts failing, revisit.
+
+- **Wave-coordination shared-file contention (#121 vs #118 on `tests/index.test.ts`).**
+  Considered, but Rule 18 (Fleet + worktree execution) already requires the
+  ownership-table check before parallel dispatch — and the most recent fanout
+  (Picard 2026-06-01 triage) cited it correctly. Rule is working; no amendment needed.
+
+## Open questions for the user
+
+1. **Rule 23 enforcement strength.** Two options:
+   - **(a) Hard CI gate** that fails the build on any `session-state` substring
+     in `specs/*/plan.md` (proposed default).
+   - **(b) Warning-only** in CI + Tuvok pre-merge review obligation.
+   Option (a) is more in keeping with Rules 14–18 (enforceable gates). Please
+   confirm (a) before Tuvok applies the workflow edit.
+
+2. **Rule 22 scope.** Should the preflight ritual extend to verifying that the
+   *base branch* (typically `origin/main` or an epic branch) is fetched and
+   the worktree is rebased onto it, or is that out of scope for Rule 22 and
+   belongs in a separate "worktree-base-freshness" rule? My recommendation:
+   keep Rule 22 dependency-state-only; base-branch freshness is already
+   implicit in Rule 4 ("rebase before every push") and explicitly in the
+   `audit-wip-fanout` skill.
+
+3. **Skill location.** Should `worktree-preflight` live under `.squad/skills/`
+   (team-level) or `.copilot/skills/` (coordinator-level)? My recommendation:
+   `.squad/skills/` because every implementer agent uses worktrees, not just
+   the coordinator. This matches the existing skill placement convention.
+
+4. **Plan migration for the live offender.** `specs/005-web-control-panel/plan.md`
+   is currently the placeholder Rule 23 would forbid. Should the migration
+   be filed as a separate issue (recommended) or rolled into the next P1
+   close-out PR (faster but mixes scopes)? My recommendation: separate issue,
+   labeled `squad:tuvok,docs` per O'Brien's runbook follow-up note.
+
+
+---
+

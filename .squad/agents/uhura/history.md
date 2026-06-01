@@ -156,6 +156,7 @@ using the DM draft at `.squad/agents/uhura/outreach/stfc-discord-bot-request.md`
 Once bot is in the guild, run `node scripts/fetch-discord-channel.mjs`.
 
 ---
+> Older learnings archived to history-archive.md. See archive for context.
 
 ### Scribe note (2026-05-31T19:55Z): Session completion — Uhura dispatch BLOCKED
 

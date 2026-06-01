@@ -7,7 +7,7 @@
 
 > **Note:** Prior learnings (2026-05-08 through 2026-05-30) summarized in `history-archive.md`.
 
----
+> Older learnings archived to history-archive.md. See archive for context.
 
 ## 2026-05-31T22:13:00Z — Plan v2: 005-web-control-panel (scope/governance review)
 
@@ -44,8 +44,6 @@
 - Sequence: Phase 0 in parallel with 004 wrap; Phases 1+ start after 004 v1 + POC gate.
 
 **Not in my lane (defer to Kirk / Garak):** architecture choice (Lit+Vite vs React), CSRF/idempotency/correlation-id design, SWA-vs-alternative hosting, RAG embedder selection, claims-vs-repo fact-check. Coordinator should route to Kirk and Garak for those.
-
----
 
 ## 2026-05-31T19:50:00Z — Issue #77: crew-optimizer speckit pipeline + v1 constitution amendment (PR #97)
 
@@ -105,8 +103,6 @@ New skill at `.squad/skills/speckit-pipeline-driver/SKILL.md` codifying the phas
 
 - Phase 0 shipped (PR #111, 988c302..aeef1b5)
 
----
-
 ## 2026-06-01T01:22:44Z — P1 fanout triage (005-web-control-panel Phase 1)
 
 **Context:** Ralph cycle requested a WIP audit + wave-3-close-out + wave-4-fanout plan for the stfc-p1 worktree.
@@ -133,3 +129,7 @@ New skill at `.squad/skills/speckit-pipeline-driver/SKILL.md` codifying the phas
 ### Skill extracted
 
 New skill at `.squad/skills/audit-wip-fanout/SKILL.md` codifying the "audit uncommitted WIP → map to issues → wave-close-out + fanout plan" pattern.
+
+## 2026-06-01T02:22:04Z — Squad improve cycle delivery: Rules 22, 23, worktree-preflight skill
+
+Ran full improve cycle analyzing friction patterns from 2026-05-31 → 2026-06-01. Proposed 2 new rules (Rule 22: worktree npm ci preflight; Rule 23: plan.md durability in repo, not session-state) and 1 new skill (worktree-preflight ritual codification). No amendments to Rules 1–21 — existing rule set is sound. Delivered as DRAFT proposal in decisions/inbox/ awaiting user approval before Tuvok implementation. Also flagged 6 findings on cleanup-plan v3 (Rule 21 misclassification, Scribe dry-run gate, history schema, reviewer lanes, charter trim, panel composition).
