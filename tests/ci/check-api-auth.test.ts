@@ -84,4 +84,44 @@ describe("check-api-auth CI gate", () => {
     const result = runGate(join(FIXTURES, "good"));
     assert.equal(result.status, 0, result.stderr);
   });
+
+  // ── Position-aware enforcement (Garak P0#1 hardening, 2026-06-01) ───────────
+
+  it("exits 1 when the handler runs any statement BEFORE requireAllowedUser", () => {
+    // Counter-test for Garak P0#1: a handler that imports + calls the auth
+    // guard but executes `const log = console.log;` first must be flagged.
+    // The legacy presence-only gate let this slip through.
+    const result = runGate(join(FIXTURES, "badPosition"));
+    assert.equal(
+      result.status,
+      1,
+      `Expected exit 1 (auth-position violation), got ${result.status}. stdout: ${result.stdout}`,
+    );
+    assert.ok(
+      result.stderr.includes("handlerLateAuth.ts"),
+      `Expected offending filename in stderr. Got: ${result.stderr}`,
+    );
+    assert.ok(
+      result.stderr.includes("first non-trivial statement"),
+      `Expected position-violation diagnostic in stderr. Got: ${result.stderr}`,
+    );
+    assert.ok(
+      result.stderr.includes("const log = console.log") ||
+        result.stderr.includes("console.log"),
+      `Expected offending statement excerpt in stderr. Got: ${result.stderr}`,
+    );
+  });
+
+  it("exits 0 when the auth guard is the first statement INSIDE a leading try block", () => {
+    // The canonical pattern from the swa-auth-shape-review skill wraps the
+    // handler body in `try { requireAllowedUser(req); … } catch (e) { errorResponse(e) }`.
+    // The hardened gate must descend into the leading `try {` opener and
+    // recognise the auth guard as the first statement inside it.
+    const result = runGate(join(FIXTURES, "goodTryWrap"));
+    assert.equal(
+      result.status,
+      0,
+      `Expected exit 0 (try-wrap canonical pattern), got ${result.status}. stderr: ${result.stderr}`,
+    );
+  });
 });

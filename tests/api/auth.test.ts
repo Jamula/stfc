@@ -16,6 +16,7 @@ import {
   requireRole,
   UnauthorizedError,
   ForbiddenError,
+  type Principal,
 } from "../../api/src/_lib/auth.ts";
 import { errorResponse } from "../../api/src/_lib/respond.ts";
 
@@ -215,7 +216,7 @@ describe("requireOwner", () => {
     );
   });
 
-  it("accepts a pre-validated principal (skips re-parsing)", () => {
+  it("accepts a pre-validated principal (skips re-parsing) when allowlisted", () => {
     const principal = parsePrincipal(withPrincipal())!;
     const p = requireOwner(noHeader(), principal);
     assert.equal(p.userDetails, "cyrusjamula");
@@ -228,6 +229,51 @@ describe("requireOwner", () => {
   it("throws ForbiddenError when SQUAD_OWNER is not set", () => {
     delete process.env["SQUAD_OWNER"];
     assert.throws(() => requireOwner(withPrincipal()), ForbiddenError);
+  });
+
+  // ── Garak P1#15 bypass-prevention (defence-in-depth re-check) ───────────────
+
+  it("re-validates a supplied principal against SQUAD_ALLOWED_USERS (no bypass)", () => {
+    // P1#15: prior behaviour let callers bypass the allowlist by supplying any
+    // parsed Principal whose userDetails matched SQUAD_OWNER. requireOwner now
+    // re-runs the allowlist check on the supplied principal — the
+    // pre-validated argument is a parse-fast-path only, never a security
+    // bypass.
+    const fake: Principal = {
+      identityProvider: "github",
+      userId: "ffffffffffffffffffffffffffffffff",
+      userDetails: "cyrusjamula", // == SQUAD_OWNER, but...
+      userRoles: ["authenticated"],
+    };
+    process.env["SQUAD_ALLOWED_USERS"] = "alloweduser"; // ...NOT on the allowlist.
+    assert.throws(
+      () => requireOwner(noHeader(), fake),
+      (err) => {
+        assert.ok(
+          err instanceof ForbiddenError,
+          "Must be ForbiddenError (not in allowlist)",
+        );
+        assert.equal((err as ForbiddenError).status, 403);
+        assert.match(
+          (err as ForbiddenError).message,
+          /not in the allowed list/,
+          "Diagnostic must identify the allowlist as the rejecting gate",
+        );
+        return true;
+      },
+    );
+  });
+
+  it("rejects a supplied principal when SQUAD_ALLOWED_USERS is empty", () => {
+    // Defence-in-depth: empty allowlist must block even a pre-validated principal.
+    process.env["SQUAD_ALLOWED_USERS"] = "";
+    const principal: Principal = {
+      identityProvider: "github",
+      userId: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      userDetails: "cyrusjamula",
+      userRoles: ["authenticated"],
+    };
+    assert.throws(() => requireOwner(noHeader(), principal), ForbiddenError);
   });
 });
 

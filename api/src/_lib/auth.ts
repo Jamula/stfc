@@ -77,17 +77,14 @@ export function parsePrincipal(req: RequestLike): Principal | null {
 }
 
 /**
- * Assert the request has a valid SWA principal AND the GitHub username is in
- * the `SQUAD_ALLOWED_USERS` env-var allowlist (comma-separated GitHub logins).
+ * Verify a Principal's `userDetails` (GitHub login) is in the
+ * `SQUAD_ALLOWED_USERS` env-var allowlist. Shared by `requireAllowedUser` and
+ * `requireOwner` so the allowlist check cannot be bypassed by callers that
+ * supply a pre-parsed principal (Garak hostile fact-check P1#15).
  *
- * @throws UnauthorizedError(401) — principal missing or malformed
- * @throws ForbiddenError(403)    — principal valid but not in allowlist
+ * @throws ForbiddenError(403) — principal not in allowlist (or allowlist empty)
  */
-export function requireAllowedUser(req: RequestLike): Principal {
-  const principal = parsePrincipal(req);
-  if (!principal) {
-    throw new UnauthorizedError("No valid authentication principal");
-  }
+function assertInAllowlist(principal: Principal): Principal {
   const allowlist = (process.env["SQUAD_ALLOWED_USERS"] ?? "")
     .split(",")
     .map((u) => u.trim())
@@ -101,16 +98,38 @@ export function requireAllowedUser(req: RequestLike): Principal {
 }
 
 /**
+ * Assert the request has a valid SWA principal AND the GitHub username is in
+ * the `SQUAD_ALLOWED_USERS` env-var allowlist (comma-separated GitHub logins).
+ *
+ * @throws UnauthorizedError(401) — principal missing or malformed
+ * @throws ForbiddenError(403)    — principal valid but not in allowlist
+ */
+export function requireAllowedUser(req: RequestLike): Principal {
+  const principal = parsePrincipal(req);
+  if (!principal) {
+    throw new UnauthorizedError("No valid authentication principal");
+  }
+  return assertInAllowlist(principal);
+}
+
+/**
  * Assert the request comes from the `SQUAD_OWNER` (env var, typically `cyrusjamula`).
- * Calls `requireAllowedUser` first unless a pre-validated principal is supplied.
+ *
+ * Approach **(c) — Defense-in-depth re-check** (Garak P1#15 fix): the optional
+ * `principal` parameter is a parsing-fast-path ONLY — it skips the base64/JSON
+ * decode step but MUST NOT bypass the `SQUAD_ALLOWED_USERS` allowlist gate.
+ * When supplied, the principal is re-validated against the allowlist via
+ * `assertInAllowlist`. Without this, any caller could synthesize a Principal
+ * object whose `userDetails === SQUAD_OWNER` and gain owner access without
+ * being on the allowlist (defence-in-depth bypass).
  *
  * Use for refresh-token and other owner-only endpoints (threat-model S-4, E-2, E-5).
  *
- * @throws UnauthorizedError(401) — no principal
- * @throws ForbiddenError(403)    — authenticated but not the owner
+ * @throws UnauthorizedError(401) — no principal in request and none supplied
+ * @throws ForbiddenError(403)    — principal not in allowlist OR not the owner
  */
 export function requireOwner(req: RequestLike, principal?: Principal): Principal {
-  const p = principal ?? requireAllowedUser(req);
+  const p = principal ? assertInAllowlist(principal) : requireAllowedUser(req);
   const owner = process.env["SQUAD_OWNER"] ?? "";
   if (!owner || p.userDetails !== owner) {
     throw new ForbiddenError(`User "${p.userDetails}" is not the owner`);
