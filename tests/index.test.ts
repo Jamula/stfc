@@ -85,3 +85,4 @@ import "./web/shell.test.ts";
 import "./ci/check-bundle-budget.test.ts";
 import "./api/auth.test.ts";
 import "./ci/check-api-auth.test.ts";
+import "./skills/ruleReferenceCheck.test.ts";
