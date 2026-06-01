@@ -7,6 +7,7 @@ inserted at the top**, so the most recent run is always visible first.
 
 | Date (UTC) | Time (UTC) | Account | Gifts claimed |
 | --- | --- | --- | --- |
+| 2026-06-01 | 13:04 | main | 4 Hr Free Chest, 10 Min Free Chest, Holo-Field Amplifiers, UC Event Ticket Gift |
 | 2026-06-01 | 07:19 | main | 10 Min Free Chest, Daily Mission Key Drop |
 | 2026-06-01 | 02:03 | main | 10 Min Free Chest |
 | 2026-05-31 | 21:28 | main | 10 Min Free Chest |
