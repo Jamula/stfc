@@ -84,3 +84,26 @@ Wave 1–2 committed (#113–#116). Wave 3 close-out (#117 auth + #119 shell + #
 - Scribe finalization completed; all .squad/ logs written
 
 Status: COMPLETE
+2026-06-01T02:52Z — **PR #124 deploy job failure — OIDC secrets not provisioned**
+
+**Diagnosis pattern learned:** When `azure/login@v3` errors with `Using auth-type: SERVICE_PRINCIPAL. Not all values are present. Ensure 'client-id' and 'tenant-id' are supplied`, the first hypothesis is NOT a workflow misconfiguration — it is **missing secrets**. The action falls back to SERVICE_PRINCIPAL auth when OIDC inputs (`tenant-id`, `client-id`) evaluate to empty strings, which is what happens when the repo secrets are absent. The workflow was structurally correct throughout.
+
+**Diagnostic sequence that confirmed missing-secrets hypothesis:**
+1. Read the workflow YAML — OIDC form was correct (`client-id: ${{ secrets.AZURE_CLIENT_ID }}`).
+2. Attempted `gh secret list --repo Jamula/stfc` — 403 (Codespaces token lacks `security_events` + secrets scopes). Inconclusive.
+3. Cross-referenced `git diff origin/main --name-only -- .github/workflows/` — `swa-deploy.yml` is new to this PR. Secrets for a brand-new OIDC workflow were never provisioned.
+4. Confirmed with the PR status check rollup — all other checks green; only `deploy` failing; `teardown` skipped correctly (closed-event condition not met). Pattern consistent with absent secrets, not a bug.
+
+**Decision tree exercised:**
+- Secrets absent → Deploy failing (not informational) → **Option B**: gate jobs on `secrets.AZURE_CLIENT_ID != ''` so unprovisioned state = skip, not fail.
+- Filed issue #127 for Picard to provision AZURE_CLIENT_ID / AZURE_TENANT_ID / AZURE_SUBSCRIPTION_ID.
+
+**Pre-commit hook nuance — `checkWorkflowPinningTests`:** The hook greps ALL test files for the workflow filename and requires every referencing file to be staged — even if the reference is only in a comment. `tests/skills/swaProject.test.ts` referenced `swa-deploy.yml` in its file-header comment; the hook rejected the commit until it was staged. Fix: add a substantive cross-reference comment to the file so the staging is meaningful, not just a git trick.
+
+**Reusable secret-presence guard pattern for GitHub Actions:**
+```yaml
+jobs:
+  deploy:
+    if: secrets.AZURE_CLIENT_ID != '' && <event conditions>
+```
+Both jobs (`deploy` + `teardown`) must carry the guard. Skipping only `deploy` while leaving `teardown` ungated would cause `teardown` to fail on PR close when no SWA environment was ever created.

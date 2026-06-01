@@ -47,3 +47,8 @@ Recommended Bashir (test/contract expert) not Scotty (per reviewer-lockout).
 - Scribe finalization completed; all .squad/ logs written
 
 Status: COMPLETE
+### 2026-06-01 — PR #124 Phase 1 Wave 3 hostile fact-check
+
+**Verdict:** CHANGES_REQUESTED ⚠️. The useful attack pattern was to test claimed gates as adversarial contracts, not just read their happy-path fixtures. `check-api-auth` passed a handler that executed code before `requireAllowedUser`, proving the “first statement” claim was prose rather than enforcement.
+
+**Recurring gaps:** PR bodies drifted after late fixes (905 → 906 tests), Rule 15 test inventories omitted whole test families, and repo-facing plan/docs remained placeholders while the PR claimed Phase 1 surfaces had landed. Deploy workflows that require not-yet-provisioned secrets must skip cleanly or they convert an “infra later” promise into a red required check.
