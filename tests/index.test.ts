@@ -9,6 +9,7 @@ import "./lib/promoCodes.test.ts";
 import "./lib/summary.test.ts";
 import "./lib/redact.test.ts";
 import "./api/client.test.ts";
+import "./api/github-raw.test.ts";
 import "./skills/runAll.test.ts";
 import "./skills/redeemCodes.test.ts";
 import "./discord/schemas.test.ts";

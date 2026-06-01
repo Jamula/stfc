@@ -36,12 +36,14 @@
     "src/telemetry/**/*.ts",
     "tests/**/*.ts",
     "src/crew/**/*.ts",
-    "shared/contracts/**/*.ts"
+    "shared/contracts/**/*.ts",
+    "api/_lib/**/*.ts"
   ],
   "exclude": [
     "node_modules",
     "src/lib/utils.ts",
     "src/lib/types.ts",
-    "src/lib/gifts-data.ts"
+    "src/lib/gifts-data.ts",
+    "tests/ci/fixtures"
   ]
 }
