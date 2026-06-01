@@ -4,7 +4,7 @@
 
 ## Phase 1 capability surface
 
-Phase 1 (Wave 3 PR #124) ships:
+### Wave 3 — Foundation (this PR #124)
 
 1. **Auth library** (`api/src/_lib/auth.ts`)
    - SWA `x-ms-client-principal` header parsing
@@ -17,15 +17,21 @@ Phase 1 (Wave 3 PR #124) ships:
    - Connected to SWA auth context
    - Smoke tested in `tests/web/shell.test.ts`
 
-3. **Data-read endpoints** (Wave 4 #121)
+3. **SWA deployment contract** (`shared/contracts/`)
+   - Type-safe schemas for chat tool-calls, audit events, run results
+   - Auto-generated from `specs/005-web-control-panel/contracts/*.json`
+   - Regenerate with `npm run build:contracts`; verify with `npm run check:contracts`
+
+### Wave 4 — Capabilities (separate PRs, already merged on main)
+
+1. **Data-read endpoints** (PR #126, merged)
    - Contracted surfaces in `shared/contracts/` (auto-generated from JSON schemas)
    - `/api/data/*` read-only access (403 for unauthorized, 200 for operator role)
    - See `docs/SWA-INVITATION-RUNBOOK.md` for user invitation steps
 
-4. **SWA deployment contract** (`shared/contracts/`)
-   - Type-safe schemas for chat tool-calls, audit events, run results
-   - Auto-generated from `specs/005-web-control-panel/contracts/*.json`
-   - Regenerate with `npm run build:contracts`; verify with `npm run check:contracts`
+2. **Invitation runbook** (PR #125, merged)
+   - User invitation and access grant procedures
+   - See `docs/SWA-INVITATION-RUNBOOK.md` for complete steps
 
 ## Getting started
 
