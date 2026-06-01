@@ -1,0 +1,94 @@
+# Azure Static Web Apps deployment.
+#
+# Prod: fires on push to main.
+# Preview: fires on pull_request open/sync/reopen targeting main;
+#           tears down on PR close.
+#
+# Auth: OIDC federation — no long-lived deploy secret.
+# Fallback: swap OIDC steps for azure_static_web_apps_api_token input
+#           if the tenant blocks workload-identity federation.
+#
+# Contract: specs/005-web-control-panel/deploy-contract.md
+name: Deploy SWA
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - closed
+    branches:
+      - main
+
+permissions:
+  id-token: write      # OIDC token for Azure federated credential
+  contents: read       # checkout
+  pull-requests: write # preview-URL comment on PRs
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+# One prod deploy at a time; previews are per-PR.
+concurrency:
+  group: swa-deploy-${{ github.event_name == 'push' && 'prod' || github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Skip when OIDC secrets are not yet provisioned (secrets absent = empty string).
+    # Also skip for closed-PR events (teardown job handles those).
+    if: >-
+      secrets.AZURE_CLIENT_ID != '' &&
+      (github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.action != 'closed'))
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.0
+        with:
+          submodules: false
+
+      - name: Log in to Azure (OIDC)
+        uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43  # v3.0.0
+        with:
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Deploy to SWA
+        uses: Azure/static-web-apps-deploy@1a947af9992250f3bc2e68ad0754c0b0c11566c9  # v1
+        with:
+          azure_static_web_apps_api_token: ""  # intentionally empty — OIDC auth via azure/login above
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          action: upload
+          app_location: web
+          api_location: api
+          output_location: dist
+        env:
+          DISABLE_WRITES: "1"
+
+  teardown:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # Skip teardown too when OIDC secrets are absent — no SWA environment was created.
+    if: secrets.AZURE_CLIENT_ID != '' && github.event_name == 'pull_request' && github.event.action == 'closed'
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.0
+
+      - name: Log in to Azure (OIDC)
+        uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43  # v3.0.0
+        with:
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Close preview environment
+        uses: Azure/static-web-apps-deploy@1a947af9992250f3bc2e68ad0754c0b0c11566c9  # v1
+        with:
+          azure_static_web_apps_api_token: ""
+          action: close
+        env:
+          DISABLE_WRITES: "1"

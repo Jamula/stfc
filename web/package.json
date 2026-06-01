@@ -1,0 +1,24 @@
+{
+  "name": "stfc-control-panel-web",
+  "version": "1.0.0",
+  "description": "STFC Control Panel — Lit+Vite frontend. Populated by Wave 3 (Scotty, issue #119).",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "lit": "^3.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "~5.7.2",
+    "vite": "^6.0.0"
+  }
+}

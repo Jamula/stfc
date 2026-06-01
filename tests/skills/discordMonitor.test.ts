@@ -527,6 +527,23 @@ describe("discordMonitor / workflow YAML assertions (T027)", () => {
     assert.match(yaml, /STFC_ACCOUNTS:\s*\$\{\{\s*secrets\.STFC_ACCOUNTS\s*\}\}/);
   });
 
+  it("permissions include `contents: write` (required for commit-on-write step)", () => {
+    const yaml = fs.readFileSync(yamlPath, "utf8");
+    assert.match(yaml, /contents:\s*write/);
+  });
+
+  it("commit-on-write step exists and stages data/digests (constitution v2.0.0 durable artifact)", () => {
+    const yaml = fs.readFileSync(yamlPath, "utf8");
+    // A step must git-add data/digests so digests are committed after each run.
+    assert.match(yaml, /git add\b[^\n]*data\/digests/);
+  });
+
+  it("commit-on-write step has retry-once push (pull --rebase before push to handle cron contention)", () => {
+    const yaml = fs.readFileSync(yamlPath, "utf8");
+    assert.match(yaml, /git pull --rebase origin/);
+    assert.match(yaml, /git push origin/);
+  });
+
   // Note: ApiClient import is kept so the test file mirrors runAll.test.ts's
   // structural pattern; the type is unused below but documents the seam.
   void ApiClient;
