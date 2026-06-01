@@ -19,7 +19,8 @@
       "repositories": {
         "Jamula/stfc": {
           "permissions": {
-            "security_events": "read"
+            "security_events": "read",
+            "actions": "write"
           }
         }
       }
