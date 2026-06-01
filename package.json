@@ -17,6 +17,7 @@
 		"skill:roster": "tsx src/cli.ts roster",
 		"skill:optimize-crew": "tsx src/cli.ts optimize-crew",
 		"skill:progression": "tsx src/cli.ts progression",
+		"crew:knowledge:rebuild": "tsx src/crew/knowledge.ts rebuild",
 		"test": "node --import tsx --test tests/index.test.ts",
 		"test:watch": "node --import tsx --test --watch tests/index.test.ts",
 		"build:web": "cd web && npm run build",

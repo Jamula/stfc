@@ -17,12 +17,13 @@ function fakeHandlers(overrides: Partial<CrewCommandHandlerMap> = {}): CrewComma
     tasks: async () => "tasks routed",
     officers: async () => "officers routed",
     rosterShow: async () => "roster show routed",
+    knowledge: async () => "knowledge routed",
   };
   return { ...base, ...overrides };
 }
 
 describe("crew command dispatcher", () => {
-  it("routes all 8 read-only verbs and posts the handler output", async () => {
+  it("routes all 9 read-only verbs and posts the handler output", async () => {
     const cases = [
       ["!crew best mining-g3 --account tiny", "best routed"],
       ["!crew status --account tiny", "status routed"],
@@ -32,6 +33,7 @@ describe("crew command dispatcher", () => {
       ["!crew tasks --account tiny", "tasks routed"],
       ["!crew officers --account tiny", "officers routed"],
       ["!crew roster show --account tiny", "roster show routed"],
+      ["!crew knowledge how do I level officers", "knowledge routed"],
     ] as const;
 
     for (const [content, expected] of cases) {
