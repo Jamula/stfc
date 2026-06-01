@@ -13,13 +13,14 @@
 
 import { describe, it, before } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile, readdir } from 'node:fs/promises';
+import { readFile, readdir, stat } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 const REPO = resolve(import.meta.dirname, '../..');
 const WEB_DIR = join(REPO, 'web');
 const COMPONENTS_DIR = join(WEB_DIR, 'src', 'components');
+const WEB_VITE_BIN = join(WEB_DIR, 'node_modules', '.bin', 'vite');
 
 // ---------------------------------------------------------------------------
 // 1. Component source files — static checks on @customElement names
@@ -102,7 +103,24 @@ describe('index.html — no inline scripts', () => {
 describe('vite build', () => {
   let buildResult: ReturnType<typeof spawnSync>;
 
-  before(() => {
+  before(async () => {
+    const hasVite = await stat(WEB_VITE_BIN)
+      .then(() => true)
+      .catch(() => false);
+
+    if (!hasVite) {
+      const installResult = spawnSync('npm', ['ci'], {
+        cwd: WEB_DIR,
+        encoding: 'utf8',
+        timeout: 180_000,
+      });
+      assert.equal(
+        installResult.status,
+        0,
+        `web/npm ci failed:\n${installResult.stderr}\n${installResult.stdout}`,
+      );
+    }
+
     buildResult = spawnSync('npm', ['run', 'build'], {
       cwd: WEB_DIR,
       encoding: 'utf8',
