@@ -22,6 +22,8 @@
 		"build:web": "cd web && npm run build",
 		"build:api": "cd api && npm run build",
 		"build:swa": "npm run build:web && npm run build:api",
+		"build:contracts": "node scripts/build-contracts.mjs",
+		"check:contracts": "node scripts/ci/check-contracts-types.mjs",
 		"dev:swa": "swa start http://localhost:5173 --api-location api",
 		"typecheck": "tsc --noEmit",
 		"capture-token": "node scripts/capture-token.mjs",
@@ -46,6 +48,7 @@
 		"@types/node": "^24.0.0",
 		"ajv": "^8.20.0",
 		"ajv-formats": "^3.0.1",
+		"json-schema-to-typescript": "^15.0.4",
 		"playwright": "^1.49.1",
 		"simple-git-hooks": "^2.13.1",
 		"typescript": "~5.7.2"
