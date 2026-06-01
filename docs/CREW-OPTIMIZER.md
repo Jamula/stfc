@@ -361,13 +361,37 @@ which accounts regenerated and which were skipped.
 
 ---
 
+## Discord `!crew` commands
+
+Read-only Discord commands reuse the committed crew database, task
+definitions, and roster YAML. Every account-scoped command requires
+`--account X`; if omitted, the bot responds with the discovered roster file
+names.
+
+| Command | Purpose |
+|---|---|
+| `!crew best <task> --account X [--top N]` | Recommend crews for a task. |
+| `!crew status --account X` | Summarize roster freshness and validation. |
+| `!crew progression --account X` | Show progression gaps and next actions. |
+| `!crew explain <officer> --account X` | Look up officer details by id first, then case-insensitive name. |
+| `!crew synergy <group> --account X` | Show exact case-insensitive snake_case synergy-group members. |
+| `!crew tasks --account X` | List known task definitions. |
+| `!crew officers --account X [--owned] [--faction X]` | Dump officer inventory; long output truncates with filter guidance. |
+| `!crew roster show --account X` | Show current roster entries. |
+
+Responses are plain Discord markdown strings. The `officers` inventory is
+truncated below Discord's 2000-character message limit and asks the operator
+to narrow with `--owned` or `--faction X` when more rows are available.
+
+---
+
 ## Roadmap
 
 | Version | Status | Notes |
 |---|---|---|
 | **v1** | ✅ Shipped | Pure-compute optimizer + `skill:roster` family + `skill:optimize-crew` + `skill:progression` + hand-curated 37-officer DB |
 | **v1.5 — iPhone OCR** | 🔬 In development | iPhone screenshot → Discord → OCR → PR loop for roster refresh. Gated on OCR POC passing its acceptance bar. Tracked in issues [#85](https://github.com/Jamula/stfc/issues/85)–[#90](https://github.com/Jamula/stfc/issues/90). |
-| **v2 — Discord commands** | 🔬 In development | Read-only `!crew best`, `!crew progression`, `!crew knowledge <q>` interactive Discord commands. Gated on v1 ship + v2 design. Tracked in issues [#91](https://github.com/Jamula/stfc/issues/91)–[#95](https://github.com/Jamula/stfc/issues/95). |
+| **v2 — Discord commands** | 🔬 In development | Read-only `!crew best`, `status`, `progression`, `explain`, `synergy`, `tasks`, `officers`, `roster show`, and `knowledge <q>` interactive Discord commands. Gated on v1 ship + v2 design. Tracked in issues [#91](https://github.com/Jamula/stfc/issues/91)–[#95](https://github.com/Jamula/stfc/issues/95). |
 
 See also `docs/stfc-game-knowledge.md` for the domain reference (officer
 stats, faction synergy groups, BDA role taxonomy) that underpins the
