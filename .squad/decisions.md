@@ -1,3 +1,133 @@
+# Kirk decision: PR #141 re-review
+
+Date: 2026-06-02T02:55:47Z
+PR: #141 — `ci: add cleanup-old-runs workflow`
+Head: `1068c1c`
+
+**Verdict:** APPROVE ✅
+
+All three blockers from the 2026-06-01 CHANGES_REQUESTED review are fixed:
+- B1 counter-abort under `set -e` → `$((x + 1))` form throughout
+- B2 pipe-to-while subshell → process substitution `done < <(...)`
+- B3 fake backoff → `sleep 5` + single retry with stderr classification (404/429/5xx/other)
+
+Non-blocking items also addressed: positive-integer input validation, 404 idempotency
+accounting, self-decap guard, scoped permissions, jq status filter.
+
+CI all-green. Rule 3 pin: not required (dispatch-only workflow, no cron/concurrency).
+
+Per Rule 7, coordinator may auto-merge.
+
+---
+
+# Kirk review verdict — PR #96 (discord-channels stub + ingest script)
+
+**Date:** 2026-06-02T02:55:47Z
+**PR:** https://github.com/Jamula/stfc/pull/96
+**Verdict:** **APPROVE** ✅
+**Comment:** https://github.com/Jamula/stfc/pull/96#issuecomment-4598333241
+
+## Summary
+
+Picard un-drafted #96 under Option C (ship the prep work for an external blocker
+we don't control — bot is not a member of guild `639255937869152267`). I reviewed
+the script + docs and APPROVE.
+
+## What was verified
+
+- **Token hygiene:** env-only, fails loudly, never echoed; JWT-regex redaction in
+  the FATAL handler protects against leaks via bubbled fetch errors.
+- **Discord API hygiene:** pins-first → paginated history; 500 ms polite delay
+  between pages; 429 → `retry-after` → single recursive retry; 401/403 produce
+  actionable messages with the invite URL template.
+- **Permission bitmask 66560** = VIEW_CHANNEL(1024) + READ_MESSAGE_HISTORY(65536)
+  — verified numerically; no write, no admin.
+- **Lineage block** generated from script constants; all six fields populated and
+  match the convention in `docs/stfc-knowledge/README.md`.
+- **Read-only:** no POST/PATCH/DELETE codepath anywhere — ToS-compliant.
+- **Idempotent:** script only overwrites its own two output files; existing
+  channel `README.md` stub is untouched (script only `console.log`s an advisory).
+- **Rule 3:** N/A — no workflow YAML.
+- **Rule 16:** satisfied — script docs live in header comment + two READMEs.
+- **Tests:** `npm test` = 567/567 pass on `cae7efe`. Script itself has no tests —
+  defensible for v1 (one-shot manual tool, live Discord API dependency).
+
+## Non-blocking observation (logged in PR comment, not in inbox follow-up)
+
+Repo convention for ingest-script exit codes is `0/1/2`. Currently 401 (operator
+issue) and 403 (remote-service rejected) both exit 1. A future revision could
+split 403/5xx → exit 2 for cleaner CI signaling. No blocker — no test enforces it
+and the script isn't on a CI path today.
+
+## Auto-merge note for the coordinator
+
+Per Rule 7: reviewer approval is in, CI hasn't run yet (just un-drafted). Wait
+for CI green, then `gh pr merge 96 --squash --delete-branch`. No additional
+governance gate (no constitution touch, no infra touch).
+
+— Kirk
+
+---
+
+# Picard decision: PR #96 triage — ship preparation, defer execution
+
+**Date:** 2026-06-02
+**Role:** Picard (M2 / EM — scope & priority)
+**PR:** #96 — `docs(stfc-knowledge): stub discord-channels dir — blocked on guild access`
+**Issue:** #76 — Ingest STFC Discord channel #1115978499400933473
+**Verdict:** **Option C — un-draft and ship** (`gh pr ready 96` executed)
+
+## Context
+
+PR #96 sat at DRAFT for >24h on branch `squad/76-ingest-discord-channel`. Blocker is
+external: the bot is not a member of guild `639255937869152267` (STFC Officer Tool
+Discord) and `DISCORD_BOT_TOKEN` is a CI-only secret per stored memory — guild
+membership cannot be probed locally. The PR ships: blocker README + directory stub
++ ready-to-run `scripts/fetch-discord-channel.mjs` + updated knowledge index row.
+567/567 tests pass.
+
+## Options considered
+
+| Opt | Action | Outcome |
+|---|---|---|
+| A | Close PR + close #76 | Throws away script + README; #76 needs re-filing when access lands |
+| B | Close PR, keep #76 open | Same loss as A; tracking issue stays |
+| C | Un-draft + ship | Preserves prep work; #76 closes on merge; refile ingest as fresh ticket when unblocked |
+| D | Hold draft 7 days | Same as A/B if guild access doesn't land; clutters board meanwhile |
+| E | Escalate to user | Unnecessary — context is unambiguous |
+
+## Why C
+
+The docs + script **are** the deliverable for the "blocked" state. The README is a
+self-contained runbook (probe URLs, invite template with `permissions=66560`,
+`discord.gg/BRhru6Vcnj` server invite). The directory convention now exists for
+any future Discord channel ingestion. Script is dead-on-arrival until guild access
+— zero runtime risk. Closing the PR is pure waste.
+
+## Reusable heuristic (external-blocker PRs)
+
+When a PR is blocked by an external party (third-party API access, vendor
+credential, guild admin, etc.) and the PR ships **standalone-useful artifacts**
+(docs of the blocker, ready-to-run script, directory/schema convention) with **no
+runtime risk**, prefer Option C over closing. The artifacts capture the analysis
+work and provide a one-command path forward when the blocker clears. Reserve close
+(A/B) for cases where the prep work is genuinely throwaway or where leaving it in
+the tree creates ongoing confusion.
+
+## Follow-up ticket (post-merge, when guild access lands)
+
+File a fresh issue titled "Ingest STFC Discord channel #1115978499400933473 (guild
+access granted)" with label `squad:o-brien`. Do NOT pre-file — it's board noise
+until the external blocker clears.
+
+## Per Rule 7
+
+Auto-merge intentionally NOT enabled. Kirk may take a beat to scan the script
+(technical surface) before merge. Docs/scope is clean from my side.
+
+— Picard
+
+---
 > Older entries archived to decisions-archive.md (up to 2026-05-18). See archive for history.
 
 # Uhura PR #102 fix — Structural workflow pin tests

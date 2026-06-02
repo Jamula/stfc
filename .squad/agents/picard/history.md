@@ -70,3 +70,41 @@ Participated in:
 
 **Next:** Phase 0 continuation on stfc-76 (frozen worktree).
 
+
+## 2026-06-02 — Triage: PR #96 (discord-channels stub, blocked on guild access)
+
+**Verdict:** Option C — un-drafted PR #96 and posted ship-it rationale.
+
+**Why:** PR ships standalone-useful artifacts (blocker README + directory convention + ready-to-run `scripts/fetch-discord-channel.mjs`) with zero runtime risk (567/567 tests pass; script is dead-on-arrival until bot joins guild). Closing the PR would discard durable preparation work for an external blocker we don't control.
+
+### Learnings
+
+**Reusable heuristic — external-blocker PR triage:**
+
+When a PR is blocked by an external party (third-party API access, vendor credential, guild admin sitting on an invite, etc.) and ships **standalone-useful artifacts** — docs of the blocker, ready-to-run script, directory/schema convention — with **no runtime risk**, prefer Option C (ship preparation, defer execution) over closing.
+
+- Artifacts capture the analysis work and provide a one-command path forward when the blocker clears.
+- The README itself becomes the runbook for whoever tries next (probe URLs, invite templates, server invite, exact permission scopes).
+- Close (A/B) only when prep is genuinely throwaway OR when leaving it in the tree creates ongoing confusion.
+- Don't pre-file a "do the actual work" follow-up ticket — file it when the external blocker clears. Pre-filing is board noise.
+- Don't hold at draft (Option D) — it ages without value and clutters the board.
+
+Per Rule 7, did NOT enable auto-merge — Kirk may want a quick technical scan of the script before merge, even though scope/docs is clean.
+
+
+## Triage heuristic: Ship preparation, defer execution (external blockers)
+
+**Date:** 2026-06-02T03:03:50Z
+
+When a PR is blocked by an external party (third-party API access, vendor credential, guild admin, etc.) and ships **standalone-useful artifacts** (blocker docs, ready-to-run script, directory/schema convention) with **no runtime risk**:
+
+**Prefer:** Ship the prep work (Option C) and file a fresh ticket when the blocker clears.
+**Avoid:** Close PR (options A/B) — throws away analysis and makes restart harder.
+
+The artifacts capture the work and provide a one-command path forward. Zero runtime risk means no downside to shipping.
+
+Reserved for cases where prep work is genuinely throwaway or creates ongoing confusion.
+
+Applied to PR #96 (discord-channels ingest): shipped script + blocker README + directory convention despite bot lacking guild membership. When access lands, fresh issue re-files the ingest task.
+
+— Scribe (logged from orchestration)

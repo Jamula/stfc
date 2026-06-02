@@ -86,3 +86,31 @@ Participated in:
 **Reviewers:** Kirk ✅+📝 (embedded pipeline-review skill), Bashir ✅, Picard ✅, Garak ✅ (re-verified).
 **Outcome:** PR merged 05:43Z. Next: #93 dispatch (knowledge embedding pipeline + handler) — Uhura + Scotty pair on squad/93-crew-v2-knowledge when user confirms.
 
+
+## 2026-06-02 — Q&A: How to communicate with a Discord server from a Discord app
+
+**Requested by:** Cyrus Jamula
+**Type:** Explainer (no code changes)
+
+### What was asked
+"How do I communicate with the Discord server from my Discord app?"
+
+### What was answered (summary)
+Walked Cyrus through his actual repo setup:
+- `src/discord/client.ts` — thin REST client wrapping `https://discord.com/api/v10` with `Authorization: Bot ${token}`. Implements `getMe()`, `getChannelMessages()`, and `postMessage()` (lines 129, 152, 172). Uses typed error classes (401→DiscordAuthError, 403→DiscordChannelAccessError with Discord error code extraction, 429→DiscordRateLimitError with retry, 5xx→DiscordTransientError).
+- `src/discord/ingest.ts` — pagination layer over `getChannelMessages`, up to 5 pages × 100 msgs per channel. Cursor-based (snowflake IDs), skip-dedup.
+- `scripts/discord-ops/set-discord-app-metadata.mjs` — operator-only one-shot PATCH to `/users/@me` and `/applications/@me`.
+- `scripts/fetch-discord-channel.mjs` — NOT yet merged (PR #96); production ingest script.
+
+Explained the three communication modes (REST, Gateway WebSocket, Interactions endpoint) and which applies when. Confirmed this repo uses REST-only, which is correct for the GitHub Actions scheduled-CLI model.
+
+Key blocker: bot not yet a member of guild `639255937869152267` → all guild-scoped calls return 403 (Discord error code 50001). Invite URL pattern from `docs/DISCORD-BOT-SETUP.md` + `permissions=66560`.
+
+`postMessage()` already exists in `src/discord/client.ts` at line 172 — Cyrus doesn't need to write a new HTTP call to send a message.
+
+### Reusable patterns
+- **Permissions bitmask `66560`** = `VIEW_CHANNEL` (1024) + `READ_MESSAGE_HISTORY` (65536). Add `2048` for `SEND_MESSAGES` → bitmask `68608`.
+- **Message Content Intent** must be ON in Developer Portal for `content` field to be non-empty, even on REST (not just Gateway). Documented in `docs/DISCORD-BOT-SETUP.md §2`.
+- **`DISCORD_BOT_TOKEN` is CI-only** — any call from Codespace will 401. Workaround: set a `.env` locally (never commit) or run via GitHub Actions.
+- For "send a message": `POST /channels/{channel_id}/messages` with body `{"content": "..."}`. The repo's `DiscordClient.postMessage()` already wraps this — no curl needed if using TypeScript.
+- GitHub Actions can't hold a Gateway WebSocket. Real-time listening requires a separate always-on host.
