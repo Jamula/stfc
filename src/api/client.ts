@@ -26,9 +26,11 @@ const DEFAULT_TIMEOUT_MS = 10_000;
 export class ApiError extends Error {
   override readonly name: string = "ApiError";
   readonly status: number | undefined;
-  constructor(message: string, status?: number) {
+  readonly retryAfterMs: number | undefined;
+  constructor(message: string, status?: number, options?: { retryAfterMs?: number }) {
     super(message);
     this.status = status;
+    this.retryAfterMs = options?.retryAfterMs;
   }
 }
 
@@ -196,6 +198,7 @@ async function parseAndValidate<T>(
     throw new ApiError(
       redactString(`HTTP ${status} on ${method} ${path}: ${truncate(body, 500)}`),
       status,
+      { retryAfterMs: status === 429 ? parseRetryAfterMs(res.headers.get("retry-after")) : undefined },
     );
   }
 
@@ -250,4 +253,20 @@ function jitter(min: number, max: number): number {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function parseRetryAfterMs(value: string | null): number | undefined {
+  if (!value) return undefined;
+
+  const asSeconds = Number(value);
+  if (Number.isFinite(asSeconds) && asSeconds >= 0) {
+    return Math.max(0, Math.ceil(asSeconds * 1000));
+  }
+
+  const asDate = Date.parse(value);
+  if (Number.isFinite(asDate)) {
+    return Math.max(0, asDate - Date.now());
+  }
+
+  return undefined;
 }
