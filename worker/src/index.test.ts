@@ -35,6 +35,7 @@ async function buildRequest(
   opts: {
     skewSeconds?: number;
     corruptSig?: boolean;
+    signatureOverride?: string;
     missingSignature?: boolean;
     missingTimestamp?: boolean;
     method?: string;
@@ -52,6 +53,9 @@ async function buildRequest(
     // Flip the first nibble to produce an invalid but parseable hex signature
     const first = parseInt(sigHex[0], 16);
     sigHex = ((first + 1) % 16).toString(16) + sigHex.slice(1);
+  }
+  if (opts.signatureOverride !== undefined) {
+    sigHex = opts.signatureOverride;
   }
 
   const headers: Record<string, string> = { "Content-Type": "application/json" };
@@ -111,6 +115,56 @@ describe("stfc-discord-bridge worker", () => {
     expect(await res.text()).toBe("Invalid signature");
   });
 
+  it("rejects odd-length signature hex with 401", async () => {
+    const req = await buildRequest({ type: 1 }, { signatureOverride: "abc" });
+    const ctx = makeMockCtx();
+    const res = await worker.fetch(req, testEnv, ctx as unknown as ExecutionContext);
+    expect(res.status).toBe(401);
+    expect(await res.text()).toBe("Invalid signature");
+  });
+
+  it("rejects non-hex signature values with 401", async () => {
+    const req = await buildRequest(
+      { type: 1 },
+      { signatureOverride: "hello world there!!!!!".padEnd(128, "!") }
+    );
+    const ctx = makeMockCtx();
+    const res = await worker.fetch(req, testEnv, ctx as unknown as ExecutionContext);
+    expect(res.status).toBe(401);
+    expect(await res.text()).toBe("Invalid signature");
+  });
+
+  it("rejects short signature values with 401", async () => {
+    const req = await buildRequest({ type: 1 }, { signatureOverride: "deadbeef" });
+    const ctx = makeMockCtx();
+    const res = await worker.fetch(req, testEnv, ctx as unknown as ExecutionContext);
+    expect(res.status).toBe(401);
+    expect(await res.text()).toBe("Invalid signature");
+  });
+
+  it("rejects long signature values with 401", async () => {
+    const req = await buildRequest(
+      { type: 1 },
+      { signatureOverride: "ab".repeat(100) }
+    );
+    const ctx = makeMockCtx();
+    const res = await worker.fetch(req, testEnv, ctx as unknown as ExecutionContext);
+    expect(res.status).toBe(401);
+    expect(await res.text()).toBe("Invalid signature");
+  });
+
+  it("returns 500 when DISCORD_PUBLIC_KEY is malformed", async () => {
+    const malformedEnv: Env = {
+      ...testEnv,
+      DISCORD_PUBLIC_KEY: "abcd",
+    };
+    const req = await buildRequest({ type: 1 });
+    const ctx = makeMockCtx();
+    const res = await worker.fetch(req, malformedEnv, ctx as unknown as ExecutionContext);
+    expect(res.status).toBe(500);
+    expect(await res.text()).toBe("Server misconfiguration");
+  });
+
   it("PING (type 1) returns PONG {type:1}", async () => {
     const req = await buildRequest({ type: 1 });
     const ctx = makeMockCtx();
@@ -166,6 +220,29 @@ describe("stfc-discord-bridge worker", () => {
       interaction_token: "interaction-token-abc",
       application_id: "app-id-123",
     });
+  });
+
+  it("still returns deferred response when GH dispatch responds with 5xx and logs warning", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 503 }));
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.stubGlobal("fetch", fetchMock);
+
+    const req = await buildRequest({
+      type: 2,
+      token: "interaction-token-xyz",
+      application_id: "app-id-123",
+      data: { name: "crew", options: [] },
+    });
+    const ctx = makeMockCtx();
+    const res = await worker.fetch(req, testEnv, ctx as unknown as ExecutionContext);
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ type: 5 });
+    expect(ctx.waitUntil).toHaveBeenCalledOnce();
+
+    await (ctx.waitUntil as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(warnSpy).toHaveBeenCalledWith("gh dispatch failed: 503");
+    warnSpy.mockRestore();
   });
 
   it("unknown interaction type returns 400", async () => {

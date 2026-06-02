@@ -38,6 +38,10 @@ interface DiscordInteraction {
   };
 }
 
+const HEX_PATTERN = /^[0-9a-fA-F]+$/;
+let checkedPublicKey: string | undefined;
+let checkedPublicKeyValid = false;
+
 export default {
   async fetch(req: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     if (req.method !== "POST") {
@@ -59,11 +63,23 @@ export default {
     }
 
     const body = await req.text();
-    const isValid = await ed.verifyAsync(
-      hexToBytes(signature),
-      new TextEncoder().encode(timestamp + body),
-      hexToBytes(env.DISCORD_PUBLIC_KEY),
-    );
+    if (!isStrictHex(signature, 64)) {
+      return new Response("Invalid signature", { status: 401 });
+    }
+
+    if (!isConfiguredPublicKeyValid(env.DISCORD_PUBLIC_KEY)) {
+      return new Response("Server misconfiguration", { status: 500 });
+    }
+
+    let isValid = false;
+    try {
+      const sigBytes = hexToBytes(signature);
+      const pubKeyBytes = hexToBytes(env.DISCORD_PUBLIC_KEY);
+      const msgBytes = new TextEncoder().encode(timestamp + body);
+      isValid = await ed.verifyAsync(sigBytes, msgBytes, pubKeyBytes);
+    } catch {
+      isValid = false;
+    }
     if (!isValid) {
       return new Response("Invalid signature", { status: 401 });
     }
@@ -81,7 +97,12 @@ export default {
     // ctx.waitUntil keeps the Worker alive after we return the Response, so the
     // GitHub dispatch fetch completes even though Discord got its answer in <3s.
     if (interaction.type === 2) {
-      ctx.waitUntil(dispatchToGitHub(env, interaction));
+      ctx.waitUntil(
+        dispatchToGitHub(env, interaction).catch((error: unknown) => {
+          const errorName = error instanceof Error ? error.name : "UnknownError";
+          console.warn(`gh dispatch threw: ${errorName}`);
+        }),
+      );
       // type 5 = DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE — Discord shows "Bot is thinking..."
       return Response.json({ type: 5 });
     }
@@ -91,7 +112,7 @@ export default {
 };
 
 async function dispatchToGitHub(env: Env, interaction: DiscordInteraction): Promise<void> {
-  await fetch(`https://api.github.com/repos/${env.GH_REPO}/dispatches`, {
+  const response = await fetch(`https://api.github.com/repos/${env.GH_REPO}/dispatches`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${env.GH_DISPATCH_TOKEN}`,
@@ -112,6 +133,24 @@ async function dispatchToGitHub(env: Env, interaction: DiscordInteraction): Prom
       },
     }),
   });
+  if (!response.ok) {
+    console.warn(`gh dispatch failed: ${response.status}`);
+  }
+}
+
+function isConfiguredPublicKeyValid(publicKey: string): boolean {
+  if (checkedPublicKey !== publicKey) {
+    checkedPublicKey = publicKey;
+    checkedPublicKeyValid = isStrictHex(publicKey, 32);
+    if (!checkedPublicKeyValid) {
+      console.error("DISCORD_PUBLIC_KEY misconfigured");
+    }
+  }
+  return checkedPublicKeyValid;
+}
+
+function isStrictHex(value: string, expectedBytes: number): boolean {
+  return value.length === expectedBytes * 2 && HEX_PATTERN.test(value);
 }
 
 function hexToBytes(hex: string): Uint8Array {
