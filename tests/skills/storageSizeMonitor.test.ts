@@ -21,6 +21,12 @@ describe('storageSizeMonitor workflow', () => {
     assert(dispatch !== undefined, 'workflow_dispatch not found');
   });
 
+  it('has no push or pull_request trigger', () => {
+    const on = workflow.on as Record<string, unknown>;
+    assert.strictEqual(on?.push, undefined, 'push trigger must not exist');
+    assert.strictEqual(on?.pull_request, undefined, 'pull_request trigger must not exist');
+  });
+
   it('has correct permissions', () => {
     const perms = workflow.permissions as Record<string, unknown>;
     assert.strictEqual(perms?.contents, 'read', 'contents must be read-only');
@@ -74,6 +80,17 @@ describe('storageSizeMonitor workflow', () => {
       run && run.includes('[storage] data/discord/game-state exceeds threshold'),
       'must search by expected alert title'
     );
+    assert(run && run.includes('--state open'), 'dedup must filter to open issues only');
+  });
+
+  it('issue body mentions threshold value', () => {
+    const jobs = workflow.jobs as Record<string, unknown>;
+    const monitor = jobs?.monitor as Record<string, unknown>;
+    const steps = monitor?.steps as Array<Record<string, unknown>> | undefined;
+    const createStep = steps?.find((s) => (s?.name as string) === 'Create alert issue');
+    assert(createStep, 'Create alert issue step not found');
+    const run = createStep?.run as string | undefined;
+    assert(run && run.includes('100 MB'), 'alert issue body must mention threshold value (100 MB)');
   });
 
   it('checks out with pinned SHA', () => {

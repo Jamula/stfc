@@ -405,7 +405,7 @@ skill"*).
 
 ### 3.6 CI/CD — `.github/workflows/` + `scripts/`
 
-14 workflows live in `.github/workflows/`. Grouped by purpose:
+15 workflows live in `.github/workflows/`. Grouped by purpose:
 
 | Workflow | Purpose | Trigger |
 |---|---|---|
@@ -415,6 +415,7 @@ skill"*).
 | `refresh-token.yml` | STFC JWT refresh via Playwright | weekly cron + dispatch |
 | `discord-ops.yml` | Manual Discord app metadata setter | dispatch **only** (constitution carve-out) |
 | `swa-deploy.yml` | Azure SWA deploy | push to `main`, PR open/sync/close |
+| `storage-size-monitor.yml` | Alert when `data/discord/game-state` exceeds 100 MB | `0 6 * * *` + dispatch |
 | `test.yml` | Typecheck + npm test gate | every push + PR |
 | `squad-test-gate.yml` | Dedicated required-check wrapper | PR |
 | `squad-artifact-hygiene.yml` | Secret + JWT leak scanner | PR touching `specs/`, `docs/`, `.specify/`, `.github/**/*.md` |
