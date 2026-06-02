@@ -1,0 +1,49 @@
+name: Deploy Cloudflare Worker
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'worker/**'
+      - '.github/workflows/deploy-cloudflare-worker.yml'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-cloudflare-worker
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.0
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4.4.0
+        with:
+          node-version-file: 'worker/.nvmrc'
+          cache: npm
+          cache-dependency-path: 'worker/package-lock.json'
+
+      - run: cd worker && npm ci
+      - run: cd worker && npm test
+      - run: cd worker && npm run typecheck
+
+      - uses: cloudflare/wrangler-action@1029e90033977ccf46c2a9b3ddc55e42ad5da467  # v4.0.0
+        with:
+          command: deploy
+          workingDirectory: worker
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - run: |
+          DEPLOYMENT_URL=$(cd worker && npx wrangler deployments list --json | jq -r '.[0].url' 2>/dev/null || echo "https://worker.stfc-gift-redeemer.workers.dev")
+          cat >> $GITHUB_STEP_SUMMARY <<EOF
+          ## ✅ Cloudflare Worker Deployed
+
+          Deployed URL: \`$DEPLOYMENT_URL\`
+
+          **Next step:** Copy the URL above into [Discord Developer Portal](https://discord.com/developers/applications) → Your Application → General Information → Interactions Endpoint URL
+          EOF

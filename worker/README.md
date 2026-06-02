@@ -76,6 +76,35 @@ GH_DISPATCH_TOKEN=<your-github-pat>
 GH_REPO=Jamula/stfc
 ```
 
+## Deployment
+
+This Worker is automatically deployed to Cloudflare via GitHub Actions when `worker/**` files change on the `main` branch.
+
+**Automatic deployment:**
+- Trigger: `git push` to `main` with changes to `worker/` (or the workflow itself)
+- Checks: `npm test` and `npm run typecheck` run first — code that fails tests does not deploy
+- Action: `wrangler deploy` is invoked from `.github/workflows/deploy-cloudflare-worker.yml`
+
+**Manual redeploy:**
+- GitHub → Actions tab → **Deploy Cloudflare Worker** → **Run workflow**
+
+**Required secrets (set once per repo, persists):**
+- `CLOUDFLARE_API_TOKEN` — Cloudflare API token with **Workers Scripts:Edit** permission (create at https://dash.cloudflare.com/profile/api-tokens)
+- `CLOUDFLARE_ACCOUNT_ID` — Your Cloudflare account ID (find at https://dash.cloudflare.com — bottom-left sidebar)
+
+Set both from your local terminal using `gh`:
+```bash
+gh secret set CLOUDFLARE_API_TOKEN --repo Jamula/stfc
+gh secret set CLOUDFLARE_ACCOUNT_ID --repo Jamula/stfc
+```
+
+**After deploy:**
+- Open the workflow run in GitHub Actions
+- Scroll to **Deploy Cloudflare Worker** job → final step
+- Copy the deployed URL from the job summary
+- Paste it into [Discord Developer Portal](https://discord.com/developers/applications) → Your Application → **General Information** → **Interactions Endpoint URL**
+- Discord will verify the endpoint immediately (PING/PONG handshake)
+
 ## Tests
 
 ```bash

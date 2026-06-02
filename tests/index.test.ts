@@ -30,6 +30,7 @@ import "./discord/crewCommandParser.test.ts";
 import "./discord/commandsJson.test.ts";
 import "./digest/digest.test.ts";
 import "./digest/health-remediation.test.ts";
+import "./skills/deployCloudflareWorker.test.ts";
 import "./skills/discordMonitor.test.ts";
 import "./skills/roster.test.ts";
 import "./skills/optimizeCrew.test.ts";
