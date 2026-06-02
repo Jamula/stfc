@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ES2022",
+    "lib": ["ES2022"],
+    "types": ["@cloudflare/workers-types"],
+    "strict": true,
+    "moduleResolution": "bundler",
+    "noEmit": true,
+    // @cloudflare/workers-types and @types/node (pulled in by vitest) both
+    // declare the same Web platform globals (URL, Headers, fetch, etc.).
+    // skipLibCheck suppresses the duplicate-identifier noise from node_modules
+    // declaration files while still enforcing types on our own source.
+    "skipLibCheck": true
+  },
+  "include": ["src/**/*.ts", "vitest.config.ts"]
+}

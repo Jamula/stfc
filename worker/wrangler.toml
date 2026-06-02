@@ -1,0 +1,16 @@
+name = "stfc-discord-bridge"
+main = "src/index.ts"
+compatibility_date = "2026-06-02"
+# @noble/ed25519 uses crypto.subtle (Web Crypto API) natively — no nodejs_compat
+# flag is required. If you switch to tweetnacl, add:
+#   compatibility_flags = ["nodejs_compat"]
+
+[vars]
+# Non-sensitive: repo owner/name for the GitHub dispatch target.
+GH_REPO = "Jamula/stfc"
+
+# Secrets — set via `wrangler secret put <NAME>` (never commit values):
+#   DISCORD_PUBLIC_KEY  — Ed25519 hex public key from Discord Developer Portal
+#                         > General Information > "Public Key"
+#   GH_DISPATCH_TOKEN   — GitHub PAT (fine-grained: contents:read + actions:write,
+#                         or classic: repo scope)
