@@ -411,6 +411,38 @@ describe("runAll", () => {
     assert.equal(result.accounts[0]?.promoCodes[0]?.outcome, Outcomes.CODE_REDEEMED);
   });
 
+  it("caps Retry-After at 60s to prevent hostile-server stalls", async () => {
+    const codeFile = path.join(dir, "promo.txt");
+    fs.writeFileSync(codeFile, "CAPCODE\n", "utf8");
+    let attempts = 0;
+    const sleepCalls: number[] = [];
+
+    const fake = makeFakeClient({
+      listGifts: async () => ({ items: [] }),
+      redeemCode: async () => {
+        attempts += 1;
+        if (attempts === 1) {
+          // Hostile server returns Retry-After: 86400 (1 day in seconds → 86400000 ms)
+          throw new ApiError("HTTP 429", 429, { retryAfterMs: 86_400_000 });
+        }
+        return { code: 0, message: "redeem_success" };
+      },
+    });
+
+    const { result } = await runAll({
+      accounts: [{ name: "main", token: makeJwt({ exp: 9999999999 }) }],
+      clientFactory: () => fake as unknown as ApiClient,
+      promoCodesPath: codeFile,
+      sleep: async (ms) => {
+        sleepCalls.push(ms);
+      },
+    });
+
+    assert.equal(attempts, 2);
+    assert.ok(sleepCalls[0] !== undefined && sleepCalls[0] <= 60_000, `expected sleep ≤ 60000ms, got ${sleepCalls[0]}`);
+    assert.equal(result.accounts[0]?.promoCodes[0]?.outcome, Outcomes.CODE_REDEEMED);
+  });
+
   it("dead-code cache write is atomic (tmp renamed, no leftover tmp file)", async () => {
     const codeFile = path.join(dir, "promo.txt");
     const deadCodesPath = path.join(dir, "promo-code-dead.json");
