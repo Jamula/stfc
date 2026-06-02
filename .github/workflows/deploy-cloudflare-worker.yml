@@ -31,7 +31,8 @@ jobs:
       - run: cd worker && npm test
       - run: cd worker && npm run typecheck
 
-      - uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0  # v4.0.0 (verified via refs/tags/v4.0.0)
+      - id: deploy
+        uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0  # v4.0.0 (verified via refs/tags/v4.0.0)
         with:
           command: deploy
           workingDirectory: worker
@@ -39,7 +40,7 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
       - run: |
-          DEPLOYMENT_URL=$(cd worker && npx wrangler deployments list --json | jq -r '.[0].url' 2>/dev/null || echo "https://worker.stfc-gift-redeemer.workers.dev")
+          DEPLOYMENT_URL="${{ steps.deploy.outputs.deployment-url }}"
           cat >> $GITHUB_STEP_SUMMARY <<EOF
           ## ✅ Cloudflare Worker Deployed
 

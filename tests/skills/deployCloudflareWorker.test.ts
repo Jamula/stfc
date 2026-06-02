@@ -207,5 +207,10 @@ test("deploy-cloudflare-worker.yml: pinning tests", async (t) => {
       (summaryStep?.run as string)?.includes("Cloudflare Worker Deployed"),
       "summary includes 'Cloudflare Worker Deployed' message"
     );
+    // Verifies deployment URL is captured from wrangler-action's deployment-url output (not from shelling out to wrangler).
+    assert.ok(
+      (summaryStep?.run as string)?.includes("steps.deploy.outputs.deployment-url"),
+      "summary step uses wrangler-action deployment-url output"
+    );
   });
 });
