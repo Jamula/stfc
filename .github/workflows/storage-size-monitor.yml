@@ -1,0 +1,76 @@
+name: Storage Size Monitor
+
+on:
+  schedule:
+    - cron: '0 6 * * *'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: storage-size-monitor
+  cancel-in-progress: false
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.0
+
+      - name: Compute folder size
+        id: size
+        run: |
+          SIZE_BYTES=$(du -sb data/discord/game-state 2>/dev/null | awk '{print $1}' || echo 0)
+          SIZE_MB=$((SIZE_BYTES / 1048576))
+          echo "size_mb=$SIZE_MB" >> "$GITHUB_OUTPUT"
+
+      - name: Check threshold
+        id: check
+        run: |
+          SIZE_MB=${{ steps.size.outputs.size_mb }}
+          THRESHOLD=100
+          if (( SIZE_MB >= THRESHOLD )); then
+            echo "exceeded=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exceeded=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Report OK to summary
+        if: steps.check.outputs.exceeded == 'false'
+        run: |
+          SIZE_MB=${{ steps.size.outputs.size_mb }}
+          echo "✅ Storage OK: ${SIZE_MB} MB / 100 MB" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Check for existing alert issue
+        if: steps.check.outputs.exceeded == 'true'
+        id: issue
+        run: |
+          EXISTING=$(gh issue list --search '[storage] data/discord/game-state exceeds threshold' --state open --json number --jq '.[0].number' 2>/dev/null || echo "")
+          if [ -z "$EXISTING" ]; then
+            echo "issue_number=new" >> "$GITHUB_OUTPUT"
+          else
+            echo "issue_number=$EXISTING" >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create alert issue
+        if: steps.check.outputs.exceeded == 'true' && steps.issue.outputs.issue_number == 'new'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue create \
+            --title '[storage] data/discord/game-state exceeds threshold' \
+            --label 'squad:obrien,priority:storage,type:operations' \
+            --body 'Current size: ${{ steps.size.outputs.size_mb }} MB. Threshold: 100 MB. Alert raised: '"$(date -u '+%Y-%m-%dT%H:%M:%SZ')"'. Recommended: review data/discord/game-state contents, archive old days to R2 (deferred #164), or trigger migration. Closes when size drops below 75 MB (hysteresis pending #165).'
+
+      - name: Add comment to existing alert
+        if: steps.check.outputs.exceeded == 'true' && steps.issue.outputs.issue_number != 'new'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue comment ${{ steps.issue.outputs.issue_number }} \
+            --body 'Update: '"$(date -u '+%Y-%m-%dT%H:%M:%SZ')"'. Current size: ${{ steps.size.outputs.size_mb }} MB (exceeds 100 MB threshold).'
+

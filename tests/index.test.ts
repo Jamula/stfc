@@ -32,6 +32,7 @@ import "./digest/digest.test.ts";
 import "./digest/health-remediation.test.ts";
 import "./skills/deployCloudflareWorker.test.ts";
 import "./skills/discordMonitor.test.ts";
+import "./skills/storageSizeMonitor.test.ts";
 import "./skills/discordRegisterCommands.test.ts";
 import "./skills/discordCommandHandler.test.ts";
 import "./skills/roster.test.ts";
