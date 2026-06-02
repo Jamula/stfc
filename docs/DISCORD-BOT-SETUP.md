@@ -250,3 +250,25 @@ PUT endpoint.
 
 > **Tip:** Prefer guild-scoped registration during development — it takes effect
 > instantly and only affects one server. Switch to global once the commands are stable.
+
+### Command routing (`discord-command-handler.yml`)
+
+The Cloudflare Worker bridge dispatches `repository_dispatch` events with
+`event_type: "discord-command"`. Workflow
+`.github/workflows/discord-command-handler.yml` routes the payload to:
+
+- `redeem-status` — reads recent lines from `docs/redeem-history.md`
+- `trigger-redeem` — starts `redeem.yml` and replies with the run ID + link
+- any other command — replies with `Unknown command: <name>`
+
+To add a new slash command end-to-end:
+
+1. Add the command to `discord/commands.json`
+2. Re-register commands (`discord-register-commands.yml`)
+3. Add a new command case in `scripts/discord-handler.mjs`
+4. Add/update tests (`tests/discord/commandsJson.test.ts`,
+   `tests/scripts/discordHandler.test.ts`)
+
+Discord interaction tokens are valid for ~15 minutes. Keep command follow-up
+responses short and immediate (especially for `trigger-redeem`, which replies
+as soon as the workflow run is started).
