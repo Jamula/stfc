@@ -14,6 +14,7 @@
     "name": "game-state",
     "description": "Upload a screenshot or video to capture current game state",
     "type": 1,
+    "default_member_permissions": "8",
     "options": [
       {
         "name": "file",

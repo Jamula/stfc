@@ -92,6 +92,17 @@ describe("discord/commands.json", () => {
     assert.equal(noteOpt.type, 3, "note option must be type 3 (STRING)");
     assert.equal(noteOpt.required, false, "note option must not be required");
   });
+
+  it("includes /game-state with ADMINISTRATOR permission (default_member_permissions='8')", () => {
+    const commands = JSON.parse(readFileSync(COMMANDS_JSON, "utf8"));
+    const cmd = commands.find((c: { name: string }) => c.name === "game-state");
+    assert.ok(cmd, "game-state command missing from commands.json");
+    assert.equal(
+      cmd.default_member_permissions,
+      "8",
+      "game-state must require ADMINISTRATOR (bitmask '8')",
+    );
+  });
 });
 
 describe("scripts/validate-discord-commands.mjs", () => {
@@ -226,6 +237,87 @@ describe("scripts/validate-discord-commands.mjs", () => {
       writeFileSync(fixturePath, JSON.stringify(valid), "utf8");
       const r = runValidator(fixturePath);
       assert.equal(r.status, 0, `expected exit 0 for ATTACHMENT option; stderr=${r.stderr}`);
+      assert.match(r.stdout, /OK:/, "expected OK: prefix in stdout");
+    } finally {
+      unlinkSync(fixturePath);
+    }
+  });
+
+  it("exits 1 on uppercase option names", () => {
+    const broken = [
+      {
+        name: "my-upload",
+        type: 1,
+        description: "Upload a file",
+        options: [{ type: 11, name: "UPPERCASE", description: "bad", required: true }],
+      },
+    ];
+    const fixturePath = resolve(REPO_ROOT, "discord/_test-broken-uppercase-option-name.json");
+    try {
+      writeFileSync(fixturePath, JSON.stringify(broken), "utf8");
+      const r = runValidator(fixturePath);
+      assert.equal(r.status, 1, `expected exit 1 for uppercase option name; stdout=${r.stdout}`);
+      assert.match(r.stderr, /option\[0\]\.name/i, "expected option-name validation error");
+    } finally {
+      unlinkSync(fixturePath);
+    }
+  });
+
+  it("exits 1 on option names with spaces", () => {
+    const broken = [
+      {
+        name: "my-upload",
+        type: 1,
+        description: "Upload a file",
+        options: [{ type: 11, name: "my file", description: "bad", required: true }],
+      },
+    ];
+    const fixturePath = resolve(REPO_ROOT, "discord/_test-broken-space-option-name.json");
+    try {
+      writeFileSync(fixturePath, JSON.stringify(broken), "utf8");
+      const r = runValidator(fixturePath);
+      assert.equal(r.status, 1, `expected exit 1 for option name with space; stdout=${r.stdout}`);
+      assert.match(r.stderr, /option\[0\]\.name/i, "expected option-name validation error");
+    } finally {
+      unlinkSync(fixturePath);
+    }
+  });
+
+  it("exits 0 on a valid lowercase option name", () => {
+    const valid = [
+      {
+        name: "my-upload",
+        type: 1,
+        description: "Upload a file",
+        options: [{ type: 11, name: "note", description: "ok", required: false }],
+      },
+    ];
+    const fixturePath = resolve(REPO_ROOT, "discord/_test-valid-lowercase-option-name.json");
+    try {
+      writeFileSync(fixturePath, JSON.stringify(valid), "utf8");
+      const r = runValidator(fixturePath);
+      assert.equal(r.status, 0, `expected exit 0 for valid lowercase option name; stderr=${r.stderr}`);
+      assert.match(r.stdout, /OK:/, "expected OK: prefix in stdout");
+    } finally {
+      unlinkSync(fixturePath);
+    }
+  });
+
+  it("exits 0 with default_member_permissions='8' on a command", () => {
+    const valid = [
+      {
+        name: "my-upload",
+        type: 1,
+        description: "Upload a file",
+        default_member_permissions: "8",
+        options: [{ type: 11, name: "file", description: "x", required: true }],
+      },
+    ];
+    const fixturePath = resolve(REPO_ROOT, "discord/_test-valid-default-member-permissions.json");
+    try {
+      writeFileSync(fixturePath, JSON.stringify(valid), "utf8");
+      const r = runValidator(fixturePath);
+      assert.equal(r.status, 0, `expected exit 0 with default_member_permissions='8'; stderr=${r.stderr}`);
       assert.match(r.stdout, /OK:/, "expected OK: prefix in stdout");
     } finally {
       unlinkSync(fixturePath);

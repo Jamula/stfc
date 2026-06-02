@@ -25,7 +25,9 @@ const filePath = process.argv[2] ? resolve(process.argv[2]) : DEFAULT_PATH;
 // Discord command naming rules: lowercase letters, numbers, hyphens, underscores.
 // Using \p{Ll} (lowercase letter in any script) per docs:
 // https://discord.com/developers/docs/interactions/application-commands#application-command-object-application-command-naming
-const NAME_PATTERN = "^[-_\\p{Ll}\\p{N}]{1,32}$";
+const NAME_CHARS = "[-_\\p{Ll}\\p{N}]";
+const NAME_REGEX = new RegExp(`^${NAME_CHARS}+$`, "u");
+const NAME_PATTERN = `^${NAME_CHARS}{1,32}$`;
 
 /** @type {import('ajv').JSONSchemaType<unknown>} */
 const commandSchema = {
@@ -111,9 +113,14 @@ if (validate(commands)) {
           );
           process.exit(1);
         }
-        if (typeof opt.name !== "string" || opt.name.length < 1 || opt.name.length > 32) {
+        if (
+          typeof opt.name !== "string" ||
+          opt.name.length < 1 ||
+          opt.name.length > 32 ||
+          !NAME_REGEX.test(opt.name)
+        ) {
           process.stderr.write(
-            `INVALID: ${filePath}\n  command "${command.name}" option[${optIndex}].name must be a string (1-32 chars)\n`,
+            `INVALID: ${filePath}\n  command "${command.name}" option[${optIndex}].name must be a string (1-32 chars, lowercase letters/digits/dashes/underscores)\n`,
           );
           process.exit(1);
         }
