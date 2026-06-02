@@ -1,0 +1,13 @@
+[
+  {
+    "name": "redeem-status",
+    "type": 1,
+    "description": "Show the latest redemption run results"
+  },
+  {
+    "name": "trigger-redeem",
+    "type": 1,
+    "description": "Manually trigger the next gift redemption run",
+    "default_member_permissions": "8"
+  }
+]
