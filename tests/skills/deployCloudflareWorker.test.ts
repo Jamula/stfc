@@ -85,6 +85,24 @@ test("deploy-cloudflare-worker.yml: pinning tests", async (t) => {
     );
   });
 
+  await t.test("setup-node: node-version-file points to root .nvmrc", () => {
+    const steps = (
+      (workflow.jobs as Record<string, Record<string, unknown>>).deploy as Record<
+        string,
+        unknown
+      >
+    ).steps as Array<Record<string, unknown>>;
+
+    const setupNodeStep = steps.find((s) => (s.uses as string)?.includes("actions/setup-node"));
+    const withObj = (setupNodeStep?.with as Record<string, unknown>) || {};
+
+    assert.equal(
+      withObj["node-version-file"],
+      ".nvmrc",
+      "node-version-file points to root .nvmrc (not worker/.nvmrc)"
+    );
+  });
+
   await t.test("steps: npm test and npm run typecheck before deploy", () => {
     const steps = (
       (workflow.jobs as Record<string, Record<string, unknown>>).deploy as Record<
