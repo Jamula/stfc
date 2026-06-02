@@ -4,9 +4,13 @@ on:
   workflow_dispatch:
     inputs:
       older_than_days:
-        description: 'Delete runs older than N days (default: 3)'
+        description: 'Delete runs older than N days. Ignored if older_than_hours is set.'
         required: false
         default: '3'
+      older_than_hours:
+        description: 'Delete runs older than N hours. If set, takes precedence over older_than_days.'
+        required: false
+        default: ''
 
 permissions:
   actions: write
@@ -20,12 +24,25 @@ jobs:
         id: cutoff
         env:
           DAYS: ${{ inputs.older_than_days }}
+          HOURS: ${{ inputs.older_than_hours }}
         run: |
-          [[ "$DAYS" =~ ^[1-9][0-9]*$ ]] || { echo "older_than_days must be a positive integer, got: $DAYS"; exit 1; }
-          # Compute cutoff: current time minus N days
-          CUTOFF=$(date -u -d "$DAYS days ago" +"%Y-%m-%dT%H:%M:%SZ")
+          if [[ -n "$HOURS" && "$HOURS" != "" ]]; then
+            # Use hours logic if provided and non-empty
+            [[ "$HOURS" =~ ^[1-9][0-9]*$ ]] || { echo "older_than_hours must be a positive integer, got: $HOURS"; exit 1; }
+            CUTOFF=$(date -u -d "$HOURS hours ago" +"%Y-%m-%dT%H:%M:%SZ")
+            MODE="hours"
+            MODE_VALUE="$HOURS"
+          else
+            # Fall back to days logic
+            [[ "$DAYS" =~ ^[1-9][0-9]*$ ]] || { echo "older_than_days must be a positive integer, got: $DAYS"; exit 1; }
+            CUTOFF=$(date -u -d "$DAYS days ago" +"%Y-%m-%dT%H:%M:%SZ")
+            MODE="days"
+            MODE_VALUE="$DAYS"
+          fi
           echo "cutoff=$CUTOFF" >> "$GITHUB_OUTPUT"
-          echo "Cutoff timestamp: $CUTOFF"
+          echo "mode=$MODE" >> "$GITHUB_OUTPUT"
+          echo "mode_value=$MODE_VALUE" >> "$GITHUB_OUTPUT"
+          echo "Cutoff timestamp: $CUTOFF (using $MODE_VALUE $MODE)"
 
       - name: Enumerate and delete old runs
         env:
@@ -111,6 +128,8 @@ jobs:
           {
             echo "## Cleanup Summary"
             echo ""
+            echo "- **Mode**: Deleting runs older than ${{ steps.cutoff.outputs.mode_value }} ${{ steps.cutoff.outputs.mode }}"
+            echo "- **Cutoff**: $CUTOFF"
             echo "- **Total runs found** (created before $CUTOFF): $total_found"
             echo "- **Deleted**: $deleted"
             echo "- **Failed**: $failed"
@@ -118,6 +137,4 @@ jobs:
             echo "- **Rate-limited failures** (429): $rate_limited"
             echo "- **Server failures** (5xx): $server_errors"
             echo "- **Skipped** (own run to prevent self-decapitation): $skipped_active"
-            echo ""
-            echo "Cutoff days: ${{ inputs.older_than_days }}"
           } >> "$GITHUB_STEP_SUMMARY"
