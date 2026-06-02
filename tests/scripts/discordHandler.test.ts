@@ -209,13 +209,75 @@ describe("scripts/discord-handler.mjs", () => {
     });
 
     assert.equal(code, 0, stderr.text());
-    assert.match(discordPatch, /📁 Saved https:\/\/github.com\/Jamula\/stfc\/blob\/abc123\/data\/discord\/game-state\/2026-06-02\/064800-state.png/);
-    assert.equal(mem.files.has("data/discord/game-state/2026-06-02/064800-state.png"), true);
-    assert.equal(mem.files.has("data/discord/game-state/2026-06-02/064800-state.png.lineage.json"), true);
+    assert.match(discordPatch, /📁 Saved https:\/\/github.com\/Jamula\/stfc\/blob\/abc123\/data\/discord\/game-state\/2026-06-02\/064800000-state.png/);
+    assert.equal(mem.files.has("data/discord/game-state/2026-06-02/064800000-state.png"), true);
+    assert.equal(mem.files.has("data/discord/game-state/2026-06-02/064800000-state.png.lineage.json"), true);
     assert.equal(mem.files.has("data/discord/game-state/2026-06-02/_index.json"), true);
     const commit = gitCalls.find((c) => c.args[0] === "commit");
     assert.ok(commit?.stdin?.includes("data(game-state): after raid"));
     assert.ok(commit?.stdin?.includes("Source: https://discord.com/channels/g1/c1/..."));
+  });
+
+  it("game-state same-second same-name uploads get unique filenames — no collision", async () => {
+    const mem = createMemFs();
+    const times = [
+      new Date("2026-06-02T06:48:00.000Z"),
+      new Date("2026-06-02T06:48:00.001Z"),
+    ];
+    let callIdx = 0;
+
+    const makeUpload = () =>
+      mod.runCli({
+        env: baseEnv(gameStatePayload()),
+        nowFn: () => times[callIdx++]!,
+        readFileImpl: mem.readFile,
+        writeFileImpl: mem.writeFile,
+        mkdirImpl: mem.mkdir,
+        renameImpl: mem.rename,
+        rmImpl: mem.rm,
+        runGh: async () => "",
+        runGit: async (args) => {
+          if (args[0] === "rev-parse") return "abc123\n";
+          return "";
+        },
+        fetchImpl: async (url: string) => {
+          if (url.includes("cdn.discordapp.com")) {
+            return {
+              ok: true,
+              status: 200,
+              url,
+              headers: createHeaders({ "content-length": "5", "content-type": "image/png" }),
+              arrayBuffer: async () => Buffer.from("abcde"),
+              text: async () => "",
+            };
+          }
+          return { ok: true, status: 200, text: async () => "{}" };
+        },
+        stdout: { write: () => {} },
+        stderr: { write: () => {} },
+      });
+
+    // Run sequentially — shared in-memory FS to test _index accumulation
+    const code1 = await makeUpload();
+    const code2 = await makeUpload();
+
+    assert.equal(code1, 0);
+    assert.equal(code2, 0);
+
+    // Both blob files exist — no overwrite
+    assert.equal(mem.files.has("data/discord/game-state/2026-06-02/064800000-state.png"), true);
+    assert.equal(mem.files.has("data/discord/game-state/2026-06-02/064800001-state.png"), true);
+
+    // Both lineage files exist
+    assert.equal(mem.files.has("data/discord/game-state/2026-06-02/064800000-state.png.lineage.json"), true);
+    assert.equal(mem.files.has("data/discord/game-state/2026-06-02/064800001-state.png.lineage.json"), true);
+
+    // _index.json accumulates 2 distinct entries
+    const indexContent = JSON.parse(await mem.readFile("data/discord/game-state/2026-06-02/_index.json", "utf8"));
+    assert.equal(indexContent.files.length, 2);
+    const names = indexContent.files.map((f: { filename: string }) => f.filename);
+    assert.ok(names.includes("064800000-state.png"), `expected 064800000-state.png in index, got: ${JSON.stringify(names)}`);
+    assert.ok(names.includes("064800001-state.png"), `expected 064800001-state.png in index, got: ${JSON.stringify(names)}`);
   });
 
   it("game-state path traversal filename is sanitized and stays under target folder", async () => {

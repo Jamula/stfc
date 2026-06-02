@@ -346,9 +346,11 @@ export async function handleGameStateCommand({
   const today = capturedAtUtc.slice(0, 10);
   const hhmmss = capturedAtUtc.slice(11, 19).replace(/:/g, "");
 
+  const ms = capturedAtUtc.slice(20, 23); // 3-digit milliseconds from ISO string
+
   const cleanName = sanitizeFilename(attachment.filename);
   const outDir = `${GAME_STATE_BASE_DIR}/${today}`;
-  const outFile = `${outDir}/${hhmmss}-${cleanName}`;
+  const outFile = `${outDir}/${hhmmss}${ms}-${cleanName}`;
 
   const baseDirAbs = path.resolve(GAME_STATE_BASE_DIR);
   const outFileAbs = path.resolve(outFile);
