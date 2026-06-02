@@ -108,6 +108,9 @@ gh secret set CLOUDFLARE_API_TOKEN --repo Jamula/stfc
 
 gh secret set CLOUDFLARE_ACCOUNT_ID --repo Jamula/stfc
 # Paste your Cloudflare Account ID (from A2), then press Enter
+
+gh secret set ALLOWED_GUILD_IDS --repo Jamula/stfc
+# Comma-separated Discord guild IDs allowed to run slash workflows (e.g. 123,456)
 ```
 
 **Verify:**
@@ -120,6 +123,7 @@ Should show:
 CLOUDFLARE_API_TOKEN
 CLOUDFLARE_ACCOUNT_ID
 DISCORD_BOT_TOKEN          # should already exist from #143
+ALLOWED_GUILD_IDS         # required for /game-state handler allowlist re-check
 ```
 
 ---

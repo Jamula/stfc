@@ -57,6 +57,7 @@ describe(".github/workflows/discord-command-handler.yml", () => {
   it("invokes scripts/discord-handler.mjs and maps DISCORD_BOT_TOKEN from secrets", { skip: yaml === undefined }, () => {
     assert.match(yaml!, /node\s+scripts\/discord-handler\.mjs/);
     assert.match(yaml!, /DISCORD_BOT_TOKEN:\s*\$\{\{\s*secrets\.DISCORD_BOT_TOKEN\s*\}\}/);
+    assert.match(yaml!, /ALLOWED_GUILD_IDS:\s*\$\{\{\s*secrets\.ALLOWED_GUILD_IDS\s*\}\}/);
   });
 
   it("does not print the bot token variable in run commands", { skip: yaml === undefined }, () => {

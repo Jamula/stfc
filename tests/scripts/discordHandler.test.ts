@@ -42,6 +42,7 @@ function baseEnv(payload: Record<string, unknown>): Record<string, string> {
     GITHUB_REPOSITORY: "Jamula/stfc",
     GITHUB_REF_NAME: "main",
     GITHUB_SERVER_URL: "https://github.com",
+    ALLOWED_GUILD_IDS: "g1,g2",
   };
 }
 
@@ -338,6 +339,28 @@ describe("scripts/discord-handler.mjs", () => {
 
     assert.equal(code, 1);
     assert.match(discordPatch, /❌ attachment.url must use Discord CDN hostname/);
+  });
+
+  it("game-state rejects guilds outside ALLOWED_GUILD_IDS", async () => {
+    let discordPatch = "";
+
+    const env = baseEnv(gameStatePayload({ guild_id: "g9" }));
+    env.ALLOWED_GUILD_IDS = "g1,g2";
+
+    const code = await mod.runCli({
+      env,
+      runGh: async () => "",
+      runGit: async () => "",
+      fetchImpl: async (_url: string, init: any) => {
+        discordPatch = String(init.body ?? "");
+        return { ok: true, status: 200, text: async () => "{}" };
+      },
+      stdout: { write: () => {} },
+      stderr: { write: () => {} },
+    });
+
+    assert.equal(code, 1);
+    assert.match(discordPatch, /❌ guild is not allowlisted for game-state/);
   });
 
   it("game-state index update is atomic via temp-file rename", async () => {

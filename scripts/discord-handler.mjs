@@ -90,6 +90,28 @@ export function sanitizeLine(input, fallback = "unknown") {
   return clean.length > 0 ? clean : fallback;
 }
 
+export function parseAllowedGuildIds(raw) {
+  if (typeof raw !== "string") return [];
+  return raw
+    .split(",")
+    .map((v) => v.trim())
+    .filter((v) => v.length > 0);
+}
+
+export function assertGuildAllowed(payload, allowedGuildIds) {
+  if (payload.command !== "game-state") return;
+
+  if (!payload.guild_id || typeof payload.guild_id !== "string") {
+    throw new Error("game-state requires guild_id");
+  }
+  if (!Array.isArray(allowedGuildIds) || allowedGuildIds.length === 0) {
+    throw new Error("ALLOWED_GUILD_IDS is required for game-state");
+  }
+  if (!allowedGuildIds.includes(payload.guild_id)) {
+    throw new Error("guild is not allowlisted for game-state");
+  }
+}
+
 export function validateCdnUrl(rawUrl) {
   let parsed;
   try {
@@ -490,6 +512,7 @@ export async function runCli({
 
     payload = JSON.parse(env.DISCORD_CLIENT_PAYLOAD);
     validatePayload(payload);
+    assertGuildAllowed(payload, parseAllowedGuildIds(env.ALLOWED_GUILD_IDS));
 
     const repo = env.GITHUB_REPOSITORY;
     if (!repo) throw new Error("GITHUB_REPOSITORY env var not set");
