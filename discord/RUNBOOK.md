@@ -74,10 +74,10 @@ Each step includes: **(a) what to do**, **(b) the exact command or click path**,
 4. Expiration: 90 days (rotate quarterly)
 5. Resource owner: `Jamula`
 6. Repository access: **Only select repositories** → `Jamula/stfc`
-7. **Permissions:** Expand the following and set to **Read and write** (or as specified):
-   - **Actions:** `Read and write` (to allow `repository_dispatch` trigger)
-   - **Contents:** `Read only` (to allow reading the repo, if needed for context)
+7. **Permissions:** Configure the token with:
+   - **Contents:** `Read and write` (required for `repository_dispatch`)
    - **Metadata:** `Read only` (required; GitHub always enforces this for any PAT)
+   - **Actions:** no additional permission needed for `repository_dispatch`
 8. Click **Generate token**
 9. **Copy the token immediately** — it will not be shown again
 10. Store it in a secure place; you will use it in step D
@@ -147,25 +147,34 @@ Run these commands from your **local terminal**:
 ```bash
 cd /path/to/stfc/worker
 
+# One-time CLI auth pre-flight (recommended path: repo-pinned wrangler via npx)
+npx wrangler --version
+npx wrangler login
+
+# Alternative if you prefer a global install:
+# npm install -g wrangler
+# wrangler login
+
 # Set the Discord Public Key on the Worker
-wrangler secret put DISCORD_PUBLIC_KEY
+npx wrangler secret put DISCORD_PUBLIC_KEY
 # Paste your Discord Public Key (from A4), then press Enter
 
 # Set the GitHub dispatch token on the Worker
-wrangler secret put GH_DISPATCH_TOKEN
+npx wrangler secret put GH_DISPATCH_TOKEN
 # Paste your GitHub fine-grained PAT (from A3), then press Enter
 ```
 
+You can verify auth with `npx wrangler whoami` (or `wrangler whoami` if using a global install) — it should print your Cloudflare account email.
+
 **Verify:**
 ```bash
-wrangler secret list
+npx wrangler secret list
 ```
 
 Should show:
 ```
 DISCORD_PUBLIC_KEY
 GH_DISPATCH_TOKEN
-GH_REPO (should already exist — value is "Jamula/stfc")
 ```
 
 ---
@@ -242,12 +251,12 @@ GH_REPO (should already exist — value is "Jamula/stfc")
 | Symptom | Root Cause | Check | Fix |
 |---------|-----------|-------|-----|
 | Discord Developer Portal save of Interactions Endpoint URL **fails** (error message: "Invalid Interactions Endpoint URL" or timeout) | Worker not deployed, or `DISCORD_PUBLIC_KEY` not set on Worker | `cd worker && wrangler tail` (watch live logs); check step C deployed successfully; check step D secrets were set | (1) Re-run step C deploy, (2) Verify step D secrets with `wrangler secret list`, (3) Re-try Discord save |
-| Slash command appears in autocomplete but responding with **"Application did not respond"** | Worker timing out (Discord enforates 3-second initial response limit), or Worker signature verification failing | `cd worker && wrangler tail` (watch logs when you invoke the command); look for errors like "timestamp too skewed" or "invalid signature" | (1) Check Worker secrets in step D — `DISCORD_PUBLIC_KEY` must be exactly correct, (2) Check Discord server system clock is in sync (test: `date` command should be within ±5 min of UTC), (3) If issue persists, re-do step D and step E |
-| `/trigger-redeem` responds **"401 Bad Credentials"** | `GH_DISPATCH_TOKEN` wrong, expired, or lacks required scope | (1) Verify token was set in step D: `wrangler secret list`, (2) Check token expiry: `gh auth token` and verify the token hasn't expired (GitHub UI shows expiry date), (3) Check permissions: re-read step A3 "Permissions" — ensure `Actions: Read and write` is set | Re-generate the GitHub PAT per step A3 and re-set it per step D |
+| Slash command appears in autocomplete but responding with **"Application did not respond"** | Worker timing out (Discord enforces 3-second initial response limit), or Worker signature verification failing | `cd worker && npx wrangler tail` (watch logs when you invoke the command); look for errors like "timestamp too skewed" or "invalid signature" | (1) Check Worker secrets in step D — `DISCORD_PUBLIC_KEY` must be exactly correct, (2) Check Discord server system clock is in sync (test: `date` command should be within ±5 min of UTC), (3) If issue persists, re-do step D and step E |
+| `/trigger-redeem` responds **"401 Bad Credentials"** | `GH_DISPATCH_TOKEN` wrong, expired, or lacks required scope | (1) Verify token was set in step D: `npx wrangler secret list`, (2) Check token expiry in GitHub UI, (3) Check permissions: re-read step A3 "Permissions" — ensure `Contents: Read and write` is set | Re-generate the GitHub PAT per step A3 and re-set it per step D |
 | Slash commands **don't appear at all** in Discord autocomplete | Registration workflow didn't run, or guild_id mismatch (if testing guild-scoped) | (1) Check Actions tab — was the Register Discord Commands workflow triggered? (2) If you registered guild-scoped (step F), verify you're testing in the correct server by comparing server ID to guild_id input | Re-run step F with correct guild_id (or empty for global) |
 | Worker deployed but responding with **500 (Server misconfiguration)** when you try to save Interactions Endpoint URL | `DISCORD_PUBLIC_KEY` is invalid (e.g., not a valid hex string) | `wrangler tail` and look for "Invalid signature" or hex parsing errors | Re-check step A4 — Discord Public Key should be a ~64-character hex string (no dashes, spaces, or special chars). Re-copy from Developer Portal and re-set per step D |
 | Commands work in one server but not another | Global vs guild-scoped registration mismatch | (1) Check how you registered (step F) — if guild-scoped, commands only appear in that guild, (2) If you registered global, wait ~1 hour for propagation | Re-register either guild-scoped for the target server or global (then wait 1 hour) |
-| **CodeQL scanning fails on Worker code** | CodeQL or required CI check on the Worker failed on `wrangler` deployment | Check Actions run logs for CodeQL errors; see [Rule 13a](../../.github/.#/copilot-instructions.md#rule-13a-codeql-alerts-api-403--token-scope-diagnosis) in copilot-instructions.md | Usually resolves on its own; if blocking a deploy, ask in `#stfc` Slack |
+| **CodeQL scanning fails on Worker code** | CodeQL or required CI check on the Worker failed on `wrangler` deployment | Check Actions run logs for CodeQL errors; see [Rule 13a](../.github/copilot-instructions.md#13-codespaces-operational-gotchas) in copilot-instructions.md | Usually resolves on its own; if blocking a deploy, ask in `#stfc` Slack |
 
 ---
 
