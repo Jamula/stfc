@@ -34,7 +34,8 @@ Three bindings are required. Set the secrets with wrangler — **never** commit 
 # Ed25519 hex public key from Discord Developer Portal > your app > General Information
 wrangler secret put DISCORD_PUBLIC_KEY
 
-# GitHub PAT with fine-grained permissions: contents:read + actions:write
+# GitHub PAT with fine-grained permissions: contents:write
+# (metadata:read is automatically enforced by GitHub for fine-grained PATs)
 # (or classic PAT with `repo` scope)
 wrangler secret put GH_DISPATCH_TOKEN
 ```
@@ -126,7 +127,7 @@ Tests cover:
 | Binding | Type | Value |
 |---|---|---|
 | `DISCORD_PUBLIC_KEY` | Secret | Ed25519 hex public key from Developer Portal |
-| `GH_DISPATCH_TOKEN` | Secret | GitHub PAT (contents:read + actions:write) |
+| `GH_DISPATCH_TOKEN` | Secret | GitHub PAT (contents:write; metadata:read auto-enforced) |
 | `GH_REPO` | Var | `Jamula/stfc` |
 
 ## Related issues
