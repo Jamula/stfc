@@ -1,3 +1,7 @@
+## Session 2026-06-02 — Discord slash epic #143 shipped
+
+Parallel fleet delivered 6 PRs (commands.json, register workflow, Worker bridge, handler workflow, deploy, runbook). 4 reviewer-lockout cycles (Garak blockers → Scotty fixes). Epic fully operational.
+
 # Project Context
 
 - **Owner:** cyrusj
@@ -173,3 +177,23 @@ Participated in:
 ## 2026-06-02T03:38Z — Discord slash command handler workflow #147 assigned
 
 Epic #143 (Discord slash commands, Option B) filed with 6 children. Scotty owns #147 (handler workflow via `repository_dispatch`). Depends on #144 (commands.json). Handler invokes `gh workflow run redeem.yml` and posts follow-up via Discord API. Expected complexity: medium. Coordinate with Uhura on dispatcher wire-up in `src/discord/crewCommandParser.ts` (shared file — Uhura owns, Scotty imports from `src/crew/handlers/index.ts`).
+
+## Learnings
+
+### Rebase conflict patterns for additive changes
+
+When two PRs touch the same file but in non-overlapping ways (e.g., appending distinct doc sections, adding separate test imports), conflicts are **purely additive** — keep both sides verbatim, remove the conflict markers, and stage the resolved file. Git cannot auto-merge when both sides append to the same region even if the content doesn't logically conflict.
+
+Key steps for additive rebase conflicts:
+1. Identify which side is HEAD (origin/main) and which is your incoming commit.
+2. For docs: order the sections logically (e.g., register-commands before command-routing since registration is a prerequisite to routing).
+3. For test index files: preserve all imports in order — HEAD imports first, then your new ones.
+4. `git add <files>` then `GIT_EDITOR=true git rebase --continue` to avoid an editor prompt.
+
+### force-with-lease after rebase
+
+After any `git rebase` that rewrites history (produces new SHAs), use `git push --force-with-lease origin <branch>` — NOT `--force`. `--force-with-lease` verifies the remote hasn't been updated by someone else since your last fetch, preventing clobbering concurrent pushes. In single-maintainer repos this is mostly academic but is still the correct default.
+
+### Rule 22: npm ci in fresh/reused worktrees
+
+After a rebase into an existing worktree with a `node_modules` symlink, `tsx` (and other devDependencies) may be missing. Always run `npm ci` before the first `npm test` in a worktree to avoid misleading `ERR_MODULE_NOT_FOUND` failures that look like real test breaks.

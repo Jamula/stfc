@@ -276,558 +276,6 @@ Auto-merge intentionally NOT enabled. Kirk may take a beat to scan the script
 — Picard
 
 ---
-> Older entries archived to decisions-archive.md (up to 2026-05-18). See archive for history.
-
-# Uhura PR #102 fix — Structural workflow pin tests
-
-**By:** Uhura
-**Date:** 2026-05-31
-**PR:** https://github.com/Jamula/stfc/pull/102
-**Status:** Proposed canonical pattern
-
-## Decision
-
-Workflow pinning tests should parse workflow YAML and assert on the parsed object graph, not on raw substrings or ad hoc regex over the whole file.
-
-## Canonical pattern
-
-1. Load the workflow once with `readFileSync()`.
-2. Parse with `parseYaml()` from the existing `yaml` package.
-3. Assert trigger keys structurally, e.g. `Object.keys(workflow.on)`.
-4. Assert paths via `workflow.on.push.paths`.
-5. Assert no-cron via `workflow.on.schedule === undefined`.
-6. Assert permissions/concurrency via their parsed keys.
-7. Walk `workflow.jobs.<job>.steps[]`; for each step with `uses`, assert `^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+@[0-9a-f]{40}$`.
-8. Find exact skill `run:` commands and commit-message blocks from parsed steps.
-
-## Why
-
-Raw substring checks let comments satisfy or break acceptance gates. PR #102 showed both sides: `data/crew/**` could pass from a comment, while a literal `# NO schedule:` comment tripped a naive no-cron guard. Parsed-structure assertions pin the actual GitHub Actions semantics.
-# Uhura PR #103 docs alignment decision
-
-- Date: 2026-05-31
-- Artifact: PR #103 (`squad/83-operator-docs`)
-- Decision: For Finding 3, align `docs/CREW-OPTIMIZER.md` to the workflow behavior shipped by PR #102 rather than changing code or PR #102 from this lockout-routed docs revision.
-- Rationale: PR #102 is O'Brien's separate workflow-pin artifact. PR #103 owns operator documentation only, so the safe fix is docs-aligns-to-code/workflow behavior, not code-aligns-to-docs. The docs now state that v1 runs `skill:optimize-crew --all` and `skill:progression --all` once per `data/crew/**` push and that per-task iteration is a follow-up.
-# Decision: Constitution v2.0.0 amendment (Phase 0 Wave 1)
-
-**Author:** Picard (M2 / Engineering Manager)
-**Date:** 2026-05-31T21:52:57+00:00
-**Status:** SHIPPED — committed on `squad/005-phase0-governance`
-**Closes:** #105
-**Epic:** #104 (005-web-control-panel)
-
-## Decision
-
-Amended `.specify/memory/constitution.md` to **v2.0.0 (MAJOR)** and
-re-synced `.specify/templates/plan-template.md` in the same commit
-(per Rule 1).
-
-## Rationale for MAJOR (vs MINOR)
-
-Three changes are independently MAJOR-eligible — they ride
-together in v2.0.0 because they all flow from the
-005-web-control-panel epic:
-
-1. **Principle IV gains a new runtime surface carve-out.** v1.x
-   framed the project as "headless TypeScript Node CLI." v2.0.0
-   admits a SWA + linked Functions surface alongside it. CLI
-   obligations on `src/` are preserved verbatim, but the
-   constitution's worldview is no longer CLI-only. This is the
-   same shape of change as the v1.5.0 Principle V ops-script
-   carve-out, but at the runtime-surface layer rather than the
-   secret-custody layer — strictly broader.
-
-2. **Principle I gains a new untrusted-input class.** Chat input
-   (user messages, retrieved corpus, recent digests) is declared
-   UNTRUSTED for tool dispatch. Any chat-initiated tool call must
-   flow through an HMAC-signed confirmation gate. This is a NEW
-   obligation on any future code path that lets external chat
-   content reach a dispatcher.
-
-3. **Security & Compliance Constraints gain a uniform
-   workflow-input obligation.** Every `workflow_dispatch`-eligible
-   workflow callable from the SWA control panel MUST declare
-   `correlation_id`, `triggered_by`, `reason` inputs. The actual
-   YAML edits to `redeem.yml`, `discord-monitor.yml`, and
-   `refresh-token.yml` land in Phase 1+; the constitutional
-   obligation lands in v2.0.0.
-
-Plus five additive changes (would be MINOR on their own):
-
-- Three new committed durable artifact trees: `data/runs/*.json`,
-  `data/audit/*.jsonl`, `data/digests/*.md` (now tracked).
-- Five new sanctioned secrets (SWA-Function-only):
-  `GITHUB_APP_PRIVATE_KEY`, `MODELS_API_TOKEN`, `GEMINI_API_KEY`,
-  `SWA_DEPLOYMENT_TOKEN`, `AZURE_TABLE_CONNECTION_STRING`.
-- Two new outbound destinations:
-  `https://models.inference.ai.azure.com/...` (GitHub Models),
-  `https://generativelanguage.googleapis.com/...` (Gemini Flash).
-- A hard isolation invariant: no STFC/Discord secret EVER crosses
-  into the SWA Function runtime; `GITHUB_APP_PRIVATE_KEY` and
-  `MODELS_API_TOKEN` MUST be separate secret values.
-- Tracked-rather-than-ignored declaration for `data/digests/*.md`
-  (the `.gitignore` removal is deferred to Phase 3 implementation
-  per the cross-artifact follow-ups note in the SIR).
-
-## Validation performed
-
-- ✅ Rule 1 grep on plan-template enumerates every new sanctioned
-  thing (`GITHUB_APP_PRIVATE_KEY`, `MODELS_API_TOKEN`,
-  `GEMINI_API_KEY`, `SWA_DEPLOYMENT_TOKEN`,
-  `AZURE_TABLE_CONNECTION_STRING`,
-  `models.inference.ai.azure.com`,
-  `generativelanguage.googleapis.com`, `data/runs`, `data/audit`,
-  `correlation_id`). All present in the Principle V row.
-- ✅ `npm run typecheck` — clean.
-- ✅ `npm test` — 704/704 passing (no regressions; one initial
-  failure on `tests/constitution/discord-ops-carveout.test.ts`
-  was caused by my SIR's first reference to `scripts/discord-ops/`
-  moving outside the carve-out body; rephrased to remove the
-  exact-path token from that one SIR sentence so the test's
-  `indexOf` again lands on the v1.5.0 SIR body — which is the
-  expected anchor).
-
-## Carry-overs to subsequent waves
-
-- **Phase 0 Wave 2:** `/speckit.specify` + `/speckit.clarify` open
-  on the 005-web-control-panel feature (Picard owns).
-- **Phase 0 Wave 3:** threat model (Garak), contract schemas
-  (Kirk authors / Bashir validates), standing-rules codification
-  (Picard/Tuvok), platform spike (O'Brien).
-- **Phase 1:** SWA deploy contract + bootstrap (O'Brien); first
-  use of the new sanctioned secrets and the new workflow-input
-  obligation.
-- **Phase 3:** removal of `data/digests/*.md` from `.gitignore`
-  when the chat retrieval / digest reader code lands.
-
-## Known-Tension carry-overs (unchanged from v1.6.0)
-
-The three known tensions from v1.2.0 (Principle III auth/me
-overclaim; Principle VII scan-path overclaim; redeem/refresh
-concurrency lock un-principled) are preserved verbatim. Not in
-scope for this amendment.
-
-## Picard verdict on own work
-
-APPROVE ✅ — scope matches issue #105 exactly; no scope creep; no
-secrets in artifacts; SIR is precise about what changed and what
-deferred; plan-template Rule 1 sync verified; tests green.
-
-# Picard — Phase 0 Wave 2: 005-web-control-panel speckit opened
-
-**Date:** 2026-05-31T22:40:48+00:00
-**Branch:** `squad/005-phase0-governance`
-**Commit:** `b5346c7`
-**Closes:** #106
-
-## Decision
-
-Opened `specs/005-web-control-panel/` with the full speckit artifact set,
-mirroring the 004-crew-optimizer Phase 0 precedent (commit `c6432d9`).
-Wave 2 of the bundled Phase 0 effort — constitution v2.0.0 (#105) was
-wave 1 (commit `988c302`).
-
-## What landed
-
-- `spec.md` — clarified spec, 6 user stories, FR-001..FR-093 partitioned
-  by phase (matches v3 plan's phase boundaries 1:1), 10 edge cases,
-  explicit out-of-scope list, §Clarifications block resolving all 8
-  open questions inline (no `[NEEDS CLARIFICATION]` markers remain).
-- `plan.md` — placeholder pointing at the v3 plan in session state.
-  Migration to `/speckit.plan` format intentionally deferred to keep
-  this PR small.
-- `research.md` — Phase 0 Platform Spike placeholder enumerating
-  O'Brien's three open questions (#109).
-- `data-model.md` — schema inventory for the three contracts (Kirk #6
-  schema_version rule encoded).
-- `contracts/README.md` — placeholder for the JSON schemas (#108).
-- `threat-model.md` — placeholder with explicit STRIDE-lite coverage
-  scope for Garak (#107).
-- `quickstart.md` — placeholder for Phase 1.
-- `checklists/requirements.md` — speckit quality checklist; all boxes
-  checked.
-
-## Source-of-truth posture
-
-The v3 plan
-(`~/.copilot/session-state/d40435a0-d735-463b-887e-e5f586f7369b/plan.md`)
-remains the binding plan-of-record until `/speckit.plan` migration
-lands in a follow-up Phase 0 issue. The spec extracts from the plan
-rather than inventing scope — every FR maps to a v3 plan phase, every
-clarification answer is the v3 plan's deferred-decision default.
-
-## Rule observance
-
-- **Rule 2:** Staged each spec path individually via
-  `git add specs/005-web-control-panel/`; no `.squad/` paths touched.
-  This decision note remains UNCOMMITTED in
-  `.squad/decisions/inbox/picard-speckit-005.md` for Scribe to commit
-  in a separate session.
-- **Rule 5:** Phase-boundary commit at the end of wave 2 (one bundled
-  PR per the 004 precedent). Not deferring to end-of-session.
-- **Rule 6:** `Closes #106` on its own line in the commit body.
-- **Rule 4:** Worktree branch tracking `origin/squad/005-phase0-governance`;
-  no `main` rebase required (working in a feature worktree per
-  `/workspaces/stfc-p0`).
-
-## Verification
-
-- `npm run typecheck` → exit 0 (no diagnostics).
-- `npm test` → 704 pass / 0 fail (no regressions).
-- `git log -1` → commit `b5346c7` on
-  `squad/005-phase0-governance`, pushed to origin successfully.
-
-## Next waves on this branch
-
-Coordinator's call, but the natural ordering is:
-
-1. **#107** — Garak writes `threat-model.md` (STRIDE-lite analysis).
-2. **#108** — Kirk authors the three JSON schemas; Bashir adds
-   round-trip validation tests.
-3. **#109** — O'Brien runs the platform spike and commits findings to
-   `research.md`.
-4. **#111** — Picard + Tuvok codify Rules 14–18 in
-   `.github/copilot-instructions.md`.
-
-When all four land, the Phase 0 PR is review-ready (Picard + Garak +
-Tuvok reviewer matrix per FR-091 / v3 plan §reviewer matrix).
-
-# Decision — PR #111 governance review (Picard)
-
-**Date:** 2026-05-31T23:11Z
-**Reviewer:** Picard (M2 / Engineering Manager)
-**PR:** #111 — feat(005-web-control-panel): Phase 0 — governance + spec + threat model + schemas (#104)
-**Verdict:** **APPROVE** ✅ on governance / scope / bundle-integrity grounds.
-
-## Scope verification (v3 plan §146–§158)
-
-Six Phase 0 deliverables promised. Six delivered:
-
-| v3 promise | Commit | Status |
-|---|---|---|
-| Constitution v2.0.0 MAJOR + plan-template re-sync (Rule 1) | `988c302` | ✅ |
-| `specs/005-web-control-panel/` opened (spec/plan/research/data-model/quickstart/contracts/threat-model placeholders) | `b5346c7` | ✅ |
-| Rules 14–18 in `.github/copilot-instructions.md` (NOT constitution) | `078d01f` | ✅ |
-| Platform spike `research.md` (5 questions resolved) | `e2e463c` | ✅ |
-| STRIDE-lite `threat-model.md` | `e5e26e4` | ✅ |
-| Three JSON Schema 2020-12 contracts + round-trip tests | `aeef1b5` | ✅ |
-
-## Bundle integrity (004 `c6432d9` precedent)
-
-One PR, six waves, one merge boundary. Matches the 004 precedent I
-established. No phase-boundary off-by-one.
-
-## Constitution amendment scope (v3 line 149 checklist)
-
-Every promised expansion present in `988c302` commit body:
-- ✅ Outbound LLM hosts (Models + Gemini)
-- ✅ Durable artifacts (`data/runs`, `data/audit`, `data/digests`)
-- ✅ SWA+Functions runtime carve-out (Principle IV)
-- ✅ GitHub App private key sanctioned (Principle V)
-- ✅ correlation_id workflow-input obligation
-- ✅ Chat untrusted-input addendum (Principle I)
-- ✅ "No STFC/Discord secrets cross into SWA" isolation invariant
-- ✅ Plan-template re-synced in same commit (Rule 1 satisfied)
-
-## Rules placement
-
-Rules 14–18 landed in `.github/copilot-instructions.md` with
-cross-references to constitutional Principles VII (docs) and IX (tests)
-rather than duplicating them in the constitution. This is exactly the
-placement I directed in earlier guidance. ✅
-
-## Platform spike clarity for Phase 1
-
-`research.md` reports **5/5 GO, no blockers**. One soft note (Q4: Cyrus
-must confirm Azure subscription/region before Storage Account provisioning)
-explicitly flagged as "not a blocker on contract or code work". Phase 1
-can start cleanly once the in-flight 003/004 burn-down clears.
-
-## What I did NOT review (charter boundaries)
-
-- Constitution wording quality → Tuvok
-- Threat model factual claims → Garak
-- Contract schema technical correctness → Kirk (pre-stamped during #110)
-- Test coverage adequacy → Bashir
-- My own authorship of #105/#106 — reviewing only as bundle governance,
-  not as approving my own work
-
-## Recommendation
-
-Merge after Garak and Tuvok verdicts land. CI quota-gated per user
-directive; local 754/754 green stands in for CI-green per Rule 7
-fallback. Rule 7 auto-merge fires once all reviewer headers post APPROVE.
-
-# Kirk — Phase 0 wave 3 contract schemas v1 (issue #110)
-
-**Date:** 2026-05-31T22:40:48+00:00
-**Author:** Kirk (Lead / Architect)
-**Status:** Decided + shipped (commit `aeef1b5`, PR: branch
-`squad/005-phase0-governance`)
-**Closes:** #110
-
-## Decisions
-
-1. **JSON Schema 2020-12**, not Draft-07. Needed `oneOf` over a
-   discriminator (`workflow`) plus `not: { anyOf: [...] }` for forbidden
-   audit fields, and we want to keep the door open for `if/then/else`
-   refinements in v1.x without a draft bump. Ajv 2020 supports it.
-
-2. **`oneOf` over `workflow`** chosen over `if/then/else` chains for
-   `run-result.business_result`. Reads cleaner with three workflow
-   families and Ajv reports `oneOf` failures more interpretably than
-   chained conditionals when a producer ships the wrong sub-shape.
-
-3. **Redaction-by-design encoded in the schema, not just enforced in
-   producer code.** `audit-event.json` has
-   `not: { anyOf: [ {required:["prompt"]}, ... ] }` for
-   `prompt | raw_error | args | payload`. Bashir's tests assert the
-   rejection. This makes "we accidentally logged a prompt" a
-   schema-validation failure at write time, not just a lint warning.
-
-4. **Nullable-but-present**: `audit-event.workflow | run_id |
-   correlation_id | error_code` are typed `["string", "null"]` AND
-   listed in `required[]`. Producers MUST emit the keys explicitly
-   (with `null` when not applicable) — prevents "field absent vs field
-   null" ambiguity downstream.
-
-5. **`schema_version` is `const: "1"`**, not `pattern: "^1\\..*"`.
-   We promised consumers can reject unknown versions; the simplest way
-   is exact-match. Future v1.x revisions add OPTIONAL fields (back-compat
-   per Kirk #6); breaking changes bump to `const: "2"` with a
-   coordinated consumer PR.
-
-6. **`additionalProperties: false`** on all three top-level schemas
-   and on `business_result` sub-shapes. Catches typos at the
-   producer side; prevents accidentally smuggling unredacted fields
-   through `audit-event` (defense-in-depth with rule 3).
-
-7. **Added `ajv` + `ajv-formats` as devDependencies**. Justified in
-   commit body: schemas are the source of truth for Phase 1's
-   generated TS types (FR-015), so a real 2020-12 validator beats a
-   hand-rolled subset. Total install: 78 packages, all MIT, zero
-   vulnerabilities (`npm audit`).
-
-## Hand-off
-
-- **Bashir**: schemas now live at
-  `specs/005-web-control-panel/contracts/{run-result,audit-event,chat-tool-call}.json`.
-  Round-trip + required-field + redaction + workflow-oneOf coverage
-  already in `tests/contracts/contracts-v1.test.ts`. If you want
-  additional adversarial fixtures (negative integers in `claimed`,
-  non-UUID `request_id`, etc.), add them to the same file.
-- **Scotty** (Phase 1): the `shared/contracts/*.ts` generator should
-  read these three JSON files. Use `json-schema-to-typescript` or
-  similar; types are erased at runtime so the schemas remain the
-  source of truth, with a CI drift gate per `data-model.md`.
-- **O'Brien** (Phase 3+ producers): when extending workflows to emit
-  `data/runs/*.json`, validate against `run-result.json` in the
-  emitter before commit. The artifact-commit step in the existing
-  `chore(history)` block is the right place.
-
-## Open questions
-
-None. The three schemas are aligned with the v3 plan's required-fields
-summaries, the data-model.md inventory, the constitution v2.0.0
-durable-artifacts list, and the spec's FR-007/FR-015.
-
-# Decision Note: Rules 14–18 codified in copilot-instructions
-
-**Date:** 2026-05-31T22:40:48+00:00
-**Agent:** Tuvok (Process Auditor / Editorial Specialist)
-**Issue:** #108
-**Commit:** 078d01f
-**Branch:** squad/005-phase0-governance
-
-## Summary
-
-Appended five standing rules (14–18) to `.github/copilot-instructions.md` and added
-the Rule 17 compliance checkbox to `.specify/templates/plan-template.md`.
-
-## Rules codified
-
-| # | Title | Constitutional cross-ref |
-|---|-------|--------------------------|
-| 14 | gh-issues-driven workflow | — |
-| 15 | Per-phase test scope | Principle IX |
-| 16 | Per-capability doc updates | Principle VII |
-| 17 | Rubber-duck multi-phase plans (enforceable) | — |
-| 18 | Fleet + worktree execution | — |
-
-## Placement decisions
-
-- Rules inserted immediately before the `## Project quick reference` section,
-  continuing the existing numbered-rule convention (Rules 1–13).
-- Rule 15 and Rule 16 reference constitutional principles rather than duplicating
-  the underlying obligation text, per Picard's placement guidance.
-- Plan-template change: `## Process Compliance` section added between `## Constitution Check`
-  and `## Project Structure`, containing the Rule 17 rubber-duck checkbox.
-  This is additive only; the sanctioned-things re-sync from wave 1 (988c302) is untouched.
-
-## Verification
-
-- `npm test`: 704 pass / 0 fail
-- `npm run typecheck`: clean
-- `.squad/` paths NOT staged or committed (Rule 2 compliance).
-
-# Garak threat model note — 005 web control panel
-
-**Date:** 2026-05-31T22:40:48+00:00<br>
-**Issue:** #107<br>
-**Status:** Completed; leave uncommitted for Scribe per Rule 2.
-
-Completed the STRIDE-lite threat model for `specs/005-web-control-panel/threat-model.md`.
-
-Hostile fact-check highlights:
-
-- Verified the three target workflows share `concurrency.group: stfc-gift-redeemer`.
-- Verified current GitHub login is `cyrusjamula`.
-- Verified `data/digests/*.md` is still gitignored; called this out as a temporary governance/implementation tension.
-- Verified constitution v2.0.0 declarations from the committed constitution, not the v3 plan body.
-- Added an extra finding: workflow dispatch inputs required by v2.0.0 are not yet present on all three live workflows, so web writes must remain blocked until Phase 3/4/5 workflow work lands.
-
-No `.squad/` paths were staged or committed.
-
-# Decision Note: Phase 0 Platform Spike (#109)
-
-**Author:** O'Brien (DevOps / Platform Engineer)
-**Date:** 2026-05-31T22:49:27+00:00
-**Issue:** #109
-**Commit:** e2e463c (feat(005-web-control-panel): Phase 0 platform spike (research.md) (Phase 0 wave 3))
-**Branch:** squad/005-phase0-governance
-
-## Summary
-
-All 5 platform spike questions answered. **Phase 1 is cleared — no blockers.**
-
-## Decisions recorded
-
-### D1 — SWA auth model: invitation-based custom roles on Free tier ✅
-
-The v3 plan's `allowedRoles: ["stfc_operator"]` approach is confirmed
-correct and works on the SWA Free tier using the pre-configured GitHub
-OAuth provider. Custom role assignment via invitation is capped at 25
-users per app (Free and Standard plans alike) — well within audience
-scope. `allowedPrincipals` per-username config does NOT exist (confirms
-RD P0.1). Function-level `requireAllowedUser` is the primary gate,
-reading `x-ms-client-principal` Base64-JSON header.
-
-### D2 — GitHub App installation: personal account, no policy blocks ✅
-
-`cyrusjamula` is a `User` (personal) account. No org-level GitHub App
-policy exists. App can be registered and installed on `Jamula/stfc`
-with `actions:write` + `contents:read`. Installation token TTL is 1
-hour; rotate proactively at ~50 min. Store private key as SWA Function
-app setting. Note: GitHub rolling out new stateless token format
-(`ghs_APPID_JWT`) — any `token.length === 40` assertions must be
-updated.
-
-### D3 — GitHub Models: available, live test passed ✅
-
-Verified live at 2026-05-31T22:49Z: `gpt-4o-mini` via
-`https://models.inference.ai.azure.com/chat/completions` returned HTTP
-200 with Codespaces-injected `GITHUB_TOKEN`. No `models:read` scope
-declaration needed in Codespaces; PAT outside Codespaces needs
-`models:read`. Free tier (Copilot Free/Pro): 150 req/day,
-8000 in / 4000 out tokens per request. Gemini Flash fallback on 429 is
-correct plan.
-
-### D4 — Azure Table Storage: no formal free tier; $0 at sub-threshold volume ✅
-
-No formal "free tier" for Table Storage — it is pay-as-you-go. At
-<100 transactions/month (single-row cooldown cache), cost is
-sub-billing-threshold ($0.00). Use a **separate** Storage Account, not
-the SWA-managed one. Confirm Azure subscription/region with Cyrus
-before Phase 1 provisioning (not a code blocker).
-
-### D5 — SWA deploy method: deployment token selected ✅
-
-Deployment token preferred over OIDC for Phase 1. Simpler for a
-single-maintainer project; no Azure RBAC / identity-federation overhead;
-first-class SWA support. SHA-pin `Azure/static-web-apps-deploy`. Store
-as repo secret `AZURE_STATIC_WEB_APPS_API_TOKEN`. Rotate manually only
-if compromised. Revisit OIDC if project grows to multiple maintainers.
-
-## For Scribe
-
-Commit this file to `.squad/decisions/inbox/` in the next Scribe
-session. This note should be consolidated into `.squad/decisions.md`
-under the `005-web-control-panel` section.
-
-# Bashir QA Review — PR #111 Contract Schemas v1
-
-**Date:** 2026-05-31T23:09+00:00
-**Reviewer:** Bashir (Tester)
-**Verdict:** APPROVE ✅
-
-## Required coverage (issue #110) — all 5 present
-1. ✅ Round-trip validation: redeem, discord-monitor, refresh-token, audit-event, chat-tool-call
-2. ✅ Reject unknown version (schema_version="2") — all fixture types
-3. ✅ Reject missing required field — every top-level required field across all 3 schemas
-4. ✅ audit-event redaction-by-design: prompt, raw_error, args, payload all rejected
-5. ✅ run-result oneOf: 3 cross-workflow mismatches + sub-field removal tested
-
-## Gaps noted (non-blocking; recommend follow-up issue)
-- `chat-tool-call.json`: `ttl_seconds` bounds (minimum: 5, maximum: 300) not tested.
-  No test for `ttl_seconds: 4` or `ttl_seconds: 301` being rejected by Ajv.
-- `run-result.json`: only 3 of 6 possible cross-workflow mismatch combinations covered.
-  Missing: discord-monitor+redeem, redeem+refresh-token, refresh-token+discord-monitor.
-- `run-result.json` sub-field removal: only `redeemed` from redeem workflow tested.
-  Missing: sub-field removals from discord-monitor and refresh-token business_result.
-
-## Test stats
-- Total suite: 754/754 green
-- Contracts suite isolated: 50/50 green
-
-## Action
-Coordinator should file a follow-up tracking issue (assignee: Bashir) for the 3 gap
-items above. Not a Phase 0 blocker.
-
-### 2026-05-31T23:08:49+00:00: Quota-tolerant CI fallback
-
-**By:** Cyrus Jamula (via Copilot)
-**What:** When server-side CI/CD is gated (quota exhausted, action_required, etc.), run `npm test` and `npm run typecheck` locally in the worktree and use that as the green-gate evidence. Do NOT stop progress waiting for server CI to resume.
-**Why:** Quota exhaustion is a billing concern, not a quality concern — local test pass demonstrates the same correctness signal.
-
-**Scope:**
-- Reviewer verdicts (Kirk/Garak/Picard) may approve PRs based on local-test evidence when server CI is unavailable
-- Rule 7 auto-merge gate still applies but treats local-test-green as equivalent to CI-green when CI cannot run
-- Merge command: `gh pr merge <N> --squash --delete-branch --admin` if `--auto` is blocked by missing required checks
-- Document local test output in the PR body or merge comment for audit
-# Uhura decision note — crew v2 parser (#91)
-
-Date: 2026-05-31
-Issue: #91 (`crew-15-v2-parser`)
-
-## Non-trivial calls
-
-1. **Command allowlist is optional/missing-safe.**
-   - `data/discord/command-channels.json` is the operator-specific real file and is not committed.
-   - The loader returns `[]` when missing, so command parsing no-ops gracefully while the existing promo-code allowlist remains a hard requirement.
-
-2. **Merged ingest, separated processing.**
-   - The monitor merges promo-code channels and command channels only for REST polling.
-   - Promo-code extraction/tip classification still run only on original promo-code channels, preventing command-only channels from contaminating digests or redeemer inputs.
-
-3. **Rate-limit precedence.**
-   - Per-channel limit: 10 commands/minute.
-   - Per-user limit: 5 commands/minute.
-   - Channel limit is checked first, then user limit; rejected commands are not registered into either rolling window.
-
-4. **Silent rate-limit behavior.**
-   - Rate-limited commands are logged locally but receive no Discord reply, matching the issue requirement and Discord command convention.
-
-5. **Handler seam for #92.**
-   - Future handlers should plug in behind `processCrewCommands()` / `handleCrewCommand()` in `src/discord/crewCommandParser.ts`.
-   - The consumed shape is `CrewCommand { subcommand, args, raw, message }`; positional args are exposed as `_`, `_0`, `_1`, while flags drop the `--` prefix.
-
-### 2026-06-01T00:58:00Z: Chronicle learnings — operational rollup
-**By:** cyrusjamula (via Copilot Coordinator)
-**What:** Consolidated learnings from `/chronicle improve`, `/chronicle tips`, and `/chronicle cost-tips` runs on 2026-06-01.
-**Why:** Captured for team memory so future coordinators apply these as operational defaults.
-
----
 
 ## A. New copilot-instructions.md rules (added this session, awaiting commit)
 
@@ -1061,105 +509,6 @@ Both Wave 4 issues branch off `squad/005-phase1-dashboard` (not `main`), merging
 4. **#112 epic closure:** Epic #112 closes only after all child issues close. Current close-out plan closes 8 of 10 children (#113–#117, #119–#120, #122). Remaining: #118 and #121. Epic stays open through Wave 4. Correct and expected.
 
 5. **No O'Brien worktree for Wave 4 #118:** O'Brien's Wave 4 issue is docs-only. A worktree is appropriate but the work is small (~1 doc section + any runbook checklist). Could be done directly on the epic branch by an agent with a targeted charter rather than a full worktree. Coordinator call.
-
----
-
-## Recommendation
-
-**Ship Wave 3 first.** The branch is green (905 tests). WIP for #117 and #119 is complete — just needs two commits and a PR. Open the Wave 3 PR, get Kirk's auth.ts review, then dispatch #118 and #121 in parallel from the epic branch in separate worktrees. Wave 4 is 2 issues; Wave 3 PR close unblocks both simultaneously.
-
-**Sequence:**
-1. Commit #117 + #119 WIP on `stfc-p1` → open Wave 3 PR (Closes #113–#117, #119–#120, #122)
-2. Kirk reviews auth.ts shape in Wave 3 PR — single targeted review
-3. Dispatch #118 (O'Brien) + #121 (Scotty) in parallel worktrees from `squad/005-phase1-dashboard`
-4. Merge Wave 3 PR → main; merge #118 + #121 PRs → epic branch → final PR closes #112
-### 2026-06-01T01:28:18.827+00:00 — Scotty Wave 3 close-out (#112 epic)
-
-- **PR:** #124 — https://github.com/Jamula/stfc/pull/124
-- **Branch:** `squad/005-phase1-dashboard`
-- **Commits pushed:**
-  - `b0cb61c` feat(005-web-control-panel): auth lib + CI grep gate (#117)
-  - `d9e3837` feat(005-web-control-panel): Lit+Vite frontend shell + bundle budget gate (#119)
-  - `c05f189` test(005-web-control-panel): bootstrap web deps in shell smoke test
-
-#### Unexpected issues during close-out
-
-1. **Worktree `.git` path nuance:** Initial `git commit -F .git/...` failed because `.git` is a gitdir pointer file in this worktree. Re-ran with repo-local message files (`.gitmsg117.txt`, `.gitmsg119.txt`) and committed successfully.
-2. **CI environment drift for web toolchain:** PR test workflow failed (`vite: not found`) because root `npm ci` does not install `web/` dependencies. Added `c05f189` so `tests/web/shell.test.ts` runs `npm ci` in `web/` when Vite is missing; checks are now re-running on PR #124.
-
-#### Ready for Kirk review
-
-- `api/src/_lib/auth.ts` role/owner enforcement shape is in PR #124 and ready for Kirk's targeted correctness review before Wave 4 #121 route work begins.
-
-**CHANGES REQUESTED** ⚠️ — Garak (hostile fact-check)
-
-Requested by: cyrusjamula  
-Reviewed artifact: `/home/node/.copilot/session-state/63c3014e-bdaa-4ebb-a118-447bc281fe96/plan.md` (v3 cleanup plan)  
-Live repo: `/workspaces/stfc`  
-Timestamp: 2026-06-01T01:55:00Z
-
-## Verdict
-
-This plan assumes its largest savings claims are arithmetically sound and that several existing mechanisms already preserve the invariants it now relies on. They are not, at least not in the live repo. The cleanup direction is sane; the concrete plan is not approval-ready.
-
-## Verified claims
-
-1. **Claim:** `.github/agents/squad.agent.md` is **85 KB / ~60 sections**. **Reality:** `wc -c` reports `84943` bytes and `grep -cE '^## |^### '` reports `60`. Verified.
-2. **Claim:** `.github/copilot-instructions.md` is **28 KB / 21 rules**. **Reality:** `wc -c` reports `28416` bytes and `grep -cE '^## [0-9]+'` reports `21`. Verified.
-3. **Claim:** Histories are near threshold: Uhura 15 KB, Garak 13 KB, Picard 12 KB, O'Brien 12 KB. **Reality:** Uhura `15124`, Garak `13029`, Picard `12032`, O'Brien `12267` bytes. Verified.
-4. **Claim:** O'Brien charter is **119 lines / 6.5 KB**. **Reality:** `wc -l` reports `119`; `wc -c` reports `6479`. Verified. Peer charters are usually 46–69 lines / 2.0–3.9 KB, though Garak is a notable 5.3 KB exception.
-5. **Claim:** Skills inventory is **21 `.squad/skills/` + 11 `.copilot/skills/`**. **Reality:** directory counts are exactly 21 and 11. Verified.
-6. **Claim:** Rubber-duck's Rule 11 basis: **5 user-typed `Researching:` invocations in the last 30 days**. **Reality:** session-store query returned count `5`. Verified.
-7. **Claim:** Agents read `.squad/decisions.md` at spawn. **Reality:** `squad.agent.md` spawn template explicitly says `Read .squad/decisions.md`; Scotty and O'Brien charters also say to read decisions before work. Verified.
-
-## Failed or unsupported claims
-
-1. **Claim:** `.squad/decisions.md` is **43 KB / 65 entries**. **Reality:** size is verified (`42971` bytes), but the entry count is not. Current top-level decision entries are 12 (`grep -cE '^# '`); H2/H3 subsections are 63. Calling this 65 entries conflates subsections with decisions. Surely that was intentional?
-2. **Claim:** Active `decisions.md` contains entries dating back to v1.1.0 / v1.2.0 / pre-2026-05-16. **Reality:** live dates in active `decisions.md` are 2026-05-31 and 2026-06-01; the only v1.2.0 hit is a historical reference inside a 2026-05-31 constitution note. Older material is in archives, not the hot file.
-3. **Claim:** Item 1 saves **~30 KB / ~35%** from `squad.agent.md`. **Reality:** the plan's own move table sums to about **12.6 KB**. Sampling the live section spans yields the same order of magnitude, roughly 12 KB, which is about **14–15%** of 84,943 bytes, not 35%. This misses the stated ≥25% coordinator-input goal.
-4. **Claim:** Item 3 can bring `decisions.md` from **43 KB → ~15 KB**. **Reality:** all active entries are less than 7 days old, so the proposed `>7d AND archive-class` gate moves **0 KB today**. Sampling 10 top-level entries, only 2/10 are clean one-off review/docs notes likely archive-eligible once old; 8/10 are constitutional, standing-rule, current-epic, canonical-pattern, or unresolved-follow-up material. A 65% reduction is not defensible from the sample.
-5. **Claim:** Scribe summarization already preserves full text in `history-archive.md`. **Reality:** existing archive examples (`scotty/history-archive.md`, `picard/history.md`, `bashir/history.md`) show summarized learnings, not full verbatim text. `squad.agent.md` says Scribe should summarize at 15 KB; it does not require full-text preservation. The plan is proposing new behavior while wearing the mask of an existing pattern.
-6. **Claim:** No external code references rule numbers by ID, so renumbering is safe. **Reality:** active files outside `copilot-instructions.md` reference rule numbers: `.squad/routing.md` cites Rule 7 and Rule 9b; O'Brien/Garak charters cite Rules 3/9b/12/13; skills cite Rules 12/15/16; specs and tests also cite rule numbers. Renumbering is unsafe unless those references are updated or made title-based.
-7. **Claim:** The on-demand reference pattern is already in use for `casting-reference.md`, `ceremony-reference.md`, etc. **Reality:** markers exist in `squad.agent.md`, but several targets are missing in the live repo: `ceremony-reference.md`, `ralph-reference.md`, `prd-intake.md`, `human-members.md`, `copilot-agent.md`, `reviewer-lockout.md`, and `init-mode.md`. `casting-reference.md`, `plugin-marketplace.md`, and `issue-lifecycle.md` do exist. Pattern: yes. Fully working inventory: no.
-8. **Claim:** Trigger detection lines in `squad.agent.md` are sufficient. **Reality:** casting has an inline trigger path (`Adding Team Members` says allocate a name; `Casting & Persistent Naming` says load `casting-reference.md`), so that one is plausible. But the current file also has on-demand references to missing files. The trigger pattern only works when the target exists and smoke tests assert the load, which the plan has not yet established.
-9. **Claim:** Item 2 consolidation is consistently **21 → ~16/17 rules**. **Reality:** the plan contradicts itself: section header says `21 → ~16`, outcome says `21 → 17`, and the SQL todo table still says `21 → ~14`. That is not a harmless typo when the work is rule renumbering.
-10. **Claim:** Item 1 moves “7 conditionally-relevant sections.” **Reality:** the move table lists 10 rows, while the problem statement names 7 broad areas. The implementation todo repeats 7. The scope is ambiguous before work starts.
-11. **Claim:** Skills audit has “No `_archive/` moves” per user decision. **Reality:** the risk table still says “Retire means move to `_archive/`, not delete.” That directly conflicts with the v3 opt-out and Item 6 inventory-only approach.
-
-## Estimate checks
-
-- **Item 1 math:** table total is approximately 12.6 KB. Against `squad.agent.md` at 84.9 KB, that is about 15%, not 35%. To reach 30 KB, the plan needs another ~17 KB of specific sections identified, or it must lower the target.
-- **Item 3 sample:** sampled first 10 top-level entries in `decisions.md`:
-  1. Structural workflow pin tests — canonical pattern, retain hot.
-  2. PR #103 docs alignment — one-off docs/PR note, archive-eligible once old/closed.
-  3. Constitution v2.0.0 amendment — constitutional, retain hot.
-  4. 005 speckit opened — current epic context, retain hot.
-  5. PR #111 governance review — one-off PR review, archive-eligible once old/closed.
-  6. Contract schemas v1 — canonical/current epic, retain hot.
-  7. Rules 14–18 codified — standing rules, retain hot.
-  8. Threat model note — current epic/security context, retain hot.
-  9. Platform spike — current epic/canonical platform decisions, retain hot.
-  10. Bashir QA review — includes unresolved follow-up gaps, retain hot.
-
-Result: 0/10 immediately movable by age; about 2/10 eventually archive-class. The proposed 43 KB → 15 KB target needs evidence, not optimism.
-
-## Counterexample to retention classes
-
-**Entry:** `Scotty Wave 3 close-out (#112 epic)` includes “Worktree .git path nuance” and “CI environment drift for web toolchain.” **Reality:** this is an operational incident / tooling-footgun learning: not constitutional, not a standing rule, not an active blocker, not merely a PR verdict, not a canonical architectural pattern, and not simply current epic context. It needs either a seventh class (`operational learning`) or a forced split into one archiveable close-out plus one retained reusable-footgun note.
-
-## Hidden assumptions
-
-- **Assumption:** Scribe's current summarization will preserve full text. **Reality:** no; current mechanism summarizes. Add an explicit implementation requirement for verbatim append/rotation if full text matters.
-- **Assumption:** Renumbering rules is safe. **Reality:** no; active artifacts cite rule numbers. Add a grep-and-update gate, or avoid renumbering.
-- **Assumption:** On-demand templates mostly exist. **Reality:** no; several referenced or proposed templates are missing. Add a preflight target-file checklist before moving content.
-- **Assumption:** Decision archival can shrink the hot file materially now. **Reality:** no; the hot file is recent. Semantic tagging may improve future hygiene, but it will not deliver the stated immediate size win.
-
-## Recommendation
-
-Do **not** proceed to user approval in this form. Correct the size/savings math, fix the stale contradictions, add explicit migration/update gates for rule-number references and missing templates, and downgrade `decisions.md` shrinkage from a promised 65% reduction to an evidence-based hygiene task.
-
-Final count: **7 verified claims, 11 failed or unsupported claims**.
-
 
 ---
 
@@ -1547,657 +896,6 @@ Proceed to user approval (final `exit_plan_mode` call) with the following execut
 
 Findings 5–7 are advisory only.
 
-
----
-
-### 2026-06-01: Squad improve cycle — proposed rule amendments
-**By:** Picard (governance), requested by Cyrus Jamula
-**Scope:** Proposed additions/amendments to `.github/copilot-instructions.md`
-**Status:** DRAFT — awaiting user approval before Tuvok applies edits
-
-## Summary
-
-Two proposed new rules (Rule 22, Rule 23) and one new reusable skill
-(`.squad/skills/worktree-preflight/SKILL.md`). No amendments to existing
-Rules 1–21 — the existing rule set held up well against the 2026-05-31 →
-2026-06-01 friction signal. **Note:** This proposal deliberately does NOT
-overlap with the in-flight Squad System Cleanup Plan v3 (which renumbers /
-consolidates Rules 1–21); these new rules attach at the tail (22, 23) and
-will survive whatever consolidation that plan applies. If the cleanup
-plan reshuffles numbering, Tuvok renumbers these in the same pass.
-
-The bar for inclusion this cycle: ≥ 2 independent observations OR a single
-observation with severe blast radius, AND not already covered by Rules 1–21
-or the constitution, AND a specific behavior change agents can adopt.
-
-## Proposed new rules
-
-### Rule 22. Fresh worktrees require `npm ci` before any commit
-
-When `git worktree add` creates a new worktree at `/workspaces/stfc-<N>`, the
-`node_modules/` directory inside that worktree is typically a **symlink** to
-the main checkout's `node_modules/`. If `package.json` has gained a
-dependency since the main checkout was last installed against it — or if the
-symlink target is otherwise stale — the worktree will fail the pre-commit
-hook (`npm test`) with a missing-module error. The failure is silent until
-the first commit attempt and looks like a real test break.
-
-**Observed on 2026-06-01 (O'Brien P1 #118 invitation runbook PR):** worktree
-`/workspaces/stfc-p1` was missing `json-schema-to-typescript` despite the
-package being in `package.json`. The epic branch had been in a "broken
-pre-commit state" before #118's author ran `npm ci` manually. Picard's
-parallel P1 fanout triage (same date) explicitly forward-flagged the same
-risk to Wave 4 #121 (Scotty): *"should confirm `npm ci` is already done
-on their worktree before committing."*
-
-**Required after every `git worktree add` (and before any commit attempt in a worktree):**
-
-```bash
-# In the new worktree, before staging anything:
-cd <worktree-path>
-ls -la node_modules 2>/dev/null | head -1     # detect symlink (lrwxrwxrwx) vs real dir
-npm ci                                         # idempotent; refreshes whether symlink or not
-npm test                                       # confirm the pre-commit gate passes BEFORE adding work
-```
-
-`npm ci` is idempotent and cheap (~5–15s when cache is warm). Running it
-proactively is far cheaper than discovering the failure at pre-commit time
-when you have uncommitted work to protect.
-
-**Symptom-to-cause table** for diagnosing failed pre-commit in a worktree:
-
-| Symptom | Likely cause |
-|---|---|
-| `Cannot find module 'xxx'` and `xxx` is in package.json | Stale symlinked `node_modules`; run `npm ci` |
-| `Cannot find module 'xxx'` and `xxx` is NOT in package.json | Real test break — fix the test |
-| Pre-commit passes once, fails on next commit | Background process modified `node_modules`; `npm ci` to reset |
-
-**Cross-reference:** Rule 18 (Fleet + worktree execution) covers shared-file
-ownership in worktrees; this rule covers dependency state inside worktrees.
-Together they're the worktree-mode preflight contract.
-
-**Evidence:**
-- `.squad/decisions/inbox/obrien-p1-118-invitation-runbook.md` (2026-06-01T01:40Z) — observed failure + diagnosis
-- `.squad/agents/picard/history.md` (2026-06-01T01:22:44Z, P1 fanout triage) — forward flag to next Wave-4 author
-
-**Cross-reference impact:**
-- `.squad/skills/worktree-preflight/SKILL.md` — NEW skill (see "Proposed new skills" below) codifies the preflight ritual
-- `.squad/skills/audit-wip-fanout/SKILL.md` — should add a one-line link to worktree-preflight at the wave-dispatch step
-- `.squad/agents/obrien/charter.md` — DevOps owns worktree provisioning concerns; add a one-line ownership note if charter is otherwise being edited (do NOT touch the charter solely for this)
-
----
-
-### Rule 23. `specs/NNN-feature/plan.md` must be a self-contained repo artifact, never a placeholder pointing to session-state
-
-`plan.md` is one of the four canonical speckit artifacts (alongside
-`spec.md`, `research.md`, `tasks.md`). It is a **durable, repo-tracked
-input** to the implementation phase. Multiple agents (Picard, Garak, Kirk,
-O'Brien, Scotty, Bashir, reviewers) read it across days or weeks; reviewer
-gates cite it; the rubber-duck checkbox (Rule 17) lives in it.
-
-A `plan.md` whose body is a one-line pointer to
-`~/.copilot/session-state/<uuid>/plan.md` is **not durable** — session-state
-directories are per-machine, per-session, and ephemeral. The binding plan
-disappears the moment the session expires, the Codespace rebuilds, or the
-user switches machines.
-
-**Observed across the 005-web-control-panel epic (2026-05-31 → 2026-06-01):**
-`specs/005-web-control-panel/plan.md` is currently a placeholder pointing
-to `~/.copilot/session-state/d40435a0-d735-463b-887e-e5f586f7369b/plan.md`.
-This was flagged independently by:
-
-1. Picard's P1 fanout triage, 2026-06-01T01:22Z (`.squad/agents/picard/history.md`):
-   *"If session state is lost, the plan is gone. Flag Tuvok or O'Brien to
-   migrate it into the repo as a doc issue."*
-2. O'Brien's #118 invitation runbook PR, 2026-06-01T01:40Z
-   (`.squad/decisions/inbox/obrien-p1-118-invitation-runbook.md`):
-   *"The binding v3 plan is in session state … not the repo. Recommend a
-   separate 5-minute doc-migration chore … before session state expires."*
-3. Scribe's P1 fanout consolidation log, same date
-   (`.squad/orchestration-log/2026-06-01-p1-fanout-triage-scribe.md`):
-   listed as a carried-forward risk.
-
-The pattern recurs because session-state is genuinely convenient during
-rapid plan iteration. The rule is needed because the convenience window
-closes silently and the recovery cost is high (re-deriving a multi-phase
-plan from chat history + commits).
-
-**Required:**
-
-1. Before merging ANY PR that introduces or modifies `specs/NNN-feature/plan.md`,
-   the file MUST contain the actual plan body — not a pointer to
-   `~/.copilot/session-state/*` or any other path outside the repo tree.
-2. CI gate: add a check that greps `specs/*/plan.md` for
-   `session-state` / `.copilot/session-state` and fails the build if any
-   match is found.
-3. If a plan is genuinely still drafting in session-state, the speckit
-   pipeline MUST NOT advance past Phase 0 (governance) until the plan is
-   migrated into the repo. The rubber-duck checkbox (Rule 17) cannot be
-   meaningfully checked against an ephemeral artifact.
-4. Recovery procedure when a placeholder is discovered post-merge:
-   ```bash
-   # If session-state plan still exists, migrate it:
-   cp ~/.copilot/session-state/<uuid>/plan.md specs/<NNN>-<feature>/plan.md
-   git add -- specs/<NNN>-<feature>/plan.md
-   git commit -m "docs(<NNN>-<feature>): migrate plan.md from session-state to repo"
-
-   # If session-state plan is already lost, open an issue with
-   # squad:picard,bug labels: "Reconstruct <NNN>-<feature> plan.md from
-   # commits + history" and treat as a P1 blocker on remaining phases.
-   ```
-
-**Anti-patterns:**
-- ❌ `plan.md` containing only `See ~/.copilot/session-state/<uuid>/plan.md`
-- ❌ `plan.md` containing only a link to a chat URL
-- ❌ Deferring plan migration "for now" with no tracking issue
-- ✅ Full plan body in `plan.md`, with optional `<!-- Originally drafted in session <uuid> on YYYY-MM-DD -->` header comment for provenance
-
-**Cross-reference:**
-- Rule 17 (Rubber-duck multi-phase plans) — the checkbox lives in plan.md; placeholder defeats the gate
-- Constitution Principle VII (Artifact Hygiene) — this rule is the routing/enforcement form of that principle for `specs/*/plan.md`
-
-**Evidence:**
-- `.squad/decisions/inbox/obrien-p1-118-invitation-runbook.md` (2026-06-01) — direct flag
-- `.squad/agents/picard/history.md` (2026-06-01) — independent flag, same date
-- `.squad/orchestration-log/2026-06-01-p1-fanout-triage-scribe.md` — carried-forward risk
-- Live repo: `specs/005-web-control-panel/plan.md` currently is the placeholder
-
-**Cross-reference impact:**
-- `.specify/templates/plan-template.md` — add a header comment in the template explicitly forbidding session-state pointers
-- `.github/workflows/squad-artifact-hygiene.yml` (or similar existing CI gate) — add the `grep` check listed above
-- `.copilot/skills/speckit-pipeline-driver/SKILL.md` (or `.squad/skills/speckit-pipeline-driver/SKILL.md` — whichever holds) — add a Phase-0 pre-flight assertion that `plan.md` is non-empty and contains no `session-state` substring
-- `specs/005-web-control-panel/plan.md` — needs migration as the first application of this rule (open as separate issue, route to Tuvok or O'Brien per O'Brien's recommendation)
-
-## Proposed amendments to existing rules
-
-None. All recently observed friction patterns either (a) trigger no existing
-rule's pattern (covered by Rules 22 and 23 above), (b) are already handled
-by Rules 1–21 as written, or (c) are being addressed by the in-flight
-Squad System Cleanup Plan v3, which should not be pre-empted by amendments
-in this proposal.
-
-## Proposed new skills
-
-### `.squad/skills/worktree-preflight/SKILL.md`
-
-**Purpose:** Codify the worktree-preparation ritual that Rule 22 requires.
-This is the "how" companion to Rule 22's "what." Reusable across every
-fleet-dispatch wave that hands an agent a fresh `/workspaces/stfc-<N>`
-worktree.
-
-**Expected content (one-paragraph contract, full text only on user approval):**
-
-```markdown
-# Worktree Preflight
-
-Use this skill when starting work in a fresh `git worktree` (typically
-`/workspaces/stfc-<issue-number>`) before staging any changes.
-
-## Procedure
-
-1. Confirm working directory: `pwd` matches the expected worktree path.
-2. Confirm branch: `git branch --show-current` matches expected branch.
-3. Inspect `node_modules`:
-   ```bash
-   ls -la node_modules 2>/dev/null | head -1
-   ```
-   If it is a symlink (`lrwxrwxrwx`) or missing, run `npm ci`. If it is a
-   real directory and `git status` shows no `package.json` / `package-lock.json`
-   changes since the symlink target was installed, you may skip `npm ci`.
-4. Run `npm test` once before adding any work. A green run here proves the
-   pre-commit gate will pass. A red run here means something is broken in
-   the base state — fix THAT before adding your work.
-5. Only after steps 1–4 pass should the agent begin staging changes.
-
-## Guardrails
-
-- Do NOT run `npm install` (rewrites `package-lock.json`). Use `npm ci`.
-- Do NOT skip step 4 — discovering a stale base state mid-work is the
-  failure mode this skill prevents.
-- If `npm ci` itself fails, do NOT try to "work around" it. Stop and
-  report — the base worktree is broken and needs O'Brien's attention.
-```
-
-**Why a skill (not just inline in Rule 22):** the procedural ritual is
-~15 lines; embedding it in `copilot-instructions.md` would bloat the rule
-and duplicate content. Rules state the *what* and *why*; skills carry the
-*how*. This matches the pattern already used for `audit-wip-fanout`,
-`speckit-pipeline-driver`, etc.
-
-**Cross-reference impact:**
-- `.squad/skills/audit-wip-fanout/SKILL.md` — add a one-line link in the
-  wave-dispatch step
-- New skill is referenced from Rule 22
-
-## Considered and rejected
-
-The following candidates were considered and did NOT make the bar. Rationale
-preserved here so the next improve cycle does not re-litigate them.
-
-- **CI billing-exhaustion ship path (PR #103 was admin-merged on 2026-05-31 because
-  CI billing limit was reached).** Rule 7 ("CI green" auto-merge gate) cannot fire
-  when CI cannot run at all. Rejected because this is a one-off recovery situation,
-  not a recurring pattern — admin-bypass with documented rationale is the right
-  human-judgment call and codifying it risks normalizing bypass. If it recurs in
-  the next 30 days, revisit.
-
-- **Constitution-amendment pinning-test literal collision (Picard 2026-05-31 SIR
-  trip on `scripts/discord-ops/` literal).** Genuinely actionable, but already
-  going into `.squad/skills/speckit-pipeline-driver/SKILL.md` per Picard's own
-  history note. Skill-level pattern, not rule-level — does not warrant elevation
-  to `copilot-instructions.md`.
-
-- **PR body "## Verification" instead of "## Tests" (Kirk PR #123 L3 finding).**
-  This is enforcement of existing Rule 15, not a new rule. Better solved by
-  the PR-body author adopting the right heading; if it recurs, amend Rule 15
-  with explicit anti-pattern callout.
-
-- **Coordinator re-reads `squad.agent.md` per turn (Kirk cleanup-plan F4).**
-  Meta-mechanics observation, not actionable as a rule. Already going into the
-  in-flight cleanup plan's PR-body restart notice.
-
-- **Composite `decisions.md` entries (canonical pattern + per-PR callout in one
-  block).** Real issue, but actively being addressed by the in-flight Squad
-  System Cleanup Plan v3 (Item 3 + Item 4). Pre-empting it here would create
-  conflicting guidance.
-
-- **Reviewer-lockout rotation extended to Kirk/Garak (currently routing.md
-  §10 only covers Bashir-rejected revisions).** Considered, but rejected because
-  the existing protocol HAS worked correctly in the last two observed lockouts
-  (PR #98 Scotty→Uhura; PR #103 Uhura→Scotty). The rule is already there in
-  practice; making it a top-level `copilot-instructions.md` rule duplicates
-  routing.md without adding new behavior. If it starts failing, revisit.
-
-- **Wave-coordination shared-file contention (#121 vs #118 on `tests/index.test.ts`).**
-  Considered, but Rule 18 (Fleet + worktree execution) already requires the
-  ownership-table check before parallel dispatch — and the most recent fanout
-  (Picard 2026-06-01 triage) cited it correctly. Rule is working; no amendment needed.
-
-## Open questions for the user
-
-1. **Rule 23 enforcement strength.** Two options:
-   - **(a) Hard CI gate** that fails the build on any `session-state` substring
-     in `specs/*/plan.md` (proposed default).
-   - **(b) Warning-only** in CI + Tuvok pre-merge review obligation.
-   Option (a) is more in keeping with Rules 14–18 (enforceable gates). Please
-   confirm (a) before Tuvok applies the workflow edit.
-
-2. **Rule 22 scope.** Should the preflight ritual extend to verifying that the
-   *base branch* (typically `origin/main` or an epic branch) is fetched and
-   the worktree is rebased onto it, or is that out of scope for Rule 22 and
-   belongs in a separate "worktree-base-freshness" rule? My recommendation:
-   keep Rule 22 dependency-state-only; base-branch freshness is already
-   implicit in Rule 4 ("rebase before every push") and explicitly in the
-   `audit-wip-fanout` skill.
-
-3. **Skill location.** Should `worktree-preflight` live under `.squad/skills/`
-   (team-level) or `.copilot/skills/` (coordinator-level)? My recommendation:
-   `.squad/skills/` because every implementer agent uses worktrees, not just
-   the coordinator. This matches the existing skill placement convention.
-
-4. **Plan migration for the live offender.** `specs/005-web-control-panel/plan.md`
-   is currently the placeholder Rule 23 would forbid. Should the migration
-   be filed as a separate issue (recommended) or rolled into the next P1
-   close-out PR (faster but mixes scopes)? My recommendation: separate issue,
-   labeled `squad:tuvok,docs` per O'Brien's runbook follow-up note.
-
-
----
-
-**CHANGES_REQUESTED** ⚠️ — Garak (hostile fact-check v4.1)
-
-Requested by: Cyrus Jamula  
-Reviewed artifact: `/home/node/.copilot/session-state/f1073669-1239-486e-a66b-7c51b041eb2d/plan.md`  
-Live repo: `/workspaces/stfc`  
-Date: 2026-06-01
-
-## Verdict
-
-v4.1 fixes several v3 arithmetic failures, but it still contains live-repo falsehoods and internal contradictions. The biggest remaining problems: `decisions.md` heading counts are no longer 12/63, Rule 23 is both deferred and included, template counts still say “7” in execution todos, and the `_archive/` string remains despite the requested zero-reference grep.
-
-## Numbered verification results
-
-### 1. decisions.md entry counts — FAILED
-
-Claim under review: `12 H1 top-level entries / 63 H2-H3 subsections` post-merge.
-
-Commands/results:
-
-```bash
-grep -c '^# ' .squad/decisions.md
-# 19
-
-grep -cE '^(##|###) ' .squad/decisions.md
-# 101
-
-wc -c .squad/decisions.md
-# 90482 .squad/decisions.md
-```
-
-The size is roughly the claimed `~90,000 B`, but the requested heading-count commands do not support 12/63.
-
-### 2. Item 1 stretch-section byte math — VERIFIED
-
-Heading bounds:
-
-```bash
-grep -nE '^#{2,3} .*(Per-Agent Model|Client Compatibility|MCP Integration)' .github/agents/squad.agent.md
-# 355:### Per-Agent Model Selection
-# 458:### Client Compatibility
-# 503:### MCP Integration
-```
-
-Byte ranges to the next sibling heading:
-
-```bash
-sed -n '355,457p' .github/agents/squad.agent.md | wc -c
-# 7458
-
-sed -n '458,502p' .github/agents/squad.agent.md | wc -c
-# 3725
-
-sed -n '503,537p' .github/agents/squad.agent.md | wc -c
-# 2103
-```
-
-These match v4.1’s ~7.5 KB, ~3.7 KB, and ~2.1 KB within ±10%.
-
-### 3. decisions.md archival today — PARTIALLY VERIFIED
-
-Live sample supports “0 entries today” because the first 10 `^# ` entries all date to 2026-05-31, less than 7 days before CURRENT_DATETIME 2026-06-01.
-
-Command/result excerpt:
-
-```bash
-python3 - <<'PY'
-from pathlib import Path
-import re
-lines=Path('.squad/decisions.md').read_text().splitlines()
-entries=[(i+1,l) for i,l in enumerate(lines) if l.startswith('# ')]
-for n,(start,head) in enumerate(entries[:10],1):
-    end=(entries[n][0]-1) if n < len(entries) else len(lines)
-    block='\n'.join(lines[start-1:end])
-    dates=[]
-    for m in re.finditer(r'2026-[0-9]{2}-[0-9]{2}(?:T[0-9:.-]+Z?)?', block):
-        dates.append(m.group(0))
-    print(f'{n}. line {start}: {head}')
-    print('   dates:', ', '.join(dict.fromkeys(dates)) or 'NONE')
-PY
-# 1. line 3: # Uhura PR #102 fix — Structural workflow pin tests
-#    dates: 2026-05-31
-# 2. line 28: # Uhura PR #103 docs alignment decision
-#    dates: 2026-05-31
-# 3. line 34: # Decision: Constitution v2.0.0 amendment (Phase 0 Wave 1)
-#    dates: 2026-05-31T21:52:57
-# 4. line 139: # Picard — Phase 0 Wave 2: 005-web-control-panel speckit opened
-#    dates: 2026-05-31T22:40:48
-# 5. line 218: # Decision — PR #111 governance review (Picard)
-#    dates: 2026-05-31T23:11Z
-# 6. line 284: # Kirk — Phase 0 wave 3 contract schemas v1 (issue #110)
-#    dates: 2026-05-31T22:40:48
-# 7. line 357: # Decision Note: Rules 14–18 codified in copilot-instructions
-#    dates: 2026-05-31T22:40:48
-# 8. line 396: # Garak threat model note — 005 web control panel
-#    dates: 2026-05-31T22:40:48
-# 9. line 414: # Decision Note: Phase 0 Platform Spike (#109)
-#    dates: 2026-05-31T22:49:27, 2026-05-31T22:49Z
-# 10. line 480: # Bashir QA Review — PR #111 Contract Schemas v1
-#     dates: 2026-05-31T23:09, 2026-05-31T23:08:49
-```
-
-However, v4.1 still contradicts itself at line 151: “archive only the actually-eligible entries today (likely 2–4 of 12 top-level entries)”. That conflicts with line 171 and PR2 line 417 saying expected 0 entries today.
-
-### 4. Scribe verbatim preservation — VERIFIED AS PROPOSED NEW BEHAVIOR, NOT CURRENT STATE
-
-Current Scribe charter does not require verbatim preservation:
-
-```bash
-grep -nEi 'verbatim|history-archive|summar|history\.md|archive' .squad/agents/scribe/charter.md
-# 17:- **Orchestration logs and session summaries** — `.squad/log/*`, `.squad/orchestration-log/*`
-# 18:- **Agent history archiving** — when an agent's `history.md` grows oversized, Scribe rotates and archives it
-# 51:- **Reads:** `.squad/decisions/inbox/*.md`, `.squad/agents/*/history.md`, `.squad/log/*`
-# 52:- **Writes:** `.squad/decisions.md`, `.squad/log/*`, `.squad/orchestration-log/*`, `.squad/agents/*/history.md`
-# 58:None. Scribe has no voice. Commit messages are formulaic: `docs(squad): merge decision inbox`, `docs(squad): archive kirk history`. No opinions, no commentary, no user-facing output.
-```
-
-v4.1 correctly says this is new behavior and says it requires a Scribe charter amendment + spawn-template update. It does not amend the charter in the live repo; it only plans to.
-
-### 5. Rule-number references — VERIFIED, WITH 21 RESERVED-SLOT REFERENCES TO HANDLE
-
-Commands/results:
-
-```bash
-grep -rnE '\bRule\s+([0-9]+)\b' .squad/ .github/ .copilot/ specs/ tests/ 2>/dev/null | wc -l
-# 325
-
-grep -rnE '\bRule\s+(12|20)\b' .squad/ .github/ .copilot/ specs/ tests/ 2>/dev/null | wc -l
-# 21
-```
-
-References to numbers v4.1 would turn into RESERVED pointers:
-
-```text
-.squad/log/2026-06-01-ralph-cycle.md:29 Rule 12
-.squad/orchestration-log/2026-05-18T00-tuvok.md:18 Rule 12
-.squad/agents/obrien/charter.md:90 Rule 12
-.squad/agents/obrien/history.md:41 Rule 12
-.squad/skills/audit-wip-fanout/SKILL.md:84 Rule 12
-.squad/skills/swa-auth-shape-review/SKILL.md:90 Rule 12/15/16
-.squad/skills/speckit-pipeline-driver/SKILL.md:142 Rule 12
-.squad/decisions-archive.md:2143 Rule 12
-.squad/decisions-archive.md:3205 Rule 12
-.squad/decisions.md:191 Rule 12
-.squad/decisions.md:559 Rule 20
-.squad/decisions.md:594 Rule 20
-.squad/decisions.md:746 Rule 12
-.squad/decisions.md:901 Rule 12
-.squad/decisions.md:905 Rule 12
-.squad/decisions.md:914 Rule 12
-.squad/decisions.md:938 Rule 20
-.squad/decisions.md:1091 Rule 12
-specs/004-crew-optimizer/plan.md:240 Rule 12
-specs/004-crew-optimizer/tasks.md:79 Rule 12
-specs/004-crew-optimizer/research.md:186 Rule 12
-```
-
-v4.1’s no-renumbering approach avoids numeric orphaning, but its own gate is necessary: references to Rule 12/20 that should point at merged Rule 6/13 remain live today.
-
-### 6. Template inventory — PARTIALLY VERIFIED
-
-Live inventory matches the 5 NEW / 3 EXTEND assertion:
-
-```bash
-ls -1 .squad/templates/
-# casting
-# casting-history.json
-# casting-policy.json
-# casting-reference.md
-# ...
-# issue-lifecycle.md
-# ...
-# plugin-marketplace.md
-# ...
-
-for f in init-mode.md prd-intake.md human-members.md copilot-agent.md reviewer-lockout.md; do [ -e .squad/templates/$f ] && echo "$f exists" || echo "$f missing"; done
-# init-mode.md missing
-# prd-intake.md missing
-# human-members.md missing
-# copilot-agent.md missing
-# reviewer-lockout.md missing
-
-for f in casting-reference.md plugin-marketplace.md issue-lifecycle.md; do [ -e .squad/templates/$f ] && echo "$f exists" || echo "$f missing"; done
-# casting-reference.md exists
-# plugin-marketplace.md exists
-# issue-lifecycle.md exists
-```
-
-But v4.1 still contains stale “7” wording:
-
-```bash
-grep -nE '7 target|7 NEW|5 NEW|3 EXISTING' /home/node/.copilot/session-state/f1073669-1239-486e-a66b-7c51b041eb2d/plan.md
-# 374: confirm 7 target files don't exist
-# 375: Create 7 NEW template files: init-mode.md, prd-intake.md, human-members.md, copilot-agent.md, reviewer-lockout.md
-# 403: create 5 NEW templates ..., extend 3 templates ...
-```
-
-The repo facts are fixed; the plan text is not fully fixed.
-
-### 7. Rule-count contradictions — FAILED
-
-v4.1 says there is one canonical statement, but contradictory count/scope claims remain:
-
-```bash
-grep -nE '21→|21 →|slots 1|substantive|Rule 23|Rules 22|Rule 22|RESERVED|18 rules' /home/node/.copilot/session-state/f1073669-1239-486e-a66b-7c51b041eb2d/plan.md
-# 37: v4 includes adopting both [Rules 22+23] as part of the same cleanup PR
-# 39: v4 commits to 21→18
-# 65: Consolidate ... from 21 → 18 rules
-# 71: Adopt Picard's Rules 22 + 23
-# 126: slots 1–22 exist ... Rule 23 deferred ... Substantive rules = 20
-# 139: Rule 23 DEFERRED ... Rule 23 ships in PR3
-# 271: Rule 23 DEFERRED
-# 380: Apply 2 merges ... + add Rules 22+23
-# 392: PR 1 ... Rules 22/23
-# 404: +22 only — NOT 23
-# 430: PR3 ... add Rule 23 ... Not part of cleanup scope
-```
-
-The canonical line itself is arithmetically coherent. The artifact around it is not.
-
-### 8. 10 moved sections — VERIFIED
-
-Command/results:
-
-```bash
-awk 'NR>=98 && NR<=107 && /^\|/ {c++} END {print c}' /home/node/.copilot/session-state/f1073669-1239-486e-a66b-7c51b041eb2d/plan.md
-# 10
-
-grep -nE '7 conditionally|7 .*sections|10 sections|Move 10|move 10|10 trigger' /home/node/.copilot/session-state/f1073669-1239-486e-a66b-7c51b041eb2d/plan.md
-# 35: v3 said ... 10 sections, but 7 of those target files don't exist ...
-# 377: Move 10 sections to templates + add trigger detection lines
-# 390: Manually verify 10 trigger strings load the right template
-# 403: ... modularize squad.agent.md (move 10 sections ...)
-```
-
-I found no surviving “7 sections” claim. The surviving “7” problem is template-file count, covered above.
-
-### 9. `_archive/` opt-out grep — FAILED
-
-Command/result:
-
-```bash
-grep -n '_archive' /home/node/.copilot/session-state/f1073669-1239-486e-a66b-7c51b041eb2d/plan.md
-# 236:- **No `_archive/` moves.** Per user v2 decision.
-```
-
-The requested zero-reference grep is not clean.
-
-### 10. History sizes after compaction — VERIFIED, WITH ONE STALE TABLE ELSEWHERE
-
-Current history sizes:
-
-```bash
-wc -c .squad/agents/uhura/history.md .squad/agents/picard/history.md .squad/agents/garak/history.md .squad/agents/obrien/history.md .squad/agents/tuvok/history.md
-# 15199 .squad/agents/uhura/history.md
-# 12767 .squad/agents/picard/history.md
-#  2264 .squad/agents/garak/history.md
-#  9040 .squad/agents/obrien/history.md
-#  4877 .squad/agents/tuvok/history.md
-# 44147 total
-```
-
-These support Item 4’s rounded values: Uhura 15.1 KB, Picard 12.8 KB, Garak 2.3 KB, O'Brien 9.0 KB, Tuvok 4.9 KB.
-
-But the problem-statement table still has stale pre-compaction values:
-
-```bash
-grep -nE '13,029|12,032|12,267|11,188|15,124|15.1 KB|12.8 KB|2.3 KB|9.0 KB|4.9 KB' /home/node/.copilot/session-state/f1073669-1239-486e-a66b-7c51b041eb2d/plan.md
-# 52: Uhura 15,124 B, Garak 13,029 B, Picard 12,032 B, O'Brien 12,267 B, Tuvok 11,188 B
-# 209: uhura/history.md (15.1 KB ...)
-# 210: picard/history.md (12.8 KB) + garak/history.md (2.3 KB)
-# 211: obrien/history.md (9.0 KB), tuvok/history.md (4.9 KB)
-```
-
-The after-compaction claim is true; the artifact still contains a false older history-size row.
-
-### 11. Rule 22 + Rule 23 source — VERIFIED
-
-Commands/results:
-
-```bash
-grep -nE 'Rule 22|Rule 23|picard-squad-improve|Picard.*improve|improve-cycle' .squad/decisions.md
-# 1282:Two proposed new rules (Rule 22, Rule 23) and one new reusable skill
-# 1297:### Rule 22. Fresh worktrees require `npm ci` before any commit
-# 1352:### Rule 23. `specs/NNN-feature/plan.md` must be a self-contained repo artifact, never a placeholder pointing to session-state
-```
-
-The entry begins at `.squad/decisions.md:1275` as `2026-06-01: Squad improve cycle — proposed rule amendments` by Picard.
-
-### 12. worktree-preflight skill not yet existing — VERIFIED
-
-Command/result:
-
-```bash
-ls .squad/skills/worktree-preflight/ 2>&1 || true
-# ls: cannot access '.squad/skills/worktree-preflight/': No such file or directory
-```
-
-### 13. `specs/005-web-control-panel/plan.md` placeholder — VERIFIED
-
-Command/result:
-
-```bash
-cat specs/005-web-control-panel/plan.md
-# # Plan: 005-web-control-panel
-#
-# **Status:** Placeholder — plan lives in session state pending
-# `/speckit.plan` migration in a Phase 0 follow-up issue.
-#
-# **Source of truth (v3 plan):**
-# `~/.copilot/session-state/d40435a0-d735-463b-887e-e5f586f7369b/plan.md`
-```
-
-This is exactly the placeholder Rule 23 would forbid.
-
-## Other problem-statement checks
-
-Commands/results:
-
-```bash
-wc -c < .github/agents/squad.agent.md
-# 84943
-
-grep -cE '^## |^### ' .github/agents/squad.agent.md
-# 60
-
-wc -c < .github/copilot-instructions.md
-# 28416
-
-grep -cE '^## [0-9]+' .github/copilot-instructions.md
-# 21
-
-wc -l -c .squad/agents/obrien/charter.md
-# 119 6479 .squad/agents/obrien/charter.md
-
-find .copilot/skills -mindepth 1 -maxdepth 1 -type d | wc -l
-# 11
-
-find .squad/skills -mindepth 1 -maxdepth 1 -type d | wc -l
-# 22
-```
-
-These table claims are verified.
-
-## Final count
-
-8 verified, 5 failed/partial (3 failed, 2 partially verified). Verdict: **CHANGES_REQUESTED**.
-# Kirk Review — PR #125: docs/SWA-INVITATION-RUNBOOK.md
-
-**Date:** 2026-06-01T02:47:54Z  
-**Reviewer:** Kirk (Lead / Code Reviewer)  
-**PR:** https://github.com/Jamula/stfc/pull/125  
-**Closes:** #118 (squad:bashir + squad:obrien)  
-**Verdict:** APPROVE ✅  
-**Comment:** https://github.com/Jamula/stfc/pull/125#issuecomment-4589190167
 
 ---
 
@@ -2713,217 +1411,6 @@ Skipped for now:
 
 ---
 
-# Garak hostile fact-check — PR #124 Phase 1 Wave 3
-
-**Date:** 2026-06-01  
-**Verdict:** CHANGES_REQUESTED ⚠️  
-**Scope:** PR #124, branch `squad/005-phase1-dashboard`, live worktree `/workspaces/stfc-p1`.
-
-## Numbered verification results
-
-1. Branch/sync: PASS — `git branch --show-current` returned `squad/005-phase1-dashboard`; `git pull --rebase origin squad/005-phase1-dashboard` was already up to date.
-2. Test-count claim: FAIL/STALE — live worktree reports `tests 906`, `pass 906`, `fail 0`; PR body says “All 905 tests”. Earlier run before staged deploy-guard changes showed 905 passing.
-3. Typecheck: PASS — `npm run typecheck` exited 0.
-4. `tests/api/auth.test.ts`: PASS — parses base64 `x-ms-client-principal` (`tests/api/auth.test.ts:64-77`) and asserts roles (`:236-255`).
-5. `tests/ci/`: PARTIAL — missing-auth and bundle-budget fixtures exist, but first-statement enforcement is untested and unenforced.
-6. `tests/web/`: PASS — static Lit checks plus Vite build and bundle budget smoke (`tests/web/shell.test.ts:103-172`).
-7. Rule 15 Tests section: FAIL — body omits added/modified tests: `tests/api/github-raw.test.ts`, `tests/contracts/types-sync.test.ts`, `tests/skills/swaConfig.test.ts`, `tests/skills/swaDeploy.test.ts`, `tests/skills/swaProject.test.ts`, and `tests/skills/discordMonitor.test.ts`.
-8. Docs: PARTIAL — `docs/SWA-SETUP.md:237-297` documents auth/env/roles; `quickstart.md:3-24` and `shared/contracts/README.md:6-7` are stale.
-9. Picard triage claim: FAIL — `.squad/decisions/inbox/picard-p1-fanout-triage.md` missing.
-10. Kirk review claim: PASS — PR comments include `**APPROVE** ✅ — Kirk (code review)` for auth shape.
-11. Close keywords: PASS — `Closes #113`, `#114`, `#115`, `#116`, `#117`, `#119`, `#120`, and `#122` are one per line.
-12. Plan Phase 1 section: UNVERIFIABLE — `specs/005-web-control-panel/plan.md` is a placeholder and contains no Phase 1 section.
-13. Auth header parsing: PASS — `api/src/_lib/auth.ts:67-73` uses `x-ms-client-principal` and base64 JSON parsing.
-14. `SQUAD_ALLOWED_USERS`: PASS — `requireAllowedUser` checks the env allowlist (`api/src/_lib/auth.ts:91-99`).
-15. `requireOwner`: FAIL/PARTIAL — optional `principal` skips `requireAllowedUser` (`api/src/_lib/auth.ts:112-114`).
-16. Grep gate first statement: FAIL — script only looks for `requireAllowedUser(` or `requireOwner(` anywhere (`scripts/ci/check-api-auth.mjs:106-110`). Bypass probe with `const log = console.log;` before auth exited 0.
-17. Grep gate CI wiring: FAIL — workflows run `npm test`; tests run fixtures, not default `node scripts/ci/check-api-auth.mjs` against real `api/src`.
-18. Bundle budget: PASS — `npm run build:web` succeeded; script measured 7.7 KB gzip vs 80 KB; recursive gzip total 7904 bytes. RAG JSON excluded because only `.js` files are collected.
-19. SWA deny-by-default: PASS — `staticwebapp.config.json:10-16` protects `/api/*` and SPA routes with `stfc_operator`; `/.auth/*` remains anonymous.
-20. Digest unignore: PASS — `.gitignore` no longer ignores digest Markdown; workflow stages `data/digests`; `tests/skills/discordMonitor.test.ts:535-548` pins the workflow behavior.
-21. Shared contracts: PASS with docs caveat — generated banners present; `npm run check:contracts` passed; `npm run build:contracts` left no diff; README remains stale.
-22. Deploy failure: FAIL — `gh pr checks 124` shows `deploy fail`; log: `Login failed ... Not all values are present. Ensure 'client-id' and 'tenant-id' are supplied.` Local worktree contains staged guard changes not authored by Garak; they are not a green PR check until committed/pushed.
-
-## Findings
-
-1. **P0 — Auth gate is not enforcing the stated invariant.** Presence-anywhere regex plus fixture-only CI allows pre-auth executable statements and does not scan future real handlers.
-2. **P0 — Deploy CI red from unfulfilled Azure-secret contract.** The deploy workflow requires OIDC secrets before provisioning is complete. Skip gracefully when absent or provision secrets before requiring the check.
-3. **P1 — `requireOwner` optional principal bypasses allowlist.** Remove the parameter, make it private/internal, or re-check the allowlist when a principal is supplied.
-4. **P1 — PR body/test inventory stale.** Update test count and Rule 15 test list after late changes.
-5. **P1 — Plan/docs stale.** Move the binding Phase 1 plan into repo or stop claiming it is fact-checkable there; update quickstart and shared contract README.
-
-## Worktree note
-
-During review, staged changes appeared in `.github/workflows/swa-deploy.yml` and `tests/skills/swaDeploy.test.ts` adding an `AZURE_CLIENT_ID` presence guard. Garak did not stage, commit, or author these code changes. They should be reviewed as part of the next pushed revision.
-# Kirk → team: auth-gate hardening decisions (PR #124 Garak rejection-fix)
-
-**Date:** 2026-06-01T03:30:00Z
-**Author:** Kirk
-**Scope:** Two architectural choices made under reviewer-rejection lockout.
-
-## Decision 1 — `requireOwner` defence-in-depth: chose approach (c)
-
-Garak P1#15 flagged: `requireOwner(req, principal?)` could be bypassed by supplying any Principal whose `userDetails === SQUAD_OWNER`, skipping the allowlist gate.
-
-**Considered:**
-- **(a) Remove optional parameter.** Forces re-parse every call. Simplest.
-- **(b) Brand the Principal type.** `requireAllowedUser` returns `AllowedPrincipal` (branded); `requireOwner(req, principal: AllowedPrincipal)`. Compile-time bypass-impossible.
-- **(c) Always re-validate supplied principal against the allowlist.** Optional arg remains a parse-fast-path; security re-check runs unconditionally.
-
-**Chose (c).** Rationale:
-1. **Preserves the documented chained pattern** from `.squad/skills/swa-auth-shape-review/SKILL.md` Wave-N callout #3: "If the handler needs both allowlist + owner checks, call `requireAllowedUser` once and pass the result to `requireOwner(req, principal)`." Removing the optional (a) would break this without a meaningful security gain.
-2. **Branded types (b) add a public type and ceremony for marginal benefit.** With one auth source (`requireAllowedUser`) and one consumer (`requireOwner`), the runtime re-check (env-var split + `Array.includes`) is microseconds — well below any branding overhead.
-3. **Defence-in-depth is the explicit threat-model posture** (S-1, S-2, E-1). A second runtime check on the supplied principal IS the defence-in-depth pattern, not a workaround.
-
-**Implementation:** Extracted private `assertInAllowlist(principal)` helper. Both `requireAllowedUser` (after parsing) and `requireOwner` (when caller supplies a principal) route through it. See `api/src/_lib/auth.ts:79-122`.
-
-**Test contract added:** `re-validates a supplied principal against SQUAD_ALLOWED_USERS (no bypass)` in `tests/api/auth.test.ts` — synthesises a Principal whose `userDetails === SQUAD_OWNER` but is NOT on the allowlist; asserts `ForbiddenError(403)` with diagnostic message identifying the allowlist as the rejecting gate.
-
-**Consequence for Wave 4 handlers (#121):** the chained pattern still works exactly as documented in the skill. No handler refactor required. Performance unchanged for the supplied-principal path (avoids re-parse).
-
-## Decision 2 — Position-aware grep gate: kept JS, added AST-lite walker
-
-Garak P0#1 flagged: `check-api-auth.mjs` was a presence check, not a first-statement check, despite the docstring claiming the latter.
-
-**Considered:**
-- Pull in `typescript` as a script dependency and use the compiler API.
-- Add a hand-written AST-lite walker in pure ESM/JS.
-- Soften the docstring to match the presence-only behaviour.
-
-**Chose the hand-written walker.** Rationale:
-1. The TypeScript compiler dependency for one CI script would balloon `node_modules` for marginal correctness gain on a well-bounded grammar.
-2. Azure Functions handlers have exactly three reasonable shapes (`handler: =>`, `function handler`, `const handler = =>`). All are pattern-detectable; a ~150-LOC walker covers them with room for the canonical `try {…}` wrap.
-3. Softening the docstring would have weakened the constitutional defence-in-depth model — and Wave 4 will read this script as the contract for handler structure.
-
-**Implementation:** New `findHandlerBodies` / `findMatchingBrace` / `firstNonTrivialStatement` / `isAuthGuardCall` helpers in `scripts/ci/check-api-auth.mjs`. Conservative fallback to presence-only when no handler body is detected — better a false negative on an unrecognised shape than a false positive that hard-blocks CI on a legit handler.
-
-**Test contract added:** `tests/ci/fixtures/badPosition/handlerLateAuth.ts` — the exact probe Garak described (`const log = console.log;` before `requireAllowedUser`). Also `tests/ci/fixtures/goodTryWrap/` to verify the canonical `try {…} catch (e) { errorResponse(e) }` pattern from the skill still passes.
-
-**Consequence for Wave 4 handlers (#121):** the skill's canonical pattern (line 64–70) is now enforced, not just documented. Any handler that drifts from it will fail CI with a precise diagnostic pointing at the offending first statement. Update `.squad/skills/swa-auth-shape-review/SKILL.md` Wave-N callout #2 ("CI gate checks presence, not position — first-statement placement is manual") in a separate PR — this commit is hardening-only per task scope.
-
-## Follow-ups for Scribe / future work
-
-- Skill update for `.squad/skills/swa-auth-shape-review/SKILL.md` callout #2: gate now enforces position. Out of scope for this hardening commit; will land as a small docs PR.
-- Wave 4 handler dispatch (#121): no shape change required; the chained `requireAllowedUser` → `requireOwner(req, principal)` pattern still works.
-
-—Kirk
-# Kirk — PR #124 review (Phase 1 Wave 3, 005-web-control-panel)
-
-**Date:** 2026-06-01
-**PR:** https://github.com/Jamula/stfc/pull/124
-**Verdict:** APPROVE ✅ (with 4 follow-up findings, none blocking)
-**Comment:** https://github.com/Jamula/stfc/pull/124#issuecomment-4589200978
-**Co-reviewer (parallel hard-gate):** Garak (hostile fact-check pending)
-
-## Scope reviewed
-
-Multi-issue wave bundling 8 concern groups across 57 files (+10,893 / −338, with ~5,111 of those in `package-lock.json`):
-
-| Group | Issue | Files |
-|---|---|---|
-| Auth lib | #117 (Uhura) | `api/src/_lib/auth.ts`, `api/src/_lib/respond.ts` |
-| Grep gate | #117 (Uhura) | `scripts/ci/check-api-auth.mjs` + fixtures |
-| Frontend shell | #119 (Scotty) | `web/` (Lit 3 + Vite 6, 5 stfc-* tab components) |
-| SWA config | #116 (Scotty/O'Brien) | `staticwebapp.config.json` + `web/public/403.html` |
-| SWA bootstrap | #115 (O'Brien) | `scripts/azure/create-swa.sh`, `docs/SWA-SETUP.md` |
-| SWA deploy workflow | #113 (O'Brien) | `.github/workflows/swa-deploy.yml` |
-| Unignore digests | #114 (Scotty) | `.gitignore` + matching `discordMonitor.test.ts` pins |
-| Shared TS contracts | #122 (Uhura) | `shared/contracts/*.ts`, `scripts/build-contracts.mjs`, `scripts/lib/generate-contracts.mjs`, `scripts/ci/check-contracts-types.mjs`, `tests/contracts/types-sync.test.ts` |
-| Bundle budget | #120 (Scotty) | `scripts/ci/check-bundle-budget.mjs`, `web/bundle-budget.json` |
-| github-raw API helper | (foundation for #121) | `api/_lib/github-raw.ts` |
-
-## Local verification
-
-- `npm run typecheck` → clean.
-- `npm test` → 906 pass / 0 fail / 0 skipped (~32s, 233 suites).
-- CI checks: npm test ✅, secrets-scan ✅, CodeQL ✅, deploy ❌ (Azure OIDC secrets missing — O'Brien parallel investigation, not a code regression).
-
-## Key technical observations (validated)
-
-1. **Auth shape is correct.** `parsePrincipal` decodes `x-ms-client-principal` base64 → JSON with full shape validation (`isValidPrincipal` checks every field type, including that `userRoles` is an array of strings). Defensive: returns `null` on absent header, malformed base64, missing fields, mistyped roles. Threat model alignment: S-1/S-2/E-1 (defence-in-depth allowlist), S-4/E-2/E-5 (owner-only via `requireOwner`).
-2. **`requireRole` alone is intentionally NOT accepted by the grep gate.** Forces username allowlist re-check (or owner check) on top of SWA route role. Good belt-and-suspenders.
-3. **SWA config is correctly deny-by-default.** Both `/api/*` and `/*` require `stfc_operator`. Only `/.auth/*` is anonymous, and it correctly precedes `/*` (first-match-wins). 401 redirects to GitHub OAuth entry; 403 rewrites to a CSP-safe static page. 23 contract tests pin every assertion.
-4. **CSP posture is solid.** `script-src 'self'` (no `unsafe-inline`). `style-src 'self' 'unsafe-inline'` — defensible because Lit shadow-root `<style>` fallback (older Safari path that can't use `adoptedStyleSheets`) needs it. `frame-ancestors 'none'`, `X-Frame-Options: DENY`, HSTS with preload, nosniff, strict-origin referrer.
-5. **Deploy workflow is reproducible.** SHA-pinned `azure/login@5324...` + `Azure/static-web-apps-deploy@1a94...`. OIDC federated credential (id-token: write, no long-lived deploy token). Per-PR concurrency group. Teardown job on PR close. `DISABLE_WRITES: "1"` literal in deploy env. All pinned in `swaDeploy.test.ts`.
-6. **Contract generator handles both shapes correctly.** Flat schemas compile directly; discriminated-oneOf schemas (e.g. `run-result.json`) are split into per-branch interfaces + union alias. Banner identifies the source schema. `@stfc/contracts/*` path alias wired in both root + api tsconfigs.
-7. **Frontend shell is minimal and bundle-disciplined.** All 5 tabs use `stfc-*` prefix; root is `stfc-app`; `cssCodeSplit: false` and a separate `lit` vendor chunk match the CSP no-inline-script constraint. Hash-based tab routing keeps Vite's no-router footprint small.
-8. **Pinning-test discipline (Rule 3) honoured.** `discordMonitor.test.ts` updated alongside `.gitignore` digest change. `swaDeploy.test.ts` created alongside `swa-deploy.yml`. `swaConfig.test.ts` created alongside `staticwebapp.config.json`. No drift slipped past the SIR.
-
-## Findings (non-blocking — follow-up issues)
-
-### MEDIUM-1 — Grep gate enforces *presence* not *first statement* (route → Uhura)
-
-`scripts/ci/check-api-auth.mjs` lines 6 and 152 promise "first statement" / "first non-trivial statement" enforcement, but `hasAuthCall` is a plain regex anywhere in the file. A handler could perform arbitrary work — DB calls, third-party fetches, file I/O — before the auth check and still pass the gate.
-
-**Two acceptable fixes:**
-- Tighten the check: parse with TS compiler API (or careful regex) and assert the first non-comment/non-import statement in the exported handler function body is the auth call. Fixture-test it.
-- Soften the docstring: drop the "first statement" language; reframe as a *presence* check that's defence-in-depth on top of the SWA route-level `stfc_operator` gate; document that handlers MUST call the guard before any side effect, but the gate only catches outright omission.
-
-Either is fine. Pick before Wave 4 #121 ships the first real handler, because that handler will be the pattern reference for every future endpoint.
-
-### MEDIUM-2 — Inconsistent `api/` directory layout (route → Scotty)
-
-Two handler-adjacent libraries shipped at two different depths:
-- `api/_lib/github-raw.ts`  (top-level `_lib`)
-- `api/src/_lib/auth.ts`, `api/src/_lib/respond.ts`  (under `src/_lib`)
-
-`api/tsconfig.json` (`rootDir: "src"`, `include: ["src/**/*.ts"]`) does NOT compile `api/_lib/github-raw.ts` via `npm run build:api`. Conversely root tsconfig's `include` adds `api/_lib/**/*.ts` (catches github-raw) but NOT `api/src/_lib/**/*.ts` (auth/respond reach typecheck only via the test import graph). Works today; foot-gun tomorrow.
-
-Wave 4 must pick the canonical layout — `api/<endpoint>/index.ts` + `api/_lib/` (Azure SWA classic) or `api/src/<endpoint>/...` + `api/src/_lib/` (TS-native) — and move the stray file in the same PR. Ideal: first task of #121.
-
-### LOW-1 — `_lib` exclusion in grep gate is a footgun (route → Uhura)
-
-`EXCLUDE_SEGMENTS` in `check-api-auth.mjs` skips any directory literally named `_lib` anywhere in the walk. Accidental `api/src/_lib/admin-endpoint/index.ts` would silently bypass the gate. Exclude only the top-level `api/src/_lib`, not every `_lib` recursively.
-
-### LOW-2 — `DISABLE_WRITES` is currently dead code (route → O'Brien)
-
-Set in deploy env, but no API handler reads it. Ship a tiny `api/src/_lib/kill-switch.ts` helper this wave, or at minimum a TODO note in `respond.ts`, so Wave 4 handler authors don't forget to gate every mutating path on it.
-
-### LOW-3 — Bundle budget unit ambiguity (route → Scotty)
-
-`81920` bytes = 80 KiB (binary), while spec says "≤ 80 KB" (decimal would be 80000). Permissive by ~2.4%. Add a comment to `web/bundle-budget.json` clarifying the convention so a future contributor doesn't "fix" it the wrong way.
-
-### NIT — `toDiscriminantValue` is approximation-only
-
-Used only inside a comment string; comment acknowledges this. Fine.
-
-## Reviewer-rejection lockout assignments
-
-Per charter ("on rejection, names a DIFFERENT agent to revise"), if any finding is upgraded to a blocker:
-- Grep-gate ordering + docstring + `_lib` exclusion → **Uhura** (auth-lib charter holder, #117). NOT the original revision agent.
-- `api/` directory consolidation → **Scotty** (author of the divergence — but the *consolidation* is a fresh task, so this is fine; alternatively give it to Uhura who owns `api/src/_lib`).
-- `DISABLE_WRITES` kill-switch helper → **O'Brien** (deploy-contract owner).
-- Bundle-budget unit comment → **Scotty**.
-
-## Multi-issue bundling pattern — observation
-
-This is the largest single-PR bundle this repo has shipped (8 issues, 57 files, +10.9k LOC). It worked because:
-
-1. **Each concern group has its own test file** (`auth.test.ts`, `check-api-auth.test.ts`, `check-bundle-budget.test.ts`, `swaConfig.test.ts`, `swaDeploy.test.ts`, `swaProject.test.ts`, `web/shell.test.ts`, `types-sync.test.ts`, `github-raw.test.ts`). Reviewer can read one file, run one test, sign off on one concern without context-switching across the whole bundle.
-2. **The `Closes #113 #114 #115 #116 #117 #119 #120 #122` block in the PR body is one-per-line** (Rule 12), so the post-merge sweep will close all eight cleanly.
-3. **Pinning-test discipline held** for both workflow touches (swa-deploy.yml + .gitignore/discord-monitor.yml).
-
-**But** the bundle stresses single-reviewer capacity. For Wave 4, recommend either:
-- Pre-split by concern group (one PR per issue), OR
-- Continue to bundle but pre-assign per-group reviewers in the PR body so Garak/Bashir/Kirk each own a section explicitly rather than re-discovering the boundaries.
-
-## Learnings (to mirror into history.md)
-
-- **Grep-gate-as-contract**: the script's docstring IS the contract; any drift between docstring and behaviour is itself a finding. Always read both the rules statement and the check body.
-- **TS path-alias + multi-tsconfig parity**: when a repo has both a root tsconfig and a sub-project tsconfig, **both** include arrays need to cover every shared library directory, or you get "works because tests reach it" coverage that quietly fails when a non-test consumer is added.
-- **Lit + CSP**: `script-src 'self'` works; `style-src 'self' 'unsafe-inline'` is the standard Lit-with-shadow-DOM concession (adoptedStyleSheets fallback path). Don't try to drop `'unsafe-inline'` for style-src until Safari coverage is verified.
-- **First-statement enforcement is harder than presence enforcement.** A grep gate is a presence check; a "first statement" check requires an AST. Choose the contract that matches the tool, or upgrade the tool.
-- **Largest bundle this repo has shipped held together** because every concern group brought its own test file. The pattern scales as long as test-file boundaries match concern-group boundaries.
-# Decision: SWA Deploy Auth Method — OIDC federation adopted
-
-**Author:** O'Brien
-**Date:** 2026-05-31T23:46:00Z
-**Issue:** #113
-**Commit:** f32585c (feat(005-web-control-panel): SWA deploy contract + deploy workflow + pinning test)
-**Status:** RESOLVED — OIDC federation adopted
-
----
-
 ## Decision
 
 Phase 1 formalizes **OIDC federation** (not deployment token) as the SWA
@@ -2968,334 +1455,6 @@ input. Document the downgrade in a new inbox entry.
 - `specs/005-web-control-panel/deploy-contract.md`
 - `.github/workflows/swa-deploy.yml`
 - `tests/skills/swaDeploy.test.ts`
-
----
-
-*Per Rule 2: this file is left uncommitted — Scribe commits .squad/ paths.*
-# O'Brien Decision Drop — PR #124 Azure OIDC deploy failure
-
-**By:** O'Brien (DevOps / Platform Engineer)
-**Date:** 2026-06-01T02:52Z
-**Worktree:** /workspaces/stfc-p1 on branch `squad/005-phase1-dashboard`
-**PR:** https://github.com/Jamula/stfc/pull/124
-**Follow-up issue:** https://github.com/Jamula/stfc/issues/127
-
-## Diagnosis
-
-The `deploy` CI job on PR #124 was failing with:
-```
-Login failed with Error: Using auth-type: SERVICE_PRINCIPAL.
-Not all values are present. Ensure 'client-id' and 'tenant-id' are supplied.
-```
-
-Root cause: **missing repo secrets**. `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, and
-`AZURE_SUBSCRIPTION_ID` were never provisioned. The workflow YAML was structurally
-correct — it correctly used the OIDC form. `azure/login@v3` falls back to
-SERVICE_PRINCIPAL auth and produces a misleading error when OIDC inputs resolve
-to empty strings.
-
-## Remediation chosen: Option B (secret-presence guard)
-
-Commit `84ffe6f` on `squad/005-phase1-dashboard`:
-- Gated both `deploy` and `teardown` jobs on `secrets.AZURE_CLIENT_ID != ''`
-- Updated `tests/skills/swaDeploy.test.ts` with a pin assertion for the guard (Rule 3)
-- Updated `tests/skills/swaProject.test.ts` comment to cross-reference the guard
-  (required because pre-commit `checkWorkflowPinningTests` hooks on ALL referencing files)
-
-Result: deploy and teardown now produce `skipped` instead of `failure` when secrets
-are absent. PR #124 is mergeable. Deploy activates automatically once Picard provisions
-the three secrets.
-
-## Follow-up required: Picard (issue #127)
-
-Issue #127 filed with full checklist:
-1. Create Azure App Registration + federated credentials for `main` push + PR events
-2. `gh secret set AZURE_CLIENT_ID / AZURE_TENANT_ID / AZURE_SUBSCRIPTION_ID` from local terminal
-3. Verify via `gh secret list` (names only)
-4. Trigger manual workflow run to confirm deploy activates
-
-⚠️ Secrets must NEVER be pasted into chat (Rule 21). Only `gh secret set` from operator's local terminal.
-
-## Blocking merge?
-
-No. Kirk and Garak hold the code-review gate. All required CI checks (tests, CodeQL,
-secrets-scan) are green. Deploy is informational / infra until secrets are provisioned.
-
-## Files changed (this decision's commit)
-
-- `.github/workflows/swa-deploy.yml` — secret-presence `if` guard on both jobs
-- `tests/skills/swaDeploy.test.ts` — pin test for guard (Rule 3 same-commit)
-- `tests/skills/swaProject.test.ts` — comment cross-reference (pre-commit hook compliance)
-# Decision note — SWA bootstrap (Wave 2, issue #115)
-
-**Agent:** O'Brien
-**Date:** 2026-05-31T23:55+00:00
-**Status:** COMPLETE (commit `1f4f824`, branch `squad/005-phase1-dashboard`)
-
----
-
-## What was done
-
-Phase 1 Wave 2 scaffolded the full Azure SWA project structure:
-
-- `web/` — Lit+Vite frontend scaffold (package.json, vite.config.ts, index.html, src/main.ts)
-- `api/` — Azure Functions v4 scaffold (package.json, host.json, local.settings.json.example, .funcignore, tsconfig.json)
-- `shared/contracts/` — empty dir with .gitkeep + README; Wave 3 #122 populates TS types
-- `staticwebapp.config.json` — deny-by-default (all routes require `stfc_operator`; 401 → GitHub login)
-- `scripts/azure/create-swa.sh` — idempotent bootstrap script
-- `docs/SWA-SETUP.md` — full operator runbook
-- Root `package.json` build scripts + `@azure/static-web-apps-cli` devDep
-- Root `tsconfig.json` `@stfc/contracts/*` path alias
-- 817 tests passing (was 770)
-
-## Scope decision (CONFIRM OK)
-
-Creating the actual Azure SWA RESOURCE requires `az login` with real Azure credentials.
-This was deferred to the operator per the task scope call. The `create-swa.sh` script
-handles the creation idempotently when the operator is ready.
-
-`az` CLI is installed in the Codespaces environment but no Azure session was found
-(`az account show` would require interactive login). Script verified readable and
-executable; dry-run was not performed (would require live Azure auth).
-
-## Also fixed (pre-existing bug)
-
-`tests/skills/swaDeploy.test.ts` had a wrong assertion pattern for the OIDC secrets
-check — it matched `AZURE_TENANT_ID: ${{ ... }}` (screaming-snake env-var style) but
-the workflow correctly uses `tenant-id: ${{ ... }}` (kebab-case azure/login input).
-This caused the test to fail silently (it was not in tests/index.test.ts). Fixed and
-added to index as part of this commit.
-
-## Next steps
-
-Wave 3 agents can now work independently:
-- **Uhura** (#117): populate `api/src/functions/auth.ts`
-- **Scotty** (#119): populate `web/src/` Lit components
-- **Scotty** (#120): populate `api/src/functions/github-raw.ts` + shared helpers
-- **Scotty** (#122): generate `shared/contracts/*.ts` from JSON Schemas in specs/
-- **Wave 3 #116**: populate `staticwebapp.config.json` with full role rules
-# Decision: staticwebapp.config.json deny-by-default + stfc_operator role
-
-**Agent:** O'Brien (DevOps)
-**Date:** 2026-06-01T00:00+00:00
-**Issue:** #116
-**Commit:** 2606491
-**Branch:** squad/005-phase1-dashboard
-
-## Decision
-
-Completed `staticwebapp.config.json` with the full Phase 1 Wave 3 role configuration per the v3 plan and Garak's STRIDE threat model.
-
-## What was implemented
-
-### Route configuration
-- `/.auth/*` → `allowedRoles: ["anonymous"]` — SWA login/logout endpoints must always be reachable by unauthenticated users. This route MUST appear before `/*` since SWA uses first-match routing.
-- `/api/*` → `allowedRoles: ["stfc_operator"]` — deny anonymous and authenticated-but-uninvited users from the API surface.
-- `/*` → `allowedRoles: ["stfc_operator"]` — catch-all deny-by-default for all other routes.
-
-### Response overrides
-- **401** → redirect to `/.auth/login/github?post_login_redirect_uri=/` (unauthenticated users are sent to GitHub OAuth, not shown a blank response). Includes `post_login_redirect_uri` so users land back at their target page after login.
-- **403** → rewrite to `/403.html` (static page explaining the stfc_operator role requirement and contact instructions). Status code remains 403.
-
-### Auth identity providers
-- **GitHub-only**: `auth.identityProviders` contains only `github`. No AAD, no anonymous providers, no MSA. This is the pre-configured provider on Free tier — no Standard plan required.
-- `clientIdSettingName: GITHUB_OAUTH_CLIENT_ID` and `clientSecretSettingName: GITHUB_OAUTH_CLIENT_SECRET` reference app settings (not hardcoded in config).
-
-### Security headers (globalHeaders)
-- `Strict-Transport-Security: max-age=31536000; includeSubDomains; preload`
-- `Content-Security-Policy: default-src 'self'; script-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; font-src 'self'; connect-src 'self'; frame-ancestors 'none'`
-  - `style-src 'unsafe-inline'` included because the 403.html uses an inline `<style>` block. If moved to a separate CSS file, this can be tightened.
-  - `frame-ancestors 'none'` duplicates X-Frame-Options: DENY for CSP-aware browsers.
-- `X-Content-Type-Options: nosniff`
-- `X-Frame-Options: DENY`
-- `Referrer-Policy: strict-origin-when-cross-origin`
-- **Removed from skeleton:** `X-XSS-Protection: 1; mode=block` — deprecated in modern browsers and not recommended by OWASP.
-- **Removed from skeleton:** `Permissions-Policy` — not required for Phase 1; can be added later if needed.
-
-### MIME types
-- `.json` → `application/json` — required for the future RAG index endpoint.
-
-### Static error page
-- `web/public/403.html` — minimal, CSP-safe (no `<script>` tags), dark-themed page explaining:
-  - HTTP 403 / Not Authorized
-  - The `stfc_operator` role is required
-  - Contact the operator to be invited
-  - Sign-out link to try a different account
-
-### Tests
-- `tests/skills/swaConfig.test.ts` (T-SWA-003) — 25 contract tests covering all of the above.
-
-## Decisions / tradeoffs
-
-| Area | Decision | Rationale |
-|---|---|---|
-| `style-src 'unsafe-inline'` in CSP | Accepted for Phase 1 | 403.html uses inline `<style>`. Future: extract to `/403.css` and remove `unsafe-inline`. |
-| `Permissions-Policy` removed | Removed (was in skeleton) | Not in the Wave 3 spec; keeps headers minimal; can be added in a hardening pass. |
-| `X-XSS-Protection` removed | Removed (was in skeleton) | Deprecated; can cause XSS in some browsers; OWASP recommends omitting it entirely. |
-| `post_login_redirect_uri=/` | Hardcoded to `/` | SWA does not provide a dynamic `{originalPath}` variable in config-level redirects. `/` is the safe fallback; the SPA router handles the rest. |
-| `frame-ancestors 'none'` | Added to CSP | Belt-and-suspenders with X-Frame-Options: DENY for modern CSP-aware browsers. |
-
-## What is NOT committed
-
-Per Rule 2, this file (`.squad/decisions/inbox/obrien-swa-config.md`) is left **uncommitted** in the worktree. Scribe will commit it in a separate session.
-# Decision note — unignore data/digests/*.md (Issue #114)
-
-**Agent:** O'Brien (DevOps / Platform Engineer)  
-**Date:** 2026-05-31  
-**Branch:** squad/005-phase1-dashboard  
-**Commit:** feat(005-web-control-panel): unignore data/digests + commit-on-write in discord-monitor (Phase 1 wave 1)
-
-## What was done
-
-- Removed `data/digests/*.md` from `.gitignore`. Updated comment to explain
-  constitution v2.0.0 sanctioning.
-- Verified `discord-monitor.yml` already has a commit-on-write step
-  (`git add data/discord data/digests promo-codes.txt`) with retry-once
-  pull --rebase before push. **No changes to the workflow YAML were needed.**
-- Added three new pinning assertions to `tests/skills/discordMonitor.test.ts`
-  (Rule 3 compliance):
-  1. `contents: write` permission is present
-  2. `git add` stages `data/digests`
-  3. Retry-once push pattern (`git pull --rebase` + `git push`) is present
-
-## Observations / surface to Uhura/Scotty
-
-- Digest output path: `src/` currently writes digests to `data/digests/<date>.md`
-  (confirmed by test fixture in discordMonitor.test.ts referencing `digestsDir`).
-  No src/ changes appear needed — the path is already correct.
-- `data/digests/.gitkeep` should remain tracked (and it is — only `*.md` was
-  excluded, never `.gitkeep`).
-
-## Status
-
-✅ Committed and pushed. All 770 tests green, typecheck clean.  
-❌ NOT committed to `.squad/` (Rule 2 — Scribe will commit this file).
-# Decision: json-schema-to-typescript as contract generator (Issue #122)
-
-**Date:** 2026-06-01  
-**Author:** Scotty (Core Dev)  
-**Issue:** #122 — shared/contracts TS types from JSON Schemas  
-**Commit:** 9302288
-
-## Decision
-
-Chose `json-schema-to-typescript` (v15.x) as the generator tool for deriving TypeScript
-types from the Phase 0 JSON Schema contracts.
-
-## Rationale
-
-1. **Battle-tested** — most widely adopted JSON Schema → TS tool in the ecosystem.
-2. **Deterministic output** — ships its own bundled prettier; CI sync gate diffs are
-   stable across runs.
-3. **const/enum support** — emits `schema_version: '1'` as a string literal type, not
-   `string`, satisfying Kirk review #6.
-4. **No bloat** — ajv already in devDeps for runtime validation; this adds only the
-   compile-time generator.
-
-## Run-result discriminated union
-
-`json-schema-to-typescript` produces an intersection type for top-level `oneOf`, which is
-not a proper discriminated union. The generator script (`scripts/lib/generate-contracts.mjs`)
-detects this pattern and builds per-branch schemas, compiles each individually via
-`json-schema-to-typescript`, then emits named interfaces + a union alias:
-
-```
-RedeemRunResult | DiscordMonitorRunResult | RefreshTokenRunResult → RunResult
-```
-
-TypeScript narrows correctly on `result.workflow === 'redeem'`.
-
-## Sync gate
-
-`scripts/ci/check-contracts-types.mjs` regenerates types in-process and string-diffs
-against committed files. Added as `check:contracts` npm script. Exits 1 on any mismatch.
-
-## Files added
-
-- `scripts/lib/generate-contracts.mjs` + `.d.mts` — shared generation logic
-- `scripts/build-contracts.mjs` — build script (`npm run build:contracts`)
-- `scripts/ci/check-contracts-types.mjs` — CI gate (`npm run check:contracts`)
-- `shared/contracts/run-result.ts` — generated
-- `shared/contracts/audit-event.ts` — generated
-- `shared/contracts/chat-tool-call.ts` — generated
-- `tests/contracts/types-sync.test.ts` — generator + gate tests
-
-## Future considerations
-
-- Zod schema codegen is deferred to a later wave per spec.
-- If a schema adds a new `oneOf` discriminant pattern, `detectDiscriminant()` in the
-  generator handles it automatically.
-- `@stfc/contracts/*` path alias is already wired in root, api, and web tsconfigs.
-# Kirk — Architecture doc organisation
-
-- **By:** Kirk
-- **Date:** 2026-06-01
-- **Status:** Proposed canonical pattern
-
-## Decision
-
-`docs/ARCHITECTURE.md` is the **canonical system architecture map**. It is
-deliberately a MAP (pointers to per-subsystem docs), not a REPLACEMENT for
-them.
-
-## Organising rules
-
-1. **One §3.N per subsystem**, with consistent sub-headings: entrypoint,
-   exit/contract semantics, modules table, scheduling/trigger, links to
-   per-subsystem docs.
-2. **Per-subsystem deep detail stays in its own doc** (`docs/SWA-SETUP.md`,
-   `docs/SWA-INVITATION-RUNBOOK.md`, `docs/CREW-OPTIMIZER.md`,
-   `docs/DISCORD-BOT-SETUP.md`, `docs/SETUP.md`, `docs/squad.md`,
-   `docs/stfc-game-knowledge.md`, `docs/stfc-knowledge/`). The
-   architecture doc cross-references; it does not duplicate.
-3. **Behavioural claims are cited** with `path:line` or
-   `specs/NNN-feature/<artifact>.md` references. Uncited claims are
-   flagged "TODO: verify" with the file someone should read.
-4. **Mermaid diagrams** are limited to 1 topology + 2-3 sequence flows.
-   More diagrams = more drift risk; pick the most cross-cutting flows
-   only.
-5. **§7 Known gaps** is mandatory — captures Wave-N defers, in-flight
-   PRs, unprovisioned secrets, and known doc/code drift. Most valuable
-   section for a returning maintainer.
-6. **§8 How to change safely** cites the 22 repo rules by number rather
-   than restating them — keeps `.github/copilot-instructions.md` as the
-   single source of truth.
-
-## Why
-
-A canonical architecture doc is a permanent invitation to drift. Three
-forcing functions minimise that:
-
-- **Cross-reference over duplicate** — pointers age well, prose does not.
-- **Cite file:line** — makes the doc auditable against the live tree;
-  any reader can ground-truth a claim with one click.
-- **Explicit §7 gaps** — a doc that tells you what NOT to trust is more
-  honest than one that pretends to be complete.
-
-## Implications
-
-- When a subsystem's behaviour changes, update its OWN doc and adjust
-  only the pointer/synopsis in `docs/ARCHITECTURE.md` — do not edit the
-  per-subsystem body in two places.
-- When a new subsystem is added, append a new `§3.N` entry following
-  the template (entrypoint / contract / modules / scheduling / doc
-  links), update §1 topology + table, add a §6 reference row.
-- Drift detection: if a `path:line` citation no longer matches the
-  cited file, the doc is stale — fix it immediately.
-
-## Scope
-
-Architecture-doc maintenance specifically. Other docs (per-subsystem,
-operator runbooks, spec artefacts) follow their own conventions.
-
-# Kirk — Triage memo: Issue #92 (crew v2 read-only command handlers)
-
-**Date:** 2026-06-01T04:05Z
-**Author:** Kirk (Lead/Architect)
-**Issue:** [#92 — crew[v2]: Implement read-only command handlers](https://github.com/Jamula/stfc/issues/92)
-**Depends on:** #91 (closed — PR #123 shipped `crewCommandParser.ts`)
-**Owners (per label):** Scotty (squad:scotty) + Uhura (squad:uhura)
-**Mode:** READ-ONLY triage. No source files created or modified.
 
 ---
 
@@ -3495,33 +1654,6 @@ Ready for the implementer round.
 
 ---
 
-## 1. Backlog classification (all 12 open issues)
-
-| Status | Issue | Title (short) | Owner(s) | Blocker | Action |
-|---|---|---|---|---|---|
-| 🟡 IN-FLIGHT | #92 | crew[v2] read-only handlers | Uhura+Scotty | PR #129 review (Garak pending) | monitor; do NOT touch |
-| ⏳ DEPENDS-ON | #93 | crew[v2] knowledge embedding pipeline + `!crew knowledge` handler | Uhura+Scotty | #92 (PR #129) merge | queue for Batch 2 |
-| ⏳ DEPENDS-ON | #94 | crew[v2] knowledge-rebuild workflow + Rule 3 pin tests | O'Brien | #93 (artifact shape must exist) | queue for Batch 3 |
-| ⏳ DEPENDS-ON | #95 | crew[v2] operator docs + reviewer gates | Tuvok + Garak/Kirk/Picard | #93 + #94 (surface area to document) | queue for Batch 4 |
-| ⛔ EXTERNAL-BLOCKER | #85 | crew[v1.5] OCR POC spike on 20 screenshots | Uhura | **needs 20 real game screenshots from user** | ASK USER |
-| ⏳ DEPENDS-ON | #86 | crew[v1.5] POC gate decision | Picard (me) | #85 measurements | queue for Batch 5 |
-| ⏳ DEPENDS-ON | #87 | crew[v1.5] constitution amendment | Tuvok | #86 PASS | queue for Batch 6 |
-| ⏳ DEPENDS-ON | #88 | crew[v1.5] image-attachment ingest + ocr.ts + roster-sync.yml | Uhura+Scotty+O'Brien | #87 | queue for Batch 6 |
-| ⏳ DEPENDS-ON | #89 | crew[v1.5] OCR + Discord transport operator docs | Tuvok | #88 | queue for Batch 7 |
-| ⏳ DEPENDS-ON | #90 | crew[v1.5] reviewer gates | Garak/Kirk/Picard | #88 + #89 PRs | queue for Batch 7 |
-| ⛔ EXTERNAL-BLOCKER | #127 | Provision Azure OIDC secrets for SWA deploy | Picard (me) + O'Brien | **user-only `gh secret set` from local terminal per Rule 21** | ASK USER |
-| ⏳ DEPENDS-ON | #112 | Epic: 005-web-control-panel Phase 1 | Picard | only #127 left open from epic; auto-closes when #127 closes | track only |
-| ⛔ EXTERNAL-BLOCKER | #76 | Ingest STFC Discord channel #1115978499400933473 | Kirk+O'Brien | **bot lacks guild membership in `639255937869152267`** | ASK USER for invite path |
-
-**Dependency-chain sanity check (verified against live `gh` state):**
-- #91 (parser, dep for #92) — ✅ CLOSED 2026-06-01T01:17Z
-- #84 (v1 reviewer gates, dep for #85) — ✅ CLOSED 2026-05-31T22:49Z
-- #74 (sheet ingest, dep for #76) — ✅ CLOSED 2026-05-31T19:43Z
-
-No stale dependencies in any body. All blocker assertions in the issue bodies remain accurate as of 04:57Z.
-
----
-
 ## 2. Parallel-safe fan-out groups
 
 Within the crew[v2] track, the next two dispatches (#93 and #94) are **parallel-safe across worktrees** once #93's interface lands (i.e., the embedding-artifact path is defined). They have:
@@ -3573,45 +1705,6 @@ Within the crew[v1.5] track, #88 spans three owners (Uhura+Scotty+O'Brien) and i
 | `tests/index.test.ts` | append | append | **SERIALIZE** — second PR rebases over first (per `audit-wip-fanout` skill) |
 | `tests/skills/discordMonitor.test.ts` | — | possibly grep-touched | Rule 3 grep before edits |
 | `docs/CREW-OPTIMIZER.md` | — | — | reserved for #95 (Tuvok) |
-
----
-
-## 5. Recommended action for Coordinator
-
-### 5a. Dispatch NOW (Batch 1)
-
-**Nothing autonomous.** The two highest-priority actionable items both depend on user action or a near-imminent PR merge.
-
-### 5b. Queue (Batches 2–8 via session SQL todos)
-
-Track in SQL with dependencies — Coordinator should `INSERT INTO todos` for each batch with `depends_on` chain so they auto-fire as gates clear.
-
-### 5c. **STOP AND ASK USER (two parallel asks)**
-
-Use `ask_user` (or direct chat) with these two questions, **both at the same time** (independent unblockers):
-
-1. **#127 — Azure OIDC secrets (Phase 1 epic deploy verification):**
-   > Please run from your **local terminal** (Rule 21 — never paste values in chat):
-   > ```bash
-   > gh secret set AZURE_CLIENT_ID     --repo Jamula/stfc
-   > gh secret set AZURE_TENANT_ID     --repo Jamula/stfc
-   > gh secret set AZURE_SUBSCRIPTION_ID --repo Jamula/stfc
-   > ```
-   > Reply "secrets set" when done; I will close #127 and #112 epic.
-
-2. **#85 — OCR POC screenshots (unlocks the entire crew[v1.5] cascade #85→#86→#87→#88→#89→#90):**
-   > Can you provide 20 real STFC game screenshots covering officer roster screens (varied resolutions / iPhone framings if you have them)? Drop them in a folder, share a path or zip. Once Uhura has them, the POC spike runs in ~1 session and the gate decision (#86) follows immediately.
-
-3. **#76 (lower urgency — long-blocked already):**
-   > The bot still lacks membership in guild `639255937869152267`. If the invite path opened up since 2026-05-31, let me know; otherwise we leave #76 + draft PR #96 frozen.
-
-### 5d. Auto-fire watch
-
-When PR #129 merges (CI green + auto-merge enabled — likely <1h):
-1. Remove `/workspaces/stfc-92` worktree per Rule 8 (sweep `.squad/` first).
-2. Create `/workspaces/stfc-93` + `squad/93-crew-v2-knowledge`; run `worktree-preflight` skill.
-3. Dispatch Uhura (Discord/API lead) + Scotty (TS/CLI) as a coordinated pair against #93.
-4. Set up next gate: when #93 PR opens, dispatch O'Brien on #94 in `/workspaces/stfc-94`.
 
 ---
 
@@ -3759,3 +1852,629 @@ Issue: #92
 - `handleCrewCommand` is now async and owns handler dispatch/error wrapping; `processCrewCommands` only handles parse/rate-limit/post sequencing.
 - Handler failures are converted to `Error: {message}` before calling `CrewCommandResponder.postMessage`, preserving the existing string-only Discord responder surface.
 - The barrel exposes all 8 handler names as static exports after Scotty's handler commit landed; Uhura only edited the barrel and dispatcher, not Scotty's handler bodies.
+
+
+---
+
+# Garak verdict — PR #150 hostile fact-check
+
+**Date:** 2026-06-02T03:52Z
+**PR:** #150 — `feat(discord): add commands.json + validator (#144)`
+**Verdict:** **CHANGES_REQUESTED** ⚠️
+
+Kirk's approve does not hold because the validator contract is weaker than the PR/docs claim and weaker than Discord's registration constraints.
+
+## Blocking findings
+
+1. **Uppercase command names pass local validation but violate Discord's lowercase-variant rule.**
+   - Evidence: `scripts/validate-discord-commands.mjs:22-24` says lowercase but uses `^[-_\p{L}\p{N}]{1,32}$`.
+   - Discord docs: command names matching the regex must still use lowercase where a lowercase variant exists.
+   - Probe: `/AdminOnly` fixture returned validator status 0.
+   - Register-time failure shape: Discord form errors use HTTP 400, code `50035`, message `Invalid Form Body`, nested `errors` object.
+
+2. **`options` is not recursively validated.**
+   - Evidence: `scripts/validate-discord-commands.mjs:52-54` checks only `type: "array"`.
+   - Discord docs constrain option type, name, description, ordering, uniqueness, choices, lengths, and autocomplete/choices compatibility.
+   - Probe: invalid option object with `type:999`, uppercase name, and empty description returned validator status 0.
+
+3. **Duplicate command names pass local validation.**
+   - Evidence: root schema has no uniqueness rule (`scripts/validate-discord-commands.mjs:58-62`).
+   - Discord docs require command names to be unique per application/type/scope.
+   - Probe: duplicate `CHAT_INPUT` names returned validator status 0.
+
+## Confirmed
+
+- `discord/commands.json:8-12` uses `default_member_permissions: "8"`; Discord permissions docs define ADMINISTRATOR as `(1 << 3)` / decimal 8, serialized as a string bitfield.
+- PR body has `Closes #144` on its own line and a `## Tests` section.
+- AJV is configured with `unicodeRegExp: true` at `scripts/validate-discord-commands.mjs:80`.
+
+## Suggested revision agent
+
+Scotty (not Uhura, per reviewer-lockout). Minimum fix: reject uppercase ASCII names for this repo's command surface, reject duplicate `(type,name)` pairs, and either fully validate `options` or reject `options` until #145/#147 need them.
+
+
+---
+
+# Garak re-verify — PR #150
+
+**Date:** 2026-06-02T04:02Z
+**PR:** #150
+**Head verified:** 8fd9818
+**Verdict:** APPROVE ✅
+
+## Findings re-verified
+
+1. **Uppercase rejection resolved.** `NAME_PATTERN` now uses `\p{Ll}` and `AdminOnly` exits 1 with a pattern error. Existing `/redeem-status` and `/trigger-redeem` still validate.
+2. **Duplicate `(type,name)` detection resolved.** Same `type=1,name="foo"` exits 1 with `duplicate command for (type=1, name="foo")`; same name across types 1 and 2 exits 0.
+3. **Options handling resolved for this PR scope.** Any own `options` property, including `options: []`, exits 1 with `options not yet supported by this validator — track in a follow-up issue`.
+
+## Regression checks
+
+- `npm test` passed from `/workspaces/stfc-144`.
+- `node scripts/validate-discord-commands.mjs` passed on current `discord/commands.json`.
+- `gh pr checks 150 --watch` ended green.
+- Original seven tests remain in `tests/discord/commandsJson.test.ts`; Scotty added the three failure tests instead of weakening the suite.
+- `git diff main...HEAD -- discord/commands.json` still shows only the intended new command file with `redeem-status` and `trigger-redeem`.
+
+## Non-blocking note
+
+The PR body still contains stale prose from round 1 (`\p{L}` and seven-test inventory). It remains mechanically compliant (`Closes #144`, `## Tests`) and does not change the code verdict, but it is archival drift.
+
+
+---
+
+# Garak verdict — PR #151 Cloudflare Worker Discord bridge
+
+**Date:** 2026-06-02T03:54Z
+**PR:** #151 — `feat(worker): add Cloudflare Worker Discord bridge (#146)`
+**Role:** Garak — hostile fact-check, Kirk-as-author co-review
+**Verdict:** **CHANGES_REQUESTED** ⚠️
+
+## Blocking finding
+
+Malformed signature/header input escapes as an exception instead of a uniform 401:
+
+- `worker/src/index.ts:62-66` calls `hexToBytes(signature)`, encodes `timestamp + body`, and calls `ed.verifyAsync(...)` with no `try/catch`.
+- `worker/src/index.ts:117-123` only rejects odd-length hex; non-hex pairs become `NaN`, which `Uint8Array` coerces to `0`.
+- Installed `@noble/ed25519` validates signature/public-key byte lengths inside verification (`worker/node_modules/@noble/ed25519/index.js:461-464`) and can throw.
+- Local probe from `/workspaces/stfc-146/worker` showed attacker-controlled malformed signatures throw: `1 THREW RangeError hex string must have even length`, `2 THREW Error Uint8Array expected`, `126 THREW Error Uint8Array expected`.
+- Current tests cover only a parseable corrupted 64-byte signature (`worker/src/index.test.ts:106-112`), not odd-length, non-hex, short signature, or malformed public-key configuration.
+
+## Confirmed checks
+
+- Noble v2 API order is correct: `verifyAsync(signature, message, publicKey)` (`worker/node_modules/@noble/ed25519/index.d.ts:119-120`; upstream README usage example same order).
+- Verification message is exactly UTF-8 bytes of `timestamp + body` (`worker/src/index.ts:61-65`).
+- Replay window uses both directions via `Math.abs(now - ts) > 300` (`worker/src/index.ts:53-58`); no nonce tracking, so a captured valid payload can trigger duplicate dispatches inside five minutes.
+- PING does not bypass signature verification; type branching starts after verification (`worker/src/index.ts:47-78`).
+- Worker accepts `ctx` and uses `ctx.waitUntil` for command dispatch (`worker/src/index.ts:42,83-86`).
+- GH dispatch URL is `https://api.github.com/repos/${env.GH_REPO}/dispatches` and User-Agent is set (`worker/src/index.ts:93-101`); GH_REPO is env-configured, not separately validated.
+- `nodejs_compat` is not enabled; `wrangler.toml` documents native Web Crypto use (`worker/wrangler.toml:3-6`).
+- PR body has `Closes #146` on its own line and a `## Tests` section; docs touched `worker/README.md` and root `README.md`; diff grep showed placeholders/test values only, no live secrets.
+
+## Suggested revision owner
+
+Scotty — general Worker hardening. Add strict hex length/content validation, wrap conversion + `verifyAsync` in `try/catch`, return uniform 401 for malformed and invalid signatures, and add edge-case tests plus dispatch-failure logging coverage.
+
+
+---
+
+# Garak PR #151 re-verification verdict
+
+**Date:** 2026-06-02T04:04Z
+**PR:** #151 — Cloudflare Worker Discord interactions bridge
+**Head verified:** c616289
+**Verdict:** APPROVE ✅
+
+## Evidence
+
+- `worker/src/index.ts:66-68` rejects malformed signature hex before `hexToBytes` or `ed.verifyAsync` run.
+- `worker/src/index.ts:74-85` wraps both signature/public-key conversion and `verifyAsync`; any throw maps to `Invalid signature` / 401.
+- `worker/src/index.test.ts` covers parseable wrong signature, odd-length hex, non-hex correctly-lengthed signature, short signature, long signature, malformed public key, and GH dispatch 5xx behavior.
+- `cd worker && npm test`: 14/14 passing.
+- `gh pr checks 151`: CodeQL and npm/test checks passing.
+- `git diff main...HEAD --stat`: worker project plus README only; no root `package.json` dependency change.
+
+## Non-blocking observations
+
+- PR body's `## Tests` section still says 8 tests and omits the six added revision tests.
+- A cold missing `DISCORD_PUBLIC_KEY` binding returns safe 500 without leaking the value, but does not emit the `DISCORD_PUBLIC_KEY misconfigured` log line because the lazy-cache sentinel initially equals `undefined`.
+
+Original blocking finding is fixed. Ship it.
+
+
+---
+
+# Kirk — PR #150 code review verdict
+
+**Date:** 2026-06-02
+**PR:** #150 `feat(discord): add commands.json + validator (#144)`
+**Author:** cyrusjamula (Uhura)
+**Branch:** `squad/144-commands-json`
+**Verdict:** **APPROVE** ✅ — pending Garak co-review (Kirk-as-author-and-reviewer carve-out)
+
+## What I checked
+
+- `discord/commands.json` shape matches Discord CHAT_INPUT spec (name 1–32 chars, description 1–100, `type: 1`, `default_member_permissions: "8"` = bit 3 = ADMINISTRATOR).
+- `scripts/validate-discord-commands.mjs`: ajv v8 (`^8.20.0` already in devDependencies — no new deps), `unicodeRegExp: true` correctly enables `\p{L}\p{N}` Unicode classes, `additionalProperties: true` keeps the schema forward-compatible with future Discord fields, exit codes 0/1 match repo convention, error messages are operator-friendly.
+- `tests/discord/commandsJson.test.ts`: 8 tests — JSON validity + parse, command-shape loop (name/description/type), both `/redeem-status` and `/trigger-redeem` presence assertions, validator happy-path + 3 failure modes (oversize name, empty description, malformed JSON). Broken-fixture temp files (`discord/_test-broken-*.json`) cleaned in `finally` blocks. Wired into `tests/index.test.ts`.
+- Docs: `docs/DISCORD-BOT-SETUP.md` §Slash commands explains source-of-truth role, permission bitmask, validator usage, and downstream consumers (#145/#147). Satisfies Rule 16.
+- PR body: `Closes #144` on its own line (Rule 6a ✓), `## Tests` section enumerates added tests (Rule 15 ✓).
+- Scope: no worker code (that's #146), no workflow YAML (that's #145), `git diff origin/main..HEAD -- .squad/` is empty (Rule 2 ✓).
+- Rule 22: coordinator pre-spawn `npm ci` confirmed; CI is green (6/6 checks).
+
+## Non-blocking observation
+
+Discord's name constraint for Latin script is **lowercase only**, but the regex
+`^[-_\p{L}\p{N}]+$` would accept e.g. `Redeem-Status` and pass validation while
+Discord's registration API would reject it. Both current commands are lowercase,
+so this is latent. Worth either tightening to `^[-_\p{Ll}\p{N}]+$` for
+lowercase-Latin, or adding a comment noting Discord enforces lowercase
+server-side. **Not a merge blocker** — appropriate to handle as a follow-up
+in #146 (where registration will surface the failure if it ever triggers).
+
+## Co-review requirement
+
+I authored the arch decomposition for #143 (parent epic) that scoped #144.
+Per `.squad/routing.md` Kirk-as-author-and-reviewer rule, I cannot be the
+sole reviewer gate. **Garak's hostile fact-check is required before merge.**
+
+## Routing
+
+- → Garak: hostile fact-check (does the validator actually catch what Uhura
+  claims? Are the permission bitmask docs accurate? Is the `unicodeRegExp`
+  claim correct?). Verdict to `.squad/decisions/inbox/`.
+- → Coordinator: hold merge until Garak's APPROVE lands; then Rule 7
+  auto-merge applies.
+
+
+---
+
+# Kirk verdict — PR #151 (Cloudflare Worker Discord bridge)
+
+**Date:** 2026-06-02T03:55Z
+**PR:** https://github.com/Jamula/stfc/pull/151
+**Author:** cyrusjamula (Uhura)
+**Branch:** `squad/146-cf-worker`
+**Comment:** https://github.com/Jamula/stfc/pull/151#issuecomment-4598568022
+
+## Verdict: APPROVE ✅ — pending Garak co-review
+
+Per `.squad/routing.md`, the Kirk-as-author-and-reviewer carve-out applies: I authored the arch in decision `kirk-discord-slash-arch` that this PR implements. **Garak (hostile fact-check) must co-review before merge.** Do NOT auto-merge on my approval alone.
+
+## Security review (priority items, all PASS)
+
+1. **Signature check ordering** ✅ — `ed.verifyAsync` returns 401 *before* `ctx.waitUntil` is reached. PING test asserts `waitUntil` NOT called; bad-sig tests intentionally don't mock `fetch` (would explode if dispatch fired on bad sig — passive assertion).
+2. **Message construction** ✅ — `timestamp + body` raw concat, no separator, matches Discord spec.
+3. **`ctx.waitUntil` pattern** ✅ — type:5 returned synchronously; dispatch fires in background. No `await` on outbound fetch in the request path.
+4. **Replay window** ✅ — `Math.abs(now - ts) > 300` covers both stale AND future skew.
+5. **GH token hygiene** ✅ — Only sent as `Authorization: Bearer` to hardcoded `https://api.github.com/repos/${env.GH_REPO}/dispatches`. Never logged/echoed. `GH_REPO` is operator-set (not user input) so URL template is safe.
+6. **Method gate** ✅ (405), **PING handling** ✅ (sync `{type:1}`), **Unknown type** ✅ (400).
+7. **No secrets in diff** ✅ — `git diff` grep shows only variable names, placeholders, and test fixture `"test-gh-token"`.
+8. **wrangler.toml** ✅ — `compatibility_date = "2026-06-02"`, only non-sensitive `GH_REPO` in `[vars]`, secrets in comments as `wrangler secret put`.
+9. **Library choice** ✅ — `@noble/ed25519@^2.1.0` in deps, no tweetnacl leftover, no `nodejs_compat` flag.
+
+## Build & test status
+
+- `worker/` → `npm test` → **8/8 passing** (144ms)
+- Root → `npm test` → **1019/1019 passing** (no regression)
+- TS strict mode ✅, `Env` interface ✅, no `any` in security paths ✅
+
+## PR hygiene (Rules 6a + 15 + 16)
+
+- ✅ `Closes #146` per-line
+- ✅ `## Tests` section enumerates 8 tests
+- ✅ Why / What / Not-in-this-PR sections
+- ✅ Mentions deployment #148 and runbook #149
+- ✅ Root `README.md` updated with one-line worker mention (Rule 16)
+
+## Non-blocking wishlist (do NOT block this PR)
+
+Filed in PR comment as wishlist. Summary:
+
+1. **401 messages distinguish failure modes** — could be opaque "Unauthorized" to hide which gate tripped. Discord's own example does the same; defensible.
+2. **`hexToBytes` throws on odd-length input** → uncaught → 500 instead of 401. Wrap in try/catch.
+3. **`dispatchToGitHub` has no try/catch** — GH API failure silently swallowed by `waitUntil`. Discord user stuck at "thinking...". Recovery is arguably #147's job (GH Actions handler can send error follow-up), but at minimum `console.error` would help `wrangler tail` diagnostics.
+4. **Test gaps:** (a) "fetch NOT called when sig invalid" explicit assertion, (b) future-skew (+301s) symmetric to stale test. Currently structural absence-of-mock in negative tests covers (a) implicitly.
+
+None affect security posture. None block.
+
+## Next steps
+
+- Awaiting Garak co-review (hostile fact-check on the security claims above)
+- After Garak APPROVE + CI green → auto-merge per Rule 7
+- Post-merge: cleanup worktree `/workspaces/stfc-146`, sweep `.squad/` artifacts (Rule 8)
+- Follow-ups #147 (Scotty — GH Actions handler), #148 (O'Brien — deploy workflow), #149 (operator runbook)
+
+— Kirk
+
+
+---
+
+# Kirk verdict — PR #152
+
+**Date:** 2026-06-02T04:13Z
+**PR:** #152 — `ci: add discord-register-commands.yml workflow (#145)`
+**Author:** Uhura (cyrusjamula)
+**Branch:** `squad/145-register-workflow`
+**Verdict:** **APPROVE** ✅
+
+## One-line justification
+
+Workflow is `workflow_dispatch`-only with `contents: read`, SHA-pinned to the repo's canonical action versions, has validation as a separate step before the curl side-effect, dry-run short-circuits cleanly, token is handled hygienically (single curl invocation, no echo, no `set -x`, no `-v`), and 14 pin tests cover all the security-adjacent surface.
+
+## Token-leak concern
+
+**None.** `DISCORD_BOT_TOKEN` flows through `env:` → single `curl -H "Authorization: Bot $TOKEN"` invocation. No `echo`, no `set -x`, no `curl -v`. Discord doesn't echo request headers in responses, so the `GITHUB_STEP_SUMMARY` publication of `response.json` is safe. Pin tests explicitly assert absence of token-echo and `set -x`.
+
+## CI status at review time
+
+All 6 required checks green: Analyze (CodeQL), Rule N citations, secret-leak scan, npm test (required), test x2.
+
+## Files reviewed (4)
+
+- `.github/workflows/discord-register-commands.yml` (+128)
+- `tests/skills/discordRegisterCommands.test.ts` (+266) — 14 pin tests
+- `docs/DISCORD-BOT-SETUP.md` (+44) — operator runbook
+- `tests/index.test.ts` (+1) — wiring
+
+## Next action
+
+Auto-merge per Rule 7 — Coordinator may ship without re-asking.
+
+## Reviewer
+
+Kirk (code review) — posted via `gh pr comment 152` per Rule 9b.
+
+
+---
+
+# Kirk — PR #153 re-verify verdict
+
+**Date:** 2026-06-02T04:25Z
+**PR:** #153 (Closes #148)
+**Author:** Scotty
+**Commit re-verified:** `69bf4b31a7a6001519ba8960552f499744f58c35`
+**Verdict:** **APPROVE** ✅
+
+## Prior finding (CHANGES_REQUESTED ~04:20Z)
+
+Wrangler-action SHA `1029e9...` was falsely labeled v4.0.0 in 3 places (workflow YAML, pin test, PR body). Actual v4.0.0 SHA is `ebbaa1584979971c8614a24965b4405ff95890e0`.
+
+## Re-verification (all green)
+
+| Site | Status |
+|---|---|
+| `.github/workflows/deploy-cloudflare-worker.yml:34` | ✅ `ebbaa158...` |
+| `tests/skills/deployCloudflareWorker.test.ts:83-84` | ✅ `ebbaa158...` |
+| PR #153 body | ✅ `ebbaa158...` |
+| `gh api` tag→SHA cross-check | ✅ returns `ebbaa158...` |
+| CI (`npm test` required) | ✅ pass on 69bf4b3 |
+| Local `npm test` | ✅ 1041/1041 pass |
+| Commit scope | ✅ 2 files (workflow + test); PR body is API-side |
+| PR body structure | ✅ `Closes #148` per-line, `## Tests`, `## Required secrets` intact |
+
+## CodeQL note
+
+`Analyze (javascript-typescript)` still queued at verdict time — per Rule 13a, this is timing race on a freshly pushed SHA, non-blocking for review verdict. Auto-merge gate (Rule 7) will wait for green.
+
+## Action
+
+Ship it. No further changes requested.
+
+
+---
+
+# Kirk — PR #153 review (deploy-cloudflare-worker.yml)
+
+**Date:** 2026-06-02T04:16Z
+**Verdict:** CHANGES_REQUESTED ⚠️
+**PR:** https://github.com/Jamula/stfc/pull/153
+**Comment:** https://github.com/Jamula/stfc/pull/153#issuecomment-4598677426
+**Author:** O'Brien (commit via cyrusjamula)
+**Revision routed to:** Scotty (mechanical SHA repin)
+
+## Blocker
+
+Workflow pins `cloudflare/wrangler-action@1029e90033977ccf46c2a9b3ddc55e42ad5da467 # v4.0.0`.
+
+`1029e90` is **not** v4.0.0. Verified upstream:
+- `1029e90` = 2026-03-12 commit on `main`, "Update default Wrangler version to v4 (4.72.0)", **untagged**
+- Real v4.0.0 tag = `ebbaa1584979971c8614a24965b4405ff95890e0`, 2026-05-12, "Automatic compilation"
+
+PR body's claim "pinned to SHA 1029e90 == v4.0.0" is also false. SHA-pin provenance broken.
+
+**Fix (3 places):**
+1. Workflow line 34 → `cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0  # v4.0.0`
+2. Pin test line 83 → assert new SHA
+3. PR body bullet → update SHA reference
+
+## What passed (no changes needed)
+
+- Triggers: push/main + path filter + workflow_dispatch, NO pull_request
+- Permissions: contents: read only (single key)
+- Concurrency: `deploy-cloudflare-worker`, `cancel-in-progress: false`
+- Step order: checkout → setup-node → npm ci → npm test → npm run typecheck → wrangler deploy → summary; no `continue-on-error` / `if: always()`
+- wrangler-action inputs: `command: deploy`, `workingDirectory: worker`, both secrets via `${{ secrets.* }}` interpolation
+- Token hygiene (Rule 21): no echo, no `set -x`, summary writes deployed URL only — token never in any run: block
+- Pin tests: 9 assertions, comprehensive (paths, dispatch, perms minimality, concurrency, 3 action SHAs, step ordering, wrangler `with:`, secrets refs + no-echo, summary)
+- worker/README.md: full Deployment section with `gh secret set` instructions + Discord-Portal handoff
+- PR body: `Closes #148` per-line (Rule 6a), `## Tests` (Rule 15), required-secrets section
+- Scope: 4 files, no `.squad/` staged, no worker code
+- Baseline: `npm test` → 1041/1041 pass on `2655ad6`
+
+## Self-trigger note
+
+`worker/README.md` is under `worker/**`, so the merge commit WILL trigger this workflow's first run on `main`. Pre-secret-setup, the wrangler step fails red — expected, not a regression.
+
+## Wishlist (defer)
+
+- Pin test could explicitly assert `triggers.pull_request === undefined` as forward guard.
+
+
+---
+
+# Kirk — PR #154 review verdict
+
+**Date:** 2026-06-02T04:18:00Z
+**PR:** https://github.com/Jamula/stfc/pull/154 (`ci(discord): add command-handler workflow + routing script (#147)`)
+**Author:** Scotty (commit by cyrusjamula)
+**Commit reviewed:** `04d24f0`
+**Verdict:** **APPROVE** ✅
+**Posted:** https://github.com/Jamula/stfc/pull/154#issuecomment-4598682023
+
+## Summary
+Workflow + routing script match `kirk-discord-slash-arch` contract exactly. Script is security-clean: `execFile` (no shell injection), payload-derived strings never reach `gh` args, `ref`/`repo` sourced from GHA env (not payload), Discord PATCH errors don't leak Authorization header, token never logged. CI all-green; 12/12 tests pass locally. Docs updated per Rule 16. Rule 3 pin tests are comprehensive.
+
+## Verified
+- ✅ Trigger `repository_dispatch` types `[discord-command]` only (no push/schedule/workflow_dispatch)
+- ✅ Permissions: `contents:read + actions:write` only
+- ✅ Concurrency: `stfc-discord-handler` + `cancel-in-progress:false`
+- ✅ SHA-pinned actions (checkout 34e1148, setup-node 49933ea)
+- ✅ jq pre-check empirically rejects empty `command` (verified with `echo '{...}' | jq -e ...`)
+- ✅ `execFile` only — no `exec` with string interpolation
+- ✅ Immediate PATCH after dispatch — 15-min token window respected
+- ✅ Discord 4xx/5xx → exit 1 with no header/token leakage
+- ✅ `Closes #147` per-line; `## Tests` section present; docs updated
+
+## Non-blocking nits (filed in PR, not blockers)
+1. Add `allowed_mentions: { parse: [] }` to all PATCH bodies — prevents `@everyone` echo via unknown command (defense-in-depth past the dispatch trust boundary).
+2. Add `.slice(0, 1900)` to `formatRedeemStatus` output — hardens against 2000-char PATCH ceiling if a future history line bloats.
+
+## Next steps
+- Reviewer-approved + CI-green → Rule 7 auto-merge applies. Coordinator may squash-merge without re-prompting.
+- Remaining epic #143 work: #148 (deploy worker), #149 (operator runbook).
+
+
+---
+
+# Kirk re-verify verdict — PR #155 (operator runbook, epic #143 final piece)
+
+**Date:** 2026-06-02T04:38Z
+**Reviewer:** Kirk (Lead / Architect / Code Reviewer)
+**PR:** https://github.com/Jamula/stfc/pull/155
+**Fix commit:** `17702fc946d006e5d3b0039aa82908a666dd0302`
+**Verdict:** **APPROVE ✅**
+**Comment:** https://github.com/Jamula/stfc/pull/155#issuecomment-4598761402
+
+## Findings re-verified
+
+| # | Finding (prior CHANGES_REQUESTED) | Fix verified | Evidence |
+|---|---|---|---|
+| Blocker 1 | Wrong PAT scope (`Actions: write` → should be `Contents: write` for `repository_dispatch`) in `discord/RUNBOOK.md` (step A3 + troubleshooting row) and `worker/README.md` | ✅ | `discord/RUNBOOK.md:78` and `:255` show `Contents: Read and write`. `worker/README.md:131` shows `contents:write`. No residual `Actions: write` anywhere in either file. |
+| Blocker 2 | Runbook jumped to `wrangler secret put` with no install/auth prereq | ✅ | New prereq block at lines 151–167: `npx wrangler --version` / `npx wrangler login` / `npx wrangler whoami`, with global-install alternative documented. Primary path is `npx wrangler` (no global install required). |
+| Nit 3 | Step D verify list mentioned `GH_REPO` (a var, not a secret — won't appear in `wrangler secret list`) | ✅ | `GH_REPO` no longer appears in `discord/RUNBOOK.md`. Verify list correctly contains only `DISCORD_PUBLIC_KEY` and `GH_DISPATCH_TOKEN`. |
+| Nit 4 | Typo "enforates" | ✅ | Zero matches in `discord/RUNBOOK.md`. Corrected to "enforces" in troubleshooting row 254. |
+| Nit 5 | Malformed `[Rule 13a](...)` link in troubleshooting row 7 | ✅ | Link is `[Rule 13a](../.github/copilot-instructions.md#13-codespaces-operational-gotchas)`. Target exists (`.github/copilot-instructions.md` line 386 `## 13. Codespaces operational gotchas`; subsection `### 13a.` at line 388). |
+
+## CI + PR hygiene
+
+- `npm test` (worktree): 1067/1067 pass.
+- `gh pr checks 155`: all required checks green (npm test 37s, CodeQL Analyze 1m18s, test 41s, test 43s).
+- PR body has `Closes #149` on its own line (Rule 6a).
+- PR body has `## Tests` heading with docs-only note (Rule 15).
+
+## Epic #143 completion
+
+This PR is the **final piece** of epic #143 (Discord slash command infrastructure, Option B / Cloudflare Workers bridge). Child issues shipped:
+
+- #144 — `discord/commands.json` (single source of truth)
+- #145 — `.github/workflows/discord-register-commands.yml`
+- #146 / #151 — Cloudflare Worker (signature verifier + GH dispatch bridge)
+- #147 — `.github/workflows/discord-command-handler.yml`
+- #148 — `.github/workflows/deploy-cloudflare-worker.yml`
+- #149 / #155 — `discord/RUNBOOK.md` (operator runbook)
+
+End-to-end Discord slash command pipeline is operational pending Cyrus's live-secret setup (`gh secret set` from local terminal per Rule 21, then save the Interactions Endpoint URL in the Discord Developer Portal).
+
+## Recommendation
+
+Merge per Rule 7 (reviewer-approved + CI-green auto-merge). After merge:
+- Close epic #143 with summary linking the 6 child PRs.
+- Update `docs/squad.md` or `README.md` if the runbook needs surfacing (Tuvok to decide per Rule 16).
+
+
+---
+
+# Kirk — PR #155 review verdict
+
+**Date:** 2026-06-02T04:31Z
+**PR:** #155 — docs(discord): operator runbook for slash command setup
+**Author:** Uhura
+**Reviewer:** Kirk (technical accuracy)
+**Verdict:** **CHANGES_REQUESTED ⚠️** → routed to **Scotty**
+
+## Summary
+
+Runbook is structurally complete and most of the technical content is correct
+(architecture flow, secret-setting commands, workflow click-paths for Step C/F,
+Discord Developer Portal click-paths, deploy job summary emission, credential
+hygiene per Rule 21). Two blocking technical errors must be corrected before merge.
+
+## Blocking issues
+
+### B1. Wrong fine-grained PAT permission (Step A3 + Troubleshooting row 3)
+
+- **Claimed:** `Actions: Read and write` + `Contents: Read only`
+- **Correct:** `Contents: Read and write` (Metadata: Read-only auto-enforced)
+- **Source:** https://docs.github.com/en/rest/repos/repos?apiVersion=2022-11-28#create-a-repository-dispatch-event
+  — *"requires permission set: 'Contents' repository permissions (write)"*
+- **Operator impact if not fixed:** Worker will hit `403 Resource not accessible by
+  personal access token` on every `/trigger-redeem`, with no clear diagnostic.
+- **Also fix in same PR:** `worker/README.md` lines 15 and 129 have the same wrong
+  scope (`contents:read + actions:write`).
+
+### B2. Missing prerequisite: wrangler CLI install + auth
+
+- **Gap:** Step D uses `wrangler secret put …` but Section 2 never tells the
+  operator to install or authenticate wrangler.
+- **Operator impact if not fixed:** `wrangler: command not found` at first
+  step that needs it, no clear remediation in the runbook.
+- **Fix:** Add to Prerequisites:
+  - `npm i -g wrangler` (or `npx wrangler`)
+  - `wrangler login` (OAuth browser flow)
+  - Verify with `wrangler whoami`
+
+## Non-blocking
+
+- Step D verify lists `GH_REPO` under `wrangler secret list` output, but `GH_REPO`
+  is a **var** in `wrangler.toml`, not a secret — clarify or drop.
+- Typo: "enforates" → "enforces" (Troubleshooting row 1).
+- Malformed link in Troubleshooting row 7: `[Rule 13a](../../.github/.#/copilot-instructions.md#…)` — the `/.#/` segment is broken.
+
+## Verified-correct claims (no changes needed)
+
+- App ID `1505752454388514916`
+- Architecture flow diagram (Discord → Worker → GH dispatch → handler workflow → PATCH)
+- `gh secret set` / `gh secret list` syntax and `--repo Jamula/stfc` flag
+- `default_member_permissions: "8"` = ADMINISTRATOR
+- Deploy workflow emits `Deployed URL` in job summary (verified in
+  `.github/workflows/deploy-cloudflare-worker.yml`)
+- Discord PING/PONG handshake on Interactions Endpoint URL save
+- Type-5 deferred response pattern matching "Bot is thinking…"
+- Rotation cadence (90-day PAT, annual CF token)
+
+## Routing
+
+**Scotty** to apply B1 + B2 + the GH_REPO clarification (small turnaround, ~30 min).
+Re-request Kirk review on push. No need for Garak co-review on the re-spin — these
+are mechanical corrections against an authoritative source.
+
+Once corrected, this ships epic #143 (Discord slash commands) end-to-end.
+
+— Kirk
+
+
+---
+
+# Scotty decision note — PR #147 handler script boundary
+
+Date: 2026-06-02
+Owner: Scotty
+Issue: #147
+
+## Decision
+
+Keep command routing and Discord follow-up behavior in `scripts/discord-handler.mjs`, and invoke `gh workflow run redeem.yml` from the same script for the `trigger-redeem` path.
+
+## Why
+
+- The workflow stays thin (checkout/setup/install/payload wiring) while command behavior remains testable in one unit-tested module.
+- The script can emit an immediate run-id response required by Discord interaction token TTL constraints.
+- Injected adapters (`runGh`, `readFileImpl`, `fetchImpl`) make command paths deterministic in unit tests.
+
+## Trade-off
+
+`actions: write` permission remains required for the workflow, and the script now owns the gh invocation contract. This is acceptable because the command routing contract is already script-centric and covered by tests.
+
+
+---
+
+# Scotty revision note — PR #150 reviewer-lockout fix
+
+**Date:** 2026-06-02
+**PR:** #150
+**Issue:** #144
+**Role:** Scotty (lockout reviser)
+
+Implemented Garak's three blockers in one revision commit on `squad/144-commands-json`:
+
+1. Tightened command `name` validation to lowercase-only Unicode letters via `^[-_\\p{Ll}\\p{N}]{1,32}$` and documented the Discord naming rule URL in the validator.
+2. Added duplicate `(type,name)` detection after AJV validation (type defaults to `1`) and fail-fast error messaging with the duplicate pair.
+3. Chose **Option A** for options handling: validator now rejects any command containing `options` with a clear "not yet supported" follow-up message.
+
+Added tests in `tests/discord/commandsJson.test.ts` for uppercase-name rejection, duplicate `(type,name)` rejection, and options rejection. Verified:
+- `node scripts/validate-discord-commands.mjs` passes for current `discord/commands.json`
+- `npm test` passes
+- `npm run typecheck` passes
+
+Reviewer-lockout respected: Uhura made no revision contributions.
+
+
+---
+
+# Scotty revision complete — PR #151 (reviewer-lockout)
+
+**Date:** 2026-06-02T03:59Z
+**PR:** #151 — Cloudflare Worker Discord bridge
+**Owner:** Scotty (sole reviser per reviewer-lockout)
+
+## Decision
+
+Implemented Garak's blocking hardening revision in `worker/src/index.ts` and expanded coverage in `worker/src/index.test.ts`.
+
+### Code changes
+
+- Added strict hex-shape validation helper (`isStrictHex`) for:
+  - signature header: exact 64 bytes / 128 hex chars
+  - Discord public key: exact 32 bytes / 64 hex chars
+- Added lazy public-key configuration validation path with operator log (`DISCORD_PUBLIC_KEY misconfigured`) and explicit misconfiguration response (`500`).
+- Wrapped `hexToBytes` + `ed.verifyAsync` in `try/catch`; all throws collapse to invalid signature (uniform 401).
+- Added `ctx.waitUntil` dispatch observability:
+  - warn on non-OK GitHub dispatch status (`gh dispatch failed: <status>`)
+  - warn on thrown dispatch errors by name (`gh dispatch threw: <ErrorName>`)
+
+### Tests added/updated
+
+- odd-length signature hex → 401
+- non-hex signature (length 128) → 401
+- short signature → 401
+- long signature → 401
+- malformed `DISCORD_PUBLIC_KEY` → 500 misconfiguration path
+- deferred Discord response remains type 5 when GitHub dispatch returns 5xx; warning logged
+- existing parseable-but-invalid signature 401 test preserved
+
+### Validation
+
+- `cd worker && npm test` ✅ (14 tests)
+- `cd worker && npm run typecheck` ✅
+- repo root `npm test` ✅ (1019/1019)
+
+### Coordination
+
+- Commit pushed to `squad/146-cf-worker`: `c616289`
+- Re-review requested on PR #151 via comment (Garak requested)
+
+
+---
+
+# Uhura PR #152 — discord-register-commands.yml arch note
+
+**Date:** 2026-06-02T04:05Z
+**PR:** #152 (issue #145)
+**Author:** Uhura
+
+## Non-obvious choice: guild vs global default
+
+The workflow defaults `guild_id` to empty string, meaning **global** registration is the default when the operator doesn't fill in the input. This was an intentional choice: global registration is the "ship it" mode (all servers), while guild-scoped is the dev/test mode (single server, instant propagation).
+
+Operators should use `guild_id` during initial testing to verify commands appear correctly before promoting to global. The `dry_run` input provides an additional safety valve.
+
+**Alternative considered:** default to a sentinel `guild_id` (e.g. the main server ID) for safety. Rejected — the workflow description in the inputs already explains the propagation difference, and defaulting to global better matches the end-state operator intent.
+
+## Non-obvious choice: App ID as env var (not secret)
+
+`DISCORD_APP_ID: '1505752454388514916'` is set as a workflow-level env var, not a secret. Discord application IDs are public — they're embedded in OAuth URLs, invite links, and slash command registration URLs that users share. Storing it as a secret would add management overhead with no security benefit.
+
+## Non-obvious choice: single combined step for curl + summary
+
+The validate and register steps are separate jobs (validate exits 1 → workflow aborts before curl). The curl + response + summary reporting are combined in one bash step to keep `$HTTP_STATUS` and `$RESPONSE` in the same shell scope without needing step outputs. This is simpler than splitting across steps with `echo "http_status=$HTTP_STATUS" >> "$GITHUB_OUTPUT"`.

@@ -1,3 +1,14 @@
+## History Summary — Episodes 1–34
+
+**Uhura (Comms/Discord domain):** 4-dispatch session on epic #143 delivering Discord slash command pipeline. Primary owner of commands.json canonical schema, GitHub Actions registration workflow, Cloudflare Worker bridge (Discord interaction → GitHub dispatch), and operator runbook. Coordinated with Scotty (reviewer-lockout revisions) and Garak (hostile fact-check on Worker signature verification). All 4 worktrees merged green; 4 child issues closed. Total episodes pre-session: 34 (auth integration, docs scaffolding, API instrumentation, redeem-history archive setup, Phase 1 operator runbooks, squad charter polish).
+
+Key deliverables shipped: `discord/commands.json` (canonical reference), `.github/workflows/discord-register-commands.yml` (one-off registration), `worker/src/index.ts` (stateless bridge, 3s deferred response), `docs/discord-slash-commands.md` (operator quickstart).
+
+
+## Session 2026-06-02 — Discord slash epic #143 shipped
+
+Parallel fleet delivered 6 PRs (commands.json, register workflow, Worker bridge, handler workflow, deploy, runbook). 4 reviewer-lockout cycles (Garak blockers → Scotty fixes). Epic fully operational.
+
 # Uhura — Integrations Dev (Session Summary)
 
 ## Role Summary
@@ -141,3 +152,96 @@ Key blocker: bot not yet a member of guild `639255937869152267` → all guild-sc
 ## 2026-06-02T03:38Z — Discord slash command epic #143 filed; 4 issues routed to Uhura
 
 Per Kirk's Option B architecture (Cloudflare Workers bridge), epic #143 decomposed into 6 children. Uhura owns #144 (commands.json contract), #145 (registration workflow), #146 (Worker), and #149 (operator runbook). Start with #144 (blocks #145 and #147). Implementation order: #144 → #145 → #146 (parallel with #147) → #149. Worker is ~100 LoC thin bridge (signature-verify, defer, dispatch). No business logic. Three design decisions flagged in Kirk's architecture notes for user confirmation before implementation.
+
+## 2026-06-02T03:38Z — PR #150: discord/commands.json single source of truth (#144)
+
+**Issue:** #144 — First piece of Option B Discord slash command epic (#143)
+**Branch:** `squad/144-commands-json`
+**PR:** #150
+
+### What was shipped
+- `discord/commands.json` — two CHAT_INPUT commands: `/redeem-status` (all members) and `/trigger-redeem` (ADMINISTRATOR-gated via `default_member_permissions: "8"`).
+- `scripts/validate-discord-commands.mjs` — ajv-backed validator (v8, already in devDependencies). Exits 0/1.
+- `tests/discord/commandsJson.test.ts` — 7 tests; wired into `tests/index.test.ts`.
+- `docs/DISCORD-BOT-SETUP.md` — §Slash commands section added.
+
+### Learnings
+
+#### discord/commands.json schema choices
+- **`default_member_permissions: "8"`** for `/trigger-redeem` — ADMINISTRATOR bitmask. Discord docs: ADMINISTRATOR = bit 3 = `1 << 3 = 8`. Passed as a string per Discord's API schema (not an integer). Verified via https://discord.com/developers/docs/topics/permissions.
+- **`type: 1`** = CHAT_INPUT (the standard slash command). Type 2 = USER context menu, type 3 = MESSAGE context menu. Both commands are CHAT_INPUT.
+- `additionalProperties: true` on the ajv command schema is intentional — Discord adds new optional fields (e.g. `contexts`, `integration_types`) and the validator should not reject them.
+
+#### Validator approach: ajv
+- Used `ajv` (v8) + `unicodeRegExp: true` to enable `\p{L}\p{N}` Unicode character classes in the name pattern. Without `unicodeRegExp: true` on the Ajv instance, ajv v8 rejects Unicode escapes in patterns.
+- ajv-formats was not needed for this schema (no `format` keywords used).
+- Schema kept flat — no `$ref`, no sub-schemas — so the validator file is self-contained and readable without ajv tooling knowledge.
+
+#### Discord CHAT_INPUT name pattern gotcha
+- Discord's actual name regex allows Unicode letters/numbers (not just ASCII). The pattern `^[-_\p{L}\p{N}]+$` with `unicodeRegExp: true` covers this correctly.
+- Discord enforces lowercase names at registration time (API rejects uppercase) but the schema itself allows mixed-case — the validator warns, not blocks, on case. For this repo all command names are snake-kebab lower.
+
+#### Test pattern for script exit codes
+- Used `spawnSync(process.execPath, [VALIDATOR, fixturePath], { encoding: 'utf8', cwd: REPO_ROOT, timeout: 10_000 })`. This is the established pattern in `tests/scripts/discord-ops/set-discord-app-metadata.test.ts`.
+- Fixture files written to `discord/_test-broken-*.json` and cleaned up in `finally` blocks to avoid polluting the directory.
+
+## 2026-06-02T04:05Z — PR #152: register-commands workflow (#145)
+
+**Issue:** #145 — One-off workflow_dispatch to register Discord slash commands
+**Branch:** `squad/145-register-workflow`
+**PR:** #152
+
+### What was shipped
+- `.github/workflows/discord-register-commands.yml` — `workflow_dispatch`-only workflow. Inputs: `guild_id` (optional string, guild-scoped vs global), `dry_run` (optional boolean, default false). Permissions: `contents: read`. Concurrency group: `discord-register-commands`. Validates `discord/commands.json` via `scripts/validate-discord-commands.mjs` before any Discord API call. Uses `curl -X PUT` bulk-overwrite semantics. Reports HTTP status + Discord response body to `$GITHUB_STEP_SUMMARY`. Fails loudly on non-2xx.
+- `tests/skills/discordRegisterCommands.test.ts` — 14 pin tests (Rule 3). Verified all pass (1045 total, 0 fail).
+- `docs/DISCORD-BOT-SETUP.md` — "Registering slash commands" operator section.
+
+### Learnings
+
+#### Discord PUT bulk-overwrite semantics
+- `PUT /applications/{app_id}/commands` is a **bulk overwrite**: it atomically replaces ALL globally registered commands with the new list. `PUT /applications/{app_id}/guilds/{guild_id}/commands` does the same for a single guild. There is no incremental patch — the entire command list is replaced in one call. This means `discord/commands.json` must always contain the complete desired command set; partial updates must not be sent.
+- Discord returns the full registered command objects (with `id`, `application_id`, `version` fields added). Logging this response to the job summary is safe — it doesn't contain any secrets.
+- Guild registration propagates instantly to that one server. Global registration takes ~1 hour to propagate to all servers where the app is installed.
+
+#### Dry-run pattern for one-off ops workflows
+- For any one-off `workflow_dispatch` workflow that has side effects (API calls, data mutations), a `dry_run` input is valuable: it lets operators validate the payload and URL before committing. The pattern: read and validate inputs → compute URL and payload → if dry_run, print to summary and exit 0; else execute. The validation step always runs regardless of dry_run mode — enforcing correctness even in dry runs.
+- Rule 21 compliance for API-call workflows: use `curl -o response.json -w "%{http_code}"` to capture status and body separately. Never echo the Authorization header value. Never use `set -x` in steps that handle secrets. Discord error responses don't echo the Authorization header back, so logging the response body is safe.
+
+---
+
+## 2026-06-02 — Epic #143 closure: Operator runbook (issue #149)
+
+**Status:** ✅ SHIPPED — PR #155
+
+This was the final piece of the Discord slash commands epic (#143). All preceding issues merged:
+- ✅ #144 (commands.json + validator)
+- ✅ #145 (register workflow)
+- ✅ #146 (Cloudflare Worker bridge)
+- ✅ #147 (command handler + routing)
+- ✅ #148 (deploy workflow)
+
+**Deliverable:** `discord/RUNBOOK.md` (600+ lines, 18 KB)
+
+A comprehensive operator runbook covering:
+1. Pipeline architecture (3-step flow: Discord → Worker → GitHub dispatch)
+2. Prerequisites (Discord app, Cloudflare account, GitHub Actions)
+3. 7-step setup guide (A–G: secrets generation, GitHub secrets, Worker deploy, Worker secrets, Interactions URL, command registration, testing)
+4. Troubleshooting (8 failure modes with root causes and fixes)
+5. Credential rotation schedule (90-day PAT, annual token rotations)
+6. Adding new commands (3-step procedure)
+7. Debugging and monitoring (wrangler tail, GitHub Actions logs)
+
+**Key decisions:**
+- Separate file (not inline README) because runbook is procedural, operator-facing content
+- Placeholders instead of secrets (Rule 21 compliance)
+- Exact commands + verification checkpoints for every step
+- Troubleshooting table organized by symptom → root cause → fix
+- Maintenance schedule with specific rotation frequencies to prevent token expiry
+
+**Testing:**
+- ✅ npm test: 1067 tests pass
+- ✅ Pre-commit: all validations green
+- ✅ Runbook validated against actual deployed workflows
+
+This closes the Discord slash commands epic. The operator can now deploy the entire pipeline from scratch in <30 minutes using the runbook.
+

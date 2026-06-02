@@ -1,3 +1,7 @@
+## Session 2026-06-02 — Discord slash epic #143 shipped
+
+Parallel fleet delivered 6 PRs (commands.json, register workflow, Worker bridge, handler workflow, deploy, runbook). 4 reviewer-lockout cycles (Garak blockers → Scotty fixes). Epic fully operational.
+
 # Kirk — Code Review History
 
 Recent decisions from this session. Full history archived in `history-archive.md`.
@@ -65,3 +69,61 @@ This pattern distinguishes a "re-review pass" from a "spot-check" and elevates c
 - **Interaction token 15-min expiry** is a separate, longer deadline from the 3s ack. Long-running GHA workflows can race it. Pattern: the handler workflow's FIRST follow-up should be "Started, results at <run URL>" within the first minute, so the user gets a working link even if the final results follow-up is too late. Cross-reference: Rule 6a (PR shipping) — both are about "make the slow path observable, don't black-hole it."
 - **Single-source-of-truth pattern for command definitions** (`discord/commands.json`): two consumers (registration workflow + handler workflow) read the SAME file. Prevents drift where the registered command shape diverges from the handler's expected `client_payload`. Validator script (`scripts/validate-discord-commands.mjs`) enforces schema at commit time.
 - **Stored memory hit:** existing `concurrency.group: stfc-gift-redeemer` (per `tests/skills/discordMonitor.test.ts` pin) already serializes redeem runs. Don't duplicate that — handler workflow uses its OWN group `stfc-discord-handler` because handler work is broader than redeem. `gh workflow run redeem.yml` from the handler picks up the existing serialization automatically.
+
+## 2026-06-02T03:55Z — PR #151 review (Cloudflare Worker Discord bridge)
+
+Reviewed Uhura's implementation of the arch I dispatched in `kirk-discord-slash-arch`. APPROVE with Garak co-review flagged per routing carve-out.
+
+### Learnings — review patterns for serverless signature-verifying bridges
+
+- **The "before any side effect" rule.** For any HTTP handler that gates on a crypto signature, the FIRST thing a reviewer reads is whether the signature check returns `401` *before* the handler invokes any side-effecting fetch/queue/db call. Read the control flow top-to-bottom and confirm the early return is unconditional. In PR #151 the order was: method → headers present → timestamp window → `await ed.verifyAsync` → only THEN `ctx.waitUntil(dispatch)`. Clean.
+- **Trust the tests to prove ordering.** Best signal that ordering is right: the bad-signature tests do NOT mock `fetch`. If the dispatch fired on a bad sig, the test would actually try to hit `api.github.com` and either explode in CI or leak. Absence of a fetch mock in negative-path tests is itself a passive assertion.
+
+### Learnings — `ctx.waitUntil` vs sync-await trap
+
+- The Cloudflare Workers `ctx.waitUntil(promise)` pattern is the ONLY correct way to "respond fast, work async" inside the same handler. Writing `await dispatch(); return Response.json({type:5})` is a silent bug: the response is correct but arrives after the dispatch resolves, which can blow past Discord's 3-second window when GH API is slow.
+- Reviewer heuristic: grep the handler for `await` between the response construction and the return. Any await on an outbound fetch that isn't wrapped in `ctx.waitUntil` is suspect. In PR #151, the only `await` between sig-verify and the type:5 return was `req.text()` (local) and `ed.verifyAsync` (local crypto, fast). No outbound await. ✓
+- **Test pattern:** the APPLICATION_COMMAND test asserts (a) response status + body first, (b) `ctx.waitUntil` was called once, (c) then *manually settles* `ctx.waitUntil.mock.calls[0][0]` to drive the dispatch and assert payload. This is the right structural test for the pattern.
+
+### Learnings — hex-to-bytes pitfalls
+
+- The `hexToBytes` helper in PR #151 throws `RangeError` on odd-length input. Uncaught at handler level → Workers runtime returns generic 500 instead of 401. Not a security bypass (the malformed sig would fail verify anyway) but a noisier response signature for attackers and an avoidable 500 in logs.
+- `parseInt(slice, 16)` on non-hex chars returns `NaN`, which `Uint8Array` coerces to `0` — silently produces invalid bytes that fail verify cleanly. So malformed-hex-chars is fine, odd-length isn't.
+- **Reviewer checklist for any hex parser in a security path:** (a) odd length, (b) non-hex chars, (c) leading/trailing whitespace, (d) `0x` prefix, (e) uppercase. Wrap the whole thing in try/catch → 401 to make all failures look identical to attackers.
+
+### Learnings — Discord 3-second timeout discipline
+
+- Discord's interactions endpoint has a hard 3-second deadline for the FIRST response. After that the interaction is dead — no follow-up message can recover it because the interaction token is rejected.
+- type:5 (DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE) is the escape hatch: respond fast with "thinking..." and have the actual work send a follow-up to `PATCH /webhooks/{app_id}/{token}/messages/@original` within 15 minutes.
+- The discipline this enforces on the architecture: the Worker MUST NOT do any I/O that could exceed ~2s in the synchronous path. Sig verify is local (fast). PING is a constant return. The GH dispatch goes to `ctx.waitUntil`. Anything else (e.g. fetching user info from Discord, looking up state from KV) would have to also go async or be inlined into the GH Actions handler.
+- Reviewer red flag: any synchronous `await` on a network call in the request handler is a 3-second-timeout risk waiting to fire under upstream slowness.
+
+## 2026-06-02T04:38Z — PR #155 re-verify (operator runbook fix commit `17702fc`)
+
+**Verdict:** APPROVE ✅ — https://github.com/Jamula/stfc/pull/155#issuecomment-4598761402
+
+All 5 findings from prior CHANGES_REQUESTED verified addressed. **Final piece of epic #143** — Discord slash command pipeline complete (#144–#149 all merged or merging).
+
+### Re-verify checklist for docs PRs (reusable)
+
+When re-reviewing a docs-only fix commit after CHANGES_REQUESTED, run this batch in one shot:
+
+1. `git show <sha> --stat` — confirm scope is docs-only, no surprise files.
+2. **For each blocker, run a targeted grep that would fail loudly if the fix is incomplete:**
+   - PAT scope: `grep -n "Contents.*[Ww]rite\|Actions.*[Ww]rite" <docs>` — pattern matches the BAD form too, so you SEE if it's still there.
+   - Missing prereq: positive grep for the tool's install/auth commands (`grep -n "npx wrangler\|npm install.*wrangler"`).
+   - Typos: literal grep for the typo (must return zero matches).
+   - Broken relative links: `ls -la <target-path>` + `grep -n "^## <section>" <target>` to prove the anchor exists.
+3. `npm test` — even for docs-only, the pre-commit gate must pass (proves the docs change didn't accidentally touch a code-path file).
+4. `gh pr checks <N>` — all required checks green.
+5. `gh pr view <N> --json body --jq .body | grep -E "Closes #|## Tests"` — Rule 6a (per-line `Closes`) + Rule 15 (`## Tests` heading present, even if "no test changes — docs only").
+6. Post verdict via `gh pr comment` (Rule 9b — single-maintainer repo).
+
+**Key insight:** the BAD-form grep is the highest-signal check. A grep like `grep "Actions: Read and write"` returning ZERO matches proves the bad string is gone better than reading the file. Always include the negative case in the grep pattern.
+
+### Epic completion note
+
+Epic #143 (Discord slash command infrastructure, Option B / Cloudflare Workers bridge) shipped in 6 child PRs over ~8h on 2026-06-02:
+- #144 (commands.json) → #145 (register workflow) → #146/#151 (Worker) → #147 (handler workflow) → #148 (deploy workflow) → #149/#155 (operator runbook).
+
+End-to-end flow now operational once Cyrus sets the live secrets and saves the Interactions Endpoint URL in the Discord Developer Portal. Runbook is the user-facing artifact that closes the loop.
