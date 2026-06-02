@@ -73,3 +73,7 @@ Scotty is fixing both in a quick re-spin. Once corrected, PR #155 merges and epi
 ---
 
 **Full prior history archived to `.squad/agents/uhura/history-archive-2026-06-02.md`**
+## 2026-06-02 — Pipeline Live Milestone
+
+Discord slash command pipeline operational end-to-end. 12 PRs shipped this session. Worker deployed at https://stfc-discord-bridge.cyrus-7cd.workers.dev; /redeem-status and /trigger-redeem confirmed working.
+

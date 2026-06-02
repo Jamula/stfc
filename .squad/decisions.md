@@ -2542,3 +2542,16 @@ Operators should use `guild_id` during initial testing to verify commands appear
 ## Non-obvious choice: single combined step for curl + summary
 
 The validate and register steps are separate jobs (validate exits 1 → workflow aborts before curl). The curl + response + summary reporting are combined in one bash step to keep `$HTTP_STATUS` and `$RESPONSE` in the same shell scope without needing step outputs. This is simpler than splitting across steps with `echo "http_status=$HTTP_STATUS" >> "$GITHUB_OUTPUT"`.
+### 2026-06-02T04:55Z: Cloudflare Account ID captured
+**By:** Cyrus Jamula (via Copilot)
+**What:** Cloudflare Account ID for the Workers account hosting the Discord bridge is `7cd5392b81b2a9e2532d25d1ce687126`. Stored as GH repo secret `CLOUDFLARE_ACCOUNT_ID` per `discord/RUNBOOK.md` step B convention. User confirmed in chat 2026-06-02; Codespace token couldn't `gh secret set` (Rule 13a limitation), so Cyrus runs `gh secret set CLOUDFLARE_ACCOUNT_ID --repo Jamula/stfc --body "<value>"` from local terminal.
+**Why:** Identifier needed for every wrangler/CF API call; consumed by `.github/workflows/deploy-cloudflare-worker.yml`.
+**Implications:**
+- Account IDs are semi-private (visible in `*.workers.dev` URLs and CF dashboard) — not hard-credential per Rule 21 but treated as secret for hygiene.
+- Still pending: `CLOUDFLARE_API_TOKEN` (the actual credential, needs `Account: Workers Scripts: Edit` scope), and Worker-side secrets `DISCORD_PUBLIC_KEY` + `GH_DISPATCH_TOKEN` via `npx wrangler secret put` from `worker/`.
+- The deploy workflow at `.github/workflows/deploy-cloudflare-worker.yml` will succeed once both GH secrets land.
+### 2026-06-02T04:57Z: CLOUDFLARE_API_TOKEN leak + rotation
+**By:** Cyrus Jamula (via Copilot)
+**What:** User pasted a `cfut_` Cloudflare User API Token verbatim into the chat transcript at 2026-06-02T04:57Z. Per Rule 21, value was NOT written anywhere — refused to echo, refused to use in any `gh secret set` or shell command. User instructed to rotate at https://dash.cloudflare.com/profile/api-tokens (roll/delete → create new) and re-set via `gh secret set CLOUDFLARE_API_TOKEN --repo Jamula/stfc` from local terminal with hidden input.
+**Why:** Operational record per Rule 21 inbox-write exception (fact of the leak + rotation status, never the value itself). Session transcripts persist to cloud session store and may be reviewed for telemetry.
+**Status as of capture:** Awaiting Cyrus to confirm rotation complete. Leaked token must be considered compromised regardless of rotation timing.
