@@ -174,3 +174,35 @@ No code change or redeploy is required.
 For the channel-onboarding walkthrough (allowlist edit, smoke test, and
 expected digest output), see
 [`specs/003-discord-oauth/quickstart.md`](../specs/003-discord-oauth/quickstart.md).
+
+---
+
+## Slash commands
+
+### `discord/commands.json` — single source of truth
+
+`discord/commands.json` is the canonical definition of every slash command
+this bot exposes. Downstream workflows (#145 registration, #147 handler)
+read this file; **do not add or rename commands without updating it**.
+
+Current commands:
+
+| Command | Type | Description | Permission |
+|---|---|---|---|
+| `/redeem-status` | CHAT_INPUT (1) | Show the latest redemption run results | (all members) |
+| `/trigger-redeem` | CHAT_INPUT (1) | Manually trigger the next gift redemption run | ADMINISTRATOR (`"8"`) |
+
+`default_member_permissions: "8"` is Discord's bitmask for the
+`ADMINISTRATOR` permission (bit 3, value 8). Only server administrators can
+invoke `/trigger-redeem`. See [Discord permission docs](https://discord.com/developers/docs/topics/permissions).
+
+### Validator
+
+```bash
+node scripts/validate-discord-commands.mjs
+```
+
+Exits 0 if every command satisfies Discord's CHAT_INPUT schema constraints
+(name 1–32 chars matching `^[-_\p{L}\p{N}]+$`, description 1–100 chars,
+valid `type`, string `default_member_permissions`). Exits 1 with errors on
+stderr if validation fails. Runs automatically in CI as part of `npm test`.
