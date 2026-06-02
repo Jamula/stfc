@@ -224,10 +224,20 @@ STARTREKDAY2024
 FLEETCMD-WELCOME    # one-time welcome bonus
 ```
 
-Codes are resubmitted on every scheduled run. The API returns
-`CODE_ALREADY_USED` for codes you have already redeemed, so the file is
-**naturally idempotent** — no local state is tracked. Just append new codes
-whenever you find them; old ones will quietly no-op.
+Codes are resubmitted on every scheduled run. If a code returns
+`CODE_INVALID_OR_EXPIRED`, the orchestrator marks it dead in
+`data/promo-code-dead.json` and skips it on future runs (no per-code API call
+for skipped entries). To reset and re-attempt all codes, delete
+`data/promo-code-dead.json`.
+
+Promo-code redemption retries transient failures up to **3 total attempts**
+(initial + 2 retries), sleeping **1s then 2s** by default:
+
+- Transient: network errors (`ECONNRESET`, `ETIMEDOUT`, `ENOTFOUND`,
+  `EAI_AGAIN`, `ECONNREFUSED`), HTTP `500/502/503/504` (and other 5xx), and
+  HTTP `429` (uses `Retry-After` when present, otherwise default sleep).
+- Non-transient: HTTP 4xx except 429, `TOKEN_EXPIRED`, and
+  `CODE_INVALID_OR_EXPIRED` (dead-code path, not retried).
 
 ---
 

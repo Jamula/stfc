@@ -9,6 +9,7 @@ import { Outcomes } from "../../src/lib/outcomes.ts";
 // Note: the api/client module exports these; the orchestrator may need them too.
 import {
   ApiClient,
+  ApiError,
   TokenExpiredError,
   SchemaMismatchError,
 } from "../../src/api/client.ts";
@@ -235,6 +236,7 @@ describe("runAll", () => {
       clientFactory: () => fake as unknown as ApiClient,
       summary: createSummaryWriter(undefined),
       promoCodesPath: codeFile,
+      deadCodesPath: path.join(dir, "promo-code-dead.json"),
     });
 
     assert.equal(exitCode, 0);
@@ -246,6 +248,188 @@ describe("runAll", () => {
     assert.equal(byCode.get("USEDCODE"), Outcomes.CODE_ALREADY_USED);
     assert.equal(byCode.get("OLDCODE"), Outcomes.CODE_INVALID_OR_EXPIRED);
     assert.equal(byCode.get("WEIRDCODE"), Outcomes.UNKNOWN_RESULT);
+  });
+
+  it("marks CODE_INVALID_OR_EXPIRED as dead and skips it on subsequent runs", async () => {
+    const codeFile = path.join(dir, "promo.txt");
+    const deadCodesPath = path.join(dir, "promo-code-dead.json");
+    fs.writeFileSync(codeFile, "DEADCODE\n", "utf8");
+
+    let redeemCalls = 0;
+    const fake = makeFakeClient({
+      listGifts: async () => ({ items: [] }),
+      redeemCode: async () => {
+        redeemCalls += 1;
+        return { code: 1, message: "redeem_error_code_expired" };
+      },
+    });
+
+    await runAll({
+      accounts: [{ name: "main", token: makeJwt({ exp: 9999999999 }) }],
+      clientFactory: () => fake as unknown as ApiClient,
+      summary: createSummaryWriter(undefined),
+      promoCodesPath: codeFile,
+      deadCodesPath,
+    });
+
+    const deadCodes = JSON.parse(fs.readFileSync(deadCodesPath, "utf8")) as Record<string, unknown>;
+    assert.ok(deadCodes.DEADCODE, "dead code should be persisted after first invalid outcome");
+
+    await runAll({
+      accounts: [{ name: "main", token: makeJwt({ exp: 9999999999 }) }],
+      clientFactory: () => fake as unknown as ApiClient,
+      summary: createSummaryWriter(undefined),
+      promoCodesPath: codeFile,
+      deadCodesPath,
+    });
+
+    assert.equal(redeemCalls, 1, "second run should skip dead code without API call");
+  });
+
+  it("operator reset: deleting dead-code cache re-attempts previously dead code", async () => {
+    const codeFile = path.join(dir, "promo.txt");
+    const deadCodesPath = path.join(dir, "promo-code-dead.json");
+    fs.writeFileSync(codeFile, "DEADCODE\n", "utf8");
+
+    let redeemCalls = 0;
+    const fake = makeFakeClient({
+      listGifts: async () => ({ items: [] }),
+      redeemCode: async () => {
+        redeemCalls += 1;
+        return { code: 1, message: "redeem_error_code_expired" };
+      },
+    });
+
+    await runAll({
+      accounts: [{ name: "main", token: makeJwt({ exp: 9999999999 }) }],
+      clientFactory: () => fake as unknown as ApiClient,
+      promoCodesPath: codeFile,
+      deadCodesPath,
+    });
+    fs.unlinkSync(deadCodesPath);
+
+    await runAll({
+      accounts: [{ name: "main", token: makeJwt({ exp: 9999999999 }) }],
+      clientFactory: () => fake as unknown as ApiClient,
+      promoCodesPath: codeFile,
+      deadCodesPath,
+    });
+
+    assert.equal(redeemCalls, 2, "deleting cache should force re-attempt on next run");
+  });
+
+  it("retries transient network failure and succeeds on second attempt", async () => {
+    const codeFile = path.join(dir, "promo.txt");
+    fs.writeFileSync(codeFile, "RETRYME\n", "utf8");
+    let attempts = 0;
+    const sleepCalls: number[] = [];
+
+    const fake = makeFakeClient({
+      listGifts: async () => ({ items: [] }),
+      redeemCode: async () => {
+        attempts += 1;
+        if (attempts === 1) {
+          const err = new Error("socket reset") as Error & { code: string };
+          err.code = "ECONNRESET";
+          throw err;
+        }
+        return { code: 0, message: "redeem_success" };
+      },
+    });
+
+    const { result } = await runAll({
+      accounts: [{ name: "main", token: makeJwt({ exp: 9999999999 }) }],
+      clientFactory: () => fake as unknown as ApiClient,
+      promoCodesPath: codeFile,
+      sleep: async (ms) => {
+        sleepCalls.push(ms);
+      },
+    });
+
+    assert.equal(attempts, 2);
+    assert.deepEqual(sleepCalls, [1000]);
+    assert.equal(result.accounts[0]?.promoCodes[0]?.outcome, Outcomes.CODE_REDEEMED);
+  });
+
+  it("retries transient network failure 3x then records TRANSIENT failure (not dead)", async () => {
+    const codeFile = path.join(dir, "promo.txt");
+    const deadCodesPath = path.join(dir, "promo-code-dead.json");
+    fs.writeFileSync(codeFile, "FLAKY\n", "utf8");
+    let attempts = 0;
+
+    const fake = makeFakeClient({
+      listGifts: async () => ({ items: [] }),
+      redeemCode: async () => {
+        attempts += 1;
+        const err = new Error("timeout") as Error & { code: string };
+        err.code = "ETIMEDOUT";
+        throw err;
+      },
+    });
+
+    const { result } = await runAll({
+      accounts: [{ name: "main", token: makeJwt({ exp: 9999999999 }) }],
+      clientFactory: () => fake as unknown as ApiClient,
+      promoCodesPath: codeFile,
+      deadCodesPath,
+      sleep: async () => undefined,
+    });
+
+    assert.equal(attempts, 3, "transient errors should be attempted 3 total times");
+    assert.equal(result.accounts[0]?.promoCodes[0]?.outcome, Outcomes.TRANSIENT);
+    assert.equal(fs.existsSync(deadCodesPath), false, "transient exhaustion must not mark code dead");
+  });
+
+  it("honors Retry-After on HTTP 429 before retrying", async () => {
+    const codeFile = path.join(dir, "promo.txt");
+    fs.writeFileSync(codeFile, "RATECODE\n", "utf8");
+    let attempts = 0;
+    const sleepCalls: number[] = [];
+
+    const fake = makeFakeClient({
+      listGifts: async () => ({ items: [] }),
+      redeemCode: async () => {
+        attempts += 1;
+        if (attempts === 1) {
+          throw new ApiError("HTTP 429", 429, { retryAfterMs: 1500 });
+        }
+        return { code: 0, message: "redeem_success" };
+      },
+    });
+
+    const { result } = await runAll({
+      accounts: [{ name: "main", token: makeJwt({ exp: 9999999999 }) }],
+      clientFactory: () => fake as unknown as ApiClient,
+      promoCodesPath: codeFile,
+      sleep: async (ms) => {
+        sleepCalls.push(ms);
+      },
+    });
+
+    assert.equal(attempts, 2);
+    assert.deepEqual(sleepCalls, [1500]);
+    assert.equal(result.accounts[0]?.promoCodes[0]?.outcome, Outcomes.CODE_REDEEMED);
+  });
+
+  it("dead-code cache write is atomic (tmp renamed, no leftover tmp file)", async () => {
+    const codeFile = path.join(dir, "promo.txt");
+    const deadCodesPath = path.join(dir, "promo-code-dead.json");
+    fs.writeFileSync(codeFile, "DEADCODE\n", "utf8");
+
+    const fake = makeFakeClient({
+      listGifts: async () => ({ items: [] }),
+      redeemCode: async () => ({ code: 1, message: "redeem_error_code_expired" }),
+    });
+
+    await runAll({
+      accounts: [{ name: "main", token: makeJwt({ exp: 9999999999 }) }],
+      clientFactory: () => fake as unknown as ApiClient,
+      promoCodesPath: codeFile,
+      deadCodesPath,
+    });
+
+    assert.equal(fs.existsSync(deadCodesPath), true);
+    assert.equal(fs.existsSync(`${deadCodesPath}.tmp`), false);
   });
 
   it("schema mismatch in auth/me → recorded in errors, exitCode 1", async () => {
@@ -383,5 +567,25 @@ describe("runAll", () => {
     const contents = fs.readFileSync(historyPath, "utf8");
     assert.match(contents, /^# Redeem history/m, "header should be written");
     assert.match(contents, /\| 2026-05-09 \| 08:30 \| main \| Daily Officer Pack \|/);
+  });
+
+  it("happy path does not write dead-code cache when no invalid codes are seen", async () => {
+    const codeFile = path.join(dir, "promo.txt");
+    const deadCodesPath = path.join(dir, "promo-code-dead.json");
+    fs.writeFileSync(codeFile, "GOODCODE\n", "utf8");
+
+    const fake = makeFakeClient({
+      listGifts: async () => ({ items: [] }),
+      redeemCode: async () => ({ code: 0, message: "redeem_success" }),
+    });
+
+    await runAll({
+      accounts: [{ name: "main", token: makeJwt({ exp: 9999999999 }) }],
+      clientFactory: () => fake as unknown as ApiClient,
+      promoCodesPath: codeFile,
+      deadCodesPath,
+    });
+
+    assert.equal(fs.existsSync(deadCodesPath), false);
   });
 });
