@@ -1,0 +1,128 @@
+# One-off workflow to register Discord slash commands via PUT bulk-overwrite.
+# Reads discord/commands.json (shipped in #144) and calls Discord's API.
+# Trigger: manual workflow_dispatch only — never push/schedule.
+#
+# Global vs guild registration:
+#   - Guild-scoped (guild_id provided): instant propagation, single server.
+#   - Global (guild_id empty): ~1h propagation, all servers where app is installed.
+#
+# Dry-run mode: validates JSON and prints the URL + payload without calling Discord.
+
+name: Register Discord slash commands
+
+on:
+  workflow_dispatch:
+    inputs:
+      guild_id:
+        description: 'Guild ID for guild-scoped registration (leave empty for global ~1h propagation)'
+        required: false
+        default: ''
+        type: string
+      dry_run:
+        description: 'Validate and print what WOULD be sent — no Discord API call'
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+env:
+  # App ID is public — not a secret. See discord/commands.json and #143 epic.
+  DISCORD_APP_ID: '1505752454388514916'
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+concurrency:
+  group: discord-register-commands
+  cancel-in-progress: false
+
+jobs:
+  register:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.0
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4.4.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate discord/commands.json
+        run: |
+          if ! node scripts/validate-discord-commands.mjs; then
+            echo "::error::discord/commands.json failed validation — aborting registration to avoid sending invalid data to Discord."
+            exit 1
+          fi
+          echo "Validation passed."
+
+      - name: Register commands with Discord
+        env:
+          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+          GUILD_ID: ${{ inputs.guild_id }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          COMMANDS_FILE="discord/commands.json"
+
+          if [ -n "${GUILD_ID}" ]; then
+            URL="https://discord.com/api/v10/applications/${DISCORD_APP_ID}/guilds/${GUILD_ID}/commands"
+            SCOPE="guild (${GUILD_ID}) — instant propagation"
+          else
+            URL="https://discord.com/api/v10/applications/${DISCORD_APP_ID}/commands"
+            SCOPE="global — ~1h propagation to all servers"
+          fi
+
+          PAYLOAD="$(cat "${COMMANDS_FILE}")"
+
+          if [ "${DRY_RUN}" = "true" ]; then
+            {
+              echo "## Dry run — no Discord API call made"
+              echo ""
+              echo "**Scope:** ${SCOPE}"
+              echo "**URL would be:** \`${URL}\`"
+              echo ""
+              echo "**Payload (discord/commands.json):**"
+              echo '```json'
+              echo "${PAYLOAD}"
+              echo '```'
+            } >> "${GITHUB_STEP_SUMMARY}"
+            echo "Dry run complete — validation passed, no commands registered."
+            exit 0
+          fi
+
+          # PUT bulk-overwrite: replaces ALL commands of this scope atomically.
+          # -o captures response body; -w captures HTTP status code separately.
+          # DISCORD_BOT_TOKEN is passed only via Authorization header — never echoed.
+          HTTP_STATUS="$(curl -s -o response.json -w "%{http_code}" \
+            -X PUT \
+            -H "Authorization: Bot ${DISCORD_BOT_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -H "User-Agent: stfc-gift-redeemer/register-commands" \
+            -d "${PAYLOAD}" \
+            "${URL}")"
+
+          RESPONSE="$(cat response.json)"
+
+          {
+            echo "## Discord slash command registration"
+            echo ""
+            echo "**Scope:** ${SCOPE}"
+            echo "**HTTP status:** ${HTTP_STATUS}"
+            echo ""
+            echo "**Discord response (registered commands with IDs):**"
+            echo '```json'
+            echo "${RESPONSE}"
+            echo '```'
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+          echo "HTTP status: ${HTTP_STATUS}"
+
+          if [[ "${HTTP_STATUS}" -lt 200 || "${HTTP_STATUS}" -ge 300 ]]; then
+            echo "::error::Discord API returned HTTP ${HTTP_STATUS}. See job summary for the error body."
+            exit 1
+          fi
+
+          echo "Registration successful (HTTP ${HTTP_STATUS})."

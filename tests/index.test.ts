@@ -31,6 +31,7 @@ import "./discord/commandsJson.test.ts";
 import "./digest/digest.test.ts";
 import "./digest/health-remediation.test.ts";
 import "./skills/discordMonitor.test.ts";
+import "./skills/discordRegisterCommands.test.ts";
 import "./skills/roster.test.ts";
 import "./skills/optimizeCrew.test.ts";
 import "./skills/optimizeCrewWorkflow.test.ts";
