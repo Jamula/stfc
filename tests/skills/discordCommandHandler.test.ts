@@ -41,7 +41,7 @@ describe(".github/workflows/discord-command-handler.yml", () => {
   });
 
   it("declares minimal permissions needed for handler", { skip: yaml === undefined }, () => {
-    assert.match(yaml!, /^permissions:\s*\n\s+contents:\s*read\s*\n\s+actions:\s*write\b/m);
+    assert.match(yaml!, /^permissions:\s*\n\s+contents:\s*write\s*\n\s+actions:\s*write\b/m);
     assert.doesNotMatch(yaml!, /\bpull-requests:\s*write\b/);
     assert.doesNotMatch(yaml!, /\bid-token:\s*write\b/);
   });
