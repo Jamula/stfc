@@ -97,3 +97,11 @@ Findings routed to follow-up issue #136 (non-Tuvok, Lockout label).
 
 **Result:** All three PRs shipped with zero security violations. Two re-verify cycles (Uhura, Coordinator clarification) addressed all Garak questions. Smooth shipping sequence.
 
+
+## 2026-06-02 — Design-stage hostile fact-check for game-state capture (#165)
+
+Posted preemptive design review before #160/#161 implementation so Uhura, Scotty, and O'Brien can build defenses up front rather than retrofit them during PR review.
+
+Pattern added: for privilege-escalating pipelines, review the architecture note as an attack surface before code exists. Required threat-model categories: operator authorization, path containment, filename/control-character injection, shell/YAML interpolation, CDN URL trust and redirect policy, byte/rate budgets, download integrity, git/index concurrency, lineage recovery, and downstream consumer commit amplification.
+
+Result: 3 CRITICAL, 4 HIGH, 3 MEDIUM findings posted to #165. Most critical gap: `/game-state` must not become a signed-Discord-request-to-contents-write commit channel without explicit operator/guild/channel authorization enforced in both Worker and handler.
