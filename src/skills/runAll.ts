@@ -20,6 +20,7 @@
 //   }
 
 import type { Account } from "../lib/accounts.ts";
+import * as fs from "node:fs/promises";
 import { decodeJwt, describeExpiry, JwtParseError } from "../lib/jwt.ts";
 import { createLogger } from "../lib/logger.ts";
 import {
@@ -38,6 +39,18 @@ import { claimGift, getMe, listGifts, redeemCode } from "../api/endpoints.ts";
 import type { Gift } from "../api/schemas.ts";
 
 const log = createLogger("runAll");
+const DEFAULT_DEAD_CODES_PATH = "data/promo-code-dead.json";
+const RETRY_DELAYS_MS = [1000, 2000] as const;
+const TRANSIENT_NETWORK_CODES = new Set(["ECONNRESET", "ETIMEDOUT", "ENOTFOUND", "EAI_AGAIN", "ECONNREFUSED"]);
+
+interface DeadCodeEntry {
+  marked_dead_at: string;
+  first_seen_outcome: typeof Outcomes.CODE_INVALID_OR_EXPIRED;
+  accounts_tried: string[];
+}
+
+type DeadCodeCache = Record<string, DeadCodeEntry>;
+type SleepFn = (ms: number) => Promise<void>;
 
 export interface ItemResult {
   id: string;
@@ -78,6 +91,7 @@ export interface RunAllOutput {
 export interface RunAllOptions {
   accounts: Account[];
   promoCodesPath?: string;
+  deadCodesPath?: string;
   summary?: SummaryWriter;
   /** Path to the redeem-history Markdown table (e.g. docs/redeem-history.md).
    *  When set, a row is appended for every account that successfully claimed
@@ -90,12 +104,15 @@ export interface RunAllOptions {
   clientFactory?: (account: Account) => ApiClient;
   /** Test seam: override fetch globally. */
   fetchImpl?: typeof fetch;
+  /** Test seam: override sleeping between retry attempts. */
+  sleep?: SleepFn;
 }
 
 export async function runAll(opts: RunAllOptions): Promise<RunAllOutput> {
   const report: RunAllReport = { accounts: [], errors: [] };
   const factory =
     opts.clientFactory ?? ((account: Account) => new ApiClient({ token: account.token, fetchImpl: opts.fetchImpl }));
+  const sleep = opts.sleep ?? defaultSleep;
 
   let promoCodes: string[] = [];
   if (opts.promoCodesPath) {
@@ -110,8 +127,25 @@ export async function runAll(opts: RunAllOptions): Promise<RunAllOutput> {
     }
   }
 
+  const deadCodesPath = opts.deadCodesPath ?? DEFAULT_DEAD_CODES_PATH;
+  const deadCodeCache = await readDeadCodeCache(deadCodesPath);
+  const deadCodes = new Set(Object.keys(deadCodeCache));
+  const skippedDeadCount = promoCodes.filter((code) => deadCodes.has(code)).length;
+  if (skippedDeadCount > 0) {
+    log.info(`skipping ${skippedDeadCount} dead promo code(s) from ${deadCodesPath}`);
+  }
+
   for (const account of opts.accounts) {
-    const accountReport = await processAccount(account, promoCodes, factory, report);
+    const activeCodes = promoCodes.filter((code) => !deadCodes.has(code));
+    const accountReport = await processAccount(
+      account,
+      activeCodes,
+      factory,
+      report,
+      deadCodesPath,
+      deadCodeCache,
+      sleep,
+    );
     report.accounts.push(accountReport);
   }
 
@@ -123,6 +157,9 @@ async function processAccount(
   promoCodes: string[],
   factory: (account: Account) => ApiClient,
   report: RunAllReport,
+  deadCodesPath: string,
+  deadCodeCache: DeadCodeCache,
+  sleep: SleepFn,
 ): Promise<AccountReport> {
   const expiryHuman = describeAccountExpiry(account.token);
   const items: ItemResult[] = [];
@@ -135,7 +172,7 @@ async function processAccount(
 
   if (tokenStatus === Outcomes.TOKEN_VALID) {
     items.push(...(await processGifts(client, account.name, report)));
-    codes.push(...(await processCodes(client, promoCodes, account.name, report)));
+    codes.push(...(await processCodes(client, promoCodes, account.name, report, deadCodesPath, deadCodeCache, sleep)));
   }
 
   const ok =
@@ -247,10 +284,17 @@ async function processCodes(
   codes: string[],
   accountName: string,
   report: RunAllReport,
+  deadCodesPath: string,
+  deadCodeCache: DeadCodeCache,
+  sleep: SleepFn,
 ): Promise<PromoResult[]> {
   const items: PromoResult[] = [];
   for (const code of codes) {
-    items.push(await processOneCode(client, code, accountName, report));
+    const result = await processOneCode(client, code, accountName, report, sleep);
+    items.push(result);
+    if (result.outcome === Outcomes.CODE_INVALID_OR_EXPIRED) {
+      await markCodeDead(deadCodesPath, deadCodeCache, code, accountName);
+    }
   }
   return items;
 }
@@ -260,23 +304,36 @@ async function processOneCode(
   code: string,
   accountName: string,
   report: RunAllReport,
+  sleep: SleepFn,
 ): Promise<PromoResult> {
-  try {
-    const res = await redeemCode(client, code);
-    // Live API uses `redeem_result` (numeric); fall back to legacy `code`.
-    const resultCode = res.redeem_result ?? res.code;
-    return {
-      code,
-      outcome: classifyRedeemResult({ code: resultCode, message: res.message }),
-      detail: res.message ?? (resultCode !== undefined ? `redeem_result=${resultCode}` : undefined),
-    };
-  } catch (err) {
-    if (err instanceof SchemaMismatchError) {
-      report.errors.push({ account: accountName, message: `redeem/claim schema mismatch: ${redactForLog(err)}` });
-      return { code, outcome: Outcomes.UNKNOWN_RESULT, detail: "schema mismatch" };
+  let lastTransientError: unknown;
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      const res = await redeemCode(client, code);
+      // Live API uses `redeem_result` (numeric); fall back to legacy `code`.
+      const resultCode = res.redeem_result ?? res.code;
+      return {
+        code,
+        outcome: classifyRedeemResult({ code: resultCode, message: res.message }),
+        detail: res.message ?? (resultCode !== undefined ? `redeem_result=${resultCode}` : undefined),
+      };
+    } catch (err) {
+      if (err instanceof SchemaMismatchError) {
+        report.errors.push({ account: accountName, message: `redeem/claim schema mismatch: ${redactForLog(err)}` });
+        return { code, outcome: Outcomes.UNKNOWN_RESULT, detail: "schema mismatch" };
+      }
+
+      if (!isTransientRedeemError(err)) {
+        return { code, outcome: classifyHttpError(err), detail: redactForLog(err) };
+      }
+
+      lastTransientError = err;
+      if (attempt >= 3) break;
+      await sleep(getRetryDelayMs(err, attempt));
     }
-    return { code, outcome: classifyHttpError(err), detail: redactForLog(err) };
   }
+
+  return { code, outcome: Outcomes.TRANSIENT, detail: redactForLog(lastTransientError) };
 }
 
 async function finalize(
@@ -408,4 +465,82 @@ function determineExitCode(report: RunAllReport): number {
 
 function escapeMd(s: string): string {
   return s.replace(/\r?\n/g, " ").replace(/\|/g, "\\|");
+}
+
+async function readDeadCodeCache(filePath: string): Promise<DeadCodeCache> {
+  try {
+    const raw = await fs.readFile(filePath, "utf8");
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    return parsed as DeadCodeCache;
+  } catch (err) {
+    if (isNotFoundError(err)) return {};
+    log.warn(`could not read dead-code cache at ${filePath}:`, redactForLog(err));
+    return {};
+  }
+}
+
+async function markCodeDead(
+  filePath: string,
+  deadCodeCache: DeadCodeCache,
+  code: string,
+  accountName: string,
+): Promise<void> {
+  const existing = deadCodeCache[code];
+  if (existing) {
+    if (!existing.accounts_tried.includes(accountName)) {
+      existing.accounts_tried.push(accountName);
+      await writeDeadCodeCacheAtomic(filePath, deadCodeCache);
+    }
+    return;
+  }
+
+  deadCodeCache[code] = {
+    marked_dead_at: new Date().toISOString(),
+    first_seen_outcome: Outcomes.CODE_INVALID_OR_EXPIRED,
+    accounts_tried: [accountName],
+  };
+  await writeDeadCodeCacheAtomic(filePath, deadCodeCache);
+}
+
+async function writeDeadCodeCacheAtomic(filePath: string, deadCodeCache: DeadCodeCache): Promise<void> {
+  await fs.mkdir(dirname(filePath), { recursive: true });
+  const tmp = `${filePath}.tmp`;
+  await fs.writeFile(tmp, `${JSON.stringify(deadCodeCache, null, 2)}\n`, "utf8");
+  await fs.rename(tmp, filePath);
+}
+
+function dirname(filePath: string): string {
+  const idx = filePath.lastIndexOf("/");
+  if (idx <= 0) return ".";
+  return filePath.slice(0, idx);
+}
+
+function isNotFoundError(err: unknown): boolean {
+  return Boolean(err && typeof err === "object" && "code" in err && (err as { code?: string }).code === "ENOENT");
+}
+
+function isTransientRedeemError(err: unknown): boolean {
+  if (err instanceof ApiError) {
+    if (err.status === 429) return true;
+    if (err.status !== undefined && err.status >= 500 && err.status <= 599) return true;
+  }
+
+  const name = (err as { name?: string }).name;
+  if (name === "TransientError") return true;
+  if (err instanceof TypeError) return true;
+
+  const code = String((err as { code?: unknown }).code ?? "").toUpperCase();
+  return TRANSIENT_NETWORK_CODES.has(code);
+}
+
+function getRetryDelayMs(err: unknown, attempt: number): number {
+  if (err instanceof ApiError && err.status === 429 && Number.isFinite(err.retryAfterMs)) {
+    return Math.max(0, err.retryAfterMs ?? 0);
+  }
+  return RETRY_DELAYS_MS[Math.min(attempt - 1, RETRY_DELAYS_MS.length - 1)]!;
+}
+
+function defaultSleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
