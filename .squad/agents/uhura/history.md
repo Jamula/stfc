@@ -114,3 +114,30 @@ Key blocker: bot not yet a member of guild `639255937869152267` → all guild-sc
 - **`DISCORD_BOT_TOKEN` is CI-only** — any call from Codespace will 401. Workaround: set a `.env` locally (never commit) or run via GitHub Actions.
 - For "send a message": `POST /channels/{channel_id}/messages` with body `{"content": "..."}`. The repo's `DiscordClient.postMessage()` already wraps this — no curl needed if using TypeScript.
 - GitHub Actions can't hold a Gateway WebSocket. Real-time listening requires a separate always-on host.
+
+## 2026-06-02 — Q&A: Slash commands — how to invoke bot commands from Discord chat
+
+**Requested by:** Cyrus Jamula
+**Type:** Explainer + architectural advisory (no code changes)
+**Context:** Cyrus successfully invited the bot to his Discord server (guild invite completed; permissions integer `1700157368876145`, code-grant toggle used). He is now in "what next" mode — asking how users can invoke bot commands from the chat box.
+
+### Learnings
+
+- **Bot is now in guild — the invite blocker from session history is resolved.** App ID `1505752454388514916` is now a guild member. Guild-scoped API calls (e.g. `GET /guilds/{id}/channels`) should now return data instead of 403/50001.
+- **Slash command registration is feasible right now.** `PUT /applications/{app_id}/guilds/{guild_id}/commands` works with `DISCORD_BOT_TOKEN` and can be run as a one-off GitHub Actions `workflow_dispatch`. Registration is fire-and-forget; no always-on infra required.
+- **Slash command INVOCATION HANDLING is the architectural mismatch.** Discord POSTs `INTERACTION_CREATE` events to a registered HTTPS endpoint. GitHub Actions can't hold a persistent HTTP listener. This is a hard constraint — can't be worked around without adding infra.
+- **Architectural decision point (flag for Kirk if Cyrus commits):** If Cyrus wants live `/slash` commands, the right path is a Cloudflare Workers bridge (free tier) that:
+  1. Verifies Ed25519 signature (`tweetnacl`)
+  2. Responds `type: 5` (deferred) within 3s
+  3. Calls GitHub `POST /repos/{owner}/{repo}/dispatches` with `repository_dispatch`
+  4. GHA does the work; Cloudflare Worker POSTs follow-up via `PATCH /webhooks/{app_id}/{token}/messages/@original`
+  This is the correct architecture for this repo. The Worker is thin (signature verify + dispatch); all logic stays in GHA.
+- **Permissions bitmask update:** Previous sessions used `66560` (VIEW + READ_HISTORY). With the bot now in the server and potentially sending messages, the relevant bitmask for a command-responding bot is `2147485696` (`SEND_MESSAGES` + `VIEW_CHANNEL` + `READ_MESSAGE_HISTORY` + `USE_APPLICATION_COMMANDS`). The invite Cyrus completed used `1700157368876145` (much broader — likely includes slash command permissions already).
+- **Suggested GH issue title (do not file until Cyrus commits):** "Add Cloudflare Worker as Discord interactions endpoint for slash command handling"
+- **No `.squad/decisions/inbox/` entry written** — Cyrus did not explicitly commit to Option B (Cloudflare Worker). Will write inbox entry only on explicit buy-in.
+
+---
+
+## 2026-06-02T03:38Z — Discord slash command epic #143 filed; 4 issues routed to Uhura
+
+Per Kirk's Option B architecture (Cloudflare Workers bridge), epic #143 decomposed into 6 children. Uhura owns #144 (commands.json contract), #145 (registration workflow), #146 (Worker), and #149 (operator runbook). Start with #144 (blocks #145 and #147). Implementation order: #144 → #145 → #146 (parallel with #147) → #149. Worker is ~100 LoC thin bridge (signature-verify, defer, dispatch). No business logic. Three design decisions flagged in Kirk's architecture notes for user confirmation before implementation.

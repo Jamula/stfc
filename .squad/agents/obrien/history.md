@@ -131,3 +131,9 @@ Participated in:
 **Reviewers:** Kirk ✅, Bashir ✅, Picard ✅, Garak ✅
 **Outcome:** PR merged 05:46Z. No governance impact. Next dispatch: #94 queued for Batch 3 (pending #93 PR open and artifact schema stable).
 
+
+---
+
+## 2026-06-02T03:38Z — Discord Worker deploy workflow #148 assigned
+
+Epic #143 filed. O'Brien owns #148 (deploy workflow). Responsibility: `wrangler deploy` on `worker/**` push-to-main. Depends on #146 (Worker code). Requires `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` to be set (human provisioning from local terminal per Rule 21 — never pasted in chat). Expected complexity: medium. New infra surface: Cloudflare Workers free tier.

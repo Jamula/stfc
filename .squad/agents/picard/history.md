@@ -108,3 +108,19 @@ Reserved for cases where prep work is genuinely throwaway or creates ongoing con
 Applied to PR #96 (discord-channels ingest): shipped script + blocker README + directory convention despite bot lacking guild membership. When access lands, fresh issue re-files the ingest task.
 
 — Scribe (logged from orchestration)
+
+## 2026-06-02T03:40Z — Triage: issues #138 + #112
+
+**#138 (routing smoke-tests):** Dual-assignment (`squad:bashir` + `squad:copilot`) resolved to **@copilot**. Issue body is fully specified; work is mechanical Option-A harness or Option-B runbook. Stripped `squad:bashir` and `go:needs-research`. Assignee API call failed (Codespaces token can't add Copilot as assignee — known limitation); `squad:copilot` label is the routing signal regardless.
+
+**#112 (Phase 1 epic):** Body was empty, but Phase 1 was already decomposed in-flight under #113–#122 (all CLOSED via PRs #124/#125/#126). Updated the epic body with a retroactive checklist of the 10 shipped child issues + #127 as the lone remaining gate (Azure OIDC secrets, on my plate). No new child issues filed — would have been pure board noise. No open architectural questions for Kirk.
+
+### Learnings
+
+**Dual-assignment heuristic:** when an issue has `squad:{human}` + `squad:copilot` and the body fully specifies inputs/expected outputs/implementation options, default to @copilot. Reserve the human seat for cases where domain judgment is the actual gating factor (testing strategy when not pre-decided, architectural call, security review). Mechanical "execute the spec" work goes to @copilot.
+
+**Epic reality-check before decomposition:** when an epic looks "ready to decompose", FIRST run `gh issue list --search "<prefix>" --state all` to detect in-flight decomposition. The 005-web-control-panel Phase 1 work had already been split into 10 `p1-*` issues and shipped before the tracking epic (#112) was even filed. Filing 3–6 new children would have duplicated closed work. The right action was retroactive reconciliation of the epic body.
+
+**Triage authority owns `go:needs-research` removal:** when the "research" question is actually "who owns this and how should it run?", that's a triage call, not an investigation. Don't park your own decisions behind a label that asks someone else to make them.
+
+**Assignee-API gotcha:** `gh issue edit --add-assignee Copilot` from inside Codespaces fails with `Bot does not have access to the repository` (replaceActorsForAssignable). The `squad:copilot` label is the durable routing signal; the assignee field is best-effort. Document this in skill notes so future sessions don't waste cycles troubleshooting it.

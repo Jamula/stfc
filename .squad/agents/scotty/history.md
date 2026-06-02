@@ -167,3 +167,9 @@ Participated in:
 **Cross-squad notes:** Uhura locked out by Garak CR (output determinism guarantee needed); Uhura issued fix; Garak re-verified and approved. All reviewers cleared: Kirk ✅+📝 (wrote skill), Bashir ✅, Picard ✅.
 **Outcome:** PR merged 05:43Z. Handlers ready. Next dispatch: #93 (knowledge pipeline) unblocks when PR#129 users confirms (parallel user-action gate: #127 secrets, #85 screenshots).
 
+
+---
+
+## 2026-06-02T03:38Z — Discord slash command handler workflow #147 assigned
+
+Epic #143 (Discord slash commands, Option B) filed with 6 children. Scotty owns #147 (handler workflow via `repository_dispatch`). Depends on #144 (commands.json). Handler invokes `gh workflow run redeem.yml` and posts follow-up via Discord API. Expected complexity: medium. Coordinate with Uhura on dispatcher wire-up in `src/discord/crewCommandParser.ts` (shared file — Uhura owns, Scotty imports from `src/crew/handlers/index.ts`).

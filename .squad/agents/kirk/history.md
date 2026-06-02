@@ -50,3 +50,18 @@ When reviewing a fix commit to CHANGES_REQUESTED blockers, structurally verify e
 This pattern distinguishes a "re-review pass" from a "spot-check" and elevates confidence in fix commits that touch multiple reviewers' feedback threads.
 
 — Scribe (logged from orchestration)
+
+## 2026-06-02 — Discord slash command architecture (Option B) scoping
+
+**Decision context:** Cyrus chose Option B (Cloudflare Workers bridge) from Uhura's three options. Decision inbox: `.squad/decisions/inbox/copilot-discord-slash-arch-option-b.md`. Full arch note: `.squad/decisions/inbox/kirk-discord-slash-arch.md`.
+
+**Filed epic + 6 child issues:** #143 (epic), #144 (commands.json), #145 (register workflow), #146 (Worker), #147 (handler workflow), #148 (deploy workflow), #149 (operator runbook). Dependencies mapped in epic body.
+
+### Learnings (reusable architectural patterns)
+
+- **Discord interactions bridge pattern (3-tier):** thin signature-verifier (Worker) → message bus (`repository_dispatch`) → business logic (existing GHA). Keeps all secrets/logic in their natural homes. Worker is ~100 LoC and stateless — easy to revert. Same pattern works for Slack, Microsoft Teams, any webhook-based chat platform that requires <3s ack.
+- **The 3-second Discord timeout is a hard architectural constraint.** Any work that takes >3s MUST respond `type:5` (deferred) and post follow-up later. This rules out doing the work inline anywhere in the Worker's request lifecycle. `ctx.waitUntil()` in Workers extends execution past response but does NOT extend the response deadline — defer FIRST, then dispatch.
+- **GH dispatch token scoping principle:** the token that can fire `repository_dispatch` is effectively a remote-trigger capability for every workflow listening on `repository_dispatch`. Even with one `event_type`, a leaked token lets an attacker re-fire arbitrary `client_payload`. Mitigation hierarchy: (1) fine-grained PAT, single repo, single permission; (2) handler workflow validates `client_payload.command` against an allow-list; (3) quarterly rotation. Coarse-grained `repo` PATs are a security regression vs. the existing CI surface — refuse them.
+- **Interaction token 15-min expiry** is a separate, longer deadline from the 3s ack. Long-running GHA workflows can race it. Pattern: the handler workflow's FIRST follow-up should be "Started, results at <run URL>" within the first minute, so the user gets a working link even if the final results follow-up is too late. Cross-reference: Rule 6a (PR shipping) — both are about "make the slow path observable, don't black-hole it."
+- **Single-source-of-truth pattern for command definitions** (`discord/commands.json`): two consumers (registration workflow + handler workflow) read the SAME file. Prevents drift where the registered command shape diverges from the handler's expected `client_payload`. Validator script (`scripts/validate-discord-commands.mjs`) enforces schema at commit time.
+- **Stored memory hit:** existing `concurrency.group: stfc-gift-redeemer` (per `tests/skills/discordMonitor.test.ts` pin) already serializes redeem runs. Don't duplicate that — handler workflow uses its OWN group `stfc-discord-handler` because handler work is broader than redeem. `gh workflow run redeem.yml` from the handler picks up the existing serialization automatically.

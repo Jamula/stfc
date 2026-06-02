@@ -1,3 +1,151 @@
+### 2026-06-02T03:34Z: Discord slash command architecture — Option B chosen
+**By:** Cyrus Jamula (via Copilot)
+**What:** For invoking commands from the Discord chat box (e.g. `/trigger-redeem`, `/redeem-status`), use **Option B — Cloudflare Workers bridge**. The Worker receives Discord INTERACTION_CREATE POSTs, verifies the Ed25519 signature, responds deferred (type:5), and fires a GitHub `repository_dispatch` event that triggers the actual work in GitHub Actions. GHA posts results back via Discord follow-up messages.
+**Why:** User-selected from the three options Uhura presented. Option A (workflow_dispatch only) doesn't give chat-box commands. Option C (always-on bot host) adds infra surface (~$5–10/mo, VPS maintenance) we don't need.
+**Implications:**
+- New infrastructure: Cloudflare Workers free tier (100k req/day). Single Worker, stateless.
+- New GH secrets needed: `DISCORD_PUBLIC_KEY` (Worker side, for signature verification — public, not a credential), `CLOUDFLARE_API_TOKEN` (for Worker deployment from CI).
+- New workflows: `discord-register-commands.yml` (one-off registration via workflow_dispatch), `discord-command-handler.yml` (triggered by `repository_dispatch` events from the Worker, posts follow-up via `PATCH /webhooks/{app_id}/{interaction_token}/messages/@original`).
+- Architecture: bridge keeps all business logic in GHA. Worker is thin (signature verify + dispatch). Easy to revert (delete Worker, remove workflows).
+- Owner: Kirk for architecture, Uhura primary implementer (Discord domain), Scotty assists on the GHA repository_dispatch handler, Bashir for test scaffolding around the Worker, O'Brien for CF deployment workflow.
+- Out of scope (for now): voice/presence/real-time reaction handling — explicitly deferred to "Option C if ever needed".
+
+---
+
+# Kirk — Discord slash command architecture (Option B) decomposition
+
+**Date:** 2026-06-02T03:34Z
+**From:** Kirk (Lead / Architect)
+**Decision context:** Cyrus selected Option B (Cloudflare Workers bridge) per `.squad/decisions/inbox/copilot-discord-slash-arch-option-b.md`.
+**Epic:** #143
+**Children:** #144, #145, #146, #147, #148, #149
+
+## Architecture
+
+### Component boundaries
+
+```
+User types /trigger-redeem in Discord
+  ↓ Discord POSTs INTERACTION_CREATE to Cloudflare Worker
+  ↓ Worker verifies Ed25519 signature (tweetnacl)
+  ↓ Worker responds type:5 (deferred) within 3s
+  ↓ Worker calls POST /repos/Jamula/stfc/dispatches { event_type, client_payload }
+  ↓ GHA repository_dispatch workflow runs the actual command
+  ↓ GHA PATCHes /webhooks/{app_id}/{interaction_token}/messages/@original
+```
+
+| Component | Path | Responsibility | Owner |
+|---|---|---|---|
+| Cloudflare Worker | `worker/src/index.ts` | Stateless. Signature-verify, defer, dispatch. **NO business logic.** ~100 LoC. | Uhura (#146) |
+| Registration workflow | `.github/workflows/discord-register-commands.yml` | One-off `workflow_dispatch`. Reads `discord/commands.json`, PUTs to Discord. | Uhura (#145) |
+| Handler workflow | `.github/workflows/discord-command-handler.yml` | `repository_dispatch: discord-command`. Runs the command, posts follow-up. | Scotty + Uhura (#147) |
+| Deploy workflow | `.github/workflows/deploy-cloudflare-worker.yml` | Push-to-main on `worker/**` → `wrangler deploy`. | O'Brien (#148) |
+| Command definitions | `discord/commands.json` | **Single source of truth.** | Uhura (#144) |
+| Operator runbook | `docs/discord-slash-commands.md` | <30-min wire-up guide. | Uhura (#149) |
+
+### Secrets
+
+| Secret | Lives on | Used by | Sensitivity |
+|---|---|---|---|
+| `DISCORD_PUBLIC_KEY` | CF Worker (`wrangler secret put`) | Ed25519 verification | Public but secret-ish for cleanliness |
+| `DISCORD_BOT_TOKEN` | GH Actions (exists) | Registration + follow-up message | High — existing CI secret |
+| `GH_DISPATCH_TOKEN` | CF Worker (`wrangler secret put`) | Worker → GH dispatch | **🚨 Highest.** Fine-grained PAT, single repo, single permission, quarterly rotation |
+| `CLOUDFLARE_API_TOKEN` | GH Actions (NEW) | Deploy workflow | High — Workers Edit scope only |
+| `CLOUDFLARE_ACCOUNT_ID` | GH Actions (NEW) | Deploy workflow | Low |
+
+**Human-in-the-loop (Cyrus):** must `gh secret set` / `wrangler secret put` from a local terminal. Per Rule 21 — never paste values into chat.
+
+### Risks + mitigations
+
+| Risk | Mitigation |
+|---|---|
+| 3s Discord timeout | Worker defers (`type:5`) BEFORE GH dispatch call. Test pins this contract. |
+| Replay attacks | tweetnacl signature + `X-Signature-Timestamp` reject if >300s old. |
+| GH dispatch token scope creep | Fine-grained, single-repo, single-permission, quarterly rotation. Handler allow-lists `client_payload.command`. |
+| 15-min interaction token expiry | Long-running commands respond with run URL early; document contract in #149 runbook. |
+| Concurrent slash commands | Existing `stfc-gift-redeemer` group serializes redeem. Handler gets its own `stfc-discord-handler` group. |
+
+### Out of scope (initial cut)
+
+- Subcommand routing — use separate commands
+- `APPLICATION_COMMAND_AUTOCOMPLETE`
+- Component callbacks (buttons / select menus)
+- Internationalization
+
+## Decomposition reasoning
+
+The split into 6 children is driven by **owner boundaries** and **independent shippability**, not by line count:
+
+1. **#144 (commands.json)** is the contract — both #145 and #147 consume it, so it ships first. Tiny but blocking everything Discord-shaped.
+2. **#145 (register)** is pure GHA + Discord REST. Uhura's wheelhouse. Ships independently of the Worker existing.
+3. **#146 (Worker)** is the only piece of new infrastructure. Isolating it lets the test scope stay small (~100 LoC + signature-mocking tests) and gives a clear revert boundary.
+4. **#147 (handler)** is the "business logic" piece. Routed to Scotty (CLI/orchestration owner) because it invokes `gh workflow run redeem.yml` and reads `docs/redeem-history.md` — both Scotty-domain. Uhura assists on the Discord follow-up REST call (uses existing patterns in `src/discord/client.ts:172`).
+5. **#148 (deploy)** is pure CI/CD plumbing — O'Brien's lane.
+6. **#149 (runbook)** waits for everything else because it documents the end-to-end. Filing it now ensures the docs-debt isn't forgotten.
+
+## Dependency map
+
+```
+#144 (commands.json) ──→ #145 (register)
+                    └─→ #147 (handler reads command surface)
+
+#146 (worker) ──→ #147 (handler uses agreed client_payload shape)
+            └─→ #148 (deploy needs worker/ dir to exist)
+
+#149 (runbook) ──depends on all of #144–#148
+```
+
+Suggested implementation order: **#144 → #145 → (#146 ‖ #147 after #144) → #148 → #149**.
+
+## Open questions for Cyrus
+
+1. **Global vs. per-guild registration?** Global commands take ~1h to propagate; guild commands are instant but per-guild. Recommend: register globally as the default, allow `guild_id` workflow_dispatch input for dev/testing iteration. (Codified into #145 already; flagging for confirm.)
+2. **Should `/trigger-redeem` be admin-gated?** Recommend `default_member_permissions: "8"` (ADMINISTRATOR) or a custom role check. Default is "anyone in channel."
+3. **Quarterly rotation for `GH_DISPATCH_TOKEN`** — manual or do we want a calendared issue for it? Recommend: manual for now (Cyrus's call), add a calendar reminder. We can automate later if it sticks.
+
+— Kirk
+
+---
+
+# Picard triage — issues #138 & #112
+
+**Date:** 2026-06-02
+**From:** Picard (M2 / EM)
+**To:** Scribe (for decisions ledger merge)
+
+## Issue #138 — Coordinator routing smoke-tests
+
+**Decision:** Route to **@copilot**. Strip `squad:bashir` and `go:needs-research`. `squad:copilot` label retained as routing signal.
+
+**Rationale:** Issue body fully enumerates the 10 trigger strings, expected behaviors, and two implementation options. Work is mechanical (🟡 medium per @copilot capability profile in `team.md`). No testing-strategy judgment needed from Bashir; @copilot can author the harness or runbook in one session.
+
+**Expected deliverable:** `tests/squad/coordinator-routing.test.ts` (Option A preferred) OR `docs/testing/coordinator-triggers.md` (Option B fallback) plus per-Rule 15 `## Tests` PR-body section. P3 priority — no schedule pressure.
+
+**Action gap:** `gh issue edit --add-assignee Copilot` failed with `Bot does not have access to the repository` from the Codespaces-injected token (known limitation). The `squad:copilot` label remains as the routing signal and the auto-triage workflow already offered Copilot-handoff instructions in an earlier comment. If Copilot doesn't auto-pick within a day, manually re-assign from the user's local terminal.
+
+## Issue #112 — Phase 1 epic decomposition
+
+**Decision:** No new decomposition filed. Reconciled the empty epic body with the actually-shipped P1 work (#113–#122 all CLOSED) and identified the lone remaining gate (#127, Azure OIDC secrets).
+
+**Rationale:** Phase 1 was decomposed in-flight under the `p1-*` series before this tracking epic was filed. Quickstart confirms the capability surface is live (auth lib, frontend shell, deploy contract, data-read endpoints, invitation runbook). Filing 3–6 new child issues now would be board noise.
+
+**Updated epic body:** Lists the 10 closed `p1-*` child issues as a checklist, points at #127 as the single remaining gate, defines closure criteria.
+
+**Open questions for Kirk:** None. Auth approach and hosting decision both settled in Phase 0 and shipped.
+
+**Closure path:** Picard provisions Azure OIDC secrets (per #127 checklist, from local terminal per Rule 21) → O'Brien verifies deploy job activates → epic closes.
+
+## Triage heuristics (general — for the heuristics shelf)
+
+1. **Dual-assignment resolution (`squad:X` + `squad:copilot`):** default to @copilot when the issue body is fully specified and the work is mechanical (no strategy/judgment call). Reserve the human seat for cases where the assignee's domain expertise is the actual gating factor.
+
+2. **Epic-decomposition reality check before filing children:** when an epic looks "ready to decompose", first search for already-shipped `{prefix}-*` issues (`gh issue list --search "<prefix>" --state all`). If decomposition already happened in-flight, reconcile the epic body retrospectively instead of filing duplicates.
+
+3. **`go:needs-research` is removable by the triage authority** when the "research" question is actually a routing/ownership call. Don't park your own triage decisions behind a label that asks someone else to make them.
+
+— Picard
+
+
 # Kirk decision: PR #141 re-review
 
 Date: 2026-06-02T02:55:47Z

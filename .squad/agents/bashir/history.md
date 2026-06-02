@@ -152,3 +152,9 @@ Embedding/retrieval pipelines tend to miss three specific coverage areas that su
 
 **Smooth cycle:** All three PRs merged in sequence 05:43–05:46Z. No test coverage rework required from implementers.
 
+
+---
+
+## 2026-06-02T03:38Z — Issue #138 re-routed from Bashir → @copilot
+
+Picard triage resolved the `squad:bashir + squad:copilot` dual-assignment conflict on #138 (Coordinator routing smoke-tests). Work is mechanical and fully-specified; routed to @copilot. No testing-strategy judgment required from Bashir. Bashir can focus on other P0 items. The `squad:copilot` label remains as the routing signal; if @copilot doesn't auto-pick within a day, manually re-assign from the local terminal.
