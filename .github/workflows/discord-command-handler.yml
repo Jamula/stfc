@@ -1,0 +1,50 @@
+name: Discord command handler
+
+on:
+  repository_dispatch:
+    types: [discord-command]
+
+permissions:
+  contents: read
+  actions: write
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+concurrency:
+  group: stfc-discord-handler
+  cancel-in-progress: false
+
+jobs:
+  handle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.0
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4.4.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - run: npm ci
+
+      - name: Validate repository_dispatch payload
+        env:
+          DISCORD_CLIENT_PAYLOAD: ${{ toJson(github.event.client_payload) }}
+        run: |
+          echo "$DISCORD_CLIENT_PAYLOAD" | jq -e '
+            .command and (.command | type == "string" and length > 0) and
+            .interaction_token and (.interaction_token | type == "string" and length > 0) and
+            .application_id and (.application_id | type == "string" and length > 0)
+          ' >/dev/null || {
+            echo "::error::Missing required client_payload fields: command, interaction_token, application_id"
+            exit 1
+          }
+
+      - name: Route command and post Discord follow-up
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+          DISCORD_CLIENT_PAYLOAD: ${{ toJson(github.event.client_payload) }}
+        run: node scripts/discord-handler.mjs
