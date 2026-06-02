@@ -206,3 +206,47 @@ Exits 0 if every command satisfies Discord's CHAT_INPUT schema constraints
 (name 1–32 chars matching `^[-_\p{L}\p{N}]+$`, description 1–100 chars,
 valid `type`, string `default_member_permissions`). Exits 1 with errors on
 stderr if validation fails. Runs automatically in CI as part of `npm test`.
+
+
+### Registering slash commands — `discord-register-commands.yml`
+
+Slash commands must be registered with Discord before they appear in the chat box.
+Use the **Register Discord slash commands** workflow — a one-off, manually triggered
+`workflow_dispatch` that reads `discord/commands.json` and calls Discord's bulk-overwrite
+PUT endpoint.
+
+#### How to run
+
+1. Go to **Actions → Register Discord slash commands → Run workflow**.
+2. Fill in the inputs:
+
+   | Input | Required | Description |
+   |---|---|---|
+   | `guild_id` | No | Server (guild) ID for **instant** guild-scoped registration. Leave empty for **global** registration (~1 hour propagation to all servers). |
+   | `dry_run` | No (default `false`) | Check to validate `discord/commands.json` and print what *would* be sent — without calling Discord. |
+
+3. Click **Run workflow**.
+
+#### What to expect
+
+- The **Validate** step runs `scripts/validate-discord-commands.mjs` first. If validation
+  fails, the workflow aborts before touching Discord.
+- The **Register** step does a `PUT` bulk-overwrite — this **replaces all existing
+  commands** of the chosen scope (guild or global) with the contents of
+  `discord/commands.json`.
+- On success, the **job summary** shows the HTTP 200 response from Discord, including
+  each registered command's assigned ID.
+
+#### Verifying commands appeared
+
+- **Discord client:** Open your server, type `/` in any channel — the registered
+  commands should appear in the autocomplete popup within seconds (guild-scoped)
+  or up to ~1 hour (global).
+- **API:** `GET https://discord.com/api/v10/applications/{APP_ID}/guilds/{GUILD_ID}/commands`
+  with your bot token should return the registered command list.
+
+> **Tip:** Use `dry_run: true` first to confirm the payload is valid without side
+> effects. Then re-run with `dry_run: false` to register.
+
+> **Tip:** Prefer guild-scoped registration during development — it takes effect
+> instantly and only affects one server. Switch to global once the commands are stable.
