@@ -128,3 +128,23 @@ Applied to PR #96 (discord-channels ingest): shipped script + blocker README + d
 **Triage authority owns `go:needs-research` removal:** when the "research" question is actually "who owns this and how should it run?", that's a triage call, not an investigation. Don't park your own decisions behind a label that asks someone else to make them.
 
 **Assignee-API gotcha:** `gh issue edit --add-assignee Copilot` from inside Codespaces fails with `Bot does not have access to the repository` (replaceActorsForAssignable). The `squad:copilot` label is the durable routing signal; the assignee field is best-effort. Document this in skill notes so future sessions don't waste cycles troubleshooting it.
+
+## 2026-06-02T04:50Z — Board triage round 2 (Ralph-triggered)
+
+Triaged 4 open issues: #85, #86, #127, #138.
+
+**Actions:**
+- #138 → `go:yes` added; ready for @copilot pickup. Assignee API still fails from Codespaces (expected per prior caveat); commented explicitly so Cyrus knows to assign from local terminal if Copilot doesn't self-discover.
+- #85 → NOT `go:yes`. Spike is investigative but has a hard input dependency (20 operator-provided STFC screenshots from Cyrus's iPhone). Cannot proceed without them. Commented with restated acceptance bar + unblock path.
+- #86 → No action. Correctly gated on #85; my own gate decision can't be posted until measurements land. Comment posted noting "awaiting #85".
+- #127 → No action. Purely operator-gated (Cyrus must run `gh secret set` from local terminal per Rule 21). Picard/O'Brien side is fully prepped. No `status:awaiting-user-action` label exists; made status explicit in comment instead.
+
+### Learnings
+
+**Spike-vs-implementation `go:yes` policy:** spikes are normally green-lit immediately by the EM — they're investigative, low-risk, and the bar is "measure and report", not "ship production code". Default to `go:yes` on sight. **Exception:** when a spike has a hard external input dependency (operator-provided data, third-party API access, vendor credential) that the team cannot satisfy from inside the agent surface, hold `go:yes` until the input lands. Withholding `go:yes` here is correct because dispatching Uhura would just produce a "blocked, need screenshots" comment — board noise.
+
+**Dependency-chain triage heuristic:** when a chain has the form A → B → C → D and A is blocked, the right action is to (1) document A's blocker concretely on A, (2) post a one-line "awaiting A" comment on B (the immediate next gate), and (3) leave C/D untouched. Avoid `go:no` on the downstream nodes — that conflates "not ready yet" with "won't pursue". The gating relationship is durable in the issue body; no label gymnastics required.
+
+**Operator-gated issues without a status label:** when an issue's only remaining work is operator action (secret provisioning, external admin invite, hardware data capture), and no `status:awaiting-user-action` label exists, the right move is an explicit prose comment rather than inventing a label. Label-add proposals are worth filing only if the pattern recurs 3+ times — otherwise it's premature taxonomy.
+
+**Codespaces assignee-API limitation is durable:** `gh issue edit --add-assignee Copilot` will continue to fail with `Bot does not have access to the repository (replaceActorsForAssignable)` from inside this Codespace. The `squad:copilot` label is the durable routing signal; the assignee field is best-effort. Don't waste cycles troubleshooting — note the limitation and move on.

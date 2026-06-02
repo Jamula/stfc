@@ -1,3 +1,67 @@
+# Picard board triage — Round 2 (Ralph-triggered)
+
+**Date:** 2026-06-02T04:50Z
+**Role:** Picard (M2/EM)
+**Trigger:** Ralph work-monitor loop on behalf of Cyrus
+**Scope:** Read-only triage of 4 open issues (#85, #86, #127, #138)
+
+## Decisions
+
+### #138 — routing smoke-tests → `go:yes` (ready for @copilot)
+
+- Added `go:yes` label.
+- Issue body fully specifies the 10 trigger phrases + two implementation options (A: test harness, B: runbook). No outstanding architectural questions.
+- Routing signals now complete: `squad:copilot` (durable) + `go:yes` (readiness).
+- Retried `gh issue edit 138 --add-assignee Copilot` — failed as expected (`replaceActorsForAssignable`, Codespaces token can't add Bot actor). Documented in comment.
+- Cyrus may need to manually assign from his local terminal if @copilot doesn't auto-discover the issue.
+
+### #85 — OCR POC spike → HELD (NOT `go:yes`)
+
+- Spike normally gets immediate `go:yes` (investigative, no production-code risk).
+- **Exception applied:** hard input dependency on 20 operator-provided STFC roster screenshots that Uhura cannot synthesize or substitute. Per `specs/004-crew-optimizer/spec.md`, the POC's whole point is measurement on real gameplay artifacts.
+- Posted acceptance bar restatement + unblock path (drop screenshots in `data/crew/poc-screenshots/`, re-trigger Ralph).
+- Owner (Uhura) is correct — no reassignment.
+
+### #86 — POC gate decision → HELD (gated on #85)
+
+- This is my own gate decision; cannot post PASS/FAIL without measurements.
+- Dependency chain (#85 → #86 → #87/#88 → #89/#90) is correctly modeled.
+- Posted one-line "awaiting #85 spike results" comment per Rule 9b convention. Did NOT touch #87–#90 — gating is durable in their issue bodies; label gymnastics would be noise.
+
+### #127 — Azure OIDC secrets → HELD (operator-only per Rule 21)
+
+- Workflow already gated (`secrets.AZURE_CLIENT_ID != ''`, commit `84ffe6f`) → missing secrets produce `skipped`, not `failure`. PR #124 already merged.
+- All prep work done on Picard/O'Brien side: runbook documented, `scripts/azure/create-swa.sh` shipped, deploy contract in `specs/005-web-control-panel/deploy-contract.md`, invite runbook in `docs/SWA-INVITATION-RUNBOOK.md`.
+- Remaining work is **operator-only**: Cyrus must run `gh secret set` from his local terminal with hidden-input prompt (Rule 21 — values never enter the chat surface).
+- No `status:awaiting-user-action` label exists in this repo. Made the status explicit in the comment instead of inventing taxonomy.
+
+## Outcomes
+
+**Now `go:yes` / dispatchable:**
+- #138 (ready for @copilot pickup; Cyrus may need to manually assign)
+
+**Held / gated:**
+- #85 — awaiting 20 STFC screenshots from Cyrus
+- #86 — awaiting #85 outcome (Picard's own gate)
+- #87, #88, #89, #90 — chain-gated on #86 (untouched, correctly modeled)
+- #127 — awaiting Cyrus to provision Azure OIDC secrets
+
+**Escalations for Cyrus:**
+1. **#85 / v1.5 OCR stream is operator-blocked.** Drop 20 STFC roster screenshots in `data/crew/poc-screenshots/` (gitignored) and re-trigger Ralph on #85 to unblock the entire v1.5 chain.
+2. **#127 / SWA deploy is operator-blocked.** Run the three `gh secret set` commands from your local terminal (NEVER in chat). Without this, the SWA deploy job will keep skipping and the web control panel can't ship.
+3. **#138 / @copilot assignment** may need manual assignment from your local terminal if Copilot doesn't self-discover via the `squad:copilot` label within a session or two.
+
+## Heuristics added to history.md (Learnings section)
+
+- Spike-vs-implementation `go:yes` policy + the input-dependency exception.
+- Dependency-chain triage: document blocker on root, one-line "awaiting" on immediate next gate, leave downstream untouched.
+- Operator-gated issues without a status label → prose comment, don't invent taxonomy until the pattern recurs 3+ times.
+- Codespaces assignee-API limitation is durable; don't waste cycles troubleshooting.
+
+— Picard
+
+---
+
 ### 2026-06-02T03:34Z: Discord slash command architecture — Option B chosen
 **By:** Cyrus Jamula (via Copilot)
 **What:** For invoking commands from the Discord chat box (e.g. `/trigger-redeem`, `/redeem-status`), use **Option B — Cloudflare Workers bridge**. The Worker receives Discord INTERACTION_CREATE POSTs, verifies the Ed25519 signature, responds deferred (type:5), and fires a GitHub `repository_dispatch` event that triggers the actual work in GitHub Actions. GHA posts results back via Discord follow-up messages.
