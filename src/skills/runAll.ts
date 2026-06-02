@@ -528,15 +528,17 @@ function isTransientRedeemError(err: unknown): boolean {
 
   const name = (err as { name?: string }).name;
   if (name === "TransientError") return true;
-  if (err instanceof TypeError) return true;
+  if (err instanceof TypeError) return true; // catches Node fetch's "TypeError: fetch failed" for unreachable hosts
 
   const code = String((err as { code?: unknown }).code ?? "").toUpperCase();
   return TRANSIENT_NETWORK_CODES.has(code);
 }
 
+const MAX_RETRY_AFTER_MS = 60_000; // cap against hostile servers returning large Retry-After values
+
 function getRetryDelayMs(err: unknown, attempt: number): number {
   if (err instanceof ApiError && err.status === 429 && Number.isFinite(err.retryAfterMs)) {
-    return Math.max(0, err.retryAfterMs ?? 0);
+    return Math.min(MAX_RETRY_AFTER_MS, Math.max(0, err.retryAfterMs ?? 0));
   }
   return RETRY_DELAYS_MS[Math.min(attempt - 1, RETRY_DELAYS_MS.length - 1)]!;
 }
