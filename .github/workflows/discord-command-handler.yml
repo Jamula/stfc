@@ -5,7 +5,7 @@ on:
     types: [discord-command]
 
 permissions:
-  contents: read
+  contents: write
   actions: write
 
 env:
@@ -46,5 +46,6 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+          ALLOWED_GUILD_IDS: ${{ secrets.ALLOWED_GUILD_IDS }}
           DISCORD_CLIENT_PAYLOAD: ${{ toJson(github.event.client_payload) }}
         run: node scripts/discord-handler.mjs

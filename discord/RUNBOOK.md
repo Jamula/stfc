@@ -2,7 +2,7 @@
 
 ## 1. What This Pipeline Does
 
-When an operator types a Discord slash command (e.g. `/redeem-status` or `/trigger-redeem`) in a channel where the bot is active, the message flows through a serverless bridge:
+When an operator types a Discord slash command (e.g. `/redeem-status`, `/trigger-redeem`, or `/game-state`) in a channel where the bot is active, the message flows through a serverless bridge:
 
 ```
 ┌──────────────┐       ┌──────────────────────┐       ┌──────────────────┐
@@ -32,6 +32,7 @@ When an operator types a Discord slash command (e.g. `/redeem-status` or `/trigg
 - ✅ Discord application with bot already in your server
   - App ID: `1505752454388514916` (public, not a secret)
   - Bot token (`DISCORD_BOT_TOKEN`) already set as a GitHub repo secret
+  - Worker allowlist env var `ALLOWED_GUILD_IDS` configured (issue #160) to restrict command dispatch to approved guilds
 - ✅ GitHub repo (`Jamula/stfc`) with Actions enabled
 - ✅ Cloudflare account (free tier sufficient; requires API Token access)
 - Internet access to Discord Developer Portal and Cloudflare dashboard
@@ -107,6 +108,9 @@ gh secret set CLOUDFLARE_API_TOKEN --repo Jamula/stfc
 
 gh secret set CLOUDFLARE_ACCOUNT_ID --repo Jamula/stfc
 # Paste your Cloudflare Account ID (from A2), then press Enter
+
+gh secret set ALLOWED_GUILD_IDS --repo Jamula/stfc
+# Comma-separated Discord guild IDs allowed to run slash workflows (e.g. 123,456)
 ```
 
 **Verify:**
@@ -119,6 +123,7 @@ Should show:
 CLOUDFLARE_API_TOKEN
 CLOUDFLARE_ACCOUNT_ID
 DISCORD_BOT_TOKEN          # should already exist from #143
+ALLOWED_GUILD_IDS         # required for /game-state handler allowlist re-check
 ```
 
 ---
@@ -397,6 +402,16 @@ This streams live logs from the Worker. When you invoke a slash command in Disco
 When you save the Interactions Endpoint URL in the Developer Portal (step E), Discord sends a test PING:
 - If Worker responds correctly (PONG, type 1), save succeeds
 - If Worker doesn't respond or times out, Discord shows error in the portal
+
+
+### `/game-state`
+
+- Usage: `/game-state file:<attachment> note:<optional>`
+- Handler downloads only Discord CDN attachments (`cdn.discordapp.com` / `media.discordapp.net`) and rejects files over 50 MB.
+- Files are stored under `data/discord/game-state/YYYY-MM-DD/HHMMSS-<sanitized-filename>` with a companion `.lineage.json` and daily `_index.json`.
+- Workflow commits the files to `main` and replies with a GitHub file link.
+
+**Storage hygiene:** the daily storage monitor (issue #163) alerts at 100 MB. If alerted, archive old day folders and keep the latest active day in-repo.
 
 ### Testing Commands Locally (without Discord)
 
