@@ -45,7 +45,7 @@ describe("discord/commands.json", () => {
     for (const cmd of commands) {
       assert.ok(typeof cmd.name === "string", `command.name must be a string: ${JSON.stringify(cmd)}`);
       assert.ok(cmd.name.length >= 1 && cmd.name.length <= 32, `name length out of range: "${cmd.name}"`);
-      assert.match(cmd.name, /^[-_\p{L}\p{N}]+$/u, `name fails Discord pattern: "${cmd.name}"`);
+      assert.match(cmd.name, /^[-_\p{Ll}\p{N}]+$/u, `name fails Discord pattern: "${cmd.name}"`);
 
       assert.ok(typeof cmd.description === "string", `command.description must be a string: ${JSON.stringify(cmd)}`);
       assert.ok(
@@ -121,6 +121,55 @@ describe("scripts/validate-discord-commands.mjs", () => {
       writeFileSync(fixturePath, "{ not valid json }", "utf8");
       const r = runValidator(fixturePath);
       assert.equal(r.status, 1, `expected exit 1 for invalid JSON; stdout=${r.stdout}`);
+    } finally {
+      unlinkSync(fixturePath);
+    }
+  });
+
+  it("exits 1 on uppercase command names", () => {
+    const broken = [{ name: "REDEEM", type: 1, description: "Uppercase should fail" }];
+    const fixturePath = resolve(REPO_ROOT, "discord/_test-broken-uppercase-name.json");
+    try {
+      writeFileSync(fixturePath, JSON.stringify(broken), "utf8");
+      const r = runValidator(fixturePath);
+      assert.equal(r.status, 1, `expected exit 1 for uppercase name; stdout=${r.stdout}`);
+      assert.match(r.stderr, /pattern|lowercase|INVALID/i, "expected lowercase/pattern validation error");
+    } finally {
+      unlinkSync(fixturePath);
+    }
+  });
+
+  it("exits 1 on duplicate (type, name) command pairs", () => {
+    const broken = [
+      { name: "foo", type: 1, description: "x" },
+      { name: "foo", type: 1, description: "y" },
+    ];
+    const fixturePath = resolve(REPO_ROOT, "discord/_test-broken-duplicate-type-name.json");
+    try {
+      writeFileSync(fixturePath, JSON.stringify(broken), "utf8");
+      const r = runValidator(fixturePath);
+      assert.equal(r.status, 1, `expected exit 1 for duplicate type+name; stdout=${r.stdout}`);
+      assert.match(r.stderr, /duplicate command/i, "expected duplicate command message");
+    } finally {
+      unlinkSync(fixturePath);
+    }
+  });
+
+  it("exits 1 when options are present", () => {
+    const broken = [
+      {
+        name: "foo",
+        type: 1,
+        description: "x",
+        options: [{ type: 3, name: "arg", description: "arg" }],
+      },
+    ];
+    const fixturePath = resolve(REPO_ROOT, "discord/_test-broken-options-not-supported.json");
+    try {
+      writeFileSync(fixturePath, JSON.stringify(broken), "utf8");
+      const r = runValidator(fixturePath);
+      assert.equal(r.status, 1, `expected exit 1 for options usage; stdout=${r.stdout}`);
+      assert.match(r.stderr, /options not yet supported/i, "expected options-not-supported message");
     } finally {
       unlinkSync(fixturePath);
     }

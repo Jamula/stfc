@@ -1,7 +1,10 @@
 #!/usr/bin/env node
 /**
- * Validates discord/commands.json against Discord's CHAT_INPUT command schema.
+ * Validates discord/commands.json against Discord command schema essentials.
  * https://discord.com/developers/docs/interactions/application-commands#application-command-object
+ *
+ * NOTE: `options` are intentionally rejected for now (even if structurally valid).
+ * Follow-up issue should add full recursive option-schema validation before enabling them.
  *
  * Exit 0 — valid
  * Exit 1 — invalid (errors printed to stderr)
@@ -19,9 +22,10 @@ const DEFAULT_PATH = resolve(REPO_ROOT, "discord/commands.json");
 
 const filePath = process.argv[2] ? resolve(process.argv[2]) : DEFAULT_PATH;
 
-// Discord CHAT_INPUT command name: 1–32 chars, lowercase letters/numbers/hyphens/underscores.
-// Unicode letters and numbers are allowed per Discord docs.
-const NAME_PATTERN = "^[-_\\p{L}\\p{N}]{1,32}$";
+// Discord command naming rules: lowercase letters, numbers, hyphens, underscores.
+// Using \p{Ll} (lowercase letter in any script) per docs:
+// https://discord.com/developers/docs/interactions/application-commands#application-command-object-application-command-naming
+const NAME_PATTERN = "^[-_\\p{Ll}\\p{N}]{1,32}$";
 
 /** @type {import('ajv').JSONSchemaType<unknown>} */
 const commandSchema = {
@@ -81,6 +85,25 @@ const ajv = new Ajv({ allErrors: true, unicodeRegExp: true });
 const validate = ajv.compile(rootSchema);
 
 if (validate(commands)) {
+  const seenTypeAndName = new Set();
+  for (const [index, command] of commands.entries()) {
+    const type = command.type ?? 1;
+    const key = `${type}:${command.name}`;
+    if (seenTypeAndName.has(key)) {
+      process.stderr.write(
+        `INVALID: ${filePath}\n  duplicate command for (type=${type}, name="${command.name}") at index ${index}\n`,
+      );
+      process.exit(1);
+    }
+    seenTypeAndName.add(key);
+
+    if (Object.hasOwn(command, "options")) {
+      process.stderr.write(
+        `INVALID: ${filePath}\n  command "${command.name}" uses options; options not yet supported by this validator — track in a follow-up issue\n`,
+      );
+      process.exit(1);
+    }
+  }
   process.stdout.write(`OK: ${commands.length} command(s) valid in ${filePath}\n`);
   process.exit(0);
 } else {
