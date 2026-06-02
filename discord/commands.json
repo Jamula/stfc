@@ -9,5 +9,25 @@
     "type": 1,
     "description": "Manually trigger the next gift redemption run",
     "default_member_permissions": "8"
+  },
+  {
+    "name": "game-state",
+    "description": "Upload a screenshot or video to capture current game state",
+    "type": 1,
+    "default_member_permissions": "8",
+    "options": [
+      {
+        "name": "file",
+        "description": "The image or video to archive",
+        "type": 11,
+        "required": true
+      },
+      {
+        "name": "note",
+        "description": "Optional context (e.g. \"after raid\", \"resource snapshot\")",
+        "type": 3,
+        "required": false
+      }
+    ]
   }
 ]

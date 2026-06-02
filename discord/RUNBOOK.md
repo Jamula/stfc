@@ -326,6 +326,25 @@ Edit `discord/commands.json` and add an entry to the array:
 - `"description"`: shown to user in autocomplete (max ~100 chars)
 - `"default_member_permissions"`: `"0"` for all members, `"8"` for ADMINISTRATOR, or a specific permission bit
 
+**Commands with options** (e.g. `/game-state`) can include an `"options"` array. The
+validator (`scripts/validate-discord-commands.mjs`) currently accepts a limited allowlist
+of option types: `STRING` (type 3) and `ATTACHMENT` (type 11). Each option must have
+`name` (1-32 chars), `description` (1-100 chars), and optionally a boolean `required`.
+Subcommands and choices are not yet validated and will be rejected — see issue #159 for
+the allowlist rationale.
+
+```json
+{
+  "name": "game-state",
+  "type": 1,
+  "description": "Upload a screenshot or video to capture current game state",
+  "options": [
+    { "name": "file", "description": "The image or video to archive", "type": 11, "required": true },
+    { "name": "note", "description": "Optional context", "type": 3, "required": false }
+  ]
+}
+```
+
 Commit the change and submit as a PR.
 
 ### Step 2: Register the New Command

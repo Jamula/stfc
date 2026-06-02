@@ -25,7 +25,9 @@ const filePath = process.argv[2] ? resolve(process.argv[2]) : DEFAULT_PATH;
 // Discord command naming rules: lowercase letters, numbers, hyphens, underscores.
 // Using \p{Ll} (lowercase letter in any script) per docs:
 // https://discord.com/developers/docs/interactions/application-commands#application-command-object-application-command-naming
-const NAME_PATTERN = "^[-_\\p{Ll}\\p{N}]{1,32}$";
+const NAME_CHARS = "[-_\\p{Ll}\\p{N}]";
+const NAME_REGEX = new RegExp(`^${NAME_CHARS}+$`, "u");
+const NAME_PATTERN = `^${NAME_CHARS}{1,32}$`;
 
 /** @type {import('ajv').JSONSchemaType<unknown>} */
 const commandSchema = {
@@ -97,11 +99,44 @@ if (validate(commands)) {
     }
     seenTypeAndName.add(key);
 
-    if (Object.hasOwn(command, "options")) {
-      process.stderr.write(
-        `INVALID: ${filePath}\n  command "${command.name}" uses options; options not yet supported by this validator — track in a follow-up issue\n`,
-      );
-      process.exit(1);
+    if (Array.isArray(command.options)) {
+      // Allowlist (v1): only STRING (type 3) and ATTACHMENT (type 11) options are accepted.
+      // Full recursive validation of subcommands, subcommand groups, and choices is deferred.
+      // Ref: https://discord.com/developers/docs/interactions/application-commands#application-command-object-application-command-option-structure
+      // Expand to recursive validation in a follow-up once the handler tier supports it.
+      const ALLOWED_OPTION_TYPES = new Set([3, 11]);
+      for (const [optIndex, opt] of command.options.entries()) {
+        if (typeof opt.type !== "number" || !ALLOWED_OPTION_TYPES.has(opt.type)) {
+          process.stderr.write(
+            `INVALID: ${filePath}\n  command "${command.name}" option[${optIndex}].type=${opt.type} not supported; ` +
+              `allowed: STRING(3), ATTACHMENT(11). Complex options (subcommands, choices) are not yet supported.\n`,
+          );
+          process.exit(1);
+        }
+        if (
+          typeof opt.name !== "string" ||
+          opt.name.length < 1 ||
+          opt.name.length > 32 ||
+          !NAME_REGEX.test(opt.name)
+        ) {
+          process.stderr.write(
+            `INVALID: ${filePath}\n  command "${command.name}" option[${optIndex}].name must be a string (1-32 chars, lowercase letters/digits/dashes/underscores)\n`,
+          );
+          process.exit(1);
+        }
+        if (typeof opt.description !== "string" || opt.description.length < 1 || opt.description.length > 100) {
+          process.stderr.write(
+            `INVALID: ${filePath}\n  command "${command.name}" option[${optIndex}].description must be a string (1-100 chars)\n`,
+          );
+          process.exit(1);
+        }
+        if (Object.hasOwn(opt, "required") && typeof opt.required !== "boolean") {
+          process.stderr.write(
+            `INVALID: ${filePath}\n  command "${command.name}" option[${optIndex}].required must be a boolean\n`,
+          );
+          process.exit(1);
+        }
+      }
     }
   }
   process.stdout.write(`OK: ${commands.length} command(s) valid in ${filePath}\n`);
