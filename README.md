@@ -96,9 +96,11 @@ For the one-time bot creation, privileged-intent toggles, install URL, and
 token rotation procedure, see [docs/DISCORD-BOT-SETUP.md](docs/DISCORD-BOT-SETUP.md).
 This feature is entirely optional — the core redemption workflow works without it.
 
-## Discord slash commands (in progress)
+## Discord slash commands
 
-Discord slash commands (e.g. `/crew`) are bridged via a Cloudflare Worker — see [`worker/README.md`](worker/README.md). The Worker verifies the Ed25519 signature, defers the interaction, and fires a `repository_dispatch` so the actual work runs in GitHub Actions.
+Discord slash commands (e.g. `/redeem-status`, `/trigger-redeem`) are bridged via a Cloudflare Worker. The Worker verifies the Ed25519 signature, defers the interaction, and fires a `repository_dispatch` so the actual work runs in GitHub Actions.
+
+**To set up the pipeline from scratch, see [`discord/RUNBOOK.md`](discord/RUNBOOK.md).** For technical details on the Worker, see [`worker/README.md`](worker/README.md).
 
 ---
 
