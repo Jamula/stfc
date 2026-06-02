@@ -23,6 +23,21 @@ export interface Env {
   DISCORD_PUBLIC_KEY: string;
   GH_DISPATCH_TOKEN: string;
   GH_REPO: string; // "Jamula/stfc"
+  /** Comma-separated guild snowflakes allowed to use /game-state. Set via `wrangler secret put ALLOWED_GUILD_IDS`. Fail-closed: unset = deny all. */
+  ALLOWED_GUILD_IDS?: string;
+}
+
+interface DiscordOption {
+  name: string;
+  value?: unknown;
+}
+
+interface DiscordAttachment {
+  url: string;
+  proxy_url?: string;
+  filename: string;
+  content_type?: string;
+  size: number;
 }
 
 interface DiscordInteraction {
@@ -31,12 +46,26 @@ interface DiscordInteraction {
   application_id: string;
   channel_id?: string;
   guild_id?: string;
-  member?: { user?: { id?: string } };
+  member?: { user?: { id?: string; username?: string } };
   data?: {
     name: string;
-    options?: unknown[];
+    options?: DiscordOption[];
+    resolved?: {
+      attachments?: Record<string, DiscordAttachment>;
+    };
   };
 }
+
+/**
+ * Trusted Discord CDN prefixes for attachment URLs.
+ * Defense in depth: attacker-controlled resolved.attachments cannot redirect
+ * to arbitrary URLs even if Discord's payload were tampered with in transit.
+ * Ref: https://discord.com/developers/docs/reference#cdn-formatting
+ */
+const TRUSTED_CDN_PREFIXES = [
+  "https://cdn.discordapp.com/",
+  "https://media.discordapp.net/",
+] as const;
 
 const HEX_PATTERN = /^[0-9a-fA-F]+$/;
 let checkedPublicKey: string | undefined;
@@ -97,6 +126,55 @@ export default {
     // ctx.waitUntil keeps the Worker alive after we return the Response, so the
     // GitHub dispatch fetch completes even though Discord got its answer in <3s.
     if (interaction.type === 2) {
+      const commandName = interaction.data?.name;
+
+      if (commandName === "game-state") {
+        // Guild allowlist check (fail-closed).
+        // Prevents /game-state from working in any server the bot happens to join.
+        // ALLOWED_GUILD_IDS must be set via `wrangler secret put ALLOWED_GUILD_IDS`.
+        if (!isGuildAllowed(interaction.guild_id, env.ALLOWED_GUILD_IDS)) {
+          return ephemeralError("This command isn't enabled in this server.");
+        }
+
+        // Attachment extraction: Discord passes the file option value as a snowflake
+        // referencing interaction.data.resolved.attachments[id].
+        const fileOption = interaction.data?.options?.find(o => o.name === "file");
+        if (!fileOption || typeof fileOption.value !== "string") {
+          return ephemeralError("A file attachment is required for /game-state.");
+        }
+        const attachmentId = fileOption.value;
+        const attachmentData = interaction.data?.resolved?.attachments?.[attachmentId];
+        if (!attachmentData) {
+          return ephemeralError("Could not resolve the file attachment.");
+        }
+
+        // CDN trust check: reject any URL not hosted on Discord CDN.
+        // Defends against attacker-controlled resolved.attachments pointing to
+        // arbitrary hosts and turning the runner into an SSRF relay.
+        if (!TRUSTED_CDN_PREFIXES.some(prefix => attachmentData.url.startsWith(prefix))) {
+          return ephemeralError("Attachment must be hosted on Discord CDN.");
+        }
+
+        // Note extraction and sanitization.
+        // The note transits via repository_dispatch into GHA ${{ }} interpolation.
+        // Strip control characters (NUL, newline, tab, etc.) to prevent injection
+        // and payload bloat. Cap at 200 chars — this is a human caption, not a log.
+        const noteOption = interaction.data?.options?.find(o => o.name === "note");
+        const rawNote = typeof noteOption?.value === "string" ? noteOption.value : "";
+        const sanitizedNote = sanitizeNote(rawNote);
+
+        ctx.waitUntil(
+          dispatchGameStateToGitHub(env, interaction, attachmentData, sanitizedNote).catch(
+            (error: unknown) => {
+              const errorName = error instanceof Error ? error.name : "UnknownError";
+              console.warn(`gh dispatch threw: ${errorName}`);
+            },
+          ),
+        );
+        return Response.json({ type: 5 });
+      }
+
+      // Generic command dispatch (redeem-status, trigger-redeem, etc.)
       ctx.waitUntil(
         dispatchToGitHub(env, interaction).catch((error: unknown) => {
           const errorName = error instanceof Error ? error.name : "UnknownError";
@@ -110,6 +188,79 @@ export default {
     return new Response("Unsupported interaction type", { status: 400 });
   },
 };
+
+/** Respond with an ephemeral error message (flags: 64 = EPHEMERAL — only visible to the invoker). */
+function ephemeralError(message: string): Response {
+  return Response.json({ type: 4, data: { content: message, flags: 64 } });
+}
+
+/**
+ * Returns true iff guild_id is listed in the comma-separated ALLOWED_GUILD_IDS env var.
+ * Fails closed: if ALLOWED_GUILD_IDS is unset or empty, every guild is denied.
+ * Ref: guild allowlist design — .squad/decisions/inbox/kirk-game-state-arch.md:107-108
+ */
+function isGuildAllowed(guildId: string | undefined, allowedGuildIds: string | undefined): boolean {
+  if (!guildId) return false;
+  const allowlist = (allowedGuildIds ?? "")
+    .split(",")
+    .map(g => g.trim())
+    .filter(Boolean);
+  return allowlist.length > 0 && allowlist.includes(guildId);
+}
+
+/**
+ * Sanitizes a user-supplied note for safe transit through repository_dispatch
+ * into GitHub Actions ${{ github.event.client_payload.note }} interpolation.
+ *
+ * - Caps at 200 chars (human caption; prevents payload bloat + long commit messages)
+ * - Strips U+0000–U+001F and U+007F (NUL, newlines, tabs, other control chars)
+ *
+ * Ref: Garak hostile fact-check #165, "note sanitization in transit" finding
+ */
+function sanitizeNote(note: string): string {
+  // eslint-disable-next-line no-control-regex
+  return note.slice(0, 200).replace(/[\x00-\x1F\x7F]/g, "");
+}
+
+async function dispatchGameStateToGitHub(
+  env: Env,
+  interaction: DiscordInteraction,
+  attachment: DiscordAttachment,
+  note: string,
+): Promise<void> {
+  const response = await fetch(`https://api.github.com/repos/${env.GH_REPO}/dispatches`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${env.GH_DISPATCH_TOKEN}`,
+      Accept: "application/vnd.github+json",
+      "Content-Type": "application/json",
+      "User-Agent": "stfc-discord-bridge",
+    },
+    body: JSON.stringify({
+      event_type: "discord-command",
+      client_payload: {
+        command: "game-state",
+        options: interaction.data?.options ?? [],
+        channel_id: interaction.channel_id,
+        guild_id: interaction.guild_id,
+        member: interaction.member?.user?.id,
+        member_handle: interaction.member?.user?.username,
+        interaction_token: interaction.token,
+        application_id: interaction.application_id,
+        attachment: {
+          url: attachment.url,
+          filename: attachment.filename,
+          content_type: attachment.content_type,
+          size: attachment.size,
+        },
+        note,
+      },
+    }),
+  });
+  if (!response.ok) {
+    console.warn(`gh dispatch failed: ${response.status}`);
+  }
+}
 
 async function dispatchToGitHub(env: Env, interaction: DiscordInteraction): Promise<void> {
   const response = await fetch(`https://api.github.com/repos/${env.GH_REPO}/dispatches`, {

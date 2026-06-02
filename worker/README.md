@@ -28,7 +28,7 @@ Discord API  ──POST──►  Cloudflare Worker (this)
 
 ## Secrets
 
-Three bindings are required. Set the secrets with wrangler — **never** commit values to source:
+Four bindings are required. Set the secrets with wrangler — **never** commit values to source:
 
 ```bash
 # Ed25519 hex public key from Discord Developer Portal > your app > General Information
@@ -38,6 +38,12 @@ wrangler secret put DISCORD_PUBLIC_KEY
 # (metadata:read is automatically enforced by GitHub for fine-grained PATs)
 # (or classic PAT with `repo` scope)
 wrangler secret put GH_DISPATCH_TOKEN
+
+# REQUIRED for /game-state: comma-separated guild snowflakes allowed to use the command.
+# Fail-closed: if unset or empty, /game-state responds with an ephemeral error in every server.
+# To find a Guild ID: Discord > Server Settings > Widget > Server ID
+# Example: "123456789012345678" or "123456789012345678,987654321098765432" for multiple guilds.
+wrangler secret put ALLOWED_GUILD_IDS
 ```
 
 The non-secret `GH_REPO` variable (`Jamula/stfc`) is already set in `wrangler.toml`.
@@ -128,6 +134,7 @@ Tests cover:
 |---|---|---|
 | `DISCORD_PUBLIC_KEY` | Secret | Ed25519 hex public key from Developer Portal |
 | `GH_DISPATCH_TOKEN` | Secret | GitHub PAT (contents:write; metadata:read auto-enforced) |
+| `ALLOWED_GUILD_IDS` | Secret | Comma-separated guild snowflakes allowed to use `/game-state`. Fail-closed: unset = deny all. |
 | `GH_REPO` | Var | `Jamula/stfc` |
 
 ## Related issues

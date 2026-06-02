@@ -12,5 +12,9 @@ GH_REPO = "Jamula/stfc"
 # Secrets — set via `wrangler secret put <NAME>` (never commit values):
 #   DISCORD_PUBLIC_KEY  — Ed25519 hex public key from Discord Developer Portal
 #                         > General Information > "Public Key"
-#   GH_DISPATCH_TOKEN   — GitHub PAT (fine-grained: contents:read + actions:write,
-#                         or classic: repo scope)
+#   GH_DISPATCH_TOKEN   — GitHub PAT (fine-grained: contents:write;
+#                         metadata:read is automatically enforced by GitHub)
+#   ALLOWED_GUILD_IDS   — Comma-separated guild snowflakes allowed to use
+#                         /game-state (e.g. "123456789012345678,987654321098765432").
+#                         Fail-closed: if unset, /game-state is denied in every server.
+#                         Obtain the Guild ID from Discord > Server Settings > Widget.
