@@ -7,6 +7,7 @@ inserted at the top**, so the most recent run is always visible first.
 
 | Date (UTC) | Time (UTC) | Account | Gifts claimed |
 | --- | --- | --- | --- |
+| 2026-06-12 | 05:10 | main | Archive Data Shard, 4 Hr Free Chest, 10 Min Free Chest, Holo-Field Amplifiers, Daily Mission Key Drop |
 | 2026-06-12 | 00:17 | main | 10 Min Free Chest |
 | 2026-06-11 | 22:55 | main | 4 Hr Free Chest, 10 Min Free Chest |
 | 2026-06-11 | 21:05 | main | 10 Min Free Chest |
