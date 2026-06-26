@@ -433,29 +433,65 @@ async function tryAutoLogin(page, { email, password, log, ci }) {
   const passwordSelectors = [
     'input[type="password"]',
     'input[name="password"]',
+    'input[name="credentials.passcode"][type="password"]',
     'input[autocomplete="current-password"]',
     'input[id*="password" i]',
     'input[placeholder*="assword"]',
   ];
-  const switchSelector =
-    'a:has-text("Sign in with password instead"), a.switchAuthenticator, a:has-text("password instead"), button:has-text("Sign in with password instead")';
 
-  log("auto-login: waiting for password form (or 'password instead' switch)…");
+  // After the email step Okta defaults to emailing a one-time code ("Check
+  // your inbox"). Password sign-in is still available but reached via one of
+  // two paths, so we cycle through strategies until a password field shows:
+  //   (1) a direct "Sign in with password instead" link, or
+  //   (2) open the authenticator chooser ("Back to sign-in options" /
+  //       "Verify with something else") then select the Password authenticator.
+  const directSwitchSelectors = [
+    'a:has-text("Sign in with password instead")',
+    'a:has-text("password instead")',
+    'button:has-text("Sign in with password instead")',
+    'a.switchAuthenticator',
+  ];
+  const openChooserSelectors = [
+    'a:has-text("Back to sign-in options")',
+    'a:has-text("Go back to sign in options")',
+    'a:has-text("sign in options")',
+    'a:has-text("Verify with something else")',
+    'a:has-text("Verify in another way")',
+    'a[data-se="back-link"]',
+  ];
+  const selectPasswordSelectors = [
+    '[data-se="okta_password"] a.select-factor',
+    '[data-se="okta_password"] a',
+    'div.authenticator-row:has-text("Password") a:has-text("Select")',
+    'div.authenticator-button:has-text("Password") a',
+    'li:has-text("Password") a:has-text("Select")',
+    'a.select-factor:has-text("Password")',
+    'button:has-text("Select"):below(:text("Password"))',
+  ];
+
+  log("auto-login: waiting for password form (switching from email-code if needed)…");
   let passwordField = await findVisibleIn(page, passwordSelectors);
-  let switchClicks = 0;
-  const switchDeadline = Date.now() + 30_000;
+  let directDone = false;
+  let chooserOpened = false;
+  let passwordPicked = false;
+  const switchDeadline = Date.now() + 45_000;
   while (!passwordField && Date.now() < switchDeadline) {
-    // Click the "password instead" switch at most twice — once is normally
-    // enough, and clicking it on every poll can toggle the panel back shut.
-    if (switchClicks < 2) {
-      const link = page.locator(switchSelector).first();
-      if (await link.count() > 0) {
-        if (switchClicks === 0) log("auto-login: switching to password flow");
-        await link.click({ timeout: 2_000 }).catch(() => {});
-        switchClicks += 1;
-      }
+    if (!directDone) {
+      directDone = await clickFirstInFrames(page, directSwitchSelectors);
+      if (directDone) log("auto-login: clicked 'password instead' link");
     }
-    await page.waitForTimeout(500);
+    passwordField = await findVisibleIn(page, passwordSelectors);
+    if (passwordField) break;
+
+    if (!chooserOpened) {
+      chooserOpened = await clickFirstInFrames(page, openChooserSelectors);
+      if (chooserOpened) log("auto-login: opened authenticator chooser");
+    }
+    if (chooserOpened && !passwordPicked) {
+      passwordPicked = await clickFirstInFrames(page, selectPasswordSelectors);
+      if (passwordPicked) log("auto-login: selected Password authenticator");
+    }
+    await page.waitForTimeout(750);
     passwordField = await findVisibleIn(page, passwordSelectors);
   }
 
@@ -474,7 +510,7 @@ async function tryAutoLogin(page, { email, password, log, ci }) {
       ])) !== null ||
       /check your inbox|sent a code|one-time code|verification code|no more passwords/i.test(bodyText);
     if (otpScreen) {
-      log("auto-login: Scopely now uses passwordless email login — it emailed a one-time code and offers no password field.");
+      log("auto-login: could not reach the password screen — Scopely is on the email one-time-code flow and the password path was not found.");
       if (ci) {
         log("auto-login: a one-time email code cannot be entered headlessly in CI. Capture the token manually instead: run `npm run capture-token` locally (without --ci), enter the emailed code in the browser, then update the STFC_ACCOUNTS secret. See the refresh-token.yml header for the full procedure.");
       } else {
@@ -482,7 +518,7 @@ async function tryAutoLogin(page, { email, password, log, ci }) {
       }
       return false;
     }
-    log("auto-login: no password field appeared within 30s — the login UI may have changed. Falling back to interactive login.");
+    log("auto-login: no password field appeared within 45s — the login UI may have changed. Falling back to interactive login.");
     return false;
   }
   log("auto-login: filling password and clicking Sign in");
@@ -533,6 +569,27 @@ async function findVisibleIn(page, selectors) {
   return null;
 }
 
+// Click the first visible match for any selector, across all frames. Returns
+// true if something was clicked. Used to drive Okta's multi-step authenticator
+// chooser (which may live in an iframe).
+async function clickFirstInFrames(page, selectors) {
+  for (const frame of page.frames()) {
+    for (const sel of selectors) {
+      const loc = frame.locator(sel).first();
+      const n = await loc.count().catch(() => 0);
+      if (n > 0 && (await loc.isVisible().catch(() => false))) {
+        try {
+          await loc.click({ timeout: 2_000 });
+          return true;
+        } catch {
+          /* try the next selector/frame */
+        }
+      }
+    }
+  }
+  return false;
+}
+
 // On a login stall, dump what the page actually shows (URL, frames, inputs,
 // body text) so we can see whether it's an iframe, a CAPTCHA, an OTP prompt,
 // or just a different selector — instead of guessing blind.
@@ -556,6 +613,23 @@ async function dumpLoginDiagnostics(page, log) {
         .catch(() => []);
       if (inputs.length > 0) {
         log(`auto-login diag: inputs in ${frame.url().slice(0, 70)}: ${JSON.stringify(inputs)}`);
+      }
+      const clickables = await frame
+        .$$eval('a, button, [role="button"]', (els) =>
+          els
+            .slice(0, 40)
+            .map((e) => ({
+              tag: e.tagName.toLowerCase(),
+              text: (e.innerText || e.textContent || "").trim().slice(0, 40),
+              dataSe: e.getAttribute("data-se"),
+              href: e.getAttribute("href"),
+              visible: e.getClientRects().length > 0,
+            }))
+            .filter((x) => x.text || x.dataSe),
+        )
+        .catch(() => []);
+      if (clickables.length > 0) {
+        log(`auto-login diag: clickables in ${frame.url().slice(0, 70)}: ${JSON.stringify(clickables)}`);
       }
     }
     const bodyText = await page
