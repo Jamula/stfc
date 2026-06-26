@@ -3,7 +3,10 @@
   "image": "mcr.microsoft.com/devcontainers/javascript-node:24",
   "idleTimeoutInMinutes": 180,
   "features": {
-    "ghcr.io/devcontainers/features/github-cli:1": {}
+    "ghcr.io/devcontainers/features/github-cli:1": {},
+    "ghcr.io/devcontainers/features/powershell:2": {
+      "version": "7.6.3"
+    }
   },
   "postCreateCommand": "npm ci && npm install -g @github/copilot",
   "customizations": {
