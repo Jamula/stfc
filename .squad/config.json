@@ -7,5 +7,6 @@
     "uhura": "claude-sonnet-4.6",
     "scotty": "gpt-5.3-codex",
     "garak": "gpt-5.5"
-  }
+  },
+  "stateBackend": "two-layer"
 }

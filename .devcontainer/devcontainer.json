@@ -12,7 +12,8 @@
         "GitHub.copilot",
         "GitHub.copilot-chat",
         "esbenp.prettier-vscode",
-        "ms-vscode.powershell"
+        "ms-vscode.powershell",
+        "GitHub.vscode-github-actions"
       ]
     },
     "codespaces": {
