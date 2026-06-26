@@ -8,7 +8,7 @@
       "version": "7.6.3"
     }
   },
-  "postCreateCommand": "npm ci && npm install -g @github/copilot",
+  "postCreateCommand": "npm install -g npm@latest && npm ci && npm install -g @github/copilot",
   "customizations": {
     "vscode": {
       "extensions": [
