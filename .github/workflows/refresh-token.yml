@@ -79,13 +79,37 @@ jobs:
 
       - name: Install Playwright Chromium
         # On a cache hit the browser binary is already present, so skip the
-        # multi-minute CDN download from cdn.playwright.dev that previously
-        # stalled and tripped the job timeout. The per-step timeout bounds a
-        # cold-cache download so a stalled CDN fails fast and clearly instead
-        # of silently consuming the whole job budget.
+        # multi-minute CDN download from cdn.playwright.dev entirely.
+        #
+        # On a cold cache the download from cdn.playwright.dev has repeatedly
+        # stalled *after* the main Chrome binary finishes, hanging on a
+        # follow-up artifact (headless shell / ffmpeg) until the step timeout.
+        # Because the step timed out the job failed, so actions/cache never
+        # got to save the browser and every subsequent run hit the same stall
+        # (a cache-population chicken-and-egg).
+        #
+        # Wrap the install in a bounded retry loop: each attempt is capped by
+        # `timeout` so a stalled connection is killed fast, and already-fetched
+        # artifacts persist in ~/.cache/ms-playwright across attempts so each
+        # retry makes incremental progress until one completes and the cache
+        # can finally be saved.
         if: steps.pw-cache.outputs.cache-hit != 'true'
-        timeout-minutes: 8
-        run: npx playwright install chromium
+        timeout-minutes: 15
+        run: |
+          set -uo pipefail
+          for attempt in 1 2 3; do
+            echo "::group::Playwright chromium install (attempt ${attempt}/3)"
+            if timeout 240 npx playwright install chromium; then
+              echo "Chromium installed on attempt ${attempt}."
+              echo "::endgroup::"
+              exit 0
+            fi
+            echo "::endgroup::"
+            echo "::warning::Chromium install attempt ${attempt} stalled or failed; retrying in 5s."
+            sleep 5
+          done
+          echo "::error::Failed to install Playwright chromium after 3 attempts."
+          exit 1
 
       - name: Capture fresh JWT
         id: capture
