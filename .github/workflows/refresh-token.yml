@@ -51,7 +51,7 @@ concurrency:
 jobs:
   refresh:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.0
 
@@ -63,8 +63,29 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Install Playwright + Chromium with system deps
-        run: npx playwright install --with-deps chromium
+      - name: Resolve Playwright version
+        id: pw
+        run: echo "version=$(node -p "require('playwright/package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Playwright browsers
+        id: pw-cache
+        uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57  # v4.2.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ steps.pw.outputs.version }}
+
+      - name: Install Playwright system deps
+        run: npx playwright install-deps chromium
+
+      - name: Install Playwright Chromium
+        # On a cache hit the browser binary is already present, so skip the
+        # multi-minute CDN download from cdn.playwright.dev that previously
+        # stalled and tripped the job timeout. The per-step timeout bounds a
+        # cold-cache download so a stalled CDN fails fast and clearly instead
+        # of silently consuming the whole job budget.
+        if: steps.pw-cache.outputs.cache-hit != 'true'
+        timeout-minutes: 8
+        run: npx playwright install chromium
 
       - name: Capture fresh JWT
         id: capture
