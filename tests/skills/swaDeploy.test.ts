@@ -121,11 +121,32 @@ describe("swa-deploy.yml / contract pinning (T-SWA-001)", () => {
   it("deploy and teardown jobs are gated on AZURE_CLIENT_ID being set (secret-presence guard)", () => {
     // Both jobs must skip gracefully when OIDC secrets are not yet provisioned,
     // so a missing-secret state produces `skipped` rather than `failure`.
-    // See fix(deploy) commit — PR #124 unblocker.
+    //
+    // The `secrets` context is NOT available in a job-level `if:` — using it
+    // there makes the whole workflow fail to start (startup_failure), not skip.
+    // So the guard is implemented as a `preflight` job that probes the secret in
+    // a step and exposes a `has-oidc` output; deploy/teardown gate on it via
+    // `needs.preflight.outputs.has-oidc`. See fix(deploy) commit.
     assert.match(
       yaml,
-      /secrets\.AZURE_CLIENT_ID\s*!=\s*''/,
-      "deploy/teardown jobs must gate on secrets.AZURE_CLIENT_ID != '' so unprovisioned secrets skip rather than fail",
+      /has-oidc:\s*\$\{\{\s*steps\.probe\.outputs\.has-oidc\s*\}\}/,
+      "preflight job must expose a has-oidc output probed from secrets.AZURE_CLIENT_ID",
+    );
+    assert.match(
+      yaml,
+      /AZURE_CLIENT_ID:\s*\$\{\{\s*secrets\.AZURE_CLIENT_ID\s*\}\}/,
+      "preflight probe must read secrets.AZURE_CLIENT_ID via an env var (the only place secrets are allowed)",
+    );
+    const gateMatches = yaml.match(/needs\.preflight\.outputs\.has-oidc\s*==\s*'true'/g) ?? [];
+    assert.ok(
+      gateMatches.length >= 2,
+      "deploy AND teardown jobs must gate on needs.preflight.outputs.has-oidc == 'true' so unprovisioned secrets skip rather than fail",
+    );
+    // The forbidden pattern must NOT reappear in any job-level `if:`.
+    assert.doesNotMatch(
+      yaml,
+      /if:[^\n]*secrets\.AZURE_CLIENT_ID/,
+      "secrets.* must never appear in a job-level if: — it causes a workflow startup failure",
     );
   });
 });

@@ -38,13 +38,33 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # The `secrets` context cannot be used in a job-level `if:` (doing so makes the
+  # whole workflow fail to start). Probe for the OIDC secret in a step here and
+  # expose the result as an output that downstream jobs can gate on via `needs`.
+  preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      has-oidc: ${{ steps.probe.outputs.has-oidc }}
+    steps:
+      - id: probe
+        env:
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+        run: |
+          if [ -n "${AZURE_CLIENT_ID:-}" ]; then
+            echo "has-oidc=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has-oidc=false" >> "$GITHUB_OUTPUT"
+          fi
+
   deploy:
+    needs: preflight
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    # Skip when OIDC secrets are not yet provisioned (secrets absent = empty string).
+    # Skip when OIDC secrets are not yet provisioned (probed in preflight).
     # Also skip for closed-PR events (teardown job handles those).
     if: >-
-      secrets.AZURE_CLIENT_ID != '' &&
+      needs.preflight.outputs.has-oidc == 'true' &&
       (github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.action != 'closed'))
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.0
@@ -71,10 +91,11 @@ jobs:
           DISABLE_WRITES: "1"
 
   teardown:
+    needs: preflight
     runs-on: ubuntu-latest
     timeout-minutes: 5
     # Skip teardown too when OIDC secrets are absent — no SWA environment was created.
-    if: secrets.AZURE_CLIENT_ID != '' && github.event_name == 'pull_request' && github.event.action == 'closed'
+    if: needs.preflight.outputs.has-oidc == 'true' && github.event_name == 'pull_request' && github.event.action == 'closed'
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.0
 
