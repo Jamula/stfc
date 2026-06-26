@@ -1,16 +1,29 @@
 name: Squad Test Gate
-# Dedicated PR required check — enforces npm test on every pull request.
-# After adding this workflow, cyrusj must manually enable it as a required
-# status check in GitHub → Settings → Branches → Branch protection rules.
-# Check name to require: "npm test (required)"
+# Single CI gate for the repo — consolidates the former Tests + Squad CI
+# workflows. Runs typecheck + the test suite on every push and pull request.
+#
+# The job is named "npm test (required)" so it can be enforced as a required
+# status check in GitHub -> Settings -> Branches -> Branch protection rules.
 # See: .squad/decisions/inbox/scotty-test-gate-built.md
 
 on:
+  push:
+    branches: ["**"]
   pull_request:
     branches: ["**"]
 
 permissions:
   contents: read
+
+# Opt into the Node 24 runtime for actions/* internals (default June 2026).
+# Silences the "Node 20 actions are deprecated" warning in run logs.
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+# Avoid redundant in-flight runs for the same ref/event.
+concurrency:
+  group: test-gate-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test-gate:
@@ -26,5 +39,7 @@ jobs:
           cache: npm
 
       - run: npm ci
+
+      - run: npm run typecheck
 
       - run: npm test
