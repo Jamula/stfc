@@ -171,9 +171,9 @@ export const TaskDefinitionSchema = z
         officer_b: SlotRoleSchema,
       })
       .strict(),
-    tag_weights: z.record(TagIdSchema, z.number().int()),
+    tag_weights: z.partialRecord(TagIdSchema, z.number().int()),
     synergy_bonus: z.number().int().min(0),
-    faction_bonus: z.record(FactionSchema, z.number().int()).optional(),
+    faction_bonus: z.partialRecord(FactionSchema, z.number().int()).optional(),
     constraints: z
       .object({
         exclude_officers: z.array(z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)).default([]),
