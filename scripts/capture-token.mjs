@@ -301,7 +301,9 @@ async function ghAvailable() {
 
 async function ghSetSecret(secretJson) {
   return new Promise((resolve, reject) => {
-    const p = spawn("gh", ["secret", "set", "STFC_ACCOUNTS", "--body-file", "-"], {
+    // gh reads the secret value from stdin when --body is omitted. (Older gh
+    // releases don't support --body-file, so we rely on the stdin path here.)
+    const p = spawn("gh", ["secret", "set", "STFC_ACCOUNTS"], {
       stdio: ["pipe", "inherit", "inherit"],
       shell: process.platform === "win32",
     });
