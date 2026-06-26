@@ -430,30 +430,38 @@ async function tryAutoLogin(page, { email, password, log }) {
   // The follow-up screen is server-rendered and has been slow to appear in
   // CI, so poll for EITHER outcome for up to 30s rather than racing an 8s
   // clock that assumed (b) and mistook a slow render for an OTP-only account.
-  const passwordSelectors = ['input[type="password"]', 'input[name="password"]'];
+  const passwordSelectors = [
+    'input[type="password"]',
+    'input[name="password"]',
+    'input[autocomplete="current-password"]',
+    'input[id*="password" i]',
+    'input[placeholder*="assword"]',
+  ];
   const switchSelector =
     'a:has-text("Sign in with password instead"), a.switchAuthenticator, a:has-text("password instead"), button:has-text("Sign in with password instead")';
 
   log("auto-login: waiting for password form (or 'password instead' switch)…");
-  let passwordField = null;
-  let loggedSwitch = false;
+  let passwordField = await findVisibleIn(page, passwordSelectors);
+  let switchClicks = 0;
   const switchDeadline = Date.now() + 30_000;
   while (!passwordField && Date.now() < switchDeadline) {
-    for (const sel of passwordSelectors) {
-      const el = await page.$(sel).catch(() => null);
-      if (el && (await el.isVisible().catch(() => false))) { passwordField = el; break; }
-    }
-    if (passwordField) break;
-    const link = page.locator(switchSelector).first();
-    if (await link.count() > 0) {
-      if (!loggedSwitch) { log("auto-login: switching to password flow"); loggedSwitch = true; }
-      await link.click({ timeout: 2_000 }).catch(() => {});
+    // Click the "password instead" switch at most twice — once is normally
+    // enough, and clicking it on every poll can toggle the panel back shut.
+    if (switchClicks < 2) {
+      const link = page.locator(switchSelector).first();
+      if (await link.count() > 0) {
+        if (switchClicks === 0) log("auto-login: switching to password flow");
+        await link.click({ timeout: 2_000 }).catch(() => {});
+        switchClicks += 1;
+      }
     }
     await page.waitForTimeout(500);
+    passwordField = await findVisibleIn(page, passwordSelectors);
   }
 
   // Stage E: fill the password and click Sign in.
   if (!passwordField) {
+    await dumpLoginDiagnostics(page, log);
     log("auto-login: no password field appeared within 30s — account may be OTP/MFA-only or the login UI changed. Falling back to interactive login.");
     return false;
   }
@@ -490,6 +498,53 @@ async function clickFirstAvailable(page, selectors) {
     }
   }
   return false;
+}
+
+// Search the main frame AND every child iframe for the first visible match.
+// Scopely/Okta render parts of the login inside iframes, which page.$ alone
+// (main-frame only) cannot see.
+async function findVisibleIn(page, selectors) {
+  for (const frame of page.frames()) {
+    for (const sel of selectors) {
+      const el = await frame.$(sel).catch(() => null);
+      if (el && (await el.isVisible().catch(() => false))) return el;
+    }
+  }
+  return null;
+}
+
+// On a login stall, dump what the page actually shows (URL, frames, inputs,
+// body text) so we can see whether it's an iframe, a CAPTCHA, an OTP prompt,
+// or just a different selector — instead of guessing blind.
+async function dumpLoginDiagnostics(page, log) {
+  try {
+    log(`auto-login diag: url = ${page.url()}`);
+    const frames = page.frames();
+    log(`auto-login diag: ${frames.length} frame(s): ${JSON.stringify(frames.map((f) => f.url()).slice(0, 10))}`);
+    for (const frame of frames) {
+      const inputs = await frame
+        .$$eval("input", (els) =>
+          els.slice(0, 20).map((e) => ({
+            type: e.getAttribute("type"),
+            name: e.getAttribute("name"),
+            id: e.id || null,
+            placeholder: e.getAttribute("placeholder"),
+            autocomplete: e.getAttribute("autocomplete"),
+            visible: e.getClientRects().length > 0,
+          })),
+        )
+        .catch(() => []);
+      if (inputs.length > 0) {
+        log(`auto-login diag: inputs in ${frame.url().slice(0, 70)}: ${JSON.stringify(inputs)}`);
+      }
+    }
+    const bodyText = await page
+      .evaluate(() => (document.body ? document.body.innerText.slice(0, 500) : ""))
+      .catch(() => "");
+    log(`auto-login diag: body snippet: ${JSON.stringify(bodyText)}`);
+  } catch (e) {
+    log(`auto-login diag: failed (${e.message?.slice(0, 120)})`);
+  }
 }
 
 // ----------------------------------------------------------------------------
