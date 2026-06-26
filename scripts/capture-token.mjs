@@ -378,7 +378,7 @@ async function confirm(prompt, def = false) {
 // selectors were tried so the next maintainer knows what to update.
 // ----------------------------------------------------------------------------
 
-async function tryAutoLogin(page, { email, password, log }) {
+async function tryAutoLogin(page, { email, password, log, ci }) {
   // Stage A: dismiss the OneTrust cookie banner if present (it intercepts
   // clicks on the page-level Sign-in button).
   log("auto-login: dismissing cookie banner if present");
@@ -462,7 +462,27 @@ async function tryAutoLogin(page, { email, password, log }) {
   // Stage E: fill the password and click Sign in.
   if (!passwordField) {
     await dumpLoginDiagnostics(page, log);
-    log("auto-login: no password field appeared within 30s — account may be OTP/MFA-only or the login UI changed. Falling back to interactive login.");
+    const bodyText = await page
+      .evaluate(() => (document.body ? document.body.innerText : ""))
+      .catch(() => "");
+    const otpScreen =
+      (await findVisibleIn(page, [
+        'input[name="credentials.passcode"]',
+        'input[autocomplete="one-time-code"]',
+        'input[name="otp"]',
+        'input[name="code"]',
+      ])) !== null ||
+      /check your inbox|sent a code|one-time code|verification code|no more passwords/i.test(bodyText);
+    if (otpScreen) {
+      log("auto-login: Scopely now uses passwordless email login — it emailed a one-time code and offers no password field.");
+      if (ci) {
+        log("auto-login: a one-time email code cannot be entered headlessly in CI. Capture the token manually instead: run `npm run capture-token` locally (without --ci), enter the emailed code in the browser, then update the STFC_ACCOUNTS secret. See the refresh-token.yml header for the full procedure.");
+      } else {
+        log("auto-login: enter the code from your email in the open browser window to finish signing in — the token will be captured automatically.");
+      }
+      return false;
+    }
+    log("auto-login: no password field appeared within 30s — the login UI may have changed. Falling back to interactive login.");
     return false;
   }
   log("auto-login: filling password and clicking Sign in");
@@ -604,7 +624,7 @@ async function main() {
     // /auth/login response handler picks up the JWT. If auto-login fails (e.g.
     // CAPTCHA) the user can still complete login manually in the visible
     // browser when not in --ci mode.
-    tryAutoLogin(page, { email, password, log }).catch((e) => {
+    tryAutoLogin(page, { email, password, log, ci: args.ci }).catch((e) => {
       err(`auto-login failed: ${e instanceof Error ? e.message : e}`);
     });
   }

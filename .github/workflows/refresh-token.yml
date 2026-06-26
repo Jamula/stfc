@@ -4,6 +4,28 @@
 # STFC_PASSWORD secrets, captures the resulting JWT, and updates the
 # STFC_ACCOUNTS repo secret (preserving any other accounts).
 #
+# ┌─ IMPORTANT: passwordless login (June 2026) ─────────────────────────────┐
+# │ Scopely migrated this account's Okta login to PASSWORDLESS email OTP:   │
+# │ after submitting the email it emails a one-time code and no longer      │
+# │ offers a password field ("No more passwords!"). A headless CI job       │
+# │ cannot read that emailed code, so this workflow can no longer complete  │
+# │ the capture automatically — it is kept for manual dispatch only (and    │
+# │ for the day a password authenticator is re-enabled, see below).         │
+# │                                                                          │
+# │ To refresh the token manually:                                          │
+# │   1. Locally run:  npm run capture-token            (no --ci flag)      │
+# │   2. A browser opens and auto-fills your email; enter the one-time      │
+# │      code from your inbox to finish signing in. The script captures     │
+# │      the JWT and writes it to your local .env.                          │
+# │   3. Update the repo secret from the captured token, e.g.:              │
+# │        gh secret set STFC_ACCOUNTS --repo Jamula/stfc < accounts.json   │
+# │      (accounts.json = the JSON array of {name, token} entries).         │
+# │                                                                          │
+# │ To restore full automation, re-enable a password authenticator on the  │
+# │ Scopely/Okta account (Account security settings). If/when a password    │
+# │ field reappears, re-add the `schedule:` trigger below.                  │
+# └──────────────────────────────────────────────────────────────────────────┘
+#
 # Required secrets:
 #   STFC_EMAIL          your Scopely login email
 #   STFC_PASSWORD       your Scopely password (mapped from your `cj_pwd`
@@ -20,14 +42,12 @@
 name: Refresh token
 
 on:
-  # Weekly refresh at Saturday 00:00 UTC. Pairs with Issue #13's
-  # "all-accounts-expired" alarm: a weekly refresh keeps tokens far
-  # from the 30-day expiry wall so the alarm only fires on real breakage.
-  # Shares concurrency.group `stfc-gift-redeemer` with redeem.yml (and the
-  # incoming discord-monitor.yml). A Saturday-midnight refresh may briefly
-  # queue or cancel a redeem run — acceptable at weekly cadence.
-  schedule:
-    - cron: "0 0 * * 6"   # Saturday 00:00 UTC, weekly
+  # Manual dispatch only. The scheduled trigger was removed in June 2026 when
+  # Scopely switched this account to passwordless email-OTP login, which a
+  # headless CI run cannot complete (see the header note above). Re-add the
+  # `schedule:` block once a password authenticator is available again:
+  #   schedule:
+  #     - cron: "0 0 * * 6"   # Saturday 00:00 UTC, weekly
   workflow_dispatch:
     inputs:
       account_name:
