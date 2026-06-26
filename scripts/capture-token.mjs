@@ -423,75 +423,39 @@ async function tryAutoLogin(page, { email, password, log, ci }) {
     'button.ant-btn-primary',
   ]);
 
-  // Stage D: after submitting the email, Scopely shows one of two screens:
-  //   (a) a password field directly, or
-  //   (b) an OTP / magic-link screen with a "Sign in with password instead"
-  //       link that flips to the password form.
-  // The follow-up screen is server-rendered and has been slow to appear in
-  // CI, so poll for EITHER outcome for up to 30s rather than racing an 8s
-  // clock that assumed (b) and mistook a slow render for an OTP-only account.
+  // Stage D: after the email step Scopely's Okta login lands on one of:
+  //   (a) a password field (older / password-enrolled accounts), or
+  //   (b) an email one-time-code screen ("Check your inbox").
+  // This account's web-portal login is passwordless ("No more passwords!"),
+  // confirmed via CI diagnostics: no password field or password authenticator
+  // is offered, and "Go back to sign in options" only resets to the email
+  // screen. So poll briefly for a password field (covers case (a) and slow
+  // renders) and click a benign "Sign in with password instead" link if one is
+  // present — but never touch the reset link, which would also disrupt the
+  // interactive flow where the user enters the emailed code by hand.
   const passwordSelectors = [
     'input[type="password"]',
     'input[name="password"]',
-    'input[name="credentials.passcode"][type="password"]',
     'input[autocomplete="current-password"]',
     'input[id*="password" i]',
     'input[placeholder*="assword"]',
   ];
-
-  // After the email step Okta defaults to emailing a one-time code ("Check
-  // your inbox"). Password sign-in is still available but reached via one of
-  // two paths, so we cycle through strategies until a password field shows:
-  //   (1) a direct "Sign in with password instead" link, or
-  //   (2) open the authenticator chooser ("Back to sign-in options" /
-  //       "Verify with something else") then select the Password authenticator.
-  const directSwitchSelectors = [
+  const passwordLinkSelectors = [
     'a:has-text("Sign in with password instead")',
     'a:has-text("password instead")',
     'button:has-text("Sign in with password instead")',
-    'a.switchAuthenticator',
-  ];
-  const openChooserSelectors = [
-    'a:has-text("Back to sign-in options")',
-    'a:has-text("Go back to sign in options")',
-    'a:has-text("sign in options")',
-    'a:has-text("Verify with something else")',
-    'a:has-text("Verify in another way")',
-    'a[data-se="back-link"]',
-  ];
-  const selectPasswordSelectors = [
-    '[data-se="okta_password"] a.select-factor',
-    '[data-se="okta_password"] a',
-    'div.authenticator-row:has-text("Password") a:has-text("Select")',
-    'div.authenticator-button:has-text("Password") a',
-    'li:has-text("Password") a:has-text("Select")',
-    'a.select-factor:has-text("Password")',
-    'button:has-text("Select"):below(:text("Password"))',
   ];
 
-  log("auto-login: waiting for password form (switching from email-code if needed)…");
+  log("auto-login: waiting for password form (or email one-time-code screen)…");
   let passwordField = await findVisibleIn(page, passwordSelectors);
-  let directDone = false;
-  let chooserOpened = false;
-  let passwordPicked = false;
-  const switchDeadline = Date.now() + 45_000;
-  while (!passwordField && Date.now() < switchDeadline) {
-    if (!directDone) {
-      directDone = await clickFirstInFrames(page, directSwitchSelectors);
-      if (directDone) log("auto-login: clicked 'password instead' link");
+  let clickedPwLink = false;
+  const pwDeadline = Date.now() + 20_000;
+  while (!passwordField && Date.now() < pwDeadline) {
+    if (!clickedPwLink) {
+      clickedPwLink = await clickFirstInFrames(page, passwordLinkSelectors);
+      if (clickedPwLink) log("auto-login: clicked 'password instead' link");
     }
-    passwordField = await findVisibleIn(page, passwordSelectors);
-    if (passwordField) break;
-
-    if (!chooserOpened) {
-      chooserOpened = await clickFirstInFrames(page, openChooserSelectors);
-      if (chooserOpened) log("auto-login: opened authenticator chooser");
-    }
-    if (chooserOpened && !passwordPicked) {
-      passwordPicked = await clickFirstInFrames(page, selectPasswordSelectors);
-      if (passwordPicked) log("auto-login: selected Password authenticator");
-    }
-    await page.waitForTimeout(750);
+    await page.waitForTimeout(500);
     passwordField = await findVisibleIn(page, passwordSelectors);
   }
 
@@ -510,7 +474,7 @@ async function tryAutoLogin(page, { email, password, log, ci }) {
       ])) !== null ||
       /check your inbox|sent a code|one-time code|verification code|no more passwords/i.test(bodyText);
     if (otpScreen) {
-      log("auto-login: could not reach the password screen — Scopely is on the email one-time-code flow and the password path was not found.");
+      log("auto-login: this Scopely login is passwordless — it emailed a one-time code and offers no password field.");
       if (ci) {
         log("auto-login: a one-time email code cannot be entered headlessly in CI. Capture the token manually instead: run `npm run capture-token` locally (without --ci), enter the emailed code in the browser, then update the STFC_ACCOUNTS secret. See the refresh-token.yml header for the full procedure.");
       } else {
@@ -518,7 +482,7 @@ async function tryAutoLogin(page, { email, password, log, ci }) {
       }
       return false;
     }
-    log("auto-login: no password field appeared within 45s — the login UI may have changed. Falling back to interactive login.");
+    log("auto-login: no password field appeared within 20s — the login UI may have changed. Falling back to interactive login.");
     return false;
   }
   log("auto-login: filling password and clicking Sign in");
