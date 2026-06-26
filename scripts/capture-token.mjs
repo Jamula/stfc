@@ -423,28 +423,38 @@ async function tryAutoLogin(page, { email, password, log }) {
     'button.ant-btn-primary',
   ]);
 
-  // Stage D: by default Scopely sends a magic-link / OTP. Click "Sign in
-  // with password instead" to switch to password flow. If the link doesn't
-  // appear, we may already be on the password page (or the account is
-  // configured for OTP-only).
-  log("auto-login: switching to password flow");
-  const switched = await clickWithRetry(page,
-    'a:has-text("Sign in with password instead"), a.switchAuthenticator, a:has-text("password instead"), button:has-text("Sign in with password instead")',
-    8_000,
-  );
-  if (!switched) {
-    log("auto-login: 'Sign in with password instead' not found within 8s. Account may be OTP-only — falling back to interactive login.");
-    return false;
+  // Stage D: after submitting the email, Scopely shows one of two screens:
+  //   (a) a password field directly, or
+  //   (b) an OTP / magic-link screen with a "Sign in with password instead"
+  //       link that flips to the password form.
+  // The follow-up screen is server-rendered and has been slow to appear in
+  // CI, so poll for EITHER outcome for up to 30s rather than racing an 8s
+  // clock that assumed (b) and mistook a slow render for an OTP-only account.
+  const passwordSelectors = ['input[type="password"]', 'input[name="password"]'];
+  const switchSelector =
+    'a:has-text("Sign in with password instead"), a.switchAuthenticator, a:has-text("password instead"), button:has-text("Sign in with password instead")';
+
+  log("auto-login: waiting for password form (or 'password instead' switch)…");
+  let passwordField = null;
+  let loggedSwitch = false;
+  const switchDeadline = Date.now() + 30_000;
+  while (!passwordField && Date.now() < switchDeadline) {
+    for (const sel of passwordSelectors) {
+      const el = await page.$(sel).catch(() => null);
+      if (el && (await el.isVisible().catch(() => false))) { passwordField = el; break; }
+    }
+    if (passwordField) break;
+    const link = page.locator(switchSelector).first();
+    if (await link.count() > 0) {
+      if (!loggedSwitch) { log("auto-login: switching to password flow"); loggedSwitch = true; }
+      await link.click({ timeout: 2_000 }).catch(() => {});
+    }
+    await page.waitForTimeout(500);
   }
 
-  // Stage E: wait for password field, fill, click Sign in.
-  log("auto-login: waiting for password field…");
-  const passwordField = await waitForFirstSelector(page, [
-    'input[type="password"]',
-    'input[name="password"]',
-  ], 15_000);
+  // Stage E: fill the password and click Sign in.
   if (!passwordField) {
-    log("auto-login: no password field appeared within 15s — falling back to interactive login.");
+    log("auto-login: no password field appeared within 30s — account may be OTP/MFA-only or the login UI changed. Falling back to interactive login.");
     return false;
   }
   log("auto-login: filling password and clicking Sign in");
@@ -478,21 +488,6 @@ async function clickFirstAvailable(page, selectors) {
       await el.click().catch(() => {});
       return true;
     }
-  }
-  return false;
-}
-
-async function clickWithRetry(page, selector, timeoutMs) {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    const el = page.locator(selector).first();
-    if (await el.count() > 0) {
-      try {
-        await el.click({ timeout: 2_000 });
-        return true;
-      } catch { /* retry */ }
-    }
-    await page.waitForTimeout(500);
   }
   return false;
 }
