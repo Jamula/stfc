@@ -68,10 +68,10 @@ async function tryClaim(client: ApiClient, accountName: string, gift: Gift): Pro
     log.info(`[${accountName}] skip ${label}: ${skip}`);
     return { giftLabel: label, outcome: skip };
   }
-  const bundleId = gift.bundleId ?? gift.id;
+  const bundleId = gift.bundleId ?? gift.bundle_id ?? gift.id;
   if (bundleId === undefined) {
     log.warn(`[${accountName}] no bundleId for ${label}`);
-    return { giftLabel: label, outcome: "ERROR", detail: "no bundleId or id" };
+    return { giftLabel: label, outcome: "ERROR", detail: "no bundleId/bundle_id/id field" };
   }
   try {
     await apiClaimGift(client, bundleId);
@@ -87,6 +87,7 @@ async function tryClaim(client: ApiClient, accountName: string, gift: Gift): Pro
 function giftLabel(gift: Gift): string {
   if (gift.title && gift.title.length > 0) return gift.title;
   if (gift.bundleId !== undefined) return String(gift.bundleId);
+  if (gift.bundle_id !== undefined) return String(gift.bundle_id);
   if (gift.id !== undefined) return String(gift.id);
   return "(unnamed)";
 }

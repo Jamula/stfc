@@ -51,18 +51,22 @@ export async function listGifts(opts: ListGiftsOptions): Promise<ListGiftsOutput
 function printGiftTable(accountName: string, gifts: Gift[]): void {
   log.info(`[${accountName}] ${gifts.length} gift(s):`);
   for (const g of gifts) {
-    const id = g.bundleId ?? g.id ?? "?";
+    const id = g.bundleId ?? g.bundle_id ?? g.id ?? "?";
     const flags = describeFlags(g);
     log.info(`  - id=${String(id)} title=${g.title ?? "(no title)"} ${flags}`);
   }
 }
 
+// The API sends these flags as snake_case 0/1 numbers; older surfaces used
+// camelCase booleans. Accept either spelling and treat any non-zero/true as set.
+const truthy = (v: unknown): boolean => (typeof v === "number" ? v !== 0 : v === true);
+
 function describeFlags(g: Gift): string {
   const parts: string[] = [];
-  if (g.isClaimable === true) parts.push("claimable");
-  if (g.isClaimed === true) parts.push("claimed");
-  if (g.isSpecial === true) parts.push("special");
-  if (g.hasCost === true) parts.push("has-cost");
-  if (g.isAtMax === true) parts.push("at-max");
+  if (truthy(g.isClaimable) || truthy(g.is_claimable)) parts.push("claimable");
+  if (truthy(g.isClaimed) || truthy(g.is_claimed)) parts.push("claimed");
+  if (truthy(g.isSpecial) || truthy(g.is_special)) parts.push("special");
+  if (truthy(g.hasCost) || truthy(g.has_cost)) parts.push("has-cost");
+  if (truthy(g.isAtMax) || truthy(g.is_at_max)) parts.push("at-max");
   return parts.length > 0 ? `[${parts.join(",")}]` : "";
 }
