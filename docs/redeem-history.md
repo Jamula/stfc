@@ -7,6 +7,7 @@ inserted at the top**, so the most recent run is always visible first.
 
 | Date (UTC) | Time (UTC) | Account | Gifts claimed |
 | --- | --- | --- | --- |
+| 2026-06-28 | 01:38 | main | 4 Hr Free Chest, 10 Min Free Chest |
 | 2026-06-27 | 23:32 | main | 10 Min Free Chest |
 | 2026-06-27 | 22:18 | main | 10 Min Free Chest |
 | 2026-06-27 | 21:14 | main | Daily Mission Key Drop, 10 Min Free Chest, UC Event Ticket Gift |
