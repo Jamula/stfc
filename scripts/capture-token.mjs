@@ -378,7 +378,7 @@ async function confirm(prompt, def = false) {
 // selectors were tried so the next maintainer knows what to update.
 // ----------------------------------------------------------------------------
 
-async function tryAutoLogin(page, { email, password, log }) {
+async function tryAutoLogin(page, { email, password, log, err, ci }) {
   // Stage A: dismiss the OneTrust cookie banner if present (it intercepts
   // clicks on the page-level Sign-in button).
   log("auto-login: dismissing cookie banner if present");
@@ -455,7 +455,49 @@ async function tryAutoLogin(page, { email, password, log }) {
     'button.ant-btn-primary',
   ]);
 
-  log("auto-login: submitted credentials. Network listeners will catch the resulting JWT.");
+  log("auto-login: submitted credentials, waiting for MFA/OTP challenge or JWT…");
+
+  // Stage F: some Scopely/Okta accounts require a 6-digit OTP sent to
+  // the user's email after password entry. Detect the code input and prompt
+  // the user to supply it.
+  const otpField = await waitForFirstSelector(page, [
+    'input[autocomplete="one-time-code"]',
+    'input[name="credentials.passcode"]',
+    'input[data-se="o-form-input-passcode"]',
+    'input[type="text"][maxlength="6"]',
+    'input[type="tel"][maxlength="6"]',
+  ], 15_000);
+
+  if (otpField) {
+    log("auto-login: MFA/OTP challenge detected.");
+    if (ci) {
+      err("auto-login: MFA challenge requires user input and cannot run unattended. The scheduled trigger has been disabled; run the workflow manually via workflow_dispatch from a machine where you can supply the code.");
+      process.exit(2);
+    }
+    const rl = createInterface({ input, output });
+    let code;
+    try {
+      code = (await rl.question("\n>>> Enter the 6-digit verification code from your email: ")).trim();
+    } finally {
+      rl.close();
+    }
+    if (!code) {
+      log("auto-login: no code entered — falling back to interactive login.");
+      return false;
+    }
+    await otpField.fill(code);
+    await clickFirstAvailable(page, [
+      'button:has-text("Verify")',
+      'button:has-text("Submit")',
+      'button:has-text("Sign in")',
+      'button[type="submit"]',
+      'button.ant-btn-primary',
+    ]);
+    log("auto-login: OTP submitted. Network listeners will catch the resulting JWT.");
+  } else {
+    log("auto-login: no OTP challenge detected. Network listeners will catch the resulting JWT.");
+  }
+
   return true;
 }
 
@@ -554,7 +596,7 @@ async function main() {
     // /auth/login response handler picks up the JWT. If auto-login fails (e.g.
     // CAPTCHA) the user can still complete login manually in the visible
     // browser when not in --ci mode.
-    tryAutoLogin(page, { email, password, log }).catch((e) => {
+    tryAutoLogin(page, { email, password, log, err, ci: args.ci }).catch((e) => {
       err(`auto-login failed: ${e instanceof Error ? e.message : e}`);
     });
   }

@@ -20,14 +20,10 @@
 name: Refresh token
 
 on:
-  # Weekly refresh at Saturday 00:00 UTC. Pairs with Issue #13's
-  # "all-accounts-expired" alarm: a weekly refresh keeps tokens far
-  # from the 30-day expiry wall so the alarm only fires on real breakage.
-  # Shares concurrency.group `stfc-gift-redeemer` with redeem.yml (and the
-  # incoming discord-monitor.yml). A Saturday-midnight refresh may briefly
-  # queue or cancel a redeem run — acceptable at weekly cadence.
-  schedule:
-    - cron: "0 0 * * 6"   # Saturday 00:00 UTC, weekly
+  # Schedule disabled: token refresh requires a 6-digit email OTP that
+  # only a human can supply. Trigger manually via workflow_dispatch instead.
+  # schedule:
+  #   - cron: "0 0 * * 6"   # Saturday 00:00 UTC, weekly
   workflow_dispatch:
     inputs:
       account_name:
