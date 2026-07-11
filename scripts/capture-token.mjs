@@ -378,6 +378,33 @@ async function confirm(prompt, def = false) {
 // selectors were tried so the next maintainer knows what to update.
 // ----------------------------------------------------------------------------
 
+// Prompt the user for the 6-digit OTP, fill it into `field`, and click the
+// submit button. Returns true on success, false if the user pressed Enter
+// without entering a code.
+async function promptAndSubmitOtp({ page, field, log }) {
+  const rl = createInterface({ input, output });
+  let code;
+  try {
+    code = (await rl.question("\n>>> Scopely sent a 6-digit verification code to your email.\n>>> Enter the code now: ")).trim();
+  } finally {
+    rl.close();
+  }
+  if (!code) {
+    log("auto-login: no code entered — falling back to interactive login.");
+    return false;
+  }
+  await field.fill(code);
+  await clickFirstAvailable(page, [
+    'button:has-text("Verify")',
+    'button:has-text("Submit")',
+    'button:has-text("Sign in")',
+    'button[type="submit"]',
+    'button.ant-btn-primary',
+  ]);
+  log("auto-login: OTP submitted. Network listeners will catch the resulting JWT.");
+  return true;
+}
+
 async function tryAutoLogin(page, { email, password, log, err, ci }) {
   // Stage A: dismiss the OneTrust cookie banner if present (it intercepts
   // clicks on the page-level Sign-in button).
@@ -423,21 +450,64 @@ async function tryAutoLogin(page, { email, password, log, err, ci }) {
     'button.ant-btn-primary',
   ]);
 
-  // Stage D: by default Scopely sends a magic-link / OTP. Click "Sign in
-  // with password instead" to switch to password flow. If the link doesn't
-  // appear, we may already be on the password page (or the account is
-  // configured for OTP-only).
-  log("auto-login: switching to password flow");
-  const switched = await clickWithRetry(page,
-    'a:has-text("Sign in with password instead"), a.switchAuthenticator, a:has-text("password instead"), button:has-text("Sign in with password instead")',
-    8_000,
-  );
-  if (!switched) {
-    log("auto-login: 'Sign in with password instead' not found within 8s. Account may be OTP-only — falling back to interactive login.");
+  // Stage D: after Continue, wait up to 15s for EITHER a "Sign in with
+  // password instead" link (password-capable account) OR an OTP/passcode
+  // input (email-code-only account). Whichever arrives first determines
+  // which branch we take.
+  log("auto-login: waiting for password-switch link or OTP input…");
+  const OTP_SELECTORS = [
+    'input[autocomplete="one-time-code"]',
+    'input[name="credentials.passcode"]',
+    'input[data-se="o-form-input-passcode"]',
+    'input[type="text"][maxlength="6"]',
+    'input[type="tel"][maxlength="6"]',
+  ];
+  const PASSWORD_SWITCH_SELECTOR =
+    'a:has-text("Sign in with password instead"), a.switchAuthenticator, a:has-text("password instead"), button:has-text("Sign in with password instead")';
+
+  let gotPasswordSwitch = false;
+  let primaryOtpField = null;
+  const deadline = Date.now() + 15_000;
+  while (Date.now() < deadline) {
+    // Check for OTP field first (primary email-code flow).
+    for (const sel of OTP_SELECTORS) {
+      const el = await page.$(sel).catch(() => null);
+      if (el && (await el.isVisible().catch(() => false))) {
+        primaryOtpField = el;
+        break;
+      }
+    }
+    if (primaryOtpField) break;
+    // Check for the password-switch link.
+    const switchEl = page.locator(PASSWORD_SWITCH_SELECTOR).first();
+    if ((await switchEl.count()) > 0) {
+      try {
+        await switchEl.click({ timeout: 2_000 });
+        gotPasswordSwitch = true;
+      } catch { /* retry */ }
+      if (gotPasswordSwitch) break;
+    }
+    await page.waitForTimeout(500);
+  }
+
+  // Stage D-OTP: account uses email code as primary authenticator.
+  if (primaryOtpField) {
+    log("auto-login: email code (primary OTP) challenge detected.");
+    if (ci) {
+      err("auto-login: email-code challenge requires user input and cannot run unattended. Run the workflow manually via workflow_dispatch.");
+      process.exit(2);
+    }
+    const submitted = await promptAndSubmitOtp({ page, field: primaryOtpField, log });
+    if (!submitted) return false;
+    return true;
+  }
+
+  if (!gotPasswordSwitch) {
+    log("auto-login: neither a password-switch link nor an OTP field appeared within 15s — falling back to interactive login.");
     return false;
   }
 
-  // Stage E: wait for password field, fill, click Sign in.
+  // Stage E: password-capable account — fill password and submit.
   log("auto-login: waiting for password field…");
   const passwordField = await waitForFirstSelector(page, [
     'input[type="password"]',
@@ -455,47 +525,21 @@ async function tryAutoLogin(page, { email, password, log, err, ci }) {
     'button.ant-btn-primary',
   ]);
 
-  log("auto-login: submitted credentials, waiting for MFA/OTP challenge or JWT…");
+  log("auto-login: submitted credentials, waiting for secondary MFA/OTP challenge or JWT…");
 
-  // Stage F: some Scopely/Okta accounts require a 6-digit OTP sent to
-  // the user's email after password entry. Detect the code input and prompt
-  // the user to supply it.
-  const otpField = await waitForFirstSelector(page, [
-    'input[autocomplete="one-time-code"]',
-    'input[name="credentials.passcode"]',
-    'input[data-se="o-form-input-passcode"]',
-    'input[type="text"][maxlength="6"]',
-    'input[type="tel"][maxlength="6"]',
-  ], 15_000);
-
-  if (otpField) {
-    log("auto-login: MFA/OTP challenge detected.");
+  // Stage F: some accounts require a secondary 6-digit OTP after password
+  // entry (e.g. Okta MFA step-up). We wait up to 15s.
+  const secondaryOtpField = await waitForFirstSelector(page, OTP_SELECTORS, 15_000);
+  if (secondaryOtpField) {
+    log("auto-login: secondary MFA/OTP challenge detected.");
     if (ci) {
-      err("auto-login: MFA challenge requires user input and cannot run unattended. The scheduled trigger has been disabled; run the workflow manually via workflow_dispatch from a machine where you can supply the code.");
+      err("auto-login: MFA challenge requires user input and cannot run unattended. Run the workflow manually via workflow_dispatch.");
       process.exit(2);
     }
-    const rl = createInterface({ input, output });
-    let code;
-    try {
-      code = (await rl.question("\n>>> Enter the 6-digit verification code from your email: ")).trim();
-    } finally {
-      rl.close();
-    }
-    if (!code) {
-      log("auto-login: no code entered — falling back to interactive login.");
-      return false;
-    }
-    await otpField.fill(code);
-    await clickFirstAvailable(page, [
-      'button:has-text("Verify")',
-      'button:has-text("Submit")',
-      'button:has-text("Sign in")',
-      'button[type="submit"]',
-      'button.ant-btn-primary',
-    ]);
-    log("auto-login: OTP submitted. Network listeners will catch the resulting JWT.");
+    const submitted = await promptAndSubmitOtp({ page, field: secondaryOtpField, log });
+    if (!submitted) return false;
   } else {
-    log("auto-login: no OTP challenge detected. Network listeners will catch the resulting JWT.");
+    log("auto-login: no secondary OTP challenge detected. Network listeners will catch the resulting JWT.");
   }
 
   return true;
