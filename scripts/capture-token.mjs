@@ -415,7 +415,13 @@ async function promptAndSubmitOtp({ page, field, log, maxAttempts = 3, headless 
     const attemptLabel = maxAttempts > 1 ? ` (attempt ${attempt}/${maxAttempts})` : "";
     let code;
 
-    if (headless) {
+    // STFC_OTP env var: injected by workflow_dispatch `otp` input — takes
+    // precedence over both the file-poll (headless) and stdin paths.
+    const envOtp = process.env.STFC_OTP?.trim();
+    if (envOtp) {
+      log(`auto-login: using OTP from STFC_OTP env var${attemptLabel}`);
+      code = envOtp;
+    } else if (headless) {
       // Remove any stale code file from a previous attempt.
       await fs.unlink(OTP_CODE_FILE).catch(() => {});
       // Write the ready marker so the caller knows the script is waiting.
@@ -588,8 +594,8 @@ async function tryAutoLogin(page, { email, password, log, err, ci, headless = fa
   // Stage D-OTP: account uses email code as primary authenticator.
   if (primaryOtpField) {
     log("auto-login: email code (primary OTP) challenge detected.");
-    if (ci) {
-      err("auto-login: email-code challenge requires user input and cannot run unattended. Run the workflow manually via workflow_dispatch.");
+    if (ci && !process.env.STFC_OTP) {
+      err("auto-login: email-code challenge requires user input and cannot run unattended. Run the workflow manually via workflow_dispatch with an otp input.");
       process.exit(2);
     }
     const submitted = await promptAndSubmitOtp({ page, field: primaryOtpField, log, headless });
@@ -631,8 +637,8 @@ async function tryAutoLogin(page, { email, password, log, err, ci, headless = fa
     const secondaryOtpField = await waitForFirstSelector(page, OTP_SELECTORS, 15_000);
     if (secondaryOtpField) {
       log("auto-login: secondary MFA/OTP challenge detected.");
-      if (ci) {
-        err("auto-login: MFA challenge requires user input and cannot run unattended. Run the workflow manually via workflow_dispatch.");
+      if (ci && !process.env.STFC_OTP) {
+        err("auto-login: MFA challenge requires user input and cannot run unattended. Run the workflow manually via workflow_dispatch with an otp input.");
         process.exit(2);
       }
       const submitted = await promptAndSubmitOtp({ page, field: secondaryOtpField, log, headless });
