@@ -49,7 +49,7 @@ const API_HOST  = "cdn-nv3-webstore-api.startrek.digitgaming.com";
 // ----------------------------------------------------------------------------
 
 function parseArgs(argv) {
-  const out = { name: "main", timeout: 300, debug: false, force: false, help: false, invalid: false, ci: false };
+  const out = { name: "main", timeout: 300, debug: false, force: false, help: false, invalid: false, ci: false, headless: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--name" && argv[i + 1]) { out.name = argv[++i]; continue; }
@@ -57,6 +57,7 @@ function parseArgs(argv) {
     if (a === "--debug") { out.debug = true; continue; }
     if (a === "--force") { out.force = true; continue; }
     if (a === "--ci") { out.ci = true; continue; }
+    if (a === "--headless") { out.headless = true; continue; }
     if (a === "--help" || a === "-h") { out.help = true; continue; }
     console.error(`Unknown arg: ${a}`);
     out.invalid = true;
@@ -74,7 +75,7 @@ function parseArgs(argv) {
 
 function printUsage() {
   console.log(`
-Usage: npm run capture-token -- [--name <accountName>] [--timeout <seconds>] [--debug] [--force] [--ci]
+Usage: npm run capture-token -- [--name <accountName>] [--timeout <seconds>] [--debug] [--force] [--ci] [--headless]
 
   --name      Name to record this account under in STFC_ACCOUNTS. Default: "main".
               Re-run with a different name to add additional accounts.
@@ -87,10 +88,16 @@ Usage: npm run capture-token -- [--name <accountName>] [--timeout <seconds>] [--
               captured JWT as JSON {"name":"<name>","token":"<jwt>"} to stdout
               (everything else goes to stderr). Skips .env writes and gh
               prompts. Requires STFC_EMAIL + STFC_PASSWORD env vars.
+  --headless  Run the browser headless (no visible window) but keep interactive
+              features. When STFC_EMAIL is set, auto-fills the email and waits
+              for an OTP code via the file /tmp/stfc-otp instead of stdin.
+              Useful when running inside a server/agent environment that has no
+              display but still needs a human to supply the verification code.
 
 Environment variables:
-  STFC_EMAIL     If set together with STFC_PASSWORD, the script auto-fills
-                 the Scopely Okta login form (no manual login required).
+  STFC_EMAIL     If set, the script auto-fills the Scopely email form. Combined
+                 with STFC_PASSWORD the full password flow is attempted too.
+                 For OTP-only accounts, only STFC_EMAIL is needed.
   STFC_PASSWORD  See above. NEVER pass on the command line — always via env
                  or a .env file. Required when --ci is set.
 `);
@@ -378,7 +385,122 @@ async function confirm(prompt, def = false) {
 // selectors were tried so the next maintainer knows what to update.
 // ----------------------------------------------------------------------------
 
-async function tryAutoLogin(page, { email, password, log }) {
+// Prompt the user for the 6-digit OTP, fill it into `field`, and click the
+// submit button. Retries up to `maxAttempts` times if Okta rejects the code
+// (detects the error banner or the input field re-appearing). Returns true on
+// success, false if the user presses Enter without a code or exhausts retries.
+//
+// In headless mode (headless=true) the code is read from /tmp/stfc-otp instead
+// of stdin. The script writes /tmp/stfc-otp-ready to signal it is waiting, then
+// polls /tmp/stfc-otp until the file appears (or timeout is reached).
+async function promptAndSubmitOtp({ page, field, log, maxAttempts = 3, headless = false }) {
+  const OTP_READY_FILE = "/tmp/stfc-otp-ready";
+  const OTP_CODE_FILE = "/tmp/stfc-otp";
+
+  const OTP_ERROR_SELECTORS = [
+    // Okta-rendered inline error messages (various versions)
+    '[data-se="o-form-error-container"]:not(:empty)',
+    '.okta-form-infobox-error',
+    'p.okta-error-container',
+    '[role="alert"]',
+    // Generic "invalid code" text
+    ':text("Invalid code")',
+    ':text("Incorrect code")',
+    ':text("Code is invalid")',
+    ':text("Enter a valid")',
+    ':text("does not match")',
+  ];
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const attemptLabel = maxAttempts > 1 ? ` (attempt ${attempt}/${maxAttempts})` : "";
+    let code;
+
+    if (headless) {
+      // Remove any stale code file from a previous attempt.
+      await fs.unlink(OTP_CODE_FILE).catch(() => {});
+      // Write the ready marker so the caller knows the script is waiting.
+      await fs.writeFile(OTP_READY_FILE, `attempt:${attempt}\ntimestamp:${new Date().toISOString()}\n`, "utf8").catch(() => {});
+      log(`\nauto-login: waiting for OTP code in ${OTP_CODE_FILE}${attemptLabel}`);
+      log(`  → write the 6-digit code to that file, e.g.:  echo '123456' > ${OTP_CODE_FILE}\n`);
+
+      const pollDeadline = Date.now() + 300_000; // poll up to 5 min
+      while (Date.now() < pollDeadline) {
+        if (existsSync(OTP_CODE_FILE)) {
+          code = (await fs.readFile(OTP_CODE_FILE, "utf8").catch(() => "")).trim();
+          await fs.unlink(OTP_CODE_FILE).catch(() => {});
+          if (code) break;
+        }
+        await new Promise((r) => setTimeout(r, 1_000));
+      }
+      if (!code) {
+        log("auto-login: timed out waiting for OTP file — giving up.");
+        await fs.unlink(OTP_READY_FILE).catch(() => {});
+        return false;
+      }
+    } else {
+      const rl = createInterface({ input, output });
+      try {
+        code = (await rl.question(
+          `\n>>> Scopely sent a 6-digit verification code to your email.\n>>> Enter the code now${attemptLabel}: `
+        )).trim();
+      } finally {
+        rl.close();
+      }
+      if (!code) {
+        log("auto-login: no code entered — falling back to interactive login.");
+        return false;
+      }
+    }
+
+    // The field may have been cleared/re-rendered by Okta between attempts.
+    // Re-query it to avoid stale-element errors.
+    const currentField = await page.$(
+      'input[autocomplete="one-time-code"], input[name="credentials.passcode"], input[data-se="o-form-input-passcode"], input[type="text"][maxlength="6"], input[type="tel"][maxlength="6"]'
+    ).catch(() => null) ?? field;
+
+    await currentField.fill(code).catch(() => {});
+    await clickFirstAvailable(page, [
+      'button:has-text("Verify")',
+      'button:has-text("Submit")',
+      'button:has-text("Sign in")',
+      'button[type="submit"]',
+      'button.ant-btn-primary',
+    ]);
+
+    // Wait briefly and check whether Okta rejected the code (error banner or
+    // the OTP input is still/again visible).
+    await page.waitForTimeout(2_000);
+
+    let rejected = false;
+    // Check for explicit error messages first.
+    for (const sel of OTP_ERROR_SELECTORS) {
+      const el = await page.$(sel).catch(() => null);
+      if (el && (await el.isVisible().catch(() => false))) {
+        const text = await el.textContent().catch(() => "");
+        log(`auto-login: OTP rejected (attempt ${attempt}/${maxAttempts}): "${text?.trim().slice(0, 80)}"`);
+        rejected = true;
+        break;
+      }
+    }
+
+    if (!rejected) {
+      // If no error, assume the code was accepted.
+      await fs.unlink(OTP_READY_FILE).catch(() => {});
+      log("auto-login: OTP submitted. Network listeners will catch the resulting JWT.");
+      return true;
+    }
+
+    if (attempt < maxAttempts) {
+      log(`auto-login: will re-prompt for the code.`);
+    }
+  }
+
+  await fs.unlink(OTP_READY_FILE).catch(() => {});
+  log(`auto-login: OTP rejected after ${maxAttempts} attempt(s) — falling back to interactive login.`);
+  return false;
+}
+
+async function tryAutoLogin(page, { email, password, log, err, ci, headless = false }) {
   // Stage A: dismiss the OneTrust cookie banner if present (it intercepts
   // clicks on the page-level Sign-in button).
   log("auto-login: dismissing cookie banner if present");
@@ -423,39 +545,103 @@ async function tryAutoLogin(page, { email, password, log }) {
     'button.ant-btn-primary',
   ]);
 
-  // Stage D: by default Scopely sends a magic-link / OTP. Click "Sign in
-  // with password instead" to switch to password flow. If the link doesn't
-  // appear, we may already be on the password page (or the account is
-  // configured for OTP-only).
-  log("auto-login: switching to password flow");
-  const switched = await clickWithRetry(page,
-    'a:has-text("Sign in with password instead"), a.switchAuthenticator, a:has-text("password instead"), button:has-text("Sign in with password instead")',
-    8_000,
-  );
-  if (!switched) {
-    log("auto-login: 'Sign in with password instead' not found within 8s. Account may be OTP-only — falling back to interactive login.");
+  // Stage D: after Continue, wait up to 15s for EITHER a "Sign in with
+  // password instead" link (password-capable account) OR an OTP/passcode
+  // input (email-code-only account). Whichever arrives first determines
+  // which branch we take.
+  log("auto-login: waiting for password-switch link or OTP input…");
+  const OTP_SELECTORS = [
+    'input[autocomplete="one-time-code"]',
+    'input[name="credentials.passcode"]',
+    'input[data-se="o-form-input-passcode"]',
+    'input[type="text"][maxlength="6"]',
+    'input[type="tel"][maxlength="6"]',
+  ];
+  const PASSWORD_SWITCH_SELECTOR =
+    'a:has-text("Sign in with password instead"), a.switchAuthenticator, a:has-text("password instead"), button:has-text("Sign in with password instead")';
+
+  let gotPasswordSwitch = false;
+  let primaryOtpField = null;
+  const deadline = Date.now() + 15_000;
+  while (Date.now() < deadline) {
+    // Check for OTP field first (primary email-code flow).
+    for (const sel of OTP_SELECTORS) {
+      const el = await page.$(sel).catch(() => null);
+      if (el && (await el.isVisible().catch(() => false))) {
+        primaryOtpField = el;
+        break;
+      }
+    }
+    if (primaryOtpField) break;
+    // Check for the password-switch link.
+    const switchEl = page.locator(PASSWORD_SWITCH_SELECTOR).first();
+    if ((await switchEl.count()) > 0) {
+      try {
+        await switchEl.click({ timeout: 2_000 });
+        gotPasswordSwitch = true;
+      } catch { /* retry */ }
+      if (gotPasswordSwitch) break;
+    }
+    await page.waitForTimeout(500);
+  }
+
+  // Stage D-OTP: account uses email code as primary authenticator.
+  if (primaryOtpField) {
+    log("auto-login: email code (primary OTP) challenge detected.");
+    if (ci) {
+      err("auto-login: email-code challenge requires user input and cannot run unattended. Run the workflow manually via workflow_dispatch.");
+      process.exit(2);
+    }
+    const submitted = await promptAndSubmitOtp({ page, field: primaryOtpField, log, headless });
+    if (!submitted) return false;
+    return true;
+  }
+
+  if (!gotPasswordSwitch) {
+    log("auto-login: neither a password-switch link nor an OTP field appeared within 15s — falling back to interactive login.");
     return false;
   }
 
-  // Stage E: wait for password field, fill, click Sign in.
-  log("auto-login: waiting for password field…");
-  const passwordField = await waitForFirstSelector(page, [
-    'input[type="password"]',
-    'input[name="password"]',
-  ], 15_000);
-  if (!passwordField) {
-    log("auto-login: no password field appeared within 15s — falling back to interactive login.");
-    return false;
-  }
-  log("auto-login: filling password and clicking Sign in");
-  await passwordField.fill(password);
-  await clickFirstAvailable(page, [
-    'button:has-text("Sign in")',
-    'button[type="submit"]',
-    'button.ant-btn-primary',
-  ]);
+  // Stage E: password-capable account — fill password and submit.
+  // Skip if no password was provided (OTP-only accounts don't need it).
+  if (!password) {
+    log("auto-login: no STFC_PASSWORD set — skipping password step (OTP-only account assumed).");
+  } else {
+    log("auto-login: waiting for password field…");
+    const passwordField = await waitForFirstSelector(page, [
+      'input[type="password"]',
+      'input[name="password"]',
+    ], 15_000);
+    if (!passwordField) {
+      log("auto-login: no password field appeared within 15s — falling back to interactive login.");
+      return false;
+    }
+    log("auto-login: filling password and clicking Sign in");
+    await passwordField.fill(password);
+    await clickFirstAvailable(page, [
+      'button:has-text("Sign in")',
+      'button[type="submit"]',
+      'button.ant-btn-primary',
+    ]);
 
-  log("auto-login: submitted credentials. Network listeners will catch the resulting JWT.");
+    log("auto-login: submitted credentials, waiting for secondary MFA/OTP challenge or JWT…");
+
+    // Stage F: some accounts require a secondary 6-digit OTP after password
+    // entry (e.g. Okta MFA step-up). We wait up to 15s.
+    const secondaryOtpField = await waitForFirstSelector(page, OTP_SELECTORS, 15_000);
+    if (secondaryOtpField) {
+      log("auto-login: secondary MFA/OTP challenge detected.");
+      if (ci) {
+        err("auto-login: MFA challenge requires user input and cannot run unattended. Run the workflow manually via workflow_dispatch.");
+        process.exit(2);
+      }
+      const submitted = await promptAndSubmitOtp({ page, field: secondaryOtpField, log, headless });
+      if (!submitted) return false;
+    } else {
+      log("auto-login: no secondary OTP challenge detected. Network listeners will catch the resulting JWT.");
+    }
+  }
+
   return true;
 }
 
@@ -512,10 +698,11 @@ async function main() {
 
   const email = process.env.STFC_EMAIL?.trim() || "";
   const password = process.env.STFC_PASSWORD || "";
-  const wantAutoLogin = email.length > 0 && password.length > 0;
+  // Auto-login only requires STFC_EMAIL; password is optional for OTP-only accounts.
+  const wantAutoLogin = email.length > 0;
 
   if (args.ci && !wantAutoLogin) {
-    err(`--ci requires STFC_EMAIL and STFC_PASSWORD env vars.`);
+    err(`--ci requires STFC_EMAIL (and optionally STFC_PASSWORD) env vars.`);
     process.exit(2);
   }
 
@@ -525,12 +712,14 @@ async function main() {
   log(`  timeout      : ${args.timeout}s`);
   log(`  store URL    : ${STORE_URL}`);
   log(`  auto-login   : ${wantAutoLogin ? `yes (${email})` : "no (interactive)"}`);
-  log(`  mode         : ${args.ci ? "CI (headless)" : "interactive (visible browser)"}`);
+  const runHeadless = args.ci || args.headless;
+
+  log(`  mode         : ${args.ci ? "CI (headless)" : args.headless ? "headless (file OTP)" : "interactive (visible browser)"}`);
   log("");
 
   let browser;
   try {
-    browser = await chromium.launch({ headless: args.ci });
+    browser = await chromium.launch({ headless: runHeadless });
   } catch (e) {
     err(`\nFailed to launch Chromium: ${e instanceof Error ? e.message : e}`);
     err(`\nIf this is the first run, install the browser binary:`);
@@ -554,7 +743,7 @@ async function main() {
     // /auth/login response handler picks up the JWT. If auto-login fails (e.g.
     // CAPTCHA) the user can still complete login manually in the visible
     // browser when not in --ci mode.
-    tryAutoLogin(page, { email, password, log }).catch((e) => {
+    tryAutoLogin(page, { email, password, log, err, ci: args.ci, headless: args.headless }).catch((e) => {
       err(`auto-login failed: ${e instanceof Error ? e.message : e}`);
     });
   }
