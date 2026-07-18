@@ -379,30 +379,84 @@ async function confirm(prompt, def = false) {
 // ----------------------------------------------------------------------------
 
 // Prompt the user for the 6-digit OTP, fill it into `field`, and click the
-// submit button. Returns true on success, false if the user pressed Enter
-// without entering a code.
-async function promptAndSubmitOtp({ page, field, log }) {
-  const rl = createInterface({ input, output });
-  let code;
-  try {
-    code = (await rl.question("\n>>> Scopely sent a 6-digit verification code to your email.\n>>> Enter the code now: ")).trim();
-  } finally {
-    rl.close();
+// submit button. Retries up to `maxAttempts` times if Okta rejects the code
+// (detects the error banner or the input field re-appearing). Returns true on
+// success, false if the user presses Enter without a code or exhausts retries.
+async function promptAndSubmitOtp({ page, field, log, maxAttempts = 3 }) {
+  const OTP_ERROR_SELECTORS = [
+    // Okta-rendered inline error messages (various versions)
+    '[data-se="o-form-error-container"]:not(:empty)',
+    '.okta-form-infobox-error',
+    'p.okta-error-container',
+    '[role="alert"]',
+    // Generic "invalid code" text
+    ':text("Invalid code")',
+    ':text("Incorrect code")',
+    ':text("Code is invalid")',
+    ':text("Enter a valid")',
+    ':text("does not match")',
+  ];
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const rl = createInterface({ input, output });
+    let code;
+    const attemptLabel = maxAttempts > 1 ? ` (attempt ${attempt}/${maxAttempts})` : "";
+    try {
+      code = (await rl.question(
+        `\n>>> Scopely sent a 6-digit verification code to your email.\n>>> Enter the code now${attemptLabel}: `
+      )).trim();
+    } finally {
+      rl.close();
+    }
+    if (!code) {
+      log("auto-login: no code entered — falling back to interactive login.");
+      return false;
+    }
+
+    // The field may have been cleared/re-rendered by Okta between attempts.
+    // Re-query it to avoid stale-element errors.
+    const currentField = await page.$(
+      'input[autocomplete="one-time-code"], input[name="credentials.passcode"], input[data-se="o-form-input-passcode"], input[type="text"][maxlength="6"], input[type="tel"][maxlength="6"]'
+    ).catch(() => null) ?? field;
+
+    await currentField.fill(code).catch(() => {});
+    await clickFirstAvailable(page, [
+      'button:has-text("Verify")',
+      'button:has-text("Submit")',
+      'button:has-text("Sign in")',
+      'button[type="submit"]',
+      'button.ant-btn-primary',
+    ]);
+
+    // Wait briefly and check whether Okta rejected the code (error banner or
+    // the OTP input is still/again visible).
+    await page.waitForTimeout(2_000);
+
+    let rejected = false;
+    // Check for explicit error messages first.
+    for (const sel of OTP_ERROR_SELECTORS) {
+      const el = await page.$(sel).catch(() => null);
+      if (el && (await el.isVisible().catch(() => false))) {
+        const text = await el.textContent().catch(() => "");
+        log(`auto-login: OTP rejected (attempt ${attempt}/${maxAttempts}): "${text?.trim().slice(0, 80)}"`);
+        rejected = true;
+        break;
+      }
+    }
+
+    if (!rejected) {
+      // If no error, assume the code was accepted.
+      log("auto-login: OTP submitted. Network listeners will catch the resulting JWT.");
+      return true;
+    }
+
+    if (attempt < maxAttempts) {
+      log(`auto-login: will re-prompt for the code.`);
+    }
   }
-  if (!code) {
-    log("auto-login: no code entered — falling back to interactive login.");
-    return false;
-  }
-  await field.fill(code);
-  await clickFirstAvailable(page, [
-    'button:has-text("Verify")',
-    'button:has-text("Submit")',
-    'button:has-text("Sign in")',
-    'button[type="submit"]',
-    'button.ant-btn-primary',
-  ]);
-  log("auto-login: OTP submitted. Network listeners will catch the resulting JWT.");
-  return true;
+
+  log(`auto-login: OTP rejected after ${maxAttempts} attempt(s) — falling back to interactive login.`);
+  return false;
 }
 
 async function tryAutoLogin(page, { email, password, log, err, ci }) {
