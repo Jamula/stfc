@@ -40,24 +40,18 @@ describe("Scribe — charter ownership", () => {
   });
 });
 
-describe("Scribe — write boundary (Rule 2)", () => {
-  it("Rule 2 in copilot-instructions.md declares Scribe as sole .squad/ committer", () => {
+describe("Scribe — decision consolidation", () => {
+  it("copilot-instructions.md delegates shared decision updates to Scribe", () => {
     assert.ok(
-      rules.includes("only Scribe commits there") ||
-        rules.includes("Scribe-owned commits"),
-      "copilot-instructions.md Rule 2 should declare Scribe as sole .squad/ committer",
+      rules.includes("The Scribe will merge it into the shared decisions file"),
+      "copilot-instructions.md should delegate shared decision updates to Scribe",
     );
   });
 
-  it("Rule 2 lists .squad/ paths as Scribe-owned", () => {
+  it("directs agent decisions to the decision inbox", () => {
     assert.ok(
-      rules.includes(".squad/agents/") ||
-        rules.includes(".squad/decisions/inbox/"),
-      "Rule 2 should list .squad/ paths",
-    );
-    assert.ok(
-      rules.includes(".squad/log/") || rules.includes(".squad/orchestration-log/"),
-      "Rule 2 should mention .squad/log/ paths",
+      rules.includes(".squad/decisions/inbox/"),
+      "copilot-instructions.md should list the decision inbox",
     );
   });
 });
