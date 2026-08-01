@@ -55,6 +55,11 @@ on:
         type: string
         required: false
         default: "main"
+      otp:
+        description: "6-digit OTP from the Scopely verification email (supply after triggering if Scopely sends one)"
+        type: string
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -136,6 +141,7 @@ jobs:
         env:
           STFC_EMAIL: ${{ secrets.STFC_EMAIL }}
           STFC_PASSWORD: ${{ secrets.STFC_PASSWORD || secrets.cj_pwd }}
+          STFC_OTP: ${{ inputs.otp }}
         run: |
           set -euo pipefail
           if [ -z "${STFC_EMAIL:-}" ] || [ -z "${STFC_PASSWORD:-}" ]; then

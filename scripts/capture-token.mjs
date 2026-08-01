@@ -49,7 +49,7 @@ const API_HOST  = "cdn-nv3-webstore-api.startrek.digitgaming.com";
 // ----------------------------------------------------------------------------
 
 function parseArgs(argv) {
-  const out = { name: "main", timeout: 300, debug: false, force: false, help: false, invalid: false, ci: false };
+  const out = { name: "main", timeout: 300, debug: false, force: false, help: false, invalid: false, ci: false, headless: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--name" && argv[i + 1]) { out.name = argv[++i]; continue; }
@@ -57,6 +57,7 @@ function parseArgs(argv) {
     if (a === "--debug") { out.debug = true; continue; }
     if (a === "--force") { out.force = true; continue; }
     if (a === "--ci") { out.ci = true; continue; }
+    if (a === "--headless") { out.headless = true; continue; }
     if (a === "--help" || a === "-h") { out.help = true; continue; }
     console.error(`Unknown arg: ${a}`);
     out.invalid = true;
@@ -74,7 +75,7 @@ function parseArgs(argv) {
 
 function printUsage() {
   console.log(`
-Usage: npm run capture-token -- [--name <accountName>] [--timeout <seconds>] [--debug] [--force] [--ci]
+Usage: npm run capture-token -- [--name <accountName>] [--timeout <seconds>] [--debug] [--force] [--ci] [--headless]
 
   --name      Name to record this account under in STFC_ACCOUNTS. Default: "main".
               Re-run with a different name to add additional accounts.
@@ -87,10 +88,16 @@ Usage: npm run capture-token -- [--name <accountName>] [--timeout <seconds>] [--
               captured JWT as JSON {"name":"<name>","token":"<jwt>"} to stdout
               (everything else goes to stderr). Skips .env writes and gh
               prompts. Requires STFC_EMAIL + STFC_PASSWORD env vars.
+  --headless  Run the browser headless (no visible window) but keep interactive
+              features. When STFC_EMAIL is set, auto-fills the email and waits
+              for an OTP code via the file /tmp/stfc-otp instead of stdin.
+              Useful when running inside a server/agent environment that has no
+              display but still needs a human to supply the verification code.
 
 Environment variables:
-  STFC_EMAIL     If set together with STFC_PASSWORD, the script auto-fills
-                 the Scopely Okta login form (no manual login required).
+  STFC_EMAIL     If set, the script auto-fills the Scopely email form. Combined
+                 with STFC_PASSWORD the full password flow is attempted too.
+                 For OTP-only accounts, only STFC_EMAIL is needed.
   STFC_PASSWORD  See above. NEVER pass on the command line — always via env
                  or a .env file. Required when --ci is set.
 `);
@@ -487,15 +494,7 @@ async function tryAutoLogin(page, { email, password, log, ci }) {
     log("auto-login: no password field appeared within 20s — the login UI may have changed. Falling back to interactive login.");
     return false;
   }
-  log("auto-login: filling password and clicking Sign in");
-  await passwordField.fill(password);
-  await clickFirstAvailable(page, [
-    'button:has-text("Sign in")',
-    'button[type="submit"]',
-    'button.ant-btn-primary',
-  ]);
 
-  log("auto-login: submitted credentials. Network listeners will catch the resulting JWT.");
   return true;
 }
 
@@ -622,10 +621,11 @@ async function main() {
 
   const email = process.env.STFC_EMAIL?.trim() || "";
   const password = process.env.STFC_PASSWORD || "";
-  const wantAutoLogin = email.length > 0 && password.length > 0;
+  // Auto-login only requires STFC_EMAIL; password is optional for OTP-only accounts.
+  const wantAutoLogin = email.length > 0;
 
   if (args.ci && !wantAutoLogin) {
-    err(`--ci requires STFC_EMAIL and STFC_PASSWORD env vars.`);
+    err(`--ci requires STFC_EMAIL (and optionally STFC_PASSWORD) env vars.`);
     process.exit(2);
   }
 
@@ -635,12 +635,14 @@ async function main() {
   log(`  timeout      : ${args.timeout}s`);
   log(`  store URL    : ${STORE_URL}`);
   log(`  auto-login   : ${wantAutoLogin ? `yes (${email})` : "no (interactive)"}`);
-  log(`  mode         : ${args.ci ? "CI (headless)" : "interactive (visible browser)"}`);
+  const runHeadless = args.ci || args.headless;
+
+  log(`  mode         : ${args.ci ? "CI (headless)" : args.headless ? "headless (file OTP)" : "interactive (visible browser)"}`);
   log("");
 
   let browser;
   try {
-    browser = await chromium.launch({ headless: args.ci });
+    browser = await chromium.launch({ headless: runHeadless });
   } catch (e) {
     err(`\nFailed to launch Chromium: ${e instanceof Error ? e.message : e}`);
     err(`\nIf this is the first run, install the browser binary:`);

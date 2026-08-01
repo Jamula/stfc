@@ -7,6 +7,76 @@ inserted at the top**, so the most recent run is always visible first.
 
 | Date (UTC) | Time (UTC) | Account | Gifts claimed |
 | --- | --- | --- | --- |
+| 2026-08-01 | 02:21 | main | Daily Mission Key Drop, 24 Hr Free Chest [BAJORAN FAVOR], Holo-Field Amplifiers, Replicator Rations, Emerald Chain Tier 26+, Archive Data Shard, 4 Hr Free Chest, Trial Bells, 10 Min Free Chest, Optical Diodes, Nova Squadron Supply, UC Event Ticket Gift, Alliance Tournaments Sigma Refresh!, Fleet Commander Materials, Independent Archives Schematics, G4 Ascension Unlock Gift, Nadion Supply |
+| 2026-07-05 | 12:52 | main | 10 Min Free Chest |
+| 2026-07-05 | 11:36 | main | 10 Min Free Chest |
+| 2026-07-05 | 09:57 | main | 4 Hr Free Chest, 10 Min Free Chest |
+| 2026-07-05 | 07:46 | main | 10 Min Free Chest |
+| 2026-07-05 | 04:33 | main | 4 Hr Free Chest, 10 Min Free Chest, Optical Diodes |
+| 2026-07-05 | 00:12 | main | 10 Min Free Chest |
+| 2026-07-04 | 23:10 | main | 10 Min Free Chest |
+| 2026-07-04 | 22:05 | main | 4 Hr Free Chest, 10 Min Free Chest |
+| 2026-07-04 | 21:00 | main | 10 Min Free Chest |
+| 2026-07-04 | 19:57 | main | Daily Mission Key Drop, 24 Hr Free Chest [BAJORAN FAVOR], Holo-Field Amplifiers, Replicator Rations, Emerald Chain Tier 26+, Archive Data Shard, Trial Bells, 10 Min Free Chest, Nova Squadron Supply, Fleet Commander Materials, Independent Archives Schematics, Nadion Supply |
+| 2026-07-04 | 18:40 | main | 10 Min Free Chest |
+| 2026-07-04 | 17:40 | main | 4 Hr Free Chest, 10 Min Free Chest |
+| 2026-07-04 | 16:36 | main | 10 Min Free Chest |
+| 2026-07-04 | 14:12 | main | 10 Min Free Chest |
+| 2026-07-04 | 12:37 | main | 4 Hr Free Chest, 10 Min Free Chest |
+| 2026-07-04 | 11:13 | main | 10 Min Free Chest |
+| 2026-07-04 | 09:48 | main | 10 Min Free Chest |
+| 2026-07-04 | 07:33 | main | 4 Hr Free Chest, 10 Min Free Chest |
+| 2026-07-04 | 04:50 | main | 10 Min Free Chest |
+| 2026-07-04 | 01:09 | main | 10 Min Free Chest |
+| 2026-07-03 | 23:29 | main | 10 Min Free Chest |
+| 2026-07-03 | 22:14 | main | 4 Hr Free Chest, 10 Min Free Chest |
+| 2026-07-03 | 21:00 | main | 24 Hr Free Chest [BAJORAN FAVOR], Holo-Field Amplifiers, Replicator Rations, Emerald Chain Tier 26+, Archive Data Shard, Trial Bells, 10 Min Free Chest, Nova Squadron Supply, Optical Diodes, Fleet Commander Materials, Independent Archives Schematics, Nadion Supply, Daily Mission Key Drop |
+| 2026-07-03 | 19:52 | main | 10 Min Free Chest |
+| 2026-07-03 | 18:10 | main | 4 Hr Free Chest, 10 Min Free Chest |
+| 2026-07-03 | 16:53 | main | 10 Min Free Chest, UC Event Ticket Gift |
+| 2026-07-03 | 15:22 | main | 10 Min Free Chest |
+| 2026-07-03 | 13:06 | main | 4 Hr Free Chest, 10 Min Free Chest |
+| 2026-07-03 | 11:03 | main | 10 Min Free Chest |
+| 2026-07-03 | 08:17 | main | 4 Hr Free Chest, Beyond the Threat Officers Gift, 10 Min Free Chest |
+| 2026-07-03 | 05:00 | main | 10 Min Free Chest |
+| 2026-07-03 | 01:14 | main | 4 Hr Free Chest, 10 Min Free Chest |
+| 2026-07-02 | 23:32 | main | 10 Min Free Chest |
+| 2026-07-02 | 22:16 | main | 24 Hr Free Chest [BAJORAN FAVOR], Holo-Field Amplifiers, Replicator Rations, Emerald Chain Tier 26+, Archive Data Shard, Trial Bells, 10 Min Free Chest, Nova Squadron Supply, Optical Diodes, Fleet Commander Materials, Independent Archives Schematics, Nadion Supply, Daily Mission Key Drop |
+| 2026-07-02 | 21:01 | main | 10 Min Free Chest |
+| 2026-07-02 | 19:54 | main | 4 Hr Free Chest, 10 Min Free Chest |
+| 2026-07-02 | 18:12 | main | 10 Min Free Chest |
+| 2026-07-02 | 16:25 | main | 10 Min Free Chest |
+| 2026-07-02 | 14:38 | main | 4 Hr Free Chest, 10 Min Free Chest |
+| 2026-07-02 | 12:23 | main | 10 Min Free Chest |
+| 2026-07-02 | 10:18 | main | 4 Hr Free Chest, 10 Min Free Chest |
+| 2026-07-02 | 07:27 | main | 7 Day Loyalty Chest, 10 Min Free Chest, 30 Day Loyalty Chest |
+| 2026-07-02 | 03:52 | main | 4 Hr Free Chest, 10 Min Free Chest |
+| 2026-07-01 | 23:58 | main | Daily Mission Key Drop, 24 Hr Free Chest [BAJORAN FAVOR], Holo-Field Amplifiers, Replicator Rations, Emerald Chain Tier 26+, Archive Data Shard, Trial Bells, 10 Min Free Chest, Nova Squadron Supply, Optical Diodes, Fleet Commander Materials, Independent Archives Schematics, Nadion Supply |
+| 2026-07-01 | 22:42 | main | 10 Min Free Chest |
+| 2026-07-01 | 21:13 | main | 4 Hr Free Chest, 10 Min Free Chest |
+| 2026-07-01 | 17:54 | main | 10 Min Free Chest |
+| 2026-07-01 | 15:56 | main | 4 Hr Free Chest, 10 Min Free Chest |
+| 2026-07-01 | 13:12 | main | 10 Min Free Chest |
+| 2026-07-01 | 10:10 | main | 4 Hr Free Chest, 10 Min Free Chest |
+| 2026-07-01 | 06:09 | main | 4 Hr Free Chest, 10 Min Free Chest |
+| 2026-07-01 | 01:34 | main | 24 Hr Free Chest [BAJORAN FAVOR], Holo-Field Amplifiers, Replicator Rations, Emerald Chain Tier 26+, Archive Data Shard, 4 Hr Free Chest, Trial Bells, 10 Min Free Chest, Nova Squadron Supply, Optical Diodes, Fleet Commander Materials, Independent Archives Schematics, Nadion Supply, Daily Mission Key Drop |
+| 2026-06-28 | 01:38 | main | 4 Hr Free Chest, 10 Min Free Chest |
+| 2026-06-27 | 23:32 | main | 10 Min Free Chest |
+| 2026-06-27 | 22:18 | main | 10 Min Free Chest |
+| 2026-06-27 | 21:14 | main | Daily Mission Key Drop, 10 Min Free Chest, UC Event Ticket Gift |
+| 2026-06-27 | 20:00 | main | 4 Hr Free Chest, 10 Min Free Chest |
+| 2026-06-27 | 18:48 | main | 10 Min Free Chest |
+| 2026-06-27 | 17:32 | main | 10 Min Free Chest |
+| 2026-06-27 | 16:15 | main | 10 Min Free Chest |
+| 2026-06-27 | 15:00 | main | 4 Hr Free Chest, 10 Min Free Chest |
+| 2026-06-27 | 13:25 | main | 10 Min Free Chest |
+| 2026-06-27 | 11:53 | main | 10 Min Free Chest |
+| 2026-06-27 | 10:25 | main | 4 Hr Free Chest, 10 Min Free Chest |
+| 2026-06-27 | 08:13 | main | 10 Min Free Chest |
+| 2026-06-27 | 05:36 | main | 24 Hr Free Chest [BAJORAN FAVOR], Holo-Field Amplifiers, Replicator Rations, Emerald Chain Tier 26+, Archive Data Shard, 4 Hr Free Chest, Trial Bells, 10 Min Free Chest, Nova Squadron Supply, Optical Diodes, Fleet Commander Materials, Independent Archives Schematics, Nadion Supply |
+| 2026-06-27 | 01:33 | main | 10 Min Free Chest |
+| 2026-06-26 | 23:38 | main | 10 Min Free Chest |
+| 2026-06-26 | 23:22 | main | 4 Hr Free Chest, 10 Min Free Chest |
 | 2026-06-16 | 01:49 | main | 10 Min Free Chest |
 | 2026-06-15 | 23:13 | main | 4 Hr Free Chest, 10 Min Free Chest |
 | 2026-06-15 | 21:20 | main | 10 Min Free Chest |

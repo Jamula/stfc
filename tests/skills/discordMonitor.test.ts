@@ -465,6 +465,7 @@ describe("discordMonitor / cooldown writes only", () => {
 describe("discordMonitor / workflow YAML assertions (T027)", () => {
   // T018 sub-assertion that needs T027's YAML to exist. Read the workflow
   // once and verify the bit-for-bit values that the spec requires.
+  // refresh-token.yml: schedule removed (passwordless OTP login); manual dispatch only.
   const yamlPath = path.resolve(
     import.meta.dirname,
     "..",
