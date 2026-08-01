@@ -1,5 +1,6 @@
 {
   "memory/config.json": "{\n  \"version\": 1,\n  \"defaultProvider\": \"local\",\n  \"promptOnlyFallback\": true,\n  \"externalProviders\": {\n    \"hostInjectedCopilotAdapter\": {\n      \"enabled\": false,\n      \"requireApproval\": true\n    }\n  },\n  \"policy\": {\n    \"rejectForbidden\": true,\n    \"rejectTransientDurableWrites\": true,\n    \"auditContent\": false,\n    \"auditMaxBytes\": 1048576,\n    \"auditMaxArchives\": 3\n  }\n}\n",
   "memory/index.json": "[]\n",
-  "memory/audit.jsonl": "{\"timestamp\":\"2026-08-01T02:29:05.906Z\",\"action\":\"search\",\"reason\":\"Search returned 0 result(s)\"}\n"
+  "memory/audit.jsonl": "{\"timestamp\":\"2026-08-01T02:29:05.906Z\",\"action\":\"search\",\"reason\":\"Search returned 0 result(s)\"}\n",
+  "orchestration-log/2026-07-31T19-27-15.825-07-00-obrien.md": "# O'Brien — Main Checkout Reconciliation\n\n- **Requested by:** cyrusj\n- **Mode:** sync, Standard\n- **Completed:** 2026-07-31T19:27:15.825-07:00\n- **Work:** Reconciled the dirty main checkout with `origin/main`, validated the Squad upgrade/migration changes, committed, and directly pushed `dcafb9c9a64bc1ae67355bf876053fe3f67d6246` to `main`.\n- **Outcome:** Local and origin `main` synchronized and clean. 1,108 tests passed. 28 YAML and 11 JSON files validated. Secret scan clean. Linked worktree untouched.\n"
 }
