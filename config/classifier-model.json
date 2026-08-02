@@ -1,8 +1,0 @@
-{
-  "id": "Xenova/nli-deberta-v3-xsmall",
-  "revision": "main",
-  "weightSha256": "0000000000000000000000000000000000000000000000000000000000000000",
-  "task": "zero-shot-classification",
-  "labels": ["tip", "trick", "hack", "event-info", "patch-note", "chatter"],
-  "confidenceFloor": 0.55
-}

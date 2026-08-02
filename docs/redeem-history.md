@@ -7,6 +7,31 @@ inserted at the top**, so the most recent run is always visible first.
 
 | Date (UTC) | Time (UTC) | Account | Gifts claimed |
 | --- | --- | --- | --- |
+| 2026-08-02 | 17:01 | main | 4 Hr Free Chest, 10 Min Free Chest |
+| 2026-08-02 | 15:57 | main | 10 Min Free Chest |
+| 2026-08-02 | 14:51 | main | 10 Min Free Chest |
+| 2026-08-02 | 13:49 | main | 10 Min Free Chest, Holo-Field Amplifiers |
+| 2026-08-02 | 12:04 | main | 4 Hr Free Chest, 10 Min Free Chest |
+| 2026-08-02 | 10:58 | main | 10 Min Free Chest |
+| 2026-08-02 | 09:24 | main | 10 Min Free Chest |
+| 2026-08-02 | 07:14 | main | 4 Hr Free Chest, 10 Min Free Chest |
+| 2026-08-02 | 04:35 | main | 10 Min Free Chest |
+| 2026-08-02 | 01:08 | main | Daily Mission Key Drop, 24 Hr Free Chest [BAJORAN FAVOR], Replicator Rations, Emerald Chain Tier 26+, Archive Data Shard, 4 Hr Free Chest, Trial Bells, 10 Min Free Chest, Optical Diodes, Nova Squadron Supply, UC Event Ticket Gift, Alliance Tournaments Sigma Refresh!, Fleet Commander Materials, Independent Archives Schematics, Nadion Supply |
+| 2026-08-01 | 23:29 | main | 10 Min Free Chest |
+| 2026-08-01 | 22:27 | main | 10 Min Free Chest |
+| 2026-08-01 | 21:27 | main | 10 Min Free Chest |
+| 2026-08-01 | 20:30 | main | 10 Min Free Chest |
+| 2026-08-01 | 19:36 | main | 10 Min Free Chest |
+| 2026-08-01 | 18:15 | main | 10 Min Free Chest |
+| 2026-08-01 | 17:18 | main | 10 Min Free Chest |
+| 2026-08-01 | 16:16 | main | 10 Min Free Chest |
+| 2026-08-01 | 15:17 | main | Incursion Prep, 10 Min Free Chest |
+| 2026-08-01 | 12:37 | main | 4 Hr Free Chest, 10 Min Free Chest |
+| 2026-08-01 | 11:37 | main | 10 Min Free Chest |
+| 2026-08-01 | 10:19 | main | 10 Min Free Chest |
+| 2026-08-01 | 08:36 | main | 4 Hr Free Chest, Incursion Prep, 10 Min Free Chest |
+| 2026-08-01 | 06:16 | main | 10 Min Free Chest |
+| 2026-08-01 | 03:41 | main | 10 Min Free Chest |
 | 2026-08-01 | 02:21 | main | Daily Mission Key Drop, 24 Hr Free Chest [BAJORAN FAVOR], Holo-Field Amplifiers, Replicator Rations, Emerald Chain Tier 26+, Archive Data Shard, 4 Hr Free Chest, Trial Bells, 10 Min Free Chest, Optical Diodes, Nova Squadron Supply, UC Event Ticket Gift, Alliance Tournaments Sigma Refresh!, Fleet Commander Materials, Independent Archives Schematics, G4 Ascension Unlock Gift, Nadion Supply |
 | 2026-07-05 | 12:52 | main | 10 Min Free Chest |
 | 2026-07-05 | 11:36 | main | 10 Min Free Chest |
