@@ -1,7 +1,39 @@
 # .squad/decisions/ — Decision Registry
 
-**Updated:** 2026-05-08T21:33:38Z  
-**Session:** speckit-v1.1-critique
+**Updated:** 2026-08-13T04:38:00Z  
+**Session:** redeem-outage-recovery
+
+---
+
+### 2026-08-13T04:38:00Z: Coordinator — Redeem outage: outcome classification, token liveness, CI commits
+
+**By:** Coordinator (recorded on behalf of Scribe)
+
+**Context:** The "Redeem gifts" workflow reported green while claiming zero gifts. Last real claim was 2026-08-02T17:01Z. Three independent causes, each masking the next: (1) the stored STFC store JWT was dead — `/auth/me` returned HTTP 200 while `GET /offers/gifts?available=true` returned HTTP 401; (2) failures were invisible; (3) claims could not be recorded. A fourth cause blocked unattended token refresh.
+
+**D1 — Only genuinely benign outcomes count as "expected".**
+`isExpectedOutcome()` in `src/lib/outcomes.ts` built its EXPECTED set from `Object.values(Outcomes)`, so every outcome — including `TOKEN_EXPIRED`, `TRANSIENT` and `UNKNOWN_RESULT` — counted as benign and `account.ok` was always true. The set is now explicit and excludes those three, so `account.ok` is meaningful.
+
+**D2 — A store 401 on `gifts/list` means a dead token, not an infrastructure error.**
+Even when `/auth/me` returns 200, trust the endpoint that does the real work: the account is marked `TOKEN_EXPIRED`, the run exits 2, and the summary says "secret rotation needed". Promo codes are skipped when the token is dead rather than firing every code at a dead session.
+
+**D3 — CI must commit generated files with `git commit --no-verify`.**
+`npm ci` runs `prepare` → `simple-git-hooks`, installing the developer pre-commit hook onto the runner; the workflows' `git commit` then ran the full `npm test` and aborted on an unrelated failing test. This lost the redeem-history rows *after* 16 gifts had been claimed, and caused the 2026-08-07 workflow failure. Applied to `redeem.yml`, `discord-monitor.yml`, `knowledge-rebuild.yml`, `optimize-crew.yml`.
+
+**D4 — All workflows resolve the Node version from `.nvmrc`.**
+`.nvmrc` (currently `24`) is the single lever; no workflow hardcodes a Node version.
+
+**D5 — Capture-token failure diagnostics never record element values.**
+`scripts/capture-token.mjs` uploads a screenshot plus an attribute-only DOM inventory on failure. Values are deliberately excluded so the artifact cannot leak the OTP or the JWT. This diagnosis revealed that Scopely moved to passwordless login, rendering the 6-digit code as six separate single-character boxes, while every OTP selector expected one `maxlength="6"` input.
+
+**Outcome:** After the token was refreshed and pushed to the `STFC_ACCOUNTS` secret, the workflow claimed 16 gifts and the run went green. Commits on `main`: `e15df6b`, `56ad201`, `0a9f49d`, `b227109`, `af99c77`, `3a733e4`, `ae35dcf`.
+
+**Open items (not resolved):**
+
+- **O1:** `30 Day Loyalty Chest` and `7 Day Loyalty Chest` consistently return HTTP 500 on `POST /offers/gifts/claim`. Gift claims are POSTs and are not retried (only GETs and promo codes retry).
+- **O2:** `tests/web/shell.test.ts` fails on a Vite build error (1108/1109 pass). Pre-existing and unrelated; it blocks all git hooks.
+- **O3:** The STFC token expires ~2026-09-12. Unattended refresh still requires a human-supplied email OTP (`refresh-token.yml` schedule is disabled).
+- **O4:** Cron health for `redeem.yml` (`*/10`) is UNVERIFIED. An earlier claim that it was throttled to ~1/hour was RETRACTED: `Cleanup Old Workflow Runs` was dispatched three times on 2026-08-13, once with `older_than_hours: 1`, which deleted the scheduled runs being counted.
 
 ---
 
