@@ -7,6 +7,7 @@ inserted at the top**, so the most recent run is always visible first.
 
 | Date (UTC) | Time (UTC) | Account | Gifts claimed |
 | --- | --- | --- | --- |
+| 2026-08-13 | 17:39 | main | 10 Min Free Chest |
 | 2026-08-13 | 16:39 | main | Officer Command Pass Points, 10 Min Free Chest, Federation Day The Doctor |
 | 2026-08-13 | 15:42 | main | 10 Min Free Chest |
 | 2026-08-13 | 14:46 | main | 4 Hr Free Chest, 10 Min Free Chest |
