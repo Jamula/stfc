@@ -24,10 +24,28 @@ export const Outcomes = {
 
 export type Outcome = (typeof Outcomes)[keyof typeof Outcomes];
 
-// All known outcomes are "expected" and DO NOT fail the workflow. The only
-// things that fail the workflow are infrastructure errors raised as thrown
-// exceptions (malformed STFC_ACCOUNTS, schema mismatch, uncaught crashes).
-const EXPECTED: ReadonlySet<Outcome> = new Set<Outcome>(Object.values(Outcomes));
+// "Expected" outcomes are benign steady-state results: the operation reached
+// the API and got a definitive answer we understand. They do not mark the
+// account as degraded.
+//
+// Deliberately EXCLUDED are the three outcomes that mean "we did not get a
+// usable answer": UNKNOWN_RESULT (unrecognized/failed call), TOKEN_EXPIRED
+// (credentials dead) and TRANSIENT (network/5xx). Previously every outcome
+// was treated as expected, which made `account.ok` always true and let a
+// totally broken run report a clean ✅ while claiming nothing.
+const EXPECTED: ReadonlySet<Outcome> = new Set<Outcome>([
+  Outcomes.CLAIMED,
+  Outcomes.ALREADY_CLAIMED,
+  Outcomes.AT_MAX,
+  Outcomes.IS_SPECIAL,
+  Outcomes.HAS_COST,
+  Outcomes.NO_GIFTS_AVAILABLE,
+  Outcomes.CODE_REDEEMED,
+  Outcomes.CODE_ALREADY_USED,
+  Outcomes.CODE_INVALID_OR_EXPIRED,
+  Outcomes.LEVEL_TOO_LOW,
+  Outcomes.TOKEN_VALID,
+]);
 
 export function isExpectedOutcome(o: Outcome): boolean {
   return EXPECTED.has(o);

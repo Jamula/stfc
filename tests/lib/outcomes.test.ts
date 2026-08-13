@@ -79,9 +79,28 @@ describe("classifyGiftSkip", () => {
 });
 
 describe("isExpectedOutcome", () => {
-  it("returns true for every defined Outcome", () => {
-    for (const value of Object.values(Outcomes)) {
+  it("returns true for benign steady-state outcomes", () => {
+    const benign = [
+      Outcomes.CLAIMED,
+      Outcomes.ALREADY_CLAIMED,
+      Outcomes.AT_MAX,
+      Outcomes.IS_SPECIAL,
+      Outcomes.HAS_COST,
+      Outcomes.NO_GIFTS_AVAILABLE,
+      Outcomes.CODE_REDEEMED,
+      Outcomes.CODE_ALREADY_USED,
+      Outcomes.CODE_INVALID_OR_EXPIRED,
+      Outcomes.LEVEL_TOO_LOW,
+      Outcomes.TOKEN_VALID,
+    ];
+    for (const value of benign) {
       assert.equal(isExpectedOutcome(value as Outcome), true, `expected ${value} to be expected`);
+    }
+  });
+
+  it("returns false for outcomes that mean we got no usable answer", () => {
+    for (const value of [Outcomes.UNKNOWN_RESULT, Outcomes.TOKEN_EXPIRED, Outcomes.TRANSIENT]) {
+      assert.equal(isExpectedOutcome(value as Outcome), false, `expected ${value} to be degraded`);
     }
   });
 

@@ -180,6 +180,12 @@ async function processAccount(
     items.every((i) => isExpectedOutcome(i.outcome)) &&
     codes.every((c) => isExpectedOutcome(c.outcome));
 
+  const claimed = items.filter((i) => i.outcome === Outcomes.CLAIMED).length;
+  log.info(
+    `[${account.name}] token=${tokenStatus} claimed=${claimed}/${items.length} gift(s), ` +
+      `${codes.length} promo code(s) — ${ok ? "ok" : "DEGRADED"}`,
+  );
+
   return { name: account.name, expiryHuman, tokenStatus, items, promoCodes: codes, ok };
 }
 
@@ -197,11 +203,15 @@ async function checkAuth(client: ApiClient, accountName: string, report: RunAllR
     await getMe(client);
     return Outcomes.TOKEN_VALID;
   } catch (err) {
-    if (err instanceof TokenExpiredError) return Outcomes.TOKEN_EXPIRED;
+    if (err instanceof TokenExpiredError) {
+      log.error(`[${accountName}] auth/me rejected the token — re-capture STFC_ACCOUNTS`);
+      return Outcomes.TOKEN_EXPIRED;
+    }
     if (err instanceof SchemaMismatchError) {
       report.errors.push({ account: accountName, message: `auth/me schema mismatch: ${redactForLog(err)}` });
       return Outcomes.UNKNOWN_RESULT;
     }
+    log.error(`[${accountName}] auth/me failed: ${redactForLog(err)}`);
     report.errors.push({ account: accountName, message: `auth/me failed: ${redactForLog(err)}` });
     return Outcomes.UNKNOWN_RESULT;
   }
@@ -220,8 +230,19 @@ async function processGifts(
       report.errors.push({ account: accountName, message: `gifts/list schema mismatch: ${redactForLog(err)}` });
       return [];
     }
-    return [{ id: "(list)", outcome: classifyHttpError(err), detail: redactForLog(err) }];
+    const outcome = classifyHttpError(err);
+    const detail = redactForLog(err);
+    log.error(`[${accountName}] gifts/list FAILED (${outcome}): ${detail}`);
+    // A non-transient list failure means we claimed nothing and could not
+    // even see the catalog. That must fail the workflow loudly rather than
+    // report a green run with zero claims.
+    if (outcome !== Outcomes.TRANSIENT) {
+      report.errors.push({ account: accountName, message: `gifts/list failed: ${detail}` });
+    }
+    return [{ id: "(list)", outcome, detail }];
   }
+
+  log.info(`[${accountName}] gifts/list returned ${gifts.length} gift(s)`);
 
   if (gifts.length === 0) {
     return [{ id: "(none)", outcome: Outcomes.NO_GIFTS_AVAILABLE }];
@@ -229,7 +250,9 @@ async function processGifts(
 
   const items: ItemResult[] = [];
   for (const gift of gifts) {
-    items.push(await processOneGift(client, gift, accountName, report));
+    const result = await processOneGift(client, gift, accountName, report);
+    log.info(`[${accountName}] gift "${result.id}" → ${result.outcome}${result.detail ? ` (${result.detail})` : ""}`);
+    items.push(result);
   }
   return items;
 }
