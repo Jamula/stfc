@@ -210,7 +210,7 @@ describe("runAll", () => {
     // it on /offers/gifts. That used to report a healthy ✅ run with zero
     // claims, because every outcome counted as "expected".
     const fake = makeFakeClient({
-      getMe: async () => ({ ok: true }),
+      getMe: async () => ({ id: 1, level: 50 }),
       listGifts: async () => {
         throw new TokenExpiredError("Authentication rejected (401) on GET /offers/gifts", 401);
       },
