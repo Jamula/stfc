@@ -205,8 +205,39 @@ describe("runAll", () => {
     assert.match(summary, /secret rotation/i);
   });
 
-  it("promo codes mix: success / used / invalid / unknown classified correctly", async () => {
-    const codeFile = path.join(dir, "promo.txt");
+  it("auth/me OK but gifts/list 401 → not a green run; flags secret rotation", async () => {
+    // Regression: the store can accept the JWT on /auth/me and still reject
+    // it on /offers/gifts. That used to report a healthy ✅ run with zero
+    // claims, because every outcome counted as "expected".
+    const fake = makeFakeClient({
+      getMe: async () => ({ ok: true }),
+      listGifts: async () => {
+        throw new TokenExpiredError("Authentication rejected (401) on GET /offers/gifts", 401);
+      },
+    });
+    const summaryFile = path.join(dir, "summary-store-401.md");
+    const codeFile = path.join(dir, "promo-store-401.txt");
+    fs.writeFileSync(codeFile, "SHOULDNOTBETRIED\n", "utf8");
+
+    const { result, exitCode } = await runAll({
+      accounts: [{ name: "main", token: makeJwt({ exp: 9999999999 }) }],
+      clientFactory: () => fake as unknown as ApiClient,
+      summary: createSummaryWriter(summaryFile),
+      promoCodesPath: codeFile,
+      deadCodesPath: path.join(dir, "dead-store-401.json"),
+    });
+
+    const account = result.accounts[0]!;
+    assert.equal(account.ok, false, "account must not report ok when the store rejects the token");
+    assert.equal(account.tokenStatus, Outcomes.TOKEN_EXPIRED);
+    assert.equal(exitCode, 2, "a dead token must ask for secret rotation, not exit 0");
+    assert.equal(account.promoCodes.length, 0, "promo codes must not be burned against a dead token");
+
+    const summary = fs.readFileSync(summaryFile, "utf8");
+    assert.match(summary, /secret rotation/i);
+  });
+
+  it("promo codes mix: success / used / invalid / unknown classified correctly", async () => {    const codeFile = path.join(dir, "promo.txt");
     fs.writeFileSync(
       codeFile,
       "TESTCODE1\nUSEDCODE\nOLDCODE\nWEIRDCODE\n",
