@@ -394,23 +394,34 @@ const OTP_SELECTORS = [
   'input[type="tel"][maxlength="6"]',
 ];
 
-// Scopely's passwordless login renders the code as six separate single-char
-// boxes, so none of the single-input selectors above match. Detect those by
-// their maxlength="1" inputs.
-const SPLIT_OTP_SELECTOR = 'input[maxlength="1"]';
+// Scopely's passwordless login renders the code as several separate
+// single-character boxes, so none of the single-input selectors above match.
+// Their exact attributes have changed before, so match on any of the shapes
+// these widgets commonly use rather than on maxlength alone.
+const SPLIT_OTP_SELECTOR = [
+  'input[maxlength="1"]',
+  'input[inputmode="numeric"]',
+  'input[type="tel"]',
+  'input[data-testid*="otp" i]',
+  'input[class*="otp" i]',
+  'input[aria-label*="digit" i]',
+].join(", ");
 
-// Locate the OTP entry widget, whichever form it takes. Returns null when
-// neither is present/visible.
+// Locate the OTP entry widget, whichever form it takes. Searches every frame
+// because the Scopely login renders inside a modal that may be an iframe.
+// Returns null when neither is present/visible.
 async function findOtpEntry(page) {
-  for (const sel of OTP_SELECTORS) {
-    const el = await page.$(sel).catch(() => null);
-    if (el && (await el.isVisible().catch(() => false))) return { kind: "single", el };
-  }
+  for (const frame of page.frames()) {
+    for (const sel of OTP_SELECTORS) {
+      const el = await frame.$(sel).catch(() => null);
+      if (el && (await el.isVisible().catch(() => false))) return { kind: "single", el, frame };
+    }
 
-  const boxes = page.locator(SPLIT_OTP_SELECTOR);
-  const count = await boxes.count().catch(() => 0);
-  if (count >= 4 && (await boxes.first().isVisible().catch(() => false))) {
-    return { kind: "split", boxes, count };
+    const boxes = frame.locator(SPLIT_OTP_SELECTOR);
+    const count = await boxes.count().catch(() => 0);
+    if (count >= 4 && (await boxes.first().isVisible().catch(() => false))) {
+      return { kind: "split", boxes, count, frame };
+    }
   }
   return null;
 }
@@ -838,6 +849,52 @@ async function main() {
         err(`Failure screenshot written to ${shot}`);
       } catch (e) {
         err(`Failed to write failure screenshot: ${e instanceof Error ? e.message : e}`);
+      }
+
+      // Attribute-only inventory of every frame's inputs. Deliberately records
+      // no element *values*, so it can never leak the code or the JWT — it
+      // exists purely so a selector that stops matching can be fixed from
+      // evidence instead of guesswork.
+      try {
+        const frames = [];
+        for (const frame of page.frames()) {
+          const info = await frame
+            .evaluate(() => {
+              const attrs = (el) => ({
+                tag: el.tagName,
+                type: el.getAttribute("type"),
+                name: el.getAttribute("name"),
+                id: el.id || null,
+                cls: el.getAttribute("class"),
+                maxlength: el.getAttribute("maxlength"),
+                autocomplete: el.getAttribute("autocomplete"),
+                inputmode: el.getAttribute("inputmode"),
+                ariaLabel: el.getAttribute("aria-label"),
+                dataSe: el.getAttribute("data-se"),
+                dataTestid: el.getAttribute("data-testid"),
+                visible: el.getClientRects().length > 0,
+              });
+              return {
+                url: location.href,
+                inputs: Array.from(document.querySelectorAll("input, textarea, [contenteditable='true']")).map(attrs),
+                buttons: Array.from(document.querySelectorAll("button")).map((b) => ({
+                  text: (b.textContent || "").trim().slice(0, 40),
+                  type: b.getAttribute("type"),
+                  disabled: b.disabled,
+                })),
+                shadowHosts: Array.from(document.querySelectorAll("*"))
+                  .filter((e) => e.shadowRoot)
+                  .map((e) => e.tagName + (e.id ? `#${e.id}` : "")),
+              };
+            })
+            .catch((e) => ({ url: frame.url(), error: String(e) }));
+          frames.push(info);
+        }
+        const domFile = path.join(shotDir, "dom-inputs.json");
+        await fs.writeFile(domFile, JSON.stringify({ frames }, null, 2), "utf8");
+        err(`DOM input inventory written to ${domFile}`);
+      } catch (e) {
+        err(`Failed to write DOM inventory: ${e instanceof Error ? e.message : e}`);
       }
     }
 
