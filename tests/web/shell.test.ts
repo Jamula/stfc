@@ -113,6 +113,9 @@ describe('vite build', () => {
         cwd: WEB_DIR,
         encoding: 'utf8',
         timeout: 180_000,
+        // npm is npm.cmd on Windows, which spawnSync cannot exec directly —
+        // without a shell it fails with status null before npm ever runs.
+        shell: process.platform === 'win32',
       });
       assert.equal(
         installResult.status,
@@ -125,6 +128,7 @@ describe('vite build', () => {
       cwd: WEB_DIR,
       encoding: 'utf8',
       timeout: 120_000,
+      shell: process.platform === 'win32',
     });
   });
 
