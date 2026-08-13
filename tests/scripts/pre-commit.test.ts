@@ -185,6 +185,66 @@ describe("checkSquadBoundary", () => {
   });
 });
 
+// ── #11 — Portable filenames ─────────────────────────────────────────
+
+describe("checkPortableFilenames", () => {
+  let checkPortableFilenames: (staged: string[]) => void;
+  let exitState: { code: number | null };
+
+  beforeEach(async () => {
+    exitState = captureExit();
+    mock.method(console, "error", () => {});
+    const mod = await import("../../scripts/pre-commit-checks.mjs");
+    checkPortableFilenames = mod.checkPortableFilenames;
+  });
+
+  afterEach(() => {
+    mock.restoreAll();
+  });
+
+  it("passes for ordinary paths", () => {
+    checkPortableFilenames(["src/index.ts", ".github/workflows/redeem.yml"]);
+    assert.equal(exitState.code, null);
+  });
+
+  it("passes for the safe timestamp form", () => {
+    checkPortableFilenames([".squad/log/2026-08-13T04-38-00Z-session.md"]);
+    assert.equal(exitState.code, null);
+  });
+
+  it("fails for colons in a filename (the #186 regression)", () => {
+    assert.throws(
+      () => checkPortableFilenames([".squad/log/2026-05-12T05:16:11Z-clarify.md"]),
+      /process\.exit\(1\)/,
+    );
+    assert.equal(exitState.code, 1);
+  });
+
+  it("fails for other Windows-illegal characters", () => {
+    for (const bad of ["docs/what?.md", 'docs/a"b.md', "docs/a*b.md", "docs/a|b.md"]) {
+      exitState = captureExit();
+      assert.throws(() => checkPortableFilenames([bad]), /process\.exit\(1\)/);
+      assert.equal(exitState.code, 1, `expected ${bad} to be rejected`);
+    }
+  });
+
+  it("does not flag forward slashes as path separators", () => {
+    checkPortableFilenames(["a/b/c/d.md"]);
+    assert.equal(exitState.code, null);
+  });
+
+  it("error message suggests the safe timestamp format", () => {
+    const errors: string[] = [];
+    mock.method(console, "error", (msg: string) => errors.push(msg));
+
+    assert.throws(
+      () => checkPortableFilenames([".squad/log/2026-05-12T05:16:11Z-x.md"]),
+      /process\.exit\(1\)/,
+    );
+    assert.match(errors.join("\n"), /2026-08-13T04-38-00Z/);
+  });
+});
+
 // ── #10 — Workflow pinning tests ─────────────────────────────────────
 
 describe("checkWorkflowPinningTests", () => {

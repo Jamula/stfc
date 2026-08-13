@@ -7,6 +7,8 @@ export function checkConstitutionSync(
 
 export function checkSquadBoundary(staged: string[]): void;
 
+export function checkPortableFilenames(staged: string[]): void;
+
 export function grepTestsForWorkflow(basename: string): string[];
 
 export function checkWorkflowPinningTests(

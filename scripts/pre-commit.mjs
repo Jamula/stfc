@@ -16,6 +16,7 @@ import { execSync } from 'child_process';
 import {
   checkConstitutionSync,
   checkSquadBoundary,
+  checkPortableFilenames,
   checkWorkflowPinningTests,
 } from './pre-commit-checks.mjs';
 
@@ -30,6 +31,7 @@ const staged = execSync('git diff --cached --name-only', { encoding: 'utf8' })
 
 checkConstitutionSync(staged);
 checkSquadBoundary(staged);
+checkPortableFilenames(staged);
 checkWorkflowPinningTests(staged);
 
 // --- Test suite ---

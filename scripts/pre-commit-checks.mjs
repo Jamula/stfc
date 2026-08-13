@@ -103,6 +103,36 @@ export function checkSquadBoundary(staged) {
   );
 }
 
+// ── Check #11 — Staged filenames must be valid on Windows ───────────
+
+// Characters Windows forbids in filenames. Colons are the ones that actually
+// bit us: 21 `.squad/log/` and `.squad/orchestration-log/` files created in
+// the Linux Codespace carried names like `2026-05-12T05:16:11Z-...`. They
+// could never be checked out on Windows, and once they left the index Git for
+// Windows refused to restore them — which blocked *every* commit in the repo
+// until they were untracked. See #186.
+const WINDOWS_ILLEGAL_CHARS_RE = /[:*?"<>|]/;
+
+/**
+ * Reject staged paths containing characters that are illegal in Windows
+ * filenames. The repo is worked on from both Windows and Linux Codespaces, so
+ * a name that is legal for the author can be permanently unusable for someone
+ * else — and, as #186 showed, can wedge the whole repository.
+ */
+export function checkPortableFilenames(staged) {
+  const violations = staged.filter((f) => {
+    // Only the final segments matter; a path separator is not the problem.
+    return f.split('/').some((segment) => WINDOWS_ILLEGAL_CHARS_RE.test(segment));
+  });
+  if (violations.length === 0) return;
+
+  fail(
+    'Filenames must be valid on Windows — these contain one of : * ? " < > |\n' +
+      `${violations.map((f) => `    - ${f}`).join('\n')}\n` +
+      '  For timestamps use 2026-08-13T04-38-00Z, not 2026-08-13T04:38:00Z.',
+  );
+}
+
 // ── Check #10 — Workflow YAML edits must include pinning tests ───────
 
 /**
