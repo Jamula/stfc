@@ -776,6 +776,22 @@ async function main() {
       }
     }
 
+    // A screenshot of whatever the login page is actually showing is the only
+    // way to tell a changed selector apart from a CAPTCHA when running
+    // headless in CI. Only the rendered page is captured — never page HTML,
+    // which could contain the JWT we are trying to protect.
+    const shotDir = process.env.STFC_DEBUG_DIR?.trim();
+    if (shotDir) {
+      try {
+        await fs.mkdir(shotDir, { recursive: true });
+        const shot = path.join(shotDir, "login-failure.png");
+        await page.screenshot({ path: shot, fullPage: true });
+        err(`Failure screenshot written to ${shot}`);
+      } catch (e) {
+        err(`Failed to write failure screenshot: ${e instanceof Error ? e.message : e}`);
+      }
+    }
+
     await browser.close();
     process.exit(1);
   }
