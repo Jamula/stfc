@@ -58,7 +58,9 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add docs/redeem-history.md
           NEW_LINES=$(git diff --cached --numstat docs/redeem-history.md | awk '{print $1}')
-          git commit -m "chore(history): append ${NEW_LINES} new claim row(s) [skip ci]"
+          # --no-verify: npm ci installs the developer pre-commit hook, which
+          # runs the full test suite. CI must not gate recording claims on that.
+          git commit --no-verify -m "chore(history): append ${NEW_LINES} new claim row(s) [skip ci]"
           # Retry-once on push race against a concurrent workflow.
           git pull --rebase origin "$GITHUB_REF_NAME" || true
           git push origin "HEAD:$GITHUB_REF_NAME"
