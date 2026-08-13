@@ -385,15 +385,68 @@ async function confirm(prompt, def = false) {
 // selectors were tried so the next maintainer knows what to update.
 // ----------------------------------------------------------------------------
 
-// Prompt the user for the 6-digit OTP, fill it into `field`, and click the
-// submit button. Retries up to `maxAttempts` times if Okta rejects the code
+// Selectors for a single-input OTP field (classic Okta widget).
+const OTP_SELECTORS = [
+  'input[autocomplete="one-time-code"]',
+  'input[name="credentials.passcode"]',
+  'input[data-se="o-form-input-passcode"]',
+  'input[type="text"][maxlength="6"]',
+  'input[type="tel"][maxlength="6"]',
+];
+
+// Scopely's passwordless login renders the code as six separate single-char
+// boxes, so none of the single-input selectors above match. Detect those by
+// their maxlength="1" inputs.
+const SPLIT_OTP_SELECTOR = 'input[maxlength="1"]';
+
+// Locate the OTP entry widget, whichever form it takes. Returns null when
+// neither is present/visible.
+async function findOtpEntry(page) {
+  for (const sel of OTP_SELECTORS) {
+    const el = await page.$(sel).catch(() => null);
+    if (el && (await el.isVisible().catch(() => false))) return { kind: "single", el };
+  }
+
+  const boxes = page.locator(SPLIT_OTP_SELECTOR);
+  const count = await boxes.count().catch(() => 0);
+  if (count >= 4 && (await boxes.first().isVisible().catch(() => false))) {
+    return { kind: "split", boxes, count };
+  }
+  return null;
+}
+
+// Type the code into whichever widget we found. Split widgets usually
+// auto-advance focus, but we target each box explicitly so the code lands
+// correctly even when they don't.
+async function fillOtp(page, entry, code) {
+  if (entry.kind === "single") {
+    await entry.el.fill(code).catch(() => {});
+    return;
+  }
+
+  const digits = code.replace(/\D/g, "").split("");
+  const limit = Math.min(digits.length, entry.count);
+  for (let i = 0; i < limit; i++) {
+    const box = entry.boxes.nth(i);
+    const digit = digits[i];
+    await box.click({ timeout: 2_000 }).catch(() => {});
+    try {
+      await box.fill(digit);
+    } catch {
+      await page.keyboard.type(digit, { delay: 30 }).catch(() => {});
+    }
+  }
+}
+
+// Prompt the user for the 6-digit OTP, fill it into the OTP widget, and click
+// the submit button. Retries up to `maxAttempts` times if Okta rejects the code
 // (detects the error banner or the input field re-appearing). Returns true on
 // success, false if the user presses Enter without a code or exhausts retries.
 //
 // In headless mode (headless=true) the code is read from /tmp/stfc-otp instead
 // of stdin. The script writes /tmp/stfc-otp-ready to signal it is waiting, then
 // polls /tmp/stfc-otp until the file appears (or timeout is reached).
-async function promptAndSubmitOtp({ page, field, log, maxAttempts = 3, headless = false }) {
+async function promptAndSubmitOtp({ page, entry, log, maxAttempts = 3, headless = false }) {
   const OTP_READY_FILE = "/tmp/stfc-otp-ready";
   const OTP_CODE_FILE = "/tmp/stfc-otp";
 
@@ -458,13 +511,10 @@ async function promptAndSubmitOtp({ page, field, log, maxAttempts = 3, headless 
       }
     }
 
-    // The field may have been cleared/re-rendered by Okta between attempts.
-    // Re-query it to avoid stale-element errors.
-    const currentField = await page.$(
-      'input[autocomplete="one-time-code"], input[name="credentials.passcode"], input[data-se="o-form-input-passcode"], input[type="text"][maxlength="6"], input[type="tel"][maxlength="6"]'
-    ).catch(() => null) ?? field;
-
-    await currentField.fill(code).catch(() => {});
+    // The widget may have been cleared/re-rendered between attempts, so
+    // re-query it to avoid stale-element errors.
+    const currentEntry = (await findOtpEntry(page)) ?? entry;
+    await fillOtp(page, currentEntry, code);
     await clickFirstAvailable(page, [
       'button:has-text("Verify")',
       'button:has-text("Submit")',
@@ -483,6 +533,10 @@ async function promptAndSubmitOtp({ page, field, log, maxAttempts = 3, headless 
       const el = await page.$(sel).catch(() => null);
       if (el && (await el.isVisible().catch(() => false))) {
         const text = await el.textContent().catch(() => "");
+        // The passwordless screen shows a permanent "Haven't received an
+        // email? Send again" notice that also carries role="alert". Treating
+        // it as a rejection would burn every retry instantly.
+        if (/haven't received|send again|resend/i.test(text ?? "")) continue;
         log(`auto-login: OTP rejected (attempt ${attempt}/${maxAttempts}): "${text?.trim().slice(0, 80)}"`);
         rejected = true;
         break;
@@ -556,29 +610,18 @@ async function tryAutoLogin(page, { email, password, log, err, ci, headless = fa
   // input (email-code-only account). Whichever arrives first determines
   // which branch we take.
   log("auto-login: waiting for password-switch link or OTP input…");
-  const OTP_SELECTORS = [
-    'input[autocomplete="one-time-code"]',
-    'input[name="credentials.passcode"]',
-    'input[data-se="o-form-input-passcode"]',
-    'input[type="text"][maxlength="6"]',
-    'input[type="tel"][maxlength="6"]',
-  ];
   const PASSWORD_SWITCH_SELECTOR =
     'a:has-text("Sign in with password instead"), a.switchAuthenticator, a:has-text("password instead"), button:has-text("Sign in with password instead")';
 
   let gotPasswordSwitch = false;
-  let primaryOtpField = null;
-  const deadline = Date.now() + 15_000;
+  let primaryOtpEntry = null;
+  // Scopely is passwordless now: the code email has to arrive and the boxes
+  // have to render, so give it longer than the original 15s.
+  const deadline = Date.now() + 30_000;
   while (Date.now() < deadline) {
-    // Check for OTP field first (primary email-code flow).
-    for (const sel of OTP_SELECTORS) {
-      const el = await page.$(sel).catch(() => null);
-      if (el && (await el.isVisible().catch(() => false))) {
-        primaryOtpField = el;
-        break;
-      }
-    }
-    if (primaryOtpField) break;
+    // Check for the OTP widget first (primary email-code flow).
+    primaryOtpEntry = await findOtpEntry(page);
+    if (primaryOtpEntry) break;
     // Check for the password-switch link.
     const switchEl = page.locator(PASSWORD_SWITCH_SELECTOR).first();
     if ((await switchEl.count()) > 0) {
@@ -592,19 +635,19 @@ async function tryAutoLogin(page, { email, password, log, err, ci, headless = fa
   }
 
   // Stage D-OTP: account uses email code as primary authenticator.
-  if (primaryOtpField) {
-    log("auto-login: email code (primary OTP) challenge detected.");
+  if (primaryOtpEntry) {
+    log(`auto-login: email code (primary OTP) challenge detected — ${primaryOtpEntry.kind} input.`);
     if (ci && !process.env.STFC_OTP) {
       err("auto-login: email-code challenge requires user input and cannot run unattended. Run the workflow manually via workflow_dispatch with an otp input.");
       process.exit(2);
     }
-    const submitted = await promptAndSubmitOtp({ page, field: primaryOtpField, log, headless });
+    const submitted = await promptAndSubmitOtp({ page, entry: primaryOtpEntry, log, headless });
     if (!submitted) return false;
     return true;
   }
 
   if (!gotPasswordSwitch) {
-    log("auto-login: neither a password-switch link nor an OTP field appeared within 15s — falling back to interactive login.");
+    log("auto-login: neither a password-switch link nor an OTP field appeared within 30s — falling back to interactive login.");
     return false;
   }
 
@@ -634,14 +677,20 @@ async function tryAutoLogin(page, { email, password, log, err, ci, headless = fa
 
     // Stage F: some accounts require a secondary 6-digit OTP after password
     // entry (e.g. Okta MFA step-up). We wait up to 15s.
-    const secondaryOtpField = await waitForFirstSelector(page, OTP_SELECTORS, 15_000);
-    if (secondaryOtpField) {
-      log("auto-login: secondary MFA/OTP challenge detected.");
+    let secondaryOtpEntry = null;
+    const secondaryDeadline = Date.now() + 15_000;
+    while (Date.now() < secondaryDeadline) {
+      secondaryOtpEntry = await findOtpEntry(page);
+      if (secondaryOtpEntry) break;
+      await page.waitForTimeout(500);
+    }
+    if (secondaryOtpEntry) {
+      log(`auto-login: secondary MFA/OTP challenge detected — ${secondaryOtpEntry.kind} input.`);
       if (ci && !process.env.STFC_OTP) {
         err("auto-login: MFA challenge requires user input and cannot run unattended. Run the workflow manually via workflow_dispatch with an otp input.");
         process.exit(2);
       }
-      const submitted = await promptAndSubmitOtp({ page, field: secondaryOtpField, log, headless });
+      const submitted = await promptAndSubmitOtp({ page, entry: secondaryOtpEntry, log, headless });
       if (!submitted) return false;
     } else {
       log("auto-login: no secondary OTP challenge detected. Network listeners will catch the resulting JWT.");
@@ -854,7 +903,15 @@ async function main() {
   console.log(`\nDone. Trigger the workflow with: gh workflow run "Redeem gifts" (or via the GitHub UI).`);
 }
 
-main().catch((err) => {
-  console.error(`\nUnexpected error: ${err instanceof Error ? err.stack || err.message : String(err)}`);
-  process.exit(1);
-});
+// Only run the CLI when invoked directly, so tests can import the OTP
+// helpers without launching a browser.
+const isDirectRun = process.argv[1] && path.resolve(process.argv[1]) === __filename;
+
+if (isDirectRun) {
+  main().catch((err) => {
+    console.error(`\nUnexpected error: ${err instanceof Error ? err.stack || err.message : String(err)}`);
+    process.exit(1);
+  });
+}
+
+export { findOtpEntry, fillOtp, OTP_SELECTORS, SPLIT_OTP_SELECTOR };

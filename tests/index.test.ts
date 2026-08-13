@@ -41,6 +41,7 @@ import "./skills/optimizeCrewWorkflow.test.ts";
 import "./skills/progression.test.ts";
 import "./scripts/pre-commit.test.ts";
 import "./scripts/pre-push.test.ts";
+import "./scripts/captureTokenOtp.test.ts";
 import "./scripts/discordHandler.test.ts";
 import "./scripts/discord-ops/set-discord-app-metadata.test.ts";
 import "./scripts/discord-ops/partial-success.test.ts";
