@@ -27,7 +27,7 @@
  */
 
 import { readFileSync, existsSync } from 'node:fs';
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 
 // Directories watched for secrets when no explicit files are provided.
 const WATCHED_PREFIXES = [
@@ -122,13 +122,24 @@ const PATTERNS = [
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function getStagedFiles() {
-  const out = execSync('git diff --name-only --cached --diff-filter=ACMR', { encoding: 'utf8' });
+  const out = execFileSync(
+    'git',
+    ['diff', '--name-only', '--cached', '--diff-filter=ACMR'],
+    { encoding: 'utf8' },
+  );
   return out.split('\n').filter(Boolean);
 }
 
 function getAllTrackedFiles() {
-  const out = execSync('git ls-files', { encoding: 'utf8' });
+  const out = execFileSync('git', ['ls-files'], { encoding: 'utf8' });
   return out.split('\n').filter(Boolean);
+}
+
+function readStagedFile(filePath) {
+  return execFileSync('git', ['show', `:${filePath}`], {
+    encoding: 'utf8',
+    maxBuffer: 10 * 1024 * 1024,
+  });
 }
 
 /** Returns true if this file is within a watched directory and has a watched extension. */
@@ -141,15 +152,20 @@ function isWatched(filePath) {
 }
 
 /** Scans a single file and returns an array of violation objects. */
-function scanFile(filePath) {
-  if (!existsSync(filePath)) return [];
+function scanFile(filePath, { staged = false } = {}) {
+  if (!staged && !existsSync(filePath)) return [];
 
   let content;
   try {
-    content = readFileSync(filePath, 'utf8');
+    content = staged ? readStagedFile(filePath) : readFileSync(filePath, 'utf8');
   } catch (err) {
-    process.stderr.write(`WARNING: cannot read "${filePath}" — skipping (${err.message})\n`);
-    return [];
+    process.stderr.write(`ERROR: cannot read "${filePath}" — refusing to skip scan (${err.message})\n`);
+    return [{
+      file: filePath,
+      line: 0,
+      pattern: 'READ_ERROR',
+      description: 'File could not be read for artifact hygiene scanning',
+    }];
   }
 
   const normalizedPath = filePath.replace(/\\/g, '/');
@@ -198,7 +214,7 @@ if (targets.length === 0) {
 
 let totalViolations = 0;
 for (const file of targets) {
-  for (const v of scanFile(file)) {
+  for (const v of scanFile(file, { staged: useStaged })) {
     process.stderr.write(
       `VIOLATION  ${v.file}:${v.line}  [${v.pattern}]  ${v.description}\n` +
       `           matched content → <REDACTED-TOKEN>\n` +

@@ -7,7 +7,10 @@
 
 import { describe, it, beforeEach, afterEach, mock } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { execFileSync, spawnSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
@@ -268,6 +271,34 @@ describe("checkWorkflowPinningTests", () => {
       const testAt = source.indexOf("npm test");
       assert.ok(scanAt >= 0, "artifact hygiene scanner must be enabled");
       assert.ok(testAt > scanAt, "artifact hygiene scanner must run before tests");
+    });
+
+    it("artifact hygiene scans index content rather than the working tree", () => {
+      const dir = mkdtempSync(join(tmpdir(), "stfc-hygiene-index-"));
+      const scanner = resolve("scripts/check-artifact-hygiene.mjs");
+      const artifact = join(dir, "docs", "capture.md");
+      try {
+        mkdirSync(join(dir, "docs"));
+        execFileSync("git", ["init", "--quiet"], { cwd: dir });
+        const stagedSecret = [
+          `eyJ${"a".repeat(10)}`,
+          "b".repeat(10),
+          "c".repeat(10),
+        ].join(".");
+        writeFileSync(artifact, stagedSecret);
+        execFileSync("git", ["add", "docs/capture.md"], { cwd: dir });
+        writeFileSync(artifact, "<REDACTED>");
+
+        const result = spawnSync(process.execPath, [scanner, "--staged"], {
+          cwd: dir,
+          encoding: "utf8",
+        });
+        assert.equal(result.status, 1);
+        assert.match(result.stderr, /\[JWT\]/);
+        assert.doesNotMatch(result.stderr, new RegExp(stagedSecret.replaceAll(".", "\\.")));
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
     });
   });
 

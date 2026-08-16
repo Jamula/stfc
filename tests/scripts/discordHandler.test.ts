@@ -1,5 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 
 // @ts-ignore - untyped .mjs module imported in tests.
 const mod = await import("../../scripts/discord-handler.mjs") as {
@@ -104,6 +105,14 @@ function gameStatePayload(overrides: Record<string, unknown> = {}) {
 }
 
 describe("scripts/discord-handler.mjs", () => {
+  it("scans staged game-state artifacts before bypassing commit hooks", () => {
+    const source = readFileSync("scripts/discord-handler.mjs", "utf8");
+    const scanAt = source.indexOf('check-artifact-hygiene.mjs", "--staged');
+    const commitAt = source.indexOf('["commit", "--no-verify"');
+    assert.ok(scanAt >= 0);
+    assert.ok(commitAt > scanAt);
+  });
+
   it("redeem-status command reads history and patches Discord", async () => {
     const stdout = makeStdout();
     const stderr = makeStdout();

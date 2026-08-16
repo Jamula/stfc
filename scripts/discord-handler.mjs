@@ -446,6 +446,7 @@ export async function handleGameStateCommand({
   await runGit(["add", "--", outFile]);
   await runGit(["add", "--", lineagePath]);
   await runGit(["add", "--", indexPath]);
+  await runCommand(process.execPath, ["scripts/check-artifact-hygiene.mjs", "--staged"]);
 
   const commitMessage = [
     `data(game-state): ${safeNote || "no note"}`,

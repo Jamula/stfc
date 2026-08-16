@@ -301,7 +301,7 @@ describe("discordMonitor / mixed fixture happy path", () => {
       lastAttempted: "2026-05-15T07:00:00.000Z",
       suppressedUntil: null,
       extractionConfidence: 1,
-      status: "transient-failure",
+      status: "redeemed",
       source: {
         messageId: "400000000000000000",
         channelId,
