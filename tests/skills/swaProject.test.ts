@@ -50,8 +50,9 @@ describe("SWA project structure (T-SWA-002)", () => {
     it("web/package.json has a 'build' script (vite build)", () => {
       const pkg = JSON.parse(read("web/package.json")) as Record<string, unknown>;
       const scripts = pkg["scripts"] as Record<string, string> | undefined;
-      assert.ok(scripts?.["build"], "web/package.json missing 'build' script");
-      assert.match(scripts!["build"]!, /vite\s+build/, "web build script should invoke vite build");
+      const buildScript = scripts?.["build"];
+      assert.ok(buildScript, "web/package.json missing 'build' script");
+      assert.match(buildScript, /vite\s+build/, "web build script should invoke vite build");
     });
 
     it("web/vite.config.ts exists", () => {
@@ -141,7 +142,8 @@ describe("SWA project structure (T-SWA-002)", () => {
         routes?: Array<{ route: string; allowedRoles?: string[] }>;
       };
       assert.ok(Array.isArray(config.routes), "staticwebapp.config.json must have routes array");
-      const catchAll = config.routes!.find((r) => r.route === "/*");
+      const routes = config.routes;
+      const catchAll = routes.find((r) => r.route === "/*");
       assert.ok(catchAll, "staticwebapp.config.json must have a '/*' catch-all route");
       assert.ok(
         catchAll.allowedRoles?.includes("stfc_operator"),

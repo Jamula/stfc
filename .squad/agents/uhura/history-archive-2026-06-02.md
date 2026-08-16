@@ -2,7 +2,7 @@
 
 **Uhura (Comms/Discord domain):** 4-dispatch session on epic #143 delivering Discord slash command pipeline. Primary owner of commands.json canonical schema, GitHub Actions registration workflow, Cloudflare Worker bridge (Discord interaction → GitHub dispatch), and operator runbook. Coordinated with Scotty (reviewer-lockout revisions) and Garak (hostile fact-check on Worker signature verification). All 4 worktrees merged green; 4 child issues closed. Total episodes pre-session: 34 (auth integration, docs scaffolding, API instrumentation, redeem-history archive setup, Phase 1 operator runbooks, squad charter polish).
 
-Key deliverables shipped: `discord/commands.json` (canonical reference), `.github/workflows/discord-register-commands.yml` (one-off registration), `worker/src/index.ts` (stateless bridge, 3s deferred response), `docs/discord-slash-commands.md` (operator quickstart).
+Key deliverables shipped: `discord/commands.json` (canonical reference), `.github/workflows/discord-register-commands.yml` (one-off registration), `worker/src/index.ts` (stateless bridge, 3s deferred response), `discord/RUNBOOK.md` (operator quickstart).
 
 
 ## Session 2026-06-02 — Discord slash epic #143 shipped
@@ -138,7 +138,7 @@ Key blocker: bot not yet a member of guild `639255937869152267` → all guild-sc
 - **Slash command registration is feasible right now.** `PUT /applications/{app_id}/guilds/{guild_id}/commands` works with `DISCORD_BOT_TOKEN` and can be run as a one-off GitHub Actions `workflow_dispatch`. Registration is fire-and-forget; no always-on infra required.
 - **Slash command INVOCATION HANDLING is the architectural mismatch.** Discord POSTs `INTERACTION_CREATE` events to a registered HTTPS endpoint. GitHub Actions can't hold a persistent HTTP listener. This is a hard constraint — can't be worked around without adding infra.
 - **Architectural decision point (flag for Kirk if Cyrus commits):** If Cyrus wants live `/slash` commands, the right path is a Cloudflare Workers bridge (free tier) that:
-  1. Verifies Ed25519 signature (`tweetnacl`)
+  1. Verifies Ed25519 signature (`@noble/ed25519`)
   2. Responds `type: 5` (deferred) within 3s
   3. Calls GitHub `POST /repos/{owner}/{repo}/dispatches` with `repository_dispatch`
   4. GHA does the work; Cloudflare Worker POSTs follow-up via `PATCH /webhooks/{app_id}/{token}/messages/@original`

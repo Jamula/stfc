@@ -63,8 +63,8 @@ When worktree mode is enabled, the coordinator creates dedicated worktrees for i
 
 **Dependency management:**
 - After creating a worktree, link `node_modules` from the main repo to avoid reinstalling
-- Windows: `cmd /c "mklink /J {worktree}\node_modules {main-repo}\node_modules"`
-- Unix: `ln -s {main-repo}/node_modules {worktree}/node_modules`
+- Windows: `cmd /c "mklink /J {worktree-path}\node_modules {main-repo-path}\node_modules"`
+- Unix: `ln -s {main-repo-path}/node_modules {worktree-path}/node_modules`
 - If linking fails (permissions, cross-device), fall back to `npm install` in the worktree
 
 **Reusing worktrees:**
@@ -110,7 +110,7 @@ c. **Create the worktree:**
 
 d. **Set up dependencies:**
    - Link `node_modules` from main repo to avoid reinstalling:
-     - Windows: `cmd /c "mklink /J {worktree}\node_modules {main-repo}\node_modules"`
+     - Windows: `cmd /c "mklink /J {worktree-path}\node_modules {main-repo-path}\node_modules"`
      - Unix: `ln -s {main-repo}/node_modules {worktree}/node_modules`
    - If linking fails (error), fall back: `cd {worktree} && npm install`
    - Verify the worktree is ready: check build tools are accessible
