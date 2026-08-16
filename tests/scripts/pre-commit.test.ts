@@ -7,6 +7,7 @@
 
 import { describe, it, beforeEach, afterEach, mock } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
@@ -249,6 +250,7 @@ describe("checkPortableFilenames", () => {
 
 describe("checkWorkflowPinningTests", () => {
   let checkWorkflowPinningTests: (staged: string[], grep?: (basename: string) => string[]) => void;
+  let grepTestsForWorkflow: (basename: string) => string[];
   let exitState: { code: number | null };
 
   beforeEach(async () => {
@@ -256,6 +258,17 @@ describe("checkWorkflowPinningTests", () => {
     mock.method(console, "error", () => {});
     const mod = await import("../../scripts/pre-commit-checks.mjs");
     checkWorkflowPinningTests = mod.checkWorkflowPinningTests;
+    grepTestsForWorkflow = mod.grepTestsForWorkflow;
+  });
+
+  describe("pre-commit runner", () => {
+    it("scans staged artifacts for secrets before running tests", () => {
+      const source = readFileSync("scripts/pre-commit.mjs", "utf8");
+      const scanAt = source.indexOf("check-artifact-hygiene.mjs --staged");
+      const testAt = source.indexOf("npm test");
+      assert.ok(scanAt >= 0, "artifact hygiene scanner must be enabled");
+      assert.ok(testAt > scanAt, "artifact hygiene scanner must run before tests");
+    });
   });
 
   afterEach(() => {
@@ -332,5 +345,12 @@ describe("checkWorkflowPinningTests", () => {
     const grep = () => ["tests/scripts/pre-commit.test.ts"];
     checkWorkflowPinningTests([".github/workflows/redeem.yml"], grep);
     assert.equal(exitState.code, null);
+  });
+
+  it("treats workflow names as text instead of shell commands", () => {
+    assert.deepEqual(
+      grepTestsForWorkflow("$(printf redeem).yml"),
+      ["tests/scripts/pre-commit.test.ts"],
+    );
   });
 });

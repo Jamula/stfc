@@ -283,6 +283,61 @@ describe("discordMonitor / mixed fixture happy path", () => {
     });
     assert.equal(redeemCalls, 0, "redeemCodes skipped when no fresh candidates");
   });
+
+  it("does not resubmit a code already persisted in candidates.jsonl", async () => {
+    const channelId = "222222222222222222";
+    const fixture = [{
+      id: "411111111111111111",
+      channel_id: channelId,
+      content: "ONLYCODE",
+      timestamp: "2026-05-16T07:00:00.000Z",
+      edited_timestamp: null,
+      author: { id: "999999999999999999", username: "promoposter", bot: false },
+      type: 0,
+    }];
+    fs.writeFileSync(ds.candidates, `${JSON.stringify({
+      value: "ONLYCODE",
+      firstSeen: "2026-05-15T07:00:00.000Z",
+      lastAttempted: "2026-05-15T07:00:00.000Z",
+      suppressedUntil: null,
+      extractionConfidence: 1,
+      status: "transient-failure",
+      source: {
+        messageId: "400000000000000000",
+        channelId,
+        channelLabel: "promos",
+        timestamp: "2026-05-15T07:00:00.000Z",
+        jumpLink: `https://discord.com/channels/509679626763632640/${channelId}/400000000000000000`,
+      },
+      perAccountOutcome: [],
+    })}\n`);
+
+    let redeemCalls = 0;
+    await discordMonitor({
+      accounts: [{ name: "main", token: makeJwt() }],
+      paths: {
+        allowlist: ds.allowlist,
+        cursors: ds.cursors,
+        candidates: ds.candidates,
+        suppression: ds.suppression,
+        cooldowns: ds.cooldowns,
+        digestsDir: ds.digestsDir,
+        promoCodes: ds.promoCodes,
+      },
+      clientFactory: () => ({
+        getMe: async () => ({}),
+        getChannelMessages: async (_id, opts) => (opts.after !== undefined ? [] : fixture),
+      }),
+      now: () => NOW,
+      runId: "run-prior-candidate",
+      redeemFn: async () => {
+        redeemCalls++;
+        return { result: { rows: [] }, exitCode: 0 };
+      },
+    });
+
+    assert.equal(redeemCalls, 0);
+  });
 });
 
 describe("discordMonitor / AUTO_COMMIT_PER_RUN_CAP", () => {

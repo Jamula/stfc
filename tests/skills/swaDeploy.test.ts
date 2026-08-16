@@ -116,6 +116,7 @@ describe("swa-deploy.yml / contract pinning (T-SWA-001)", () => {
   it("app_location is 'web' and api_location is 'api'", () => {
     assert.match(yaml, /app_location:\s*web/);
     assert.match(yaml, /api_location:\s*api/);
+    assert.match(yaml, /config_file_location:\s*\./);
   });
 
   it("deploy and teardown jobs are gated on AZURE_CLIENT_ID being set (secret-presence guard)", () => {

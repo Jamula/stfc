@@ -5,7 +5,6 @@
  * (via process.exit) when a policy violation is detected.
  */
 
-import { execSync } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -136,20 +135,41 @@ export function checkPortableFilenames(staged) {
 // ── Check #10 — Workflow YAML edits must include pinning tests ───────
 
 /**
- * Find test files referencing a workflow filename via grep.
+ * Find test files referencing a workflow filename.
  * Returns an array of relative file paths (may be empty).
  */
 export function grepTestsForWorkflow(basename) {
-  try {
-    const out = execSync(`grep -rl "${basename}" tests/`, {
-      encoding: 'utf8',
-      stdio: ['pipe', 'pipe', 'pipe'],
-    }).trim();
-    return out ? out.split('\n').filter(Boolean) : [];
-  } catch {
-    // grep returns exit 1 when no matches — that's fine
-    return [];
+  const matches = [];
+  const pending = ['tests'];
+
+  while (pending.length > 0) {
+    const dir = pending.pop();
+    if (!dir) continue;
+
+    let entries;
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+
+    for (const entry of entries) {
+      const filePath = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        pending.push(filePath);
+      } else if (entry.isFile()) {
+        try {
+          if (fs.readFileSync(filePath, 'utf8').includes(basename)) {
+            matches.push(filePath.replaceAll(path.sep, '/'));
+          }
+        } catch {
+          // Ignore unreadable test files, matching the previous grep behavior.
+        }
+      }
+    }
   }
+
+  return matches.sort();
 }
 
 /**

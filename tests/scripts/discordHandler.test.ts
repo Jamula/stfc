@@ -111,7 +111,14 @@ describe("scripts/discord-handler.mjs", () => {
 
     const code = await mod.runCli({
       env: baseEnv({ command: "redeem-status", interaction_token: "tok", application_id: "app" }),
-      readFileImpl: async () => "line1\nline2\nline3\n",
+      readFileImpl: async () => [
+        "# Redeem history",
+        "| Date | Gift |",
+        "| --- | --- |",
+        "| newest | chest |",
+        "| older | chest |",
+        "| oldest | chest |",
+      ].join("\n"),
       runGh: async () => "",
       runGit: async () => "",
       fetchImpl: async (_url, init: any) => {
@@ -128,7 +135,8 @@ describe("scripts/discord-handler.mjs", () => {
 
     assert.equal(code, 0, stderr.text());
     assert.match(postedBody, /Latest redeem history:/);
-    assert.match(postedBody, /line3/);
+    assert.match(postedBody, /newest/);
+    assert.ok(postedBody.indexOf("newest") < postedBody.indexOf("oldest"));
   });
 
   it("trigger-redeem command invokes gh and posts run id/link", async () => {
@@ -138,13 +146,31 @@ describe("scripts/discord-handler.mjs", () => {
     let postedBody = "";
 
     const code = await mod.runCli({
-      env: baseEnv({ command: "trigger-redeem", interaction_token: "tok", application_id: "app" }),
+      env: baseEnv({
+        command: "trigger-redeem",
+        interaction_token: "tok",
+        application_id: "app",
+        guild_id: "g1",
+      }),
       readFileImpl: async () => "",
       runGit: async () => "",
       runGh: async (args) => {
         ghCalls.push(args);
         if (args[0] === "workflow") return "";
-        return JSON.stringify([{ databaseId: 123456, url: "https://github.com/Jamula/stfc/actions/runs/123456" }]);
+        return JSON.stringify([
+          {
+            databaseId: 111111,
+            url: "https://github.com/Jamula/stfc/actions/runs/111111",
+            createdAt: "2026-06-01T00:00:00Z",
+            headBranch: "main",
+          },
+          {
+            databaseId: 123456,
+            url: "https://github.com/Jamula/stfc/actions/runs/123456",
+            createdAt: "2026-06-02T06:48:00Z",
+            headBranch: "main",
+          },
+        ]);
       },
       fetchImpl: async (_url, init: any) => {
         postedBody = String(init.body ?? "");
@@ -154,6 +180,7 @@ describe("scripts/discord-handler.mjs", () => {
           text: async () => "{}",
         };
       },
+      nowFn: () => new Date("2026-06-02T06:48:00Z"),
       stdout: stdout.stream,
       stderr: stderr.stream,
     });
@@ -166,6 +193,28 @@ describe("scripts/discord-handler.mjs", () => {
     assert.equal(ghCalls[1]?.[1], "list");
     assert.match(postedBody, /Redeem triggered — run ID 123456/);
     assert.match(postedBody, /actions\/runs\/123456/);
+  });
+
+  it("trigger-redeem rejects non-allowlisted guilds before invoking gh", async () => {
+    let ghCalled = false;
+    const code = await mod.runCli({
+      env: baseEnv({
+        command: "trigger-redeem",
+        interaction_token: "tok",
+        application_id: "app",
+        guild_id: "attacker-guild",
+      }),
+      runGh: async () => {
+        ghCalled = true;
+        return "";
+      },
+      fetchImpl: async () => ({ ok: true, status: 200, text: async () => "{}" }),
+      stdout: makeStdout().stream,
+      stderr: makeStdout().stream,
+    });
+
+    assert.equal(code, 1);
+    assert.equal(ghCalled, false);
   });
 
   it("game-state happy path downloads, commits, and follows up with link", async () => {
@@ -214,6 +263,7 @@ describe("scripts/discord-handler.mjs", () => {
     assert.equal(mem.files.has("data/discord/game-state/2026-06-02/064800000-state.png.lineage.json"), true);
     assert.equal(mem.files.has("data/discord/game-state/2026-06-02/_index.json"), true);
     const commit = gitCalls.find((c) => c.args[0] === "commit");
+    assert.ok(commit?.args.includes("--no-verify"));
     assert.ok(commit?.stdin?.includes("data(game-state): after raid"));
     assert.ok(commit?.stdin?.includes("Source: https://discord.com/channels/g1/c1/..."));
   });

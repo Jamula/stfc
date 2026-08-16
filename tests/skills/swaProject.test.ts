@@ -37,6 +37,13 @@ function isExecutable(rel: string): boolean {
 }
 
 describe("SWA project structure (T-SWA-002)", () => {
+  it("deploy workflow loads the root SWA security configuration", () => {
+    assert.match(
+      read(".github/workflows/swa-deploy.yml"),
+      /config_file_location:\s*\./,
+    );
+  });
+
   // ── web/ scaffold ──────────────────────────────────────────────────────────
   describe("web/ scaffold", () => {
     it("web/ directory exists", () => {
