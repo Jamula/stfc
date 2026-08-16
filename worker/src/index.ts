@@ -9,7 +9,7 @@
  * Discord Ed25519 verification docs:
  *   https://discord.com/developers/docs/interactions/receiving-and-responding#security-and-authorization
  *
- * Ed25519 library choice: @noble/ed25519 v2
+ * Ed25519 library choice: @noble/ed25519 v3
  *   - Uses `crypto.subtle` (Web Crypto API) natively — available in the Workers
  *     runtime without any compatibility flags.
  *   - Smaller bundle than tweetnacl (~3 kB vs ~15 kB).

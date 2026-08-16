@@ -272,8 +272,8 @@ describe("skill:roster add", () => {
         now: () => FIXED_NOW,
         writer,
       });
-      assert.equal(result.exitCode, exitCode, argv[0]);
-      assert.match([...writer.err, JSON.stringify(result.result)].join("\n"), /ENOENT/, argv[0]);
+      assert.equal(result.exitCode, exitCode, argv[0]!);
+      assert.match([...writer.err, JSON.stringify(result.result)].join("\n"), /ENOENT/, argv[0]!);
       await assert.rejects(() => fs.access(ghostPath), /ENOENT/);
     }
   });

@@ -13,7 +13,7 @@ let testEnv: Env;
 let gameStateEnv: Env;
 
 beforeAll(async () => {
-  privateKey = ed.utils.randomPrivateKey();
+  privateKey = ed.utils.randomSecretKey();
   const publicKey = await ed.getPublicKeyAsync(privateKey);
   testEnv = {
     DISCORD_PUBLIC_KEY: toHex(publicKey),
