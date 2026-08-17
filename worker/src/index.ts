@@ -128,6 +128,11 @@ export default {
     if (interaction.type === 2) {
       const commandName = interaction.data?.name;
 
+      if (commandName === "trigger-redeem" &&
+          !isGuildAllowed(interaction.guild_id, env.ALLOWED_GUILD_IDS)) {
+        return ephemeralError("This command isn't enabled in this server.");
+      }
+
       if (commandName === "game-state") {
         // Guild allowlist check (fail-closed).
         // Prevents /game-state from working in any server the bot happens to join.
