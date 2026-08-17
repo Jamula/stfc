@@ -87,6 +87,7 @@ jobs:
           app_location: web
           api_location: api
           output_location: dist
+          config_file_location: .
         env:
           DISABLE_WRITES: "1"
 

@@ -333,11 +333,7 @@ export async function discordMonitor(
 
   // Step 6: dedup against the four sources.
   const promoCodesTxt = new Set((await readPromoCodes(promoCodesPath)).map((c) => c.toUpperCase()));
-  const priorCandidates = new Map<string, CandidateCode>();
-  // We intentionally do NOT read candidates.jsonl here in Phase 3 to keep the
-  // append-only writes idempotent within tests; the real dedup against prior
-  // candidates is exercised by tests/discord/dedup.test.ts directly.
-  // T034 (digest) will revisit how priorCandidates flows in.
+  const priorCandidates = await readCandidates(candidatesPath);
   const suppression = await loadSuppression(suppressionPath);
 
   const { fresh, annotated } = dedup(extractedCandidates, {

@@ -1,7 +1,28 @@
 # .squad/decisions/ — Decision Registry
 
-**Updated:** 2026-08-13T05:15:00Z  
-**Session:** redeem-outage-recovery
+**Updated:** 2026-08-16T23:15:28Z
+**Session:** chronicle-analysis
+
+---
+
+### 2026-08-16T23:15:28Z: Chronicle — Prompting and session-discipline learnings
+
+**By:** Chronicle analysis (recorded by Scribe)
+
+**L1 — Keep secrets out of prompts and command arguments. [HIGH]**
+Secret hygiene improved after 2026-08-13: no OTP or credential-like messages were found. Preserve that practice. Never paste secrets into chat; pass secret values via stdin to the secret-setting command so they do not appear in prompts, arguments, or logs.
+
+**L2 — Ralph invocations need a bounded brief. [MED]**
+Four recent invocations were only “ralph, go”. Future Ralph prompts should state the scope to monitor, the deliverable or action expected, and the stop condition.
+
+**L3 — Prompts should carry enough execution context. [MED]**
+Thirteen of eighteen recent prompts were under 40 characters. Short prompts are acceptable only when context is already unambiguous; otherwise include the scope, expected result, and relevant constraints.
+
+**L4 — Use conversation tools deliberately. [MED]**
+No recent `/plan`, `/fork`, or rubber-duck usage was found. Use `/plan` for multi-step work, `/fork` when topics diverge, and rubber-duck before committing semantic-risk decisions involving outcome classification, retries, exit codes, or silent-failure behavior.
+
+**L5 — Keep coding and review in separate sessions. [MED]**
+The recent split of nine Coding Agent sessions and seven Code Review sessions is a positive practice. Continue separating implementation from review to preserve independent context and reviewer focus.
 
 ---
 

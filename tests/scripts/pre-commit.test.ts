@@ -7,6 +7,10 @@
 
 import { describe, it, beforeEach, afterEach, mock } from "node:test";
 import assert from "node:assert/strict";
+import { execFileSync, spawnSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
@@ -249,6 +253,7 @@ describe("checkPortableFilenames", () => {
 
 describe("checkWorkflowPinningTests", () => {
   let checkWorkflowPinningTests: (staged: string[], grep?: (basename: string) => string[]) => void;
+  let grepTestsForWorkflow: (basename: string) => string[];
   let exitState: { code: number | null };
 
   beforeEach(async () => {
@@ -256,6 +261,45 @@ describe("checkWorkflowPinningTests", () => {
     mock.method(console, "error", () => {});
     const mod = await import("../../scripts/pre-commit-checks.mjs");
     checkWorkflowPinningTests = mod.checkWorkflowPinningTests;
+    grepTestsForWorkflow = mod.grepTestsForWorkflow;
+  });
+
+  describe("pre-commit runner", () => {
+    it("scans staged artifacts for secrets before running tests", () => {
+      const source = readFileSync("scripts/pre-commit.mjs", "utf8");
+      const scanAt = source.indexOf("check-artifact-hygiene.mjs --staged");
+      const testAt = source.indexOf("npm test");
+      assert.ok(scanAt >= 0, "artifact hygiene scanner must be enabled");
+      assert.ok(testAt > scanAt, "artifact hygiene scanner must run before tests");
+    });
+
+    it("artifact hygiene scans index content rather than the working tree", () => {
+      const dir = mkdtempSync(join(tmpdir(), "stfc-hygiene-index-"));
+      const scanner = resolve("scripts/check-artifact-hygiene.mjs");
+      const artifact = join(dir, "docs", "capture.md");
+      try {
+        mkdirSync(join(dir, "docs"));
+        execFileSync("git", ["init", "--quiet"], { cwd: dir });
+        const stagedSecret = [
+          `eyJ${"a".repeat(10)}`,
+          "b".repeat(10),
+          "c".repeat(10),
+        ].join(".");
+        writeFileSync(artifact, stagedSecret);
+        execFileSync("git", ["add", "docs/capture.md"], { cwd: dir });
+        writeFileSync(artifact, "<REDACTED>");
+
+        const result = spawnSync(process.execPath, [scanner, "--staged"], {
+          cwd: dir,
+          encoding: "utf8",
+        });
+        assert.equal(result.status, 1);
+        assert.match(result.stderr, /\[JWT\]/);
+        assert.doesNotMatch(result.stderr, new RegExp(stagedSecret.replaceAll(".", "\\.")));
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
   });
 
   afterEach(() => {
@@ -332,5 +376,12 @@ describe("checkWorkflowPinningTests", () => {
     const grep = () => ["tests/scripts/pre-commit.test.ts"];
     checkWorkflowPinningTests([".github/workflows/redeem.yml"], grep);
     assert.equal(exitState.code, null);
+  });
+
+  it("treats workflow names as text instead of shell commands", () => {
+    assert.deepEqual(
+      grepTestsForWorkflow("$(printf redeem).yml"),
+      ["tests/scripts/pre-commit.test.ts"],
+    );
   });
 });

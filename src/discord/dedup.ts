@@ -55,8 +55,16 @@ function classify(value: string, ctx: DedupContext): CandidateStatus {
   // (a) Already in promo-codes.txt → already-known.
   if (ctx.promoCodesTxt.has(value)) return "already-known";
 
-  // (b) Seen on a prior run → duplicate.
-  if (ctx.priorCandidates.has(value)) return "duplicate";
+  // (b) Seen on a prior run → duplicate, except retryable transient failures.
+  const prior = ctx.priorCandidates.get(value);
+  if (prior !== undefined) {
+    if (prior.status === "transient-failure") {
+      return isInCooldown(ctx.cooldowns, value, ctx.now)
+        ? "suppressed-cooldown"
+        : "pending";
+    }
+    return "duplicate";
+  }
 
   // (c)/(d) Operator rules.
   const rule = ctx.suppression[value];

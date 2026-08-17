@@ -227,6 +227,29 @@ describe("stfc-discord-bridge worker", () => {
     });
   });
 
+  it("rejects trigger-redeem outside the trusted guild allowlist", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const req = await buildRequest({
+      type: 2,
+      token: "interaction-token-abc",
+      application_id: "app-id-123",
+      guild_id: "attacker-guild",
+      data: { name: "trigger-redeem", options: [] },
+    });
+    const ctx = makeMockCtx();
+    const res = await worker.fetch(req, gameStateEnv, ctx as unknown as ExecutionContext);
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      type: 4,
+      data: { content: "This command isn't enabled in this server.", flags: 64 },
+    });
+    expect(ctx.waitUntil).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it("still returns deferred response when GH dispatch responds with 5xx and logs warning", async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 503 }));
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
