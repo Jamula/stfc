@@ -37,21 +37,21 @@
 		"pre-push": "node scripts/pre-push.mjs"
 	},
 	"dependencies": {
-		"@discordjs/rest": "^2.5.0",
+		"@discordjs/rest": "^2.6.3",
 		"@huggingface/transformers": "^4.2.0",
-		"discord-api-types": "^0.38.0",
+		"discord-api-types": "^0.38.53",
 		"tsx": "^4.23.12",
 		"yaml": "^2.9.0",
-		"zod": "^3.25.76"
+		"zod": "^4.4.3"
 	},
 	"devDependencies": {
-		"@azure/static-web-apps-cli": "^2.0.9",
-		"@types/node": "^24.0.0",
+		"@azure/static-web-apps-cli": "^2.0.10",
+		"@types/node": "^26.2.0",
 		"ajv": "^8.20.0",
 		"ajv-formats": "^3.0.1",
 		"json-schema-to-typescript": "^15.0.4",
-		"playwright": "^1.49.1",
+		"playwright": "^1.62.1",
 		"simple-git-hooks": "^2.13.1",
-		"typescript": "~5.7.2"
+		"typescript": "~7.0.2"
 	}
 }
