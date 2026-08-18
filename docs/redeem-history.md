@@ -7,6 +7,7 @@ inserted at the top**, so the most recent run is always visible first.
 
 | Date (UTC) | Time (UTC) | Account | Gifts claimed |
 | --- | --- | --- | --- |
+| 2026-08-18 | 17:22 | main | 10 Min Free Chest |
 | 2026-08-18 | 16:50 | main | 10 Min Free Chest |
 | 2026-08-18 | 16:11 | main | 4 Hr Free Chest, Starfleet Summer:Gift, Officer Command Pass Points, 10 Min Free Chest |
 | 2026-08-18 | 15:42 | main | 10 Min Free Chest |
