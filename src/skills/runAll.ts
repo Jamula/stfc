@@ -169,18 +169,33 @@ async function processAccount(
   log.info(`account "${account.name}" — ${expiryHuman}`);
 
   const tokenStatus = await checkAuth(client, account.name, report);
+  let effectiveTokenStatus = tokenStatus;
 
   if (tokenStatus === Outcomes.TOKEN_VALID) {
     items.push(...(await processGifts(client, account.name, report)));
-    codes.push(...(await processCodes(client, promoCodes, account.name, report, deadCodesPath, deadCodeCache, sleep)));
+    // /auth/me can answer 200 with a JWT the store itself rejects. Trust the
+    // endpoint that does the real work, so the run reports "rotate the
+    // secret" instead of a healthy token that silently claims nothing.
+    if (items.some((i) => i.outcome === Outcomes.TOKEN_EXPIRED)) {
+      effectiveTokenStatus = Outcomes.TOKEN_EXPIRED;
+      log.error(`[${account.name}] token passed /auth/me but was rejected by the store — re-capture STFC_ACCOUNTS`);
+    } else {
+      codes.push(...(await processCodes(client, promoCodes, account.name, report, deadCodesPath, deadCodeCache, sleep)));
+    }
   }
 
   const ok =
-    tokenStatus === Outcomes.TOKEN_VALID &&
+    effectiveTokenStatus === Outcomes.TOKEN_VALID &&
     items.every((i) => isExpectedOutcome(i.outcome)) &&
     codes.every((c) => isExpectedOutcome(c.outcome));
 
-  return { name: account.name, expiryHuman, tokenStatus, items, promoCodes: codes, ok };
+  const claimed = items.filter((i) => i.outcome === Outcomes.CLAIMED).length;
+  log.info(
+    `[${account.name}] token=${effectiveTokenStatus} claimed=${claimed}/${items.length} gift(s), ` +
+      `${codes.length} promo code(s) — ${ok ? "ok" : "DEGRADED"}`,
+  );
+
+  return { name: account.name, expiryHuman, tokenStatus: effectiveTokenStatus, items, promoCodes: codes, ok };
 }
 
 function describeAccountExpiry(token: string): string {
@@ -197,11 +212,15 @@ async function checkAuth(client: ApiClient, accountName: string, report: RunAllR
     await getMe(client);
     return Outcomes.TOKEN_VALID;
   } catch (err) {
-    if (err instanceof TokenExpiredError) return Outcomes.TOKEN_EXPIRED;
+    if (err instanceof TokenExpiredError) {
+      log.error(`[${accountName}] auth/me rejected the token — re-capture STFC_ACCOUNTS`);
+      return Outcomes.TOKEN_EXPIRED;
+    }
     if (err instanceof SchemaMismatchError) {
       report.errors.push({ account: accountName, message: `auth/me schema mismatch: ${redactForLog(err)}` });
       return Outcomes.UNKNOWN_RESULT;
     }
+    log.error(`[${accountName}] auth/me failed: ${redactForLog(err)}`);
     report.errors.push({ account: accountName, message: `auth/me failed: ${redactForLog(err)}` });
     return Outcomes.UNKNOWN_RESULT;
   }
@@ -220,8 +239,21 @@ async function processGifts(
       report.errors.push({ account: accountName, message: `gifts/list schema mismatch: ${redactForLog(err)}` });
       return [];
     }
-    return [{ id: "(list)", outcome: classifyHttpError(err), detail: redactForLog(err) }];
+    const outcome = classifyHttpError(err);
+    const detail = redactForLog(err);
+    log.error(`[${accountName}] gifts/list FAILED (${outcome}): ${detail}`);
+    // A 401 here means the stored JWT is no longer accepted by the store,
+    // even when /auth/me still answers 200. That is a credential problem,
+    // reported via tokenStatus (-> exit code 2 / "rotate the secret"),
+    // not an infrastructure error. TRANSIENT resolves itself next cycle.
+    // Anything else is a real breakage and must fail the workflow.
+    if (outcome !== Outcomes.TOKEN_EXPIRED && outcome !== Outcomes.TRANSIENT) {
+      report.errors.push({ account: accountName, message: `gifts/list failed: ${detail}` });
+    }
+    return [{ id: "(list)", outcome, detail }];
   }
+
+  log.info(`[${accountName}] gifts/list returned ${gifts.length} gift(s)`);
 
   if (gifts.length === 0) {
     return [{ id: "(none)", outcome: Outcomes.NO_GIFTS_AVAILABLE }];
@@ -229,7 +261,9 @@ async function processGifts(
 
   const items: ItemResult[] = [];
   for (const gift of gifts) {
-    items.push(await processOneGift(client, gift, accountName, report));
+    const result = await processOneGift(client, gift, accountName, report);
+    log.info(`[${accountName}] gift "${result.id}" → ${result.outcome}${result.detail ? ` (${result.detail})` : ""}`);
+    items.push(result);
   }
   return items;
 }

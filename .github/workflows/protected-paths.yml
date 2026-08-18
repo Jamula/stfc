@@ -1,0 +1,120 @@
+# Guard against silent deletion of load-bearing files.
+#
+# Merge accf751 (2026-08-02) dropped 21 tracked files — README.md, LICENSE,
+# CHANGELOG.md, all of api/, three config/*.json and more — with no deletion
+# commit. `git log --diff-filter=D` finds nothing, because the loss happened
+# inside a merge resolution. It went unnoticed for 11 days and broke CI the
+# whole time: the redeem run died on ERR_MODULE_NOT_FOUND for api/_lib, and
+# Squad Release failed because CHANGELOG.md no longer carried the version.
+#
+# This job simply asserts the files are still there on the merge result, so
+# the same class of loss fails loudly instead of rotting for a fortnight.
+name: Protected paths
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.0
+
+      - name: Assert load-bearing paths still exist
+        run: |
+          set -uo pipefail
+
+          # Files whose disappearance has broken, or would break, the build.
+          REQUIRED_FILES="
+          README.md
+          LICENSE
+          CHANGELOG.md
+          CONTRIBUTING.md
+          SECURITY.md
+          package.json
+          .nvmrc
+          api/package.json
+          api/tsconfig.json
+          api/_lib/github-raw.ts
+          api/src/_lib/auth.ts
+          api/src/_lib/respond.ts
+          config/model-tiers.json
+          config/classifier-model.json
+          config/discord-allowlist.json
+          tests/index.test.ts
+          "
+
+          # Directories that must contain at least one tracked file.
+          REQUIRED_DIRS="
+          src
+          tests
+          web
+          worker
+          .squad/agents
+          "
+
+          missing=0
+
+          for f in $REQUIRED_FILES; do
+            if [ ! -f "$f" ]; then
+              echo "::error file=$f::Protected file is missing: $f"
+              missing=$((missing + 1))
+            fi
+          done
+
+          for d in $REQUIRED_DIRS; do
+            if [ -z "$(git ls-files "$d" | head -1)" ]; then
+              echo "::error::Protected directory has no tracked files: $d"
+              missing=$((missing + 1))
+            fi
+          done
+
+          if [ "$missing" -gt 0 ]; then
+            {
+              echo "## ❌ Protected paths"
+              echo ""
+              echo "$missing protected path(s) are missing."
+              echo ""
+              echo "Nothing should remove these. If a deletion really is intended,"
+              echo "update the list in .github/workflows/protected-paths.yml in the"
+              echo "same change, so the removal is explicit and reviewable."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+          echo "All protected paths present."
+          echo "✅ All protected paths present." >> "$GITHUB_STEP_SUMMARY"
+
+      # Colons (and friends) are illegal in Windows filenames. 21 tracked
+      # .squad/log files created in the Linux Codespace carried them, could
+      # never be checked out on Windows, and once out of the index Git for
+      # Windows refused to restore them — blocking every commit in the repo.
+      # The pre-commit hook catches this locally; this catches anything that
+      # lands without hooks (merges, web edits). See #186.
+      - name: Assert filenames are valid on Windows
+        run: |
+          set -uo pipefail
+          bad=$(git ls-files | grep -E '[:*?"<>|]' || true)
+          if [ -n "$bad" ]; then
+            echo "::error::Tracked files have names that are illegal on Windows"
+            echo "$bad"
+            {
+              echo "## ❌ Non-portable filenames"
+              echo ""
+              echo "These tracked paths cannot exist on a Windows checkout:"
+              echo ""
+              echo '```'
+              echo "$bad"
+              echo '```'
+              echo ""
+              echo "For timestamps use \`2026-08-13T04-38-00Z\`, not \`2026-08-13T04:38:00Z\`."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          echo "All tracked filenames are portable."

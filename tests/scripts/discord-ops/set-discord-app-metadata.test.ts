@@ -18,6 +18,7 @@ import { spawnSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import { pathToFileURL } from "node:url";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..", "..", "..");
 const SCRIPT = path.join(
@@ -26,13 +27,14 @@ const SCRIPT = path.join(
   "discord-ops",
   "set-discord-app-metadata.mjs",
 );
-const STUB = path.join(
+const STUB_PATH = path.join(
   REPO_ROOT,
   "tests",
   "fixtures",
   "discord-ops",
   "fetch-stub.mjs",
 );
+const STUB = pathToFileURL(STUB_PATH).href;
 const SENTINEL = "BOT_TOKEN_SENTINEL_DO_NOT_LEAK_a8f3c91e";
 
 interface RunOpts {

@@ -4,10 +4,6 @@
  *
  * Checks run in order; any non-zero exit aborts the commit.
  *
- * TODO(Uhura): When scripts/check-artifact-hygiene.* lands, uncomment:
- *   execSync('node scripts/check-artifact-hygiene.mjs', { stdio: 'inherit' });
- *   (run it BEFORE npm test so secret/artifact leaks are caught first)
- *
  * Emergency bypass — auditable, avoid routine use:
  *   git commit --no-verify
  */
@@ -16,11 +12,11 @@ import { execSync } from 'child_process';
 import {
   checkConstitutionSync,
   checkSquadBoundary,
+  checkPortableFilenames,
   checkWorkflowPinningTests,
 } from './pre-commit-checks.mjs';
 
-// TODO(Uhura): Add hygiene check here once scripts/check-artifact-hygiene.* lands:
-// execSync('node scripts/check-artifact-hygiene.mjs', { stdio: 'inherit' });
+execSync('node scripts/check-artifact-hygiene.mjs --staged', { stdio: 'inherit' });
 
 // --- Enforcement checks (fail fast before running the full test suite) ---
 
@@ -30,6 +26,7 @@ const staged = execSync('git diff --cached --name-only', { encoding: 'utf8' })
 
 checkConstitutionSync(staged);
 checkSquadBoundary(staged);
+checkPortableFilenames(staged);
 checkWorkflowPinningTests(staged);
 
 // --- Test suite ---

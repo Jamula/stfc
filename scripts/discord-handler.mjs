@@ -99,16 +99,16 @@ export function parseAllowedGuildIds(raw) {
 }
 
 export function assertGuildAllowed(payload, allowedGuildIds) {
-  if (payload.command !== "game-state") return;
+  if (!["game-state", "trigger-redeem"].includes(payload.command)) return;
 
   if (!payload.guild_id || typeof payload.guild_id !== "string") {
-    throw new Error("game-state requires guild_id");
+    throw new Error(`${payload.command} requires guild_id`);
   }
   if (!Array.isArray(allowedGuildIds) || allowedGuildIds.length === 0) {
-    throw new Error("ALLOWED_GUILD_IDS is required for game-state");
+    throw new Error(`ALLOWED_GUILD_IDS is required for ${payload.command}`);
   }
   if (!allowedGuildIds.includes(payload.guild_id)) {
-    throw new Error("guild is not allowlisted for game-state");
+    throw new Error(`guild is not allowlisted for ${payload.command}`);
   }
 }
 
@@ -148,22 +148,39 @@ export function formatRedeemStatus(historyContent, maxLines = 10) {
   const lines = historyContent
     .split(/\r?\n/)
     .map((line) => line.trimEnd())
-    .filter((line) => line.length > 0)
-    .slice(-maxLines);
+    .filter((line) => line.length > 0);
 
   if (lines.length === 0) {
     return "No redemption history is available yet.";
   }
 
+  const tableStart = lines.findIndex((line) => line.startsWith("|") && line.endsWith("|"));
+  const tableDivider = tableStart >= 0 ? lines[tableStart + 1] : undefined;
+  const selected = tableStart >= 0 && tableDivider?.startsWith("|")
+    ? [
+        lines[tableStart],
+        tableDivider,
+        ...lines.slice(tableStart + 2).filter((line) => line.startsWith("|")).slice(0, maxLines),
+      ]
+    : lines.slice(0, maxLines);
+
   return [
     "Latest redeem history:",
     "```text",
-    ...lines,
+    ...selected,
     "```",
   ].join("\n");
 }
 
-export async function triggerRedeemWorkflow({ runGh = defaultRunGh, repo, ref, serverUrl = "https://github.com" }) {
+export async function triggerRedeemWorkflow({
+  runGh = defaultRunGh,
+  repo,
+  ref,
+  serverUrl = "https://github.com",
+  nowFn = () => new Date(),
+  sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+}) {
+  const dispatchedAt = nowFn().getTime();
   await runGh(["workflow", "run", "redeem.yml", "--repo", repo, "--ref", ref]);
 
   for (let attempt = 0; attempt < 5; attempt++) {
@@ -174,22 +191,33 @@ export async function triggerRedeemWorkflow({ runGh = defaultRunGh, repo, ref, s
       "redeem.yml",
       "--event",
       "workflow_dispatch",
+      "--branch",
+      ref,
       "--limit",
-      "1",
+      "5",
       "--json",
-      "databaseId,url",
+      "databaseId,url,createdAt,headBranch",
       "--repo",
       repo,
     ]);
     const runs = JSON.parse(out || "[]");
-    if (Array.isArray(runs) && runs[0]?.databaseId) {
-      const runId = String(runs[0].databaseId);
-      const runUrl = typeof runs[0].url === "string" && runs[0].url.length > 0
-        ? runs[0].url
+    const run = Array.isArray(runs)
+      ? runs.find((candidate) => {
+          const createdAt = Date.parse(candidate?.createdAt ?? "");
+          return candidate?.databaseId &&
+            candidate?.headBranch === ref &&
+            Number.isFinite(createdAt) &&
+            createdAt >= dispatchedAt - 5_000;
+        })
+      : undefined;
+    if (run) {
+      const runId = String(run.databaseId);
+      const runUrl = typeof run.url === "string" && run.url.length > 0
+        ? run.url
         : `${serverUrl}/${repo}/actions/runs/${runId}`;
       return { runId, runUrl };
     }
-    await new Promise((resolve) => setTimeout(resolve, 1200));
+    await sleep(1200);
   }
 
   throw new Error("Redeem workflow dispatch succeeded, but run ID was not discoverable yet");
@@ -418,6 +446,7 @@ export async function handleGameStateCommand({
   await runGit(["add", "--", outFile]);
   await runGit(["add", "--", lineagePath]);
   await runGit(["add", "--", indexPath]);
+  await runCommand(process.execPath, ["scripts/check-artifact-hygiene.mjs", "--staged"]);
 
   const commitMessage = [
     `data(game-state): ${safeNote || "no note"}`,
@@ -426,7 +455,7 @@ export async function handleGameStateCommand({
     `Uploader: ${safeUploaderHandle}`,
     `Source: ${sourceUrl}`,
   ].join("\n");
-  await runGit(["commit", "-F", "-"], { stdin: `${commitMessage}\n` });
+  await runGit(["commit", "--no-verify", "-F", "-"], { stdin: `${commitMessage}\n` });
 
   const doPush = async () => {
     await runGit(["push", "origin", ref]);
@@ -464,7 +493,7 @@ export async function resolveResponseText({ payload, repo, ref, serverUrl, histo
   }
 
   if (command === "trigger-redeem") {
-    const { runId, runUrl } = await triggerRedeemWorkflow({ runGh, repo, ref, serverUrl });
+    const { runId, runUrl } = await triggerRedeemWorkflow({ runGh, repo, ref, serverUrl, nowFn });
     return `Redeem triggered — run ID ${runId}\n${runUrl}`;
   }
 

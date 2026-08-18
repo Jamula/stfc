@@ -1,6 +1,6 @@
 // T014 [US1] — dedup unit tests. Asserts the priority order (a→f):
 //   (a) promo-codes.txt        → already-known
-//   (b) candidates.jsonl prior → duplicate
+//   (b) candidates.jsonl prior → duplicate, except retryable transient failures
 //   (c) suppression deny       → suppressed-operator-deny
 //   (d) suppression allow      → overrides cooldown, routes to fresh
 //   (e) cooldown.isInCooldown  → suppressed-cooldown
@@ -65,6 +65,52 @@ describe("dedup priority order", () => {
     });
     assert.deepEqual(fresh, []);
     assert.equal(annotated[0]!.status, "duplicate");
+  });
+
+  it("keeps a prior transient failure suppressed while its cooldown is active", () => {
+    const prior = new Map<string, CandidateCode>([
+      ["RETRYME", { ...makeCandidate("RETRYME"), status: "transient-failure" }],
+    ]);
+    const cooldowns: CooldownMap = {
+      RETRYME: {
+        firstFailedAt: "2026-05-15T00:00:00Z",
+        lastFailedAt: "2026-05-15T00:00:00Z",
+        suppressedUntil: new Date(NOW.getTime() + ONE_DAY).toISOString(),
+        failureOutcomes: ["TRANSIENT"],
+      },
+    };
+    const { fresh, annotated } = dedup([makeCandidate("RETRYME")], {
+      promoCodesTxt: new Set(),
+      priorCandidates: prior,
+      suppression: {},
+      cooldowns,
+      now: NOW,
+    });
+    assert.deepEqual(fresh, []);
+    assert.equal(annotated[0]!.status, "suppressed-cooldown");
+  });
+
+  it("retries a prior transient failure after its cooldown expires", () => {
+    const prior = new Map<string, CandidateCode>([
+      ["RETRYME", { ...makeCandidate("RETRYME"), status: "transient-failure" }],
+    ]);
+    const cooldowns: CooldownMap = {
+      RETRYME: {
+        firstFailedAt: "2026-05-14T00:00:00Z",
+        lastFailedAt: "2026-05-14T00:00:00Z",
+        suppressedUntil: new Date(NOW.getTime() - ONE_DAY).toISOString(),
+        failureOutcomes: ["TRANSIENT"],
+      },
+    };
+    const { fresh, annotated } = dedup([makeCandidate("RETRYME")], {
+      promoCodesTxt: new Set(),
+      priorCandidates: prior,
+      suppression: {},
+      cooldowns,
+      now: NOW,
+    });
+    assert.equal(fresh.length, 1);
+    assert.equal(annotated[0]!.status, "pending");
   });
 
   it("(c) suppression deny → suppressed-operator-deny", () => {

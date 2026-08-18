@@ -40,3 +40,8 @@ summary.md
 # discord-monitor.yml after each run.
 # Squad: ignore runtime state (logs, inbox, sessions)
 .squad/.cache/
+# Squad: state owned by squad-state branch (two-layer/orphan backend)
+.squad/decisions.md
+.squad/agents/*/history.md
+.squad/fact-checker/audit-trail.md
+# /Squad: state owned by squad-state branch

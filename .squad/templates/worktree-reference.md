@@ -63,15 +63,15 @@ When worktree mode is enabled, the coordinator creates dedicated worktrees for i
 
 **Dependency management:**
 - After creating a worktree, link `node_modules` from the main repo to avoid reinstalling
-- Windows: `cmd /c "mklink /J {worktree}\node_modules {main-repo}\node_modules"`
-- Unix: `ln -s {main-repo}/node_modules {worktree}/node_modules`
+- Windows: `cmd /c "mklink /J {worktree-path}\node_modules {main-repo-path}\node_modules"`
+- Unix: `ln -s {main-repo-path}/node_modules {worktree-path}/node_modules`
 - If linking fails (permissions, cross-device), fall back to `npm install` in the worktree
 
 **Reusing worktrees:**
 - Before creating a new worktree, check if one exists for the same issue
 - `git worktree list` shows all active worktrees
 - If found, reuse it (cd to the path, verify branch is correct, `git pull` to sync)
-- Multiple agents can work in the same worktree concurrently if they modify different files
+- Multiple agents can work in the same worktree concurrently if they modify different files. Untracked files are still at risk: a global `git stash` / `git clean` from one agent can delete another agent's not-yet-committed files — prefer per-issue worktrees for parallel background work
 
 **Cleanup:**
 - After a PR is merged, the worktree should be removed
@@ -110,7 +110,7 @@ c. **Create the worktree:**
 
 d. **Set up dependencies:**
    - Link `node_modules` from main repo to avoid reinstalling:
-     - Windows: `cmd /c "mklink /J {worktree}\node_modules {main-repo}\node_modules"`
+     - Windows: `cmd /c "mklink /J {worktree-path}\node_modules {main-repo-path}\node_modules"`
      - Unix: `ln -s {main-repo}/node_modules {worktree}/node_modules`
    - If linking fails (error), fall back: `cd {worktree} && npm install`
    - Verify the worktree is ready: check build tools are accessible

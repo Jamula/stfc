@@ -18,6 +18,8 @@ permissions:
   # `write` so the post-run step can commit any new rows in
   # docs/redeem-history.md back to the repo using the default GITHUB_TOKEN.
   contents: write
+  # `issues: write` so a dead token raises a visible alert (exit code 2).
+  issues: write
 
 # Opt into the Node 24 runtime for actions/* internals (default June 2026).
 env:
@@ -42,9 +44,64 @@ jobs:
 
       - run: npm ci
 
-      - run: npm run skill:run-all
+      - name: Redeem
+        id: redeem
         env:
           STFC_ACCOUNTS: ${{ secrets.STFC_ACCOUNTS }}
+        run: |
+          set +e
+          npm run skill:run-all
+          code=$?
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          exit $code
+
+      # Exit code 2 means every account's token was rejected by the store, so
+      # the run claims nothing until STFC_ACCOUNTS is refreshed. Redemption
+      # silently stopped for 11 days (2026-08-02 to 2026-08-13) because a dead
+      # token produced no signal anyone saw. Raise one issue and keep it open
+      # rather than filing a duplicate every 10 minutes.
+      - name: Alert on dead token
+        if: always() && steps.redeem.outputs.exit_code == '2'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TITLE: "STFC token rejected — redemption is stopped until STFC_ACCOUNTS is refreshed"
+        run: |
+          set -euo pipefail
+          run_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          existing=$(gh issue list --state open --search "$TITLE in:title" \
+            --json number --jq '.[0].number // empty')
+
+          if [ -n "$existing" ]; then
+            echo "Alert already open as #$existing — not filing a duplicate."
+            printf 'Token still rejected as of %s\n' "$run_url" \
+              | gh issue comment "$existing" --body-file -
+            exit 0
+          fi
+
+          {
+            echo "The redeem workflow exited 2: every account's token was rejected by"
+            echo "the store. **No gifts are being claimed** until \`STFC_ACCOUNTS\` is"
+            echo "refreshed."
+            echo ""
+            echo "Failing run: $run_url"
+            echo ""
+            echo "Note the JWT may still look valid — \`/auth/me\` can return 200 while"
+            echo "\`GET /offers/gifts?available=true\` returns 401. Trust this alert over"
+            echo "the \`exp\` claim."
+            echo ""
+            echo "To fix, re-capture the token and update the secret, either:"
+            echo ""
+            echo "1. run \`npm run capture-token -- --name main\` locally (a browser opens;"
+            echo "   Scopely emails a 6-digit code), then answer \`y\` to set the secret, or"
+            echo "2. dispatch \`Refresh token\` twice — once to trigger the code email, then"
+            echo "   again passing that code as the \`otp\` input."
+            echo ""
+            echo "Close this issue once a run claims gifts again."
+          } > /tmp/alert-body.md
+
+          gh issue create --title "$TITLE" \
+            --label "squad,squad:uhura,bug,priority:p1" \
+            --body-file /tmp/alert-body.md
 
       - name: Commit redeem history (if changed)
         if: always()
@@ -58,7 +115,9 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add docs/redeem-history.md
           NEW_LINES=$(git diff --cached --numstat docs/redeem-history.md | awk '{print $1}')
-          git commit -m "chore(history): append ${NEW_LINES} new claim row(s) [skip ci]"
+          # --no-verify: npm ci installs the developer pre-commit hook, which
+          # runs the full test suite. CI must not gate recording claims on that.
+          git commit --no-verify -m "chore(history): append ${NEW_LINES} new claim row(s) [skip ci]"
           # Retry-once on push race against a concurrent workflow.
           git pull --rebase origin "$GITHUB_REF_NAME" || true
           git push origin "HEAD:$GITHUB_REF_NAME"

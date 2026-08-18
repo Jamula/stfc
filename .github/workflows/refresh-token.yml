@@ -142,6 +142,7 @@ jobs:
           STFC_EMAIL: ${{ secrets.STFC_EMAIL }}
           STFC_PASSWORD: ${{ secrets.STFC_PASSWORD || secrets.cj_pwd }}
           STFC_OTP: ${{ inputs.otp }}
+          STFC_DEBUG_DIR: /tmp/stfc-debug
         run: |
           set -euo pipefail
           if [ -z "${STFC_EMAIL:-}" ] || [ -z "${STFC_PASSWORD:-}" ]; then
@@ -162,6 +163,18 @@ jobs:
           TOKEN=$(jq -r '.token' /tmp/captured.json)
           echo "::add-mask::$TOKEN"
           echo "captured=true" >> "$GITHUB_OUTPUT"
+
+      # Only the rendered login page is uploaded (no page HTML), so a failed
+      # capture can be diagnosed as "selector changed" vs "CAPTCHA" without
+      # risking the JWT. Short retention: it shows the login email.
+      - name: Upload login-failure screenshot
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+        with:
+          name: login-failure-screenshot
+          path: /tmp/stfc-debug/
+          retention-days: 3
+          if-no-files-found: ignore
 
       - name: Merge with existing STFC_ACCOUNTS and update secret
         env:

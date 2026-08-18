@@ -126,6 +126,7 @@ describe("skill:roster status", () => {
     });
     assert.equal(exitCode, 0);
     assert.match(writer.out.join("\n"), /account\s+officers\s+age\(days\)\s+freshness/);
+    assert.match(writer.out.join("\n"), /alpha\s+2\s+11\s+warn/);
     assert.equal(writer.err.length, 0);
   });
 
@@ -272,8 +273,8 @@ describe("skill:roster add", () => {
         now: () => FIXED_NOW,
         writer,
       });
-      assert.equal(result.exitCode, exitCode, argv[0]);
-      assert.match([...writer.err, JSON.stringify(result.result)].join("\n"), /ENOENT/, argv[0]);
+      assert.equal(result.exitCode, exitCode, argv[0]!);
+      assert.match([...writer.err, JSON.stringify(result.result)].join("\n"), /ENOENT/, argv[0]!);
       await assert.rejects(() => fs.access(ghostPath), /ENOENT/);
     }
   });

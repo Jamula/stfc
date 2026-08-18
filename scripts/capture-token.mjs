@@ -18,7 +18,7 @@
 //   4. Merges the validated token into a local .env (preserving any
 //      other accounts already in STFC_ACCOUNTS).
 //   5. If `gh` CLI is available, offers (y/N) to set the GitHub repo
-//      secret STFC_ACCOUNTS via `gh secret set ... --body-file -`,
+//      secret STFC_ACCOUNTS via `gh secret set STFC_ACCOUNTS`,
 //      passing the JSON via stdin (so the token never lands on a
 //      command line, in shell history, or in a process listing).
 //
@@ -308,8 +308,8 @@ async function ghAvailable() {
 
 async function ghSetSecret(secretJson) {
   return new Promise((resolve, reject) => {
-    // gh reads the secret value from stdin when --body is omitted. (Older gh
-    // releases don't support --body-file, so we rely on the stdin path here.)
+    // gh reads the secret value from stdin when --body is omitted. Older gh
+    // releases don't support --body-file, so rely on the stdin path here.
     const p = spawn("gh", ["secret", "set", "STFC_ACCOUNTS"], {
       stdio: ["pipe", "inherit", "inherit"],
       shell: process.platform === "win32",
@@ -387,7 +387,193 @@ async function confirm(prompt, def = false) {
 // selectors were tried so the next maintainer knows what to update.
 // ----------------------------------------------------------------------------
 
-async function tryAutoLogin(page, { email, password, log, ci }) {
+// Selectors for a single-input OTP field (classic Okta widget).
+const OTP_SELECTORS = [
+  'input[autocomplete="one-time-code"]',
+  'input[name="credentials.passcode"]',
+  'input[data-se="o-form-input-passcode"]',
+  'input[type="text"][maxlength="6"]',
+  'input[type="tel"][maxlength="6"]',
+];
+
+// Scopely's passwordless login renders the code as several separate
+// single-character boxes, so none of the single-input selectors above match.
+// Their exact attributes have changed before, so match on any of the shapes
+// these widgets commonly use rather than on maxlength alone.
+const SPLIT_OTP_SELECTOR = [
+  'input[maxlength="1"]',
+  'input[inputmode="numeric"]',
+  'input[type="tel"]',
+  'input[data-testid*="otp" i]',
+  'input[class*="otp" i]',
+  'input[aria-label*="digit" i]',
+].join(", ");
+
+// Locate the OTP entry widget, whichever form it takes. Searches every frame
+// because the Scopely login renders inside a modal that may be an iframe.
+// Returns null when neither is present/visible.
+async function findOtpEntry(page) {
+  for (const frame of page.frames()) {
+    for (const sel of OTP_SELECTORS) {
+      const el = await frame.$(sel).catch(() => null);
+      if (el && (await el.isVisible().catch(() => false))) return { kind: "single", el, frame };
+    }
+
+    const boxes = frame.locator(SPLIT_OTP_SELECTOR);
+    const count = await boxes.count().catch(() => 0);
+    if (count >= 4 && (await boxes.first().isVisible().catch(() => false))) {
+      return { kind: "split", boxes, count, frame };
+    }
+  }
+  return null;
+}
+
+// Type the code into whichever widget we found. Split widgets usually
+// auto-advance focus, but we target each box explicitly so the code lands
+// correctly even when they don't.
+async function fillOtp(page, entry, code) {
+  if (entry.kind === "single") {
+    await entry.el.fill(code).catch(() => {});
+    return;
+  }
+
+  const digits = code.replace(/\D/g, "").split("");
+  const limit = Math.min(digits.length, entry.count);
+  for (let i = 0; i < limit; i++) {
+    const box = entry.boxes.nth(i);
+    const digit = digits[i];
+    await box.click({ timeout: 2_000 }).catch(() => {});
+    try {
+      await box.fill(digit);
+    } catch {
+      await page.keyboard.type(digit, { delay: 30 }).catch(() => {});
+    }
+  }
+}
+
+// Prompt the user for the 6-digit OTP, fill it into the OTP widget, and click
+// the submit button. Retries up to `maxAttempts` times if Okta rejects the code
+// (detects the error banner or the input field re-appearing). Returns true on
+// success, false if the user presses Enter without a code or exhausts retries.
+//
+// In headless mode (headless=true) the code is read from /tmp/stfc-otp instead
+// of stdin. The script writes /tmp/stfc-otp-ready to signal it is waiting, then
+// polls /tmp/stfc-otp until the file appears (or timeout is reached).
+async function promptAndSubmitOtp({ page, entry, log, maxAttempts = 3, headless = false }) {
+  const OTP_READY_FILE = "/tmp/stfc-otp-ready";
+  const OTP_CODE_FILE = "/tmp/stfc-otp";
+
+  const OTP_ERROR_SELECTORS = [
+    // Okta-rendered inline error messages (various versions)
+    '[data-se="o-form-error-container"]:not(:empty)',
+    '.okta-form-infobox-error',
+    'p.okta-error-container',
+    '[role="alert"]',
+    // Generic "invalid code" text
+    ':text("Invalid code")',
+    ':text("Incorrect code")',
+    ':text("Code is invalid")',
+    ':text("Enter a valid")',
+    ':text("does not match")',
+  ];
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const attemptLabel = maxAttempts > 1 ? ` (attempt ${attempt}/${maxAttempts})` : "";
+    let code;
+
+    // STFC_OTP env var: injected by workflow_dispatch `otp` input — takes
+    // precedence over both the file-poll (headless) and stdin paths.
+    const envOtp = process.env.STFC_OTP?.trim();
+    if (envOtp) {
+      log(`auto-login: using OTP from STFC_OTP env var${attemptLabel}`);
+      code = envOtp;
+    } else if (headless) {
+      // Remove any stale code file from a previous attempt.
+      await fs.unlink(OTP_CODE_FILE).catch(() => {});
+      // Write the ready marker so the caller knows the script is waiting.
+      await fs.writeFile(OTP_READY_FILE, `attempt:${attempt}\ntimestamp:${new Date().toISOString()}\n`, "utf8").catch(() => {});
+      log(`\nauto-login: waiting for OTP code in ${OTP_CODE_FILE}${attemptLabel}`);
+      log(`  → write the 6-digit code to that file, e.g.:  echo '123456' > ${OTP_CODE_FILE}\n`);
+
+      const pollDeadline = Date.now() + 300_000; // poll up to 5 min
+      while (Date.now() < pollDeadline) {
+        if (existsSync(OTP_CODE_FILE)) {
+          code = (await fs.readFile(OTP_CODE_FILE, "utf8").catch(() => "")).trim();
+          await fs.unlink(OTP_CODE_FILE).catch(() => {});
+          if (code) break;
+        }
+        await new Promise((r) => setTimeout(r, 1_000));
+      }
+      if (!code) {
+        log("auto-login: timed out waiting for OTP file — giving up.");
+        await fs.unlink(OTP_READY_FILE).catch(() => {});
+        return false;
+      }
+    } else {
+      const rl = createInterface({ input, output });
+      try {
+        code = (await rl.question(
+          `\n>>> Scopely sent a 6-digit verification code to your email.\n>>> Enter the code now${attemptLabel}: `
+        )).trim();
+      } finally {
+        rl.close();
+      }
+      if (!code) {
+        log("auto-login: no code entered — falling back to interactive login.");
+        return false;
+      }
+    }
+
+    // The widget may have been cleared/re-rendered between attempts, so
+    // re-query it to avoid stale-element errors.
+    const currentEntry = (await findOtpEntry(page)) ?? entry;
+    await fillOtp(page, currentEntry, code);
+    await clickFirstAvailable(page, [
+      'button:has-text("Verify")',
+      'button:has-text("Submit")',
+      'button:has-text("Sign in")',
+      'button[type="submit"]',
+      'button.ant-btn-primary',
+    ]);
+
+    // Wait briefly and check whether Okta rejected the code (error banner or
+    // the OTP input is still/again visible).
+    await page.waitForTimeout(2_000);
+
+    let rejected = false;
+    // Check for explicit error messages first.
+    for (const sel of OTP_ERROR_SELECTORS) {
+      const el = await page.$(sel).catch(() => null);
+      if (el && (await el.isVisible().catch(() => false))) {
+        const text = await el.textContent().catch(() => "");
+        // The passwordless screen shows a permanent "Haven't received an
+        // email? Send again" notice that also carries role="alert". Treating
+        // it as a rejection would burn every retry instantly.
+        if (/haven't received|send again|resend/i.test(text ?? "")) continue;
+        log(`auto-login: OTP rejected (attempt ${attempt}/${maxAttempts}): "${text?.trim().slice(0, 80)}"`);
+        rejected = true;
+        break;
+      }
+    }
+
+    if (!rejected) {
+      // If no error, assume the code was accepted.
+      await fs.unlink(OTP_READY_FILE).catch(() => {});
+      log("auto-login: OTP submitted. Network listeners will catch the resulting JWT.");
+      return true;
+    }
+
+    if (attempt < maxAttempts) {
+      log(`auto-login: will re-prompt for the code.`);
+    }
+  }
+
+  await fs.unlink(OTP_READY_FILE).catch(() => {});
+  log(`auto-login: OTP rejected after ${maxAttempts} attempt(s) — falling back to interactive login.`);
+  return false;
+}
+
+async function tryAutoLogin(page, { email, password, log, err, ci, headless = false }) {
   // Stage A: dismiss the OneTrust cookie banner if present (it intercepts
   // clicks on the page-level Sign-in button).
   log("auto-login: dismissing cookie banner if present");
@@ -432,67 +618,96 @@ async function tryAutoLogin(page, { email, password, log, ci }) {
     'button.ant-btn-primary',
   ]);
 
-  // Stage D: after the email step Scopely's Okta login lands on one of:
-  //   (a) a password field (older / password-enrolled accounts), or
-  //   (b) an email one-time-code screen ("Check your inbox").
-  // This account's web-portal login is passwordless ("No more passwords!"),
-  // confirmed via CI diagnostics: no password field or password authenticator
-  // is offered, and "Go back to sign in options" only resets to the email
-  // screen. So poll briefly for a password field (covers case (a) and slow
-  // renders) and click a benign "Sign in with password instead" link if one is
-  // present — but never touch the reset link, which would also disrupt the
-  // interactive flow where the user enters the emailed code by hand.
-  const passwordSelectors = [
-    'input[type="password"]',
-    'input[name="password"]',
-    'input[autocomplete="current-password"]',
-    'input[id*="password" i]',
-    'input[placeholder*="assword"]',
-  ];
-  const passwordLinkSelectors = [
-    'a:has-text("Sign in with password instead")',
-    'a:has-text("password instead")',
-    'button:has-text("Sign in with password instead")',
-  ];
+  // Stage D: after Continue, wait up to 15s for EITHER a "Sign in with
+  // password instead" link (password-capable account) OR an OTP/passcode
+  // input (email-code-only account). Whichever arrives first determines
+  // which branch we take.
+  log("auto-login: waiting for password-switch link or OTP input…");
+  const PASSWORD_SWITCH_SELECTOR =
+    'a:has-text("Sign in with password instead"), a.switchAuthenticator, a:has-text("password instead"), button:has-text("Sign in with password instead")';
 
-  log("auto-login: waiting for password form (or email one-time-code screen)…");
-  let passwordField = await findVisibleIn(page, passwordSelectors);
-  let clickedPwLink = false;
-  const pwDeadline = Date.now() + 20_000;
-  while (!passwordField && Date.now() < pwDeadline) {
-    if (!clickedPwLink) {
-      clickedPwLink = await clickFirstInFrames(page, passwordLinkSelectors);
-      if (clickedPwLink) log("auto-login: clicked 'password instead' link");
+  let gotPasswordSwitch = false;
+  let primaryOtpEntry = null;
+  // Scopely is passwordless now: the code email has to arrive and the boxes
+  // have to render, so give it longer than the original 15s.
+  const deadline = Date.now() + 30_000;
+  while (Date.now() < deadline) {
+    // Check for the OTP widget first (primary email-code flow).
+    primaryOtpEntry = await findOtpEntry(page);
+    if (primaryOtpEntry) break;
+    // Check for the password-switch link.
+    const switchEl = page.locator(PASSWORD_SWITCH_SELECTOR).first();
+    if ((await switchEl.count()) > 0) {
+      try {
+        await switchEl.click({ timeout: 2_000 });
+        gotPasswordSwitch = true;
+      } catch { /* retry */ }
+      if (gotPasswordSwitch) break;
     }
     await page.waitForTimeout(500);
-    passwordField = await findVisibleIn(page, passwordSelectors);
   }
 
-  // Stage E: fill the password and click Sign in.
-  if (!passwordField) {
-    await dumpLoginDiagnostics(page, log);
-    const bodyText = await page
-      .evaluate(() => (document.body ? document.body.innerText : ""))
-      .catch(() => "");
-    const otpScreen =
-      (await findVisibleIn(page, [
-        'input[name="credentials.passcode"]',
-        'input[autocomplete="one-time-code"]',
-        'input[name="otp"]',
-        'input[name="code"]',
-      ])) !== null ||
-      /check your inbox|sent a code|one-time code|verification code|no more passwords/i.test(bodyText);
-    if (otpScreen) {
-      log("auto-login: this Scopely login is passwordless — it emailed a one-time code and offers no password field.");
-      if (ci) {
-        log("auto-login: a one-time email code cannot be entered headlessly in CI. Capture the token manually instead: run `npm run capture-token` locally (without --ci), enter the emailed code in the browser, then update the STFC_ACCOUNTS secret. See the refresh-token.yml header for the full procedure.");
-      } else {
-        log("auto-login: enter the code from your email in the open browser window to finish signing in — the token will be captured automatically.");
-      }
+  // Stage D-OTP: account uses email code as primary authenticator.
+  if (primaryOtpEntry) {
+    log(`auto-login: email code (primary OTP) challenge detected — ${primaryOtpEntry.kind} input.`);
+    if (ci && !process.env.STFC_OTP) {
+      err("auto-login: email-code challenge requires user input and cannot run unattended. Run the workflow manually via workflow_dispatch with an otp input.");
+      process.exit(2);
+    }
+    const submitted = await promptAndSubmitOtp({ page, entry: primaryOtpEntry, log, headless });
+    if (!submitted) return false;
+    return true;
+  }
+
+  if (!gotPasswordSwitch) {
+    log("auto-login: neither a password-switch link nor an OTP field appeared within 30s — falling back to interactive login.");
+    return false;
+  }
+
+  // Stage E: password-capable account — fill password and submit.
+  // Skip if no password was provided (OTP-only accounts don't need it).
+  if (!password) {
+    log("auto-login: no STFC_PASSWORD set — skipping password step (OTP-only account assumed).");
+  } else {
+    log("auto-login: waiting for password field…");
+    const passwordField = await waitForFirstSelector(page, [
+      'input[type="password"]',
+      'input[name="password"]',
+    ], 15_000);
+    if (!passwordField) {
+      log("auto-login: no password field appeared within 15s — falling back to interactive login.");
       return false;
     }
-    log("auto-login: no password field appeared within 20s — the login UI may have changed. Falling back to interactive login.");
-    return false;
+    log("auto-login: filling password and clicking Sign in");
+    await passwordField.fill(password);
+    await clickFirstAvailable(page, [
+      'button:has-text("Sign in")',
+      'button[type="submit"]',
+      'button.ant-btn-primary',
+    ]);
+
+    log("auto-login: submitted credentials, waiting for secondary MFA/OTP challenge or JWT…");
+
+    // Stage F: some accounts require a secondary 6-digit OTP after password
+    // entry (e.g. Okta MFA step-up). We wait up to 15s.
+    let secondaryOtpEntry = null;
+    const secondaryDeadline = Date.now() + 15_000;
+    while (Date.now() < secondaryDeadline) {
+      secondaryOtpEntry = await findOtpEntry(page);
+      if (secondaryOtpEntry) break;
+      await page.waitForTimeout(500);
+    }
+    if (secondaryOtpEntry) {
+      log(`auto-login: secondary MFA/OTP challenge detected — ${secondaryOtpEntry.kind} input.`);
+      if (ci && !process.env.STFC_OTP) {
+        err("auto-login: MFA challenge requires user input and cannot run unattended. Run the workflow manually via workflow_dispatch with an otp input.");
+        process.exit(2);
+      }
+      const submitted = await promptAndSubmitOtp({ page, entry: secondaryOtpEntry, log, headless });
+      if (!submitted) return false;
+    } else {
+      log("auto-login: no secondary OTP challenge detected. Network listeners will catch the resulting JWT.");
+    }
   }
 
   return true;
@@ -521,89 +736,19 @@ async function clickFirstAvailable(page, selectors) {
   return false;
 }
 
-// Search the main frame AND every child iframe for the first visible match.
-// Scopely/Okta render parts of the login inside iframes, which page.$ alone
-// (main-frame only) cannot see.
-async function findVisibleIn(page, selectors) {
-  for (const frame of page.frames()) {
-    for (const sel of selectors) {
-      const el = await frame.$(sel).catch(() => null);
-      if (el && (await el.isVisible().catch(() => false))) return el;
+async function clickWithRetry(page, selector, timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const el = page.locator(selector).first();
+    if (await el.count() > 0) {
+      try {
+        await el.click({ timeout: 2_000 });
+        return true;
+      } catch { /* retry */ }
     }
-  }
-  return null;
-}
-
-// Click the first visible match for any selector, across all frames. Returns
-// true if something was clicked. Used to drive Okta's multi-step authenticator
-// chooser (which may live in an iframe).
-async function clickFirstInFrames(page, selectors) {
-  for (const frame of page.frames()) {
-    for (const sel of selectors) {
-      const loc = frame.locator(sel).first();
-      const n = await loc.count().catch(() => 0);
-      if (n > 0 && (await loc.isVisible().catch(() => false))) {
-        try {
-          await loc.click({ timeout: 2_000 });
-          return true;
-        } catch {
-          /* try the next selector/frame */
-        }
-      }
-    }
+    await page.waitForTimeout(500);
   }
   return false;
-}
-
-// On a login stall, dump what the page actually shows (URL, frames, inputs,
-// body text) so we can see whether it's an iframe, a CAPTCHA, an OTP prompt,
-// or just a different selector — instead of guessing blind.
-async function dumpLoginDiagnostics(page, log) {
-  try {
-    log(`auto-login diag: url = ${page.url()}`);
-    const frames = page.frames();
-    log(`auto-login diag: ${frames.length} frame(s): ${JSON.stringify(frames.map((f) => f.url()).slice(0, 10))}`);
-    for (const frame of frames) {
-      const inputs = await frame
-        .$$eval("input", (els) =>
-          els.slice(0, 20).map((e) => ({
-            type: e.getAttribute("type"),
-            name: e.getAttribute("name"),
-            id: e.id || null,
-            placeholder: e.getAttribute("placeholder"),
-            autocomplete: e.getAttribute("autocomplete"),
-            visible: e.getClientRects().length > 0,
-          })),
-        )
-        .catch(() => []);
-      if (inputs.length > 0) {
-        log(`auto-login diag: inputs in ${frame.url().slice(0, 70)}: ${JSON.stringify(inputs)}`);
-      }
-      const clickables = await frame
-        .$$eval('a, button, [role="button"]', (els) =>
-          els
-            .slice(0, 40)
-            .map((e) => ({
-              tag: e.tagName.toLowerCase(),
-              text: (e.innerText || e.textContent || "").trim().slice(0, 40),
-              dataSe: e.getAttribute("data-se"),
-              href: e.getAttribute("href"),
-              visible: e.getClientRects().length > 0,
-            }))
-            .filter((x) => x.text || x.dataSe),
-        )
-        .catch(() => []);
-      if (clickables.length > 0) {
-        log(`auto-login diag: clickables in ${frame.url().slice(0, 70)}: ${JSON.stringify(clickables)}`);
-      }
-    }
-    const bodyText = await page
-      .evaluate(() => (document.body ? document.body.innerText.slice(0, 500) : ""))
-      .catch(() => "");
-    log(`auto-login diag: body snippet: ${JSON.stringify(bodyText)}`);
-  } catch (e) {
-    log(`auto-login diag: failed (${e.message?.slice(0, 120)})`);
-  }
 }
 
 // ----------------------------------------------------------------------------
@@ -666,7 +811,7 @@ async function main() {
     // /auth/login response handler picks up the JWT. If auto-login fails (e.g.
     // CAPTCHA) the user can still complete login manually in the visible
     // browser when not in --ci mode.
-    tryAutoLogin(page, { email, password, log, ci: args.ci }).catch((e) => {
+    tryAutoLogin(page, { email, password, log, err, ci: args.ci, headless: args.headless }).catch((e) => {
       err(`auto-login failed: ${e instanceof Error ? e.message : e}`);
     });
   }
@@ -690,6 +835,68 @@ async function main() {
         err(`Diagnostics written to ${file}`);
       } catch (e) {
         err(`Failed to write diagnostics: ${e instanceof Error ? e.message : e}`);
+      }
+    }
+
+    // A screenshot of whatever the login page is actually showing is the only
+    // way to tell a changed selector apart from a CAPTCHA when running
+    // headless in CI. Only the rendered page is captured — never page HTML,
+    // which could contain the JWT we are trying to protect.
+    const shotDir = process.env.STFC_DEBUG_DIR?.trim();
+    if (shotDir) {
+      try {
+        await fs.mkdir(shotDir, { recursive: true });
+        const shot = path.join(shotDir, "login-failure.png");
+        await page.screenshot({ path: shot, fullPage: true });
+        err(`Failure screenshot written to ${shot}`);
+      } catch (e) {
+        err(`Failed to write failure screenshot: ${e instanceof Error ? e.message : e}`);
+      }
+
+      // Attribute-only inventory of every frame's inputs. Deliberately records
+      // no element *values*, so it can never leak the code or the JWT — it
+      // exists purely so a selector that stops matching can be fixed from
+      // evidence instead of guesswork.
+      try {
+        const frames = [];
+        for (const frame of page.frames()) {
+          const info = await frame
+            .evaluate(() => {
+              const attrs = (el) => ({
+                tag: el.tagName,
+                type: el.getAttribute("type"),
+                name: el.getAttribute("name"),
+                id: el.id || null,
+                cls: el.getAttribute("class"),
+                maxlength: el.getAttribute("maxlength"),
+                autocomplete: el.getAttribute("autocomplete"),
+                inputmode: el.getAttribute("inputmode"),
+                ariaLabel: el.getAttribute("aria-label"),
+                dataSe: el.getAttribute("data-se"),
+                dataTestid: el.getAttribute("data-testid"),
+                visible: el.getClientRects().length > 0,
+              });
+              return {
+                url: location.href,
+                inputs: Array.from(document.querySelectorAll("input, textarea, [contenteditable='true']")).map(attrs),
+                buttons: Array.from(document.querySelectorAll("button")).map((b) => ({
+                  text: (b.textContent || "").trim().slice(0, 40),
+                  type: b.getAttribute("type"),
+                  disabled: b.disabled,
+                })),
+                shadowHosts: Array.from(document.querySelectorAll("*"))
+                  .filter((e) => e.shadowRoot)
+                  .map((e) => e.tagName + (e.id ? `#${e.id}` : "")),
+              };
+            })
+            .catch((e) => ({ url: frame.url(), error: String(e) }));
+          frames.push(info);
+        }
+        const domFile = path.join(shotDir, "dom-inputs.json");
+        await fs.writeFile(domFile, JSON.stringify({ frames }, null, 2), "utf8");
+        err(`DOM input inventory written to ${domFile}`);
+      } catch (e) {
+        err(`Failed to write DOM inventory: ${e instanceof Error ? e.message : e}`);
       }
     }
 
@@ -755,7 +962,15 @@ async function main() {
   console.log(`\nDone. Trigger the workflow with: gh workflow run "Redeem gifts" (or via the GitHub UI).`);
 }
 
-main().catch((err) => {
-  console.error(`\nUnexpected error: ${err instanceof Error ? err.stack || err.message : String(err)}`);
-  process.exit(1);
-});
+// Only run the CLI when invoked directly, so tests can import the OTP
+// helpers without launching a browser.
+const isDirectRun = process.argv[1] && path.resolve(process.argv[1]) === __filename;
+
+if (isDirectRun) {
+  main().catch((err) => {
+    console.error(`\nUnexpected error: ${err instanceof Error ? err.stack || err.message : String(err)}`);
+    process.exit(1);
+  });
+}
+
+export { findOtpEntry, fillOtp, OTP_SELECTORS, SPLIT_OTP_SELECTOR };

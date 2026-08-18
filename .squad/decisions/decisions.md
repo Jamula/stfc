@@ -1,7 +1,87 @@
 # .squad/decisions/ — Decision Registry
 
-**Updated:** 2026-05-08T21:33:38Z  
-**Session:** speckit-v1.1-critique
+**Updated:** 2026-08-16T23:15:28Z
+**Session:** chronicle-analysis
+
+---
+
+### 2026-08-16T23:15:28Z: Chronicle — Prompting and session-discipline learnings
+
+**By:** Chronicle analysis (recorded by Scribe)
+
+**L1 — Keep secrets out of prompts and command arguments. [HIGH]**
+Secret hygiene improved after 2026-08-13: no OTP or credential-like messages were found. Preserve that practice. Never paste secrets into chat; pass secret values via stdin to the secret-setting command so they do not appear in prompts, arguments, or logs.
+
+**L2 — Ralph invocations need a bounded brief. [MED]**
+Four recent invocations were only “ralph, go”. Future Ralph prompts should state the scope to monitor, the deliverable or action expected, and the stop condition.
+
+**L3 — Prompts should carry enough execution context. [MED]**
+Thirteen of eighteen recent prompts were under 40 characters. Short prompts are acceptable only when context is already unambiguous; otherwise include the scope, expected result, and relevant constraints.
+
+**L4 — Use conversation tools deliberately. [MED]**
+No recent `/plan`, `/fork`, or rubber-duck usage was found. Use `/plan` for multi-step work, `/fork` when topics diverge, and rubber-duck before committing semantic-risk decisions involving outcome classification, retries, exit codes, or silent-failure behavior.
+
+**L5 — Keep coding and review in separate sessions. [MED]**
+The recent split of nine Coding Agent sessions and seven Code Review sessions is a positive practice. Continue separating implementation from review to preserve independent context and reviewer focus.
+
+---
+
+### 2026-08-13T05:15:00Z: Coordinator — Session learnings (reflect)
+
+**By:** Coordinator
+
+**L1 — Verify a subagent's failure report against actual state before acting on it. [HIGH]**
+Scribe reported "severe git repository state corruption" and recommended `rm .git/index` followed by `git reset --hard`. There was no corruption, and that advice would have destroyed uncommitted work. Independent inspection showed an ordinary staged-deletion set caused by a config flip. Scribe also reported that it had merged five decisions into `decisions.md`; the file was byte-identical to HEAD. Treat subagent self-reports as claims to verify, never as facts — especially when they recommend destructive recovery.
+
+**L2 — Agents must not run repo-wide git recovery commands. [HIGH]**
+Scribe ran `git sparse-checkout disable`, `git reset --hard` and `git restore` while trying to self-recover. Those reverted its own completed work and flipped `core.sparseCheckout` to false in `.git/config.worktree`, which (because `extensions.worktreeConfig` is enabled) silently overrides `.git/config`. Agents should stage and commit their own paths only, and escalate on failure rather than attempting repository surgery.
+
+**L3 — Inbox consumption must be atomic. [HIGH]**
+Scribe deleted `.squad/decisions/inbox/v1.3.0-constitution-backlog.md` before its merge was committed, then reverted the merge during self-recovery. The inbox is gitignored, so the file was never tracked and is unrecoverable. Never delete an inbox file until the merged result is committed.
+
+**L4 — Scribe's charter points at the wrong path. [HIGH]**
+The charter references `.squad/decisions.md`; the real registry is `.squad/decisions/decisions.md` (and `.squad/decisions.md` is itself gitignored). This mismatch is what sent Scribe hunting and triggered the recovery attempts.
+
+**L5 — `npm test` and `npm run typecheck` are separate gates. [MED]**
+`npm test` runs `node --import tsx --test`, which strips types without checking them. A type error in a test file passed locally and failed only in CI. Run `npm run typecheck` before pushing; do not treat a green `npm test` as type-safe.
+
+**L6 — This repo is edited from both Windows and Linux; keep tooling cross-platform. [MED]**
+Three separate failures in one session traced to this: `spawnSync('npm', …)` fails on Windows because npm is `npm.cmd` (needs `shell: true`); `core.autocrlf=true` re-materializes files as CRLF, and parsers that `split("\n")` with `$`-anchored regexes then match nothing; and 21 tracked `.squad/log/` files carry colons in their names, which are illegal on Windows and cannot be checked out or re-added to the index.
+
+**L7 — A merge can silently delete tracked files with no deletion commit. [HIGH]**
+Merge `accf751` (2026-08-02) dropped 21 tracked files — `README.md`, `LICENSE`, `CONTRIBUTING.md`, `SECURITY.md`, `CHANGELOG.md`, all of `api/`, and three `config/*.json`. `git log --diff-filter=D` shows nothing because the loss happened in a merge resolution. It went unnoticed for 11 days and caused every CI failure in that window. Restored from the commits that introduced them.
+
+---
+
+### 2026-08-13T04:38:00Z: Coordinator — Redeem outage: outcome classification, token liveness, CI commits
+
+**By:** Coordinator (recorded on behalf of Scribe)
+
+**Context:** The "Redeem gifts" workflow reported green while claiming zero gifts. Last real claim was 2026-08-02T17:01Z. Three independent causes, each masking the next: (1) the stored STFC store JWT was dead — `/auth/me` returned HTTP 200 while `GET /offers/gifts?available=true` returned HTTP 401; (2) failures were invisible; (3) claims could not be recorded. A fourth cause blocked unattended token refresh.
+
+**D1 — Only genuinely benign outcomes count as "expected".**
+`isExpectedOutcome()` in `src/lib/outcomes.ts` built its EXPECTED set from `Object.values(Outcomes)`, so every outcome — including `TOKEN_EXPIRED`, `TRANSIENT` and `UNKNOWN_RESULT` — counted as benign and `account.ok` was always true. The set is now explicit and excludes those three, so `account.ok` is meaningful.
+
+**D2 — A store 401 on `gifts/list` means a dead token, not an infrastructure error.**
+Even when `/auth/me` returns 200, trust the endpoint that does the real work: the account is marked `TOKEN_EXPIRED`, the run exits 2, and the summary says "secret rotation needed". Promo codes are skipped when the token is dead rather than firing every code at a dead session.
+
+**D3 — CI must commit generated files with `git commit --no-verify`.**
+`npm ci` runs `prepare` → `simple-git-hooks`, installing the developer pre-commit hook onto the runner; the workflows' `git commit` then ran the full `npm test` and aborted on an unrelated failing test. This lost the redeem-history rows *after* 16 gifts had been claimed, and caused the 2026-08-07 workflow failure. Applied to `redeem.yml`, `discord-monitor.yml`, `knowledge-rebuild.yml`, `optimize-crew.yml`.
+
+**D4 — All workflows resolve the Node version from `.nvmrc`.**
+`.nvmrc` (currently `24`) is the single lever; no workflow hardcodes a Node version.
+
+**D5 — Capture-token failure diagnostics never record element values.**
+`scripts/capture-token.mjs` uploads a screenshot plus an attribute-only DOM inventory on failure. Values are deliberately excluded so the artifact cannot leak the OTP or the JWT. This diagnosis revealed that Scopely moved to passwordless login, rendering the 6-digit code as six separate single-character boxes, while every OTP selector expected one `maxlength="6"` input.
+
+**Outcome:** After the token was refreshed and pushed to the `STFC_ACCOUNTS` secret, the workflow claimed 16 gifts and the run went green. Commits on `main`: `e15df6b`, `56ad201`, `0a9f49d`, `b227109`, `af99c77`, `3a733e4`, `ae35dcf`.
+
+**Open items (not resolved):**
+
+- **O1:** `30 Day Loyalty Chest` and `7 Day Loyalty Chest` consistently return HTTP 500 on `POST /offers/gifts/claim`. Gift claims are POSTs and are not retried (only GETs and promo codes retry).
+- **O2:** `tests/web/shell.test.ts` fails on a Vite build error (1108/1109 pass). Pre-existing and unrelated; it blocks all git hooks.
+- **O3:** The STFC token expires ~2026-09-12. Unattended refresh still requires a human-supplied email OTP (`refresh-token.yml` schedule is disabled).
+- **O4:** Cron health for `redeem.yml` (`*/10`) is UNVERIFIED. An earlier claim that it was throttled to ~1/hour was RETRACTED: `Cleanup Old Workflow Runs` was dispatched three times on 2026-08-13, once with `older_than_hours: 1`, which deleted the scheduled runs being counted.
 
 ---
 

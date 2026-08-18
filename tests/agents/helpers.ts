@@ -2,25 +2,32 @@ import { readFileSync } from "fs";
 import { resolve } from "path";
 import assert from "node:assert/strict";
 
+/**
+ * Read a repo file with line endings normalized to LF.
+ *
+ * This repo is worked on from both Linux (Codespaces) and Windows, and
+ * `core.autocrlf=true` means a Windows checkout materializes these files with
+ * CRLF. The table parsers below split on "\n" and anchor with `$`, so a
+ * trailing "\r" silently makes every row fail to match and every routing
+ * assertion fail. Normalize once, here, so the tests are checkout-independent.
+ */
+function readRepoFile(relativePath: string): string {
+  return readFileSync(resolve(process.cwd(), relativePath), "utf-8").replace(/\r\n/g, "\n");
+}
+
 /** Read and return the raw text of an agent's charter.md. */
 export function readCharter(agentName: string): string {
-  return readFileSync(
-    resolve(process.cwd(), `.squad/agents/${agentName}/charter.md`),
-    "utf-8",
-  );
+  return readRepoFile(`.squad/agents/${agentName}/charter.md`);
 }
 
 /** Read and return the raw text of .squad/routing.md. */
 export function readRouting(): string {
-  return readFileSync(resolve(process.cwd(), ".squad/routing.md"), "utf-8");
+  return readRepoFile(".squad/routing.md");
 }
 
 /** Read and return the raw text of .github/copilot-instructions.md. */
 export function readRules(): string {
-  return readFileSync(
-    resolve(process.cwd(), ".github/copilot-instructions.md"),
-    "utf-8",
-  );
+  return readRepoFile(".github/copilot-instructions.md");
 }
 
 /** Assert that the charter text mentions every string in `expectedOwns`. */

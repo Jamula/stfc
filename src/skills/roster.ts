@@ -1,6 +1,7 @@
 import { promises as fs } from "node:fs";
 import * as path from "node:path";
 import { loadOfficerDatabase } from "../crew/database.ts";
+import { evaluateStaleness } from "../crew/staleness.ts";
 import {
   loadRoster,
   RosterFileError,
@@ -14,9 +15,6 @@ const log = createLogger("roster");
 
 const DEFAULT_ROSTER_DIR = "data/crew/roster";
 const DEFAULT_OFFICERS_PATH = "data/crew/officers.json";
-const DEFAULT_WARN_DAYS = 7;
-const DEFAULT_ERROR_DAYS = 14;
-
 type SkillOutput = { result: unknown; exitCode: number };
 type Writer = {
   log: (...parts: unknown[]) => void;
@@ -436,37 +434,11 @@ function renderTextTable(headers: string[], rows: string[][]): string {
   return [format(headers), divider, ...rows.map((row) => format(row))].join("\n");
 }
 
-// TODO(merge): replace fallback with direct import from src/crew/staleness.ts when PR #99 lands.
 async function resolveStalenessEvaluator(
   now: () => Date,
 ): Promise<(rosterData: Roster) => StalenessEval> {
-  try {
-    const mod = await import(`../crew/${"staleness.ts"}`);
-    const fn = (mod as { evaluateStaleness?: unknown }).evaluateStaleness;
-    if (typeof fn === "function") {
-      return (rosterData: Roster) => {
-        const result = fn(rosterData) as { ageDays?: number; freshness?: string; status?: string };
-        return {
-          ageDays: Number.isFinite(result.ageDays) ? Number(result.ageDays) : computeAgeDays(rosterData.last_updated, now()),
-          freshness: String(result.freshness ?? result.status ?? "unknown"),
-        };
-      };
-    }
-  } catch (err) {
-    log.debug("staleness evaluator unavailable:", err);
-  }
-
   return (rosterData: Roster) => {
-    const ageDays = computeAgeDays(rosterData.last_updated, now());
-    const warn = rosterData.staleness_overrides?.warn ?? DEFAULT_WARN_DAYS;
-    const error = rosterData.staleness_overrides?.error ?? DEFAULT_ERROR_DAYS;
-    const freshness = ageDays >= error ? "error" : ageDays >= warn ? "warn" : "fresh";
-    return { ageDays, freshness };
+    const result = evaluateStaleness(rosterData, now());
+    return { ageDays: result.days, freshness: result.level };
   };
-}
-
-function computeAgeDays(lastUpdated: string, now: Date): number {
-  const last = new Date(lastUpdated);
-  if (Number.isNaN(last.getTime())) return Number.NaN;
-  return Math.max(0, Math.floor((now.getTime() - last.getTime()) / 86_400_000));
 }

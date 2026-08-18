@@ -33,6 +33,21 @@ function readIfExists(p: string): string | undefined {
   }
 }
 
+function extractYamlBlockByKey(content: string, key: string): string | undefined {
+  const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const startRe = new RegExp(`^(\\s*)${escapedKey}:\\s*$`, "m");
+  const startMatch = startRe.exec(content);
+  if (!startMatch) return undefined;
+
+  const indent = startMatch[1];
+  const start = startMatch.index;
+  const tail = content.slice(start + startMatch[0].length);
+  const siblingRe = new RegExp(`\\n${indent}[a-zA-Z_][\\w-]*:\\s*(?:\\n|$)`);
+  const nextSibling = siblingRe.exec(tail);
+  const end = nextSibling ? start + startMatch[0].length + nextSibling.index : content.length;
+  return content.slice(start, end);
+}
+
 const yaml = readIfExists(WORKFLOW);
 
 describe(".github/workflows/discord-register-commands.yml", () => {
@@ -83,8 +98,8 @@ describe(".github/workflows/discord-register-commands.yml", () => {
     () => {
       assert.match(yaml!, /guild_id:/, "must have guild_id input");
       // guild_id must not be `required: true`
-      const guildIdx = yaml!.indexOf("guild_id:");
-      const guildBlock = yaml!.slice(guildIdx, guildIdx + 300);
+      const guildBlock = extractYamlBlockByKey(yaml!, "guild_id");
+      assert.ok(guildBlock !== undefined, "could not extract guild_id block");
       assert.doesNotMatch(
         guildBlock,
         /required:\s*true/,
@@ -98,8 +113,8 @@ describe(".github/workflows/discord-register-commands.yml", () => {
     { skip: yaml === undefined },
     () => {
       assert.match(yaml!, /dry_run:/, "must have dry_run input");
-      const dryIdx = yaml!.indexOf("dry_run:");
-      const dryBlock = yaml!.slice(dryIdx, dryIdx + 300);
+      const dryBlock = extractYamlBlockByKey(yaml!, "dry_run");
+      assert.ok(dryBlock !== undefined, "could not extract dry_run block");
       assert.match(dryBlock, /default:\s*false/, "dry_run default must be false");
       assert.match(dryBlock, /type:\s*boolean/, "dry_run type must be boolean");
     },
@@ -133,7 +148,7 @@ describe(".github/workflows/discord-register-commands.yml", () => {
       );
 
       // Isolate the top-level permissions block.
-      const m = /^permissions:\s*\n([\s\S]*?)(?:^[a-zA-Z_][\w-]*:|\Z)/m.exec(
+      const m = /^permissions:\s*\n([\s\S]*?)(?:^[a-zA-Z_][\w-]*:|$)/m.exec(
         yaml!,
       );
       assert.ok(m, "could not isolate permissions block");

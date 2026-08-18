@@ -9,7 +9,7 @@
  * Discord Ed25519 verification docs:
  *   https://discord.com/developers/docs/interactions/receiving-and-responding#security-and-authorization
  *
- * Ed25519 library choice: @noble/ed25519 v2
+ * Ed25519 library choice: @noble/ed25519 v3
  *   - Uses `crypto.subtle` (Web Crypto API) natively — available in the Workers
  *     runtime without any compatibility flags.
  *   - Smaller bundle than tweetnacl (~3 kB vs ~15 kB).
@@ -127,6 +127,11 @@ export default {
     // GitHub dispatch fetch completes even though Discord got its answer in <3s.
     if (interaction.type === 2) {
       const commandName = interaction.data?.name;
+
+      if (commandName === "trigger-redeem" &&
+          !isGuildAllowed(interaction.guild_id, env.ALLOWED_GUILD_IDS)) {
+        return ephemeralError("This command isn't enabled in this server.");
+      }
 
       if (commandName === "game-state") {
         // Guild allowlist check (fail-closed).

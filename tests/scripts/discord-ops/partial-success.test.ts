@@ -21,6 +21,7 @@ import { spawnSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import { pathToFileURL } from "node:url";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..", "..", "..");
 const SCRIPT = path.join(
@@ -29,17 +30,18 @@ const SCRIPT = path.join(
   "discord-ops",
   "set-discord-app-metadata.mjs",
 );
-const STUB = path.join(
+const STUB_PATH = path.join(
   REPO_ROOT,
   "tests",
   "fixtures",
   "discord-ops",
   "fetch-stub-by-path.mjs",
 );
+const STUB = pathToFileURL(STUB_PATH).href;
 const SENTINEL = "BOT_TOKEN_SENTINEL_DO_NOT_LEAK_a8f3c91e";
 
 const scriptExists = fs.existsSync(SCRIPT);
-const stubExists = fs.existsSync(STUB);
+const stubExists = fs.existsSync(STUB_PATH);
 
 describe(
   "partial-success: /users/@me succeeds + /applications/@me fails",
@@ -175,7 +177,15 @@ describe(
           process.execPath,
           [
             "--import",
-            path.join(REPO_ROOT, "tests", "fixtures", "discord-ops", "fetch-throw-stub.mjs"),
+            pathToFileURL(
+              path.join(
+                REPO_ROOT,
+                "tests",
+                "fixtures",
+                "discord-ops",
+                "fetch-throw-stub.mjs",
+              ),
+            ).href,
             SCRIPT,
             "--description",
             "transport failure probe",

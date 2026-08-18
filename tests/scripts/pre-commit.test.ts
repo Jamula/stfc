@@ -7,6 +7,10 @@
 
 import { describe, it, beforeEach, afterEach, mock } from "node:test";
 import assert from "node:assert/strict";
+import { execFileSync, spawnSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
@@ -185,10 +189,76 @@ describe("checkSquadBoundary", () => {
   });
 });
 
+// ── #11 — Portable filenames ─────────────────────────────────────────
+
+describe("checkPortableFilenames", () => {
+  let checkPortableFilenames: (staged: string[], exists?: (path: string) => boolean) => void;
+  let exitState: { code: number | null };
+
+  beforeEach(async () => {
+    exitState = captureExit();
+    mock.method(console, "error", () => {});
+    const mod = await import("../../scripts/pre-commit-checks.mjs");
+    checkPortableFilenames = mod.checkPortableFilenames;
+  });
+
+  afterEach(() => {
+    mock.restoreAll();
+  });
+
+  it("passes for ordinary paths", () => {
+    checkPortableFilenames(["src/index.ts", ".github/workflows/redeem.yml"]);
+    assert.equal(exitState.code, null);
+  });
+
+  it("passes for the safe timestamp form", () => {
+    checkPortableFilenames([".squad/log/2026-08-13T04-38-00Z-session.md"]);
+    assert.equal(exitState.code, null);
+  });
+
+  it("fails for colons in a filename (the #186 regression)", () => {
+    assert.throws(
+      () => checkPortableFilenames([".squad/log/2026-05-12T05:16:11Z-clarify.md"], () => true),
+      /process\.exit\(1\)/,
+    );
+    assert.equal(exitState.code, 1);
+  });
+
+  it("allows deleting legacy files with non-portable names", () => {
+    checkPortableFilenames([".squad/log/2026-05-12T05:16:11Z-clarify.md"], () => false);
+    assert.equal(exitState.code, null);
+  });
+
+  it("fails for other Windows-illegal characters", () => {
+    for (const bad of ["docs/what?.md", 'docs/a"b.md', "docs/a*b.md", "docs/a|b.md"]) {
+      exitState = captureExit();
+      assert.throws(() => checkPortableFilenames([bad], () => true), /process\.exit\(1\)/);
+      assert.equal(exitState.code, 1, `expected ${bad} to be rejected`);
+    }
+  });
+
+  it("does not flag forward slashes as path separators", () => {
+    checkPortableFilenames(["a/b/c/d.md"]);
+    assert.equal(exitState.code, null);
+  });
+
+  it("error message suggests the safe timestamp format", () => {
+    const errors: string[] = [];
+    mock.method(console, "error", (msg: string) => errors.push(msg));
+
+    assert.throws(
+      () => checkPortableFilenames([".squad/log/2026-05-12T05:16:11Z-x.md"], () => true),
+      /process\.exit\(1\)/,
+    );
+    assert.match(errors.join("\n"), /2026-08-13T04-38-00Z/);
+  });
+});
+
 // ── #10 — Workflow pinning tests ─────────────────────────────────────
 
 describe("checkWorkflowPinningTests", () => {
   let checkWorkflowPinningTests: (staged: string[], grep?: (basename: string) => string[]) => void;
+  let grepTestsForWorkflow: (basename: string) => string[];
   let exitState: { code: number | null };
 
   beforeEach(async () => {
@@ -196,6 +266,45 @@ describe("checkWorkflowPinningTests", () => {
     mock.method(console, "error", () => {});
     const mod = await import("../../scripts/pre-commit-checks.mjs");
     checkWorkflowPinningTests = mod.checkWorkflowPinningTests;
+    grepTestsForWorkflow = mod.grepTestsForWorkflow;
+  });
+
+  describe("pre-commit runner", () => {
+    it("scans staged artifacts for secrets before running tests", () => {
+      const source = readFileSync("scripts/pre-commit.mjs", "utf8");
+      const scanAt = source.indexOf("check-artifact-hygiene.mjs --staged");
+      const testAt = source.indexOf("npm test");
+      assert.ok(scanAt >= 0, "artifact hygiene scanner must be enabled");
+      assert.ok(testAt > scanAt, "artifact hygiene scanner must run before tests");
+    });
+
+    it("artifact hygiene scans index content rather than the working tree", () => {
+      const dir = mkdtempSync(join(tmpdir(), "stfc-hygiene-index-"));
+      const scanner = resolve("scripts/check-artifact-hygiene.mjs");
+      const artifact = join(dir, "docs", "capture.md");
+      try {
+        mkdirSync(join(dir, "docs"));
+        execFileSync("git", ["init", "--quiet"], { cwd: dir });
+        const stagedSecret = [
+          `eyJ${"a".repeat(10)}`,
+          "b".repeat(10),
+          "c".repeat(10),
+        ].join(".");
+        writeFileSync(artifact, stagedSecret);
+        execFileSync("git", ["add", "docs/capture.md"], { cwd: dir });
+        writeFileSync(artifact, "<REDACTED>");
+
+        const result = spawnSync(process.execPath, [scanner, "--staged"], {
+          cwd: dir,
+          encoding: "utf8",
+        });
+        assert.equal(result.status, 1);
+        assert.match(result.stderr, /\[JWT\]/);
+        assert.doesNotMatch(result.stderr, new RegExp(stagedSecret.replaceAll(".", "\\.")));
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
   });
 
   afterEach(() => {
@@ -272,5 +381,12 @@ describe("checkWorkflowPinningTests", () => {
     const grep = () => ["tests/scripts/pre-commit.test.ts"];
     checkWorkflowPinningTests([".github/workflows/redeem.yml"], grep);
     assert.equal(exitState.code, null);
+  });
+
+  it("treats workflow names as text instead of shell commands", () => {
+    assert.deepEqual(
+      grepTestsForWorkflow("$(printf redeem).yml"),
+      ["tests/scripts/pre-commit.test.ts"],
+    );
   });
 });
