@@ -7,6 +7,7 @@ inserted at the top**, so the most recent run is always visible first.
 
 | Date (UTC) | Time (UTC) | Account | Gifts claimed |
 | --- | --- | --- | --- |
+| 2026-08-19 | 17:13 | main | 10 Min Free Chest |
 | 2026-08-19 | 16:50 | main | 10 Min Free Chest |
 | 2026-08-19 | 16:11 | main | 10 Min Free Chest, Starfleet Summer:Gift |
 | 2026-08-19 | 15:42 | main | 10 Min Free Chest |
