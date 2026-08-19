@@ -51,6 +51,19 @@ function extractYamlBlockByKey(content: string, key: string): string | undefined
 const yaml = readIfExists(WORKFLOW);
 
 describe(".github/workflows/discord-register-commands.yml", () => {
+  it("extracts an input block through its next sibling, regardless of length", () => {
+    const content = `      guild_id:
+        description: ${"x".repeat(400)}
+        required: false
+      dry_run:
+        required: true
+`;
+
+    const guildBlock = extractYamlBlockByKey(content, "guild_id");
+    assert.ok(guildBlock, "could not extract guild_id block");
+    assert.doesNotMatch(guildBlock, /required:\s*true/);
+  });
+
   it("workflow file exists", () => {
     assert.ok(yaml !== undefined, `expected ${WORKFLOW} to exist`);
   });
