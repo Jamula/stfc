@@ -1,4 +1,4 @@
-name: Sync Squad Labels
+name: Squad Sync Labels
 
 on:
   push:
@@ -154,6 +154,9 @@ jobs:
 
             function slugify(t) { return t.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''); }
 
+            // GitHub caps label descriptions at 100 characters — clamp to stay under the limit
+            function clampDesc(d) { return d && d.length > 100 ? d.slice(0, 97) + '...' : d; }
+
             // Ensure the base "squad" triage label exists
             const labels = [
               { name: 'squad', color: SQUAD_COLOR, description: 'Squad triage inbox — Lead will assign to a member' }
@@ -198,7 +201,7 @@ jobs:
                   repo: context.repo.repo,
                   name: label.name,
                   color: label.color,
-                  description: label.description
+                  description: clampDesc(label.description)
                 });
                 core.info(`Updated label: ${label.name}`);
               } catch (err) {
@@ -209,7 +212,7 @@ jobs:
                     repo: context.repo.repo,
                     name: label.name,
                     color: label.color,
-                    description: label.description
+                    description: clampDesc(label.description)
                   });
                   core.info(`Created label: ${label.name}`);
                 } else {

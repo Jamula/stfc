@@ -4,6 +4,28 @@
 # STFC_PASSWORD secrets, captures the resulting JWT, and updates the
 # STFC_ACCOUNTS repo secret (preserving any other accounts).
 #
+# ┌─ IMPORTANT: passwordless login (June 2026) ─────────────────────────────┐
+# │ Scopely migrated this account's Okta login to PASSWORDLESS email OTP:   │
+# │ after submitting the email it emails a one-time code and no longer      │
+# │ offers a password field ("No more passwords!"). A headless CI job       │
+# │ cannot read that emailed code, so this workflow can no longer complete  │
+# │ the capture automatically — it is kept for manual dispatch only (and    │
+# │ for the day a password authenticator is re-enabled, see below).         │
+# │                                                                          │
+# │ To refresh the token manually:                                          │
+# │   1. Locally run:  npm run capture-token            (no --ci flag)      │
+# │   2. A browser opens and auto-fills your email; enter the one-time      │
+# │      code from your inbox to finish signing in. The script captures     │
+# │      the JWT and writes it to your local .env.                          │
+# │   3. Update the repo secret from the captured token, e.g.:              │
+# │        gh secret set STFC_ACCOUNTS --repo Jamula/stfc < accounts.json   │
+# │      (accounts.json = the JSON array of {name, token} entries).         │
+# │                                                                          │
+# │ To restore full automation, re-enable a password authenticator on the  │
+# │ Scopely/Okta account (Account security settings). If/when a password    │
+# │ field reappears, re-add the `schedule:` trigger below.                  │
+# └──────────────────────────────────────────────────────────────────────────┘
+#
 # Required secrets:
 #   STFC_EMAIL          your Scopely login email
 #   STFC_PASSWORD       your Scopely password (mapped from your `cj_pwd`
@@ -20,10 +42,12 @@
 name: Refresh token
 
 on:
-  # Schedule disabled: token refresh requires a 6-digit email OTP that
-  # only a human can supply. Trigger manually via workflow_dispatch instead.
-  # schedule:
-  #   - cron: "0 0 * * 6"   # Saturday 00:00 UTC, weekly
+  # Manual dispatch only. The scheduled trigger was removed in June 2026 when
+  # Scopely switched this account to passwordless email-OTP login, which a
+  # headless CI run cannot complete (see the header note above). Re-add the
+  # `schedule:` block once a password authenticator is available again:
+  #   schedule:
+  #     - cron: "0 0 * * 6"   # Saturday 00:00 UTC, weekly
   workflow_dispatch:
     inputs:
       account_name:
@@ -52,7 +76,7 @@ concurrency:
 jobs:
   refresh:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.0
 
@@ -64,8 +88,53 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Install Playwright + Chromium with system deps
-        run: npx playwright install --with-deps chromium
+      - name: Resolve Playwright version
+        id: pw
+        run: echo "version=$(node -p "require('playwright/package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Playwright browsers
+        id: pw-cache
+        uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57  # v4.2.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ steps.pw.outputs.version }}
+
+      - name: Install Playwright system deps
+        run: npx playwright install-deps chromium
+
+      - name: Install Playwright Chromium
+        # On a cache hit the browser binary is already present, so skip the
+        # multi-minute CDN download from cdn.playwright.dev entirely.
+        #
+        # On a cold cache the download from cdn.playwright.dev has repeatedly
+        # stalled *after* the main Chrome binary finishes, hanging on a
+        # follow-up artifact (headless shell / ffmpeg) until the step timeout.
+        # Because the step timed out the job failed, so actions/cache never
+        # got to save the browser and every subsequent run hit the same stall
+        # (a cache-population chicken-and-egg).
+        #
+        # Wrap the install in a bounded retry loop: each attempt is capped by
+        # `timeout` so a stalled connection is killed fast, and already-fetched
+        # artifacts persist in ~/.cache/ms-playwright across attempts so each
+        # retry makes incremental progress until one completes and the cache
+        # can finally be saved.
+        if: steps.pw-cache.outputs.cache-hit != 'true'
+        timeout-minutes: 15
+        run: |
+          set -uo pipefail
+          for attempt in 1 2 3; do
+            echo "::group::Playwright chromium install (attempt ${attempt}/3)"
+            if timeout 240 npx playwright install chromium; then
+              echo "Chromium installed on attempt ${attempt}."
+              echo "::endgroup::"
+              exit 0
+            fi
+            echo "::endgroup::"
+            echo "::warning::Chromium install attempt ${attempt} stalled or failed; retrying in 5s."
+            sleep 5
+          done
+          echo "::error::Failed to install Playwright chromium after 3 attempts."
+          exit 1
 
       - name: Capture fresh JWT
         id: capture

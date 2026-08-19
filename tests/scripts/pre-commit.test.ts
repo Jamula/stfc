@@ -192,7 +192,7 @@ describe("checkSquadBoundary", () => {
 // ── #11 — Portable filenames ─────────────────────────────────────────
 
 describe("checkPortableFilenames", () => {
-  let checkPortableFilenames: (staged: string[]) => void;
+  let checkPortableFilenames: (staged: string[], exists?: (path: string) => boolean) => void;
   let exitState: { code: number | null };
 
   beforeEach(async () => {
@@ -218,16 +218,21 @@ describe("checkPortableFilenames", () => {
 
   it("fails for colons in a filename (the #186 regression)", () => {
     assert.throws(
-      () => checkPortableFilenames([".squad/log/2026-05-12T05:16:11Z-clarify.md"]),
+      () => checkPortableFilenames([".squad/log/2026-05-12T05:16:11Z-clarify.md"], () => true),
       /process\.exit\(1\)/,
     );
     assert.equal(exitState.code, 1);
   });
 
+  it("allows deleting legacy files with non-portable names", () => {
+    checkPortableFilenames([".squad/log/2026-05-12T05:16:11Z-clarify.md"], () => false);
+    assert.equal(exitState.code, null);
+  });
+
   it("fails for other Windows-illegal characters", () => {
     for (const bad of ["docs/what?.md", 'docs/a"b.md', "docs/a*b.md", "docs/a|b.md"]) {
       exitState = captureExit();
-      assert.throws(() => checkPortableFilenames([bad]), /process\.exit\(1\)/);
+      assert.throws(() => checkPortableFilenames([bad], () => true), /process\.exit\(1\)/);
       assert.equal(exitState.code, 1, `expected ${bad} to be rejected`);
     }
   });
@@ -242,7 +247,7 @@ describe("checkPortableFilenames", () => {
     mock.method(console, "error", (msg: string) => errors.push(msg));
 
     assert.throws(
-      () => checkPortableFilenames([".squad/log/2026-05-12T05:16:11Z-x.md"]),
+      () => checkPortableFilenames([".squad/log/2026-05-12T05:16:11Z-x.md"], () => true),
       /process\.exit\(1\)/,
     );
     assert.match(errors.join("\n"), /2026-08-13T04-38-00Z/);

@@ -18,7 +18,7 @@
 //   4. Merges the validated token into a local .env (preserving any
 //      other accounts already in STFC_ACCOUNTS).
 //   5. If `gh` CLI is available, offers (y/N) to set the GitHub repo
-//      secret STFC_ACCOUNTS via `gh secret set ... --body-file -`,
+//      secret STFC_ACCOUNTS via `gh secret set STFC_ACCOUNTS`,
 //      passing the JSON via stdin (so the token never lands on a
 //      command line, in shell history, or in a process listing).
 //
@@ -308,7 +308,9 @@ async function ghAvailable() {
 
 async function ghSetSecret(secretJson) {
   return new Promise((resolve, reject) => {
-    const p = spawn("gh", ["secret", "set", "STFC_ACCOUNTS", "--body-file", "-"], {
+    // gh reads the secret value from stdin when --body is omitted. Older gh
+    // releases don't support --body-file, so rely on the stdin path here.
+    const p = spawn("gh", ["secret", "set", "STFC_ACCOUNTS"], {
       stdio: ["pipe", "inherit", "inherit"],
       shell: process.platform === "win32",
     });

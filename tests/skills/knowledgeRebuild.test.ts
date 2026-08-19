@@ -129,6 +129,14 @@ describe(".github/workflows/knowledge-rebuild.yml", () => {
     );
   });
 
+  it("commit step bypasses local hooks for generated artifact commits", () => {
+    const commitStep = steps.find(
+      (step) => step.name === "Commit knowledge embeddings (if changed)",
+    );
+    assert.ok(commitStep?.run, "expected a named commit step with a run block");
+    assert.match(commitStep.run, /git commit --no-verify -m/);
+  });
+
   it("commit step stages data/crew/knowledge-embeddings.json", () => {
     const commitStep = steps.find(
       (step) => step.name === "Commit knowledge embeddings (if changed)",

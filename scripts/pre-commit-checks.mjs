@@ -118,8 +118,11 @@ const WINDOWS_ILLEGAL_CHARS_RE = /[:*?"<>|]/;
  * a name that is legal for the author can be permanently unusable for someone
  * else — and, as #186 showed, can wedge the whole repository.
  */
-export function checkPortableFilenames(staged) {
+export function checkPortableFilenames(staged, exists = defaultExists) {
   const violations = staged.filter((f) => {
+    // Deleted legacy files with non-portable names should be allowed to leave
+    // the index; only paths that still exist can wedge a future checkout.
+    if (!exists(f)) return false;
     // Only the final segments matter; a path separator is not the problem.
     return f.split('/').some((segment) => WINDOWS_ILLEGAL_CHARS_RE.test(segment));
   });
