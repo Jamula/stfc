@@ -61,6 +61,7 @@ describe(".github/workflows/discord-register-commands.yml", () => {
 
     const guildBlock = extractYamlBlockByKey(content, "guild_id");
     assert.ok(guildBlock, "could not extract guild_id block");
+    assert.match(guildBlock, /required:\s*false/);
     assert.doesNotMatch(guildBlock, /required:\s*true/);
   });
 
