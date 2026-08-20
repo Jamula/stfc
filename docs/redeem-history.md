@@ -7,6 +7,7 @@ inserted at the top**, so the most recent run is always visible first.
 
 | Date (UTC) | Time (UTC) | Account | Gifts claimed |
 | --- | --- | --- | --- |
+| 2026-08-20 | 10:56 | main | 30 Day Loyalty Chest, 10 Min Free Chest |
 | 2026-08-20 | 10:24 | main | 10 Min Free Chest |
 | 2026-08-20 | 09:53 | main | 30 Day Loyalty Chest, 10 Min Free Chest, 7 Day Loyalty Chest |
 | 2026-08-20 | 09:18 | main | 30 Day Loyalty Chest, 10 Min Free Chest, 7 Day Loyalty Chest |
