@@ -61,7 +61,6 @@ import type {
   RunHealth,
   SourceRef,
   Tip,
-  TipsSeenLine,
 } from "../discord/schemas.ts";
 import { createHeuristicClassifier, type Classifier } from "../discord/classifier.ts";
 import { isExcludedByModeration } from "../discord/moderation.ts";

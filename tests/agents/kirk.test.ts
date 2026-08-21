@@ -8,7 +8,6 @@ import {
   assertOwnership,
   assertBoundaries,
   assertRoutedTo,
-  assertNotRoutedTo,
   assertIssueRoutedTo,
   assertModelPreference,
   assertDecisionsReference,

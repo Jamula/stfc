@@ -52,7 +52,7 @@ export class DigestForbiddenContentError extends Error {
 
 export const MAX_EXCERPT_LEN = 600;
 const STATE_BLOCK_OPEN = "<!--\nDIGEST_STATE_V1 (do not edit by hand; re-rendered by the digest writer)";
-const STATE_BLOCK_CLOSE = "\n-->";
+const STATE_BLOCK_CLOSE = "-->";
 
 const TIP_DISPLAY_ORDER: TipCategory[] = [
   "tip", "trick", "hack", "event-info", "patch-note",
@@ -436,7 +436,7 @@ function render(d: DailyDigest): string {
   // State block — single-line minified JSON inside an HTML comment.
   lines.push(STATE_BLOCK_OPEN);
   lines.push(JSON.stringify(d));
-  lines.push("-->");
+  lines.push(STATE_BLOCK_CLOSE);
   lines.push("");
 
   return lines.join("\n");

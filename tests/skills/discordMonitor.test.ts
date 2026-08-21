@@ -653,7 +653,6 @@ describe("discordMonitor / RunHealth counters (T035 — US3)", () => {
       getChannelMessages: async () => [],
     };
 
-    let redeemCalled = false;
     const { result, exitCode } = await discordMonitor({
       accounts: [{ name: "main", token: makeJwt() }],
       paths: {
@@ -669,10 +668,7 @@ describe("discordMonitor / RunHealth counters (T035 — US3)", () => {
       clientFactory: () => client,
       now: () => NOW,
       runId: "run-auth-fail",
-      redeemFn: async (opts) => {
-        redeemCalled = true;
-        return { result: { rows: [] }, exitCode: 0 };
-      },
+      redeemFn: async () => ({ result: { rows: [] }, exitCode: 0 }),
     });
 
     assert.equal(exitCode, 2, "exitCode must be 2 (DISCORD_MONITOR_EXIT_AUTH_FAILURE) on auth failure (issue-206)");

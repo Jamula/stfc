@@ -24,7 +24,6 @@ import {
   DiscordRateLimitError,
   DiscordTransientError,
   SchemaMismatchError,
-  type DiscordClient,
 } from "./client.ts";
 import type {
   BotIdentity,

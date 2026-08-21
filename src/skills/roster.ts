@@ -9,9 +9,6 @@ import {
   upsertRosterOfficer,
 } from "../crew/roster.ts";
 import type { Roster, RosterEntry } from "../crew/schemas.ts";
-import { createLogger } from "../lib/logger.ts";
-
-const log = createLogger("roster");
 
 const DEFAULT_ROSTER_DIR = "data/crew/roster";
 const DEFAULT_OFFICERS_PATH = "data/crew/officers.json";

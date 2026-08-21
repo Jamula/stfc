@@ -1,6 +1,6 @@
 // Collector tests — extraction, dedup, audit logging.
 
-import { describe, it, beforeEach, afterEach } from "node:test";
+import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { promises as fs } from "node:fs";
 import * as path from "node:path";

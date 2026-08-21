@@ -10,7 +10,6 @@ import {
   assertRoutedTo,
   assertNotRoutedTo,
   assertIssueRoutedTo,
-  assertModelPreference,
   assertDecisionsReference,
   assertDecisionInbox,
 } from "./helpers.ts";

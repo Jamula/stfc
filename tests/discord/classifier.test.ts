@@ -13,10 +13,7 @@
 
 import { afterEach, beforeEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
-import {
-  createHeuristicClassifier,
-  type Classifier,
-} from "../../src/discord/classifier.ts";
+import { createHeuristicClassifier } from "../../src/discord/classifier.ts";
 
 let origFetch: typeof globalThis.fetch | undefined;
 let fetchCallCount = 0;
@@ -242,6 +239,3 @@ describe("classifier / confidence floor → unclassified", () => {
     await c.unload();
   });
 });
-
-// Defensive use of types in this file (TS narrowing aid).
-type _UnusedClassifier = Classifier;

@@ -13,7 +13,6 @@ import {
 } from "../../src/discord/client.ts";
 import type {
   DiscordAllowlist,
-  IngestionCursorMap,
 } from "../../src/discord/schemas.ts";
 
 interface StubMessage {
