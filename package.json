@@ -45,6 +45,7 @@
 		"zod": "^4.4.3"
 	},
 	"overrides": {
+		"tmp": "0.2.7",
 		"sharp": "^0.35.0"
 	},
 	"devDependencies": {
@@ -56,8 +57,5 @@
 		"playwright": "^1.62.1",
 		"simple-git-hooks": "^2.13.1",
 		"typescript": "~7.0.2"
-	},
-	"overrides": {
-		"tmp": "0.2.6"
 	}
 }
