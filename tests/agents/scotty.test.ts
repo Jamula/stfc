@@ -73,12 +73,12 @@ describe("Scotty — routing accuracy", () => {
 });
 
 describe("Scotty — model preference", () => {
-  it("declares gpt-5.3-codex per config override", () => {
+  it("declares gpt-5.6-sol per config override", () => {
     const modelSection = charter.match(/## Model[\s\S]*?(?=\n## |\n# |$)/);
     assert.ok(modelSection, "Charter must have a ## Model section");
     assert.ok(
-      modelSection[0].includes("gpt-5.3-codex"),
-      "Model section should declare gpt-5.3-codex",
+      modelSection[0].includes("gpt-5.6-sol"),
+      "Model section should declare gpt-5.6-sol",
     );
   });
 

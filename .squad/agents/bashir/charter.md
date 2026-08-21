@@ -35,7 +35,7 @@
 
 ## Model
 
-- **Preferred:** auto (typically `claude-sonnet-4.6` — test code)
+- **Preferred:** auto (typically `claude-sonnet-5` — test code)
 - **Rationale:** Test code is code.
 - **Fallback:** Standard chain.
 

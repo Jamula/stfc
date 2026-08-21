@@ -1,7 +1,7 @@
 # Squad model selection — catalog & recommendations
 
-> Last refreshed: 2026-05-17 by Tuvok (request from Cyrus).
-> Catalog source: Copilot CLI `task` tool model enum, 2026-05-17.
+> Last refreshed: 2026-08-20.
+> Catalog source: Copilot CLI `task` tool model enum, 2026-08-20.
 > Configuration source: `.squad/config.json` (per-agent overrides).
 > Governance source: `.github/agents/squad.agent.md` § Per-Agent Model Selection (selection algorithm).
 
@@ -23,14 +23,14 @@ Per `.github/agents/squad.agent.md` § Per-Agent Model Selection:
 | **3** | Task-aware auto-select | Per-spawn | Coordinator applies cost-first principle |
 | **4** | Default | Fallback | `claude-haiku-4.5` — cost wins when in doubt |
 
-**Cost-first principle (Layer 3):** Non-code work → Haiku. Code generation → Sonnet. Heavy multi-file refactors → Codex specialist. Architecture / governance review → Premium. Vision work → `claude-opus-4.5` (only vision-capable model in catalog; non-negotiable).
+**Cost-first principle (Layer 3):** Non-code work → Haiku. Code generation → Sonnet. Heavy multi-file refactors → latest GPT. Architecture / governance review → Premium. Vision work → latest Opus.
 
 **Fallback chains** (silent; max 3 retries before nuclear fallback):
 
 ```
-Premium:  claude-opus-4.7 → claude-opus-4.6 → claude-opus-4.5 → claude-sonnet-4.6 → claude-sonnet-4.5 → (omit model)
-Standard: claude-sonnet-4.6 → claude-sonnet-4.5 → gpt-5.5 → gpt-5.4 → gpt-5.3-codex → (omit model)
-Fast:     claude-haiku-4.5 → gpt-5.4-mini → gpt-5-mini → gpt-4.1 → (omit model)
+Premium:  claude-opus-5 → claude-opus-4.8 → claude-opus-4.7 → claude-opus-4.6 → claude-sonnet-5 → (omit model)
+Standard: claude-sonnet-5 → claude-sonnet-4.6 → gpt-5.6-sol → gpt-5.6-terra → gpt-5.6-luna → gpt-5.5 → gpt-5.4 → gpt-5.3-codex → (omit model)
+Fast:     claude-haiku-4.5 → gpt-5.4-mini → gpt-5-mini → (omit model)
 ```
 
 `(omit model)` = call `task` without the `model` parameter — platform default; always works.
@@ -45,35 +45,31 @@ Fast:     claude-haiku-4.5 → gpt-5.4-mini → gpt-5-mini → gpt-4.1 → (omit
 
 | Model | Window | Best for | Pros | Cons | Cost |
 |-------|--------|----------|------|------|------|
-| `claude-opus-4.7` | Standard | Advanced reasoning; architecture proposals | Top-tier reasoning; nuanced trade-offs | Highest cost | 💰💰💰 |
-| `claude-opus-4.7-1m-internal` | **1M** (internal-only) | Long-context governance; multi-file artifact review | Entire codebase + artifact tree in one pass; no chunking | Highest cost; internal-only | 💰💰💰 |
-| `claude-opus-4.7-high` | Standard (internal-only) | Hard problems needing extended reasoning | Extra thinking cycles; better on adversarial prompts | Internal-only; slower | 💰💰💰 |
-| `claude-opus-4.7-xhigh` | Standard (internal-only) | Maximum reasoning depth | Deepest analysis in catalog | Internal-only; slowest | 💰💰💰 |
-| `claude-opus-4.6` | Standard | General-purpose premium (fallback) | Reliable; well-tested | Older gen; prefer 4.7 variants | 💰💰💰 |
-| `claude-opus-4.6-1m` | 1M (internal-only) | Long-context (older gen) | Handles massive input | Older gen; prefer 4.7-1m | 💰💰💰 |
-| `claude-opus-4.5` | Standard | Vision + reasoning | Only model in enum capable of image/diagram analysis | Vision is the sole reason to choose over 4.7; non-negotiable for visual tasks | 💰💰💰 |
+| `claude-opus-5` | Standard or long context | Advanced reasoning; architecture proposals | Latest Opus; supports the largest selectable context tier | Highest cost | 💰💰💰 |
+| `claude-opus-4.8` | Standard or long context | Premium fallback | Strong reasoning and vision | Older generation | 💰💰💰 |
+| `claude-opus-4.7` | Standard or long context | Premium fallback | Nuanced trade-offs | Older generation | 💰💰💰 |
+| `claude-opus-4.6` | Standard or long context | Premium fallback | Reliable; well-tested | Older generation | 💰💰💰 |
 
 **Call-outs:**
 
-- **`claude-opus-4.7-1m-internal`** — The 1M window is the specific value-add. Picard's 105-turn session `06e05633` is the canonical evidence: full constitution + plan + spec tree loaded in one pass without chunking; cross-document coherence preserved throughout. Standard-window models require chunking that loses that coherence on governance reviews. That use case alone justifies the override for Picard and Kirk.
-- **`claude-opus-4.7-high` / `claude-opus-4.7-xhigh`** — Untested in this repo. Documented strengths: extended reasoning for hard problems. Not yet measured locally. Reserve for adversarial security reviews or architecture decisions where reasoning depth matters more than speed.
+- **`claude-opus-5` + `long_context`** — Picard and Kirk retain premium reasoning and large-document coherence without relying on an internal model variant. Reasoning effort remains a separate session parameter.
 
 ### Standard tier
 
 | Model | Window | Best for | Pros | Cons | Cost |
 |-------|--------|----------|------|------|------|
-| `claude-sonnet-4.6` | Standard | **Platform default** · code review · general agent work | Excellent cost/quality balance; reliable for all code work | Slightly slower than GPT-5.x | 💰💰 |
-| `claude-sonnet-4.5` | Standard | Code quality (older gen fallback) | Proven; stable | Older gen; prefer 4.6 | 💰💰 |
-| `gpt-5.5` | Standard | General-purpose · current Garak override | Latest OpenAI general model; strong code + prose | Context window unverified locally; no local benchmark yet | 💰💰 |
-| `gpt-5.4` | Standard | General-purpose (mature release) | Reliable; solid code + analysis | Older than 5.5 | 💰💰 |
-| `gpt-5.3-codex` | Standard | **Heavy code generation specialist** | 500+ LOC multi-file refactors; complex algorithms; purpose-built for code gen | Weaker on architectural framing and prose; not ideal for non-code tasks | 💰💰 |
-| `gpt-5.2-codex` | Standard | Code generation (older gen) | Multi-file code work; lower cost than 5.3 | Older; prefer 5.3-codex | 💰💰 |
-| `gpt-5.2` | Standard | General-purpose (older gen) | Cost-effective | Older; prefer 5.4 or 5.5 | 💰💰 |
+| `claude-sonnet-5` | Standard or long context | Code review · general agent work | Latest Sonnet; excellent cost/quality balance | Less reasoning depth than Opus | 💰💰 |
+| `claude-sonnet-4.6` | Standard or long context | Sonnet fallback | Proven and reliable | Older generation | 💰💰 |
+| `gpt-5.6-sol` | Standard or long context | Current Scotty and Garak override | Latest GPT family; strong code and analysis | No local benchmark yet | 💰💰 |
+| `gpt-5.6-terra` | Standard or long context | GPT fallback | Current-generation alternative | No local benchmark yet | 💰💰 |
+| `gpt-5.6-luna` | Standard or long context | GPT fallback | Current-generation alternative | No local benchmark yet | 💰💰 |
+| `gpt-5.5` | Standard or long context | General-purpose fallback | Strong code and prose | Older generation | 💰💰 |
+| `gpt-5.4` | Standard or long context | General-purpose fallback | Reliable | Older generation | 💰💰 |
+| `gpt-5.3-codex` | Standard | Legacy code specialist fallback | Purpose-built for code generation | Older generation; no long-context tier | 💰💰 |
 
 **Call-outs:**
 
-- **`gpt-5.3-codex` (current Scotty override)** — Set in `.squad/config.json` per Cyrus decision (2026-05-17). Code-specialist model for Scotty's code-writing role; replaces the earlier `gpt-5.5` override. See §4 for rationale.
-- **`gpt-5.3-codex` / `gpt-5.2-codex`** — Code-gen specialists. Great at producing large, syntactically correct TypeScript. Trade-off: weaker at the architectural framing narrative that reviewers (Kirk, Garak) expect in PRs. Best paired with a reasoning-capable review pass.
+- **`gpt-5.6-sol`** — Current family-preserving upgrade for Scotty and Garak. It keeps GPT-family diversity while adding the `long_context` tier.
 
 ### Fast / cheap tier
 
@@ -94,79 +90,79 @@ Fast:     claude-haiku-4.5 → gpt-5.4-mini → gpt-5-mini → gpt-4.1 → (omit
 
 ### Picard — M2 / Engineering Manager
 
-**Current model:** `claude-opus-4.7-1m-internal` (Layer 0 config override)
+**Current model:** `claude-opus-5` with `long_context` (Layer 0 config override)
 **Workload mix:** Scope and governance reviews; constitution review; triage; long multi-file artifact reads.
-**Recommendation:** `claude-opus-4.7-1m-internal` — **unchanged**
+**Recommendation:** `claude-opus-5` with `long_context`
 **Why:**
-- Session `06e05633` (105 turns) is the evidence base: full constitution + plan + spec tree read in a single pass. The 1M window is what makes that coherent. Standard-window models require chunking; chunked governance reviews lose cross-document consistency.
+- Session `06e05633` (105 turns) is the evidence base: full constitution + plan + spec tree read in a single pass. Long context is what makes that coherent; chunked governance reviews lose cross-document consistency.
 - Governance and scope reviews require premium reasoning depth. No cheaper substitute without measurable quality loss.
 
-**Override when:** Routine triage with no multi-document reads → `claude-haiku-4.5` is safe for that spawn. Reinstate 1m-internal for any constitution or multi-artifact review session.
+**Override when:** Routine triage with no multi-document reads → `claude-haiku-4.5` is safe for that spawn.
 
 ---
 
 ### Kirk — Lead (technical)
 
-**Current model:** `claude-opus-4.7-1m-internal` (Layer 0 config override)
+**Current model:** `claude-opus-5` with `long_context` (Layer 0 config override)
 **Workload mix:** Architecture proposals; technical code reviews; cross-cutting design decisions; PR approvals.
-**Recommendation:** `claude-opus-4.7-1m-internal` — **unchanged** (see override condition)
+**Recommendation:** `claude-opus-5` with `long_context`
 **Why:**
 - Kirk's APPROVE/CHANGES_REQUESTED carries merge authority under Rule 7. A cheaper model on a consequential review is a governance risk.
-- Architecture reviews that span multiple files, diffs, and contracts benefit from the 1M window for the same reasons as Picard's governance work.
+- Architecture reviews that span multiple files, diffs, and contracts benefit from long context for the same reasons as Picard's governance work.
 
-**Override when:** Single-file code reviews with narrow scope → `claude-sonnet-4.6` is sufficient and cheaper. Reserve 1m-internal for architecture reviews, multi-file diffs, or post-rejection re-reviews.
+**Override when:** Single-file code reviews with narrow scope → `claude-sonnet-5` is sufficient and cheaper.
 
 ---
 
 ### Scotty — Core Dev
 
-**Current model:** `gpt-5.3-codex` (Layer 0 config override)
+**Current model:** `gpt-5.6-sol` with `long_context` (Layer 0 config override)
 **Workload mix:** TypeScript CLI implementation; multi-file refactors; workflow YAML; test scaffolding.
-**Recommendation:** `gpt-5.3-codex` — **confirmed by Cyrus** (Open Questions §3 resolved 2026-05-17)
+**Recommendation:** `gpt-5.6-sol`
 **Why:**
-- Code-specialist model for a code-writing role. Purpose-built for heavy TypeScript refactors — the core of Scotty's workload.
-- Replaces the earlier `gpt-5.5` override; rationale captured in decisions ledger.
+- Latest GPT model for a code-writing role with strong reasoning and tool use across heavy TypeScript refactors.
+- Preserves the GPT family while moving to the latest available version and context tier.
 
-**Override when:** 500+ LOC single-purpose code-gen tasks → `gpt-5.3-codex` may still outperform on pure code volume. Recommended: compare on the next large Scotty task before treating gpt-5.5 as permanent.
+**Override when:** None by default; use `gpt-5.3-codex` only if a measured code-generation regression justifies the older specialist.
 
 ---
 
 ### Uhura — Integrations Dev
 
-**Current model:** `claude-sonnet-4.6` (Layer 0 config override)
+**Current model:** `claude-sonnet-5` with `long_context` (Layer 0 config override)
 **Workload mix:** Discord API integration; STFC store API; webhook handling; multi-file integration code.
-**Recommendation:** `claude-sonnet-4.6` — **confirmed by Cyrus** (Open Questions §1 resolved 2026-05-17)
+**Recommendation:** `claude-sonnet-5`
 **Why:**
-- Most of Uhura's work is targeted integration code — writing adapters, handling HTTP responses, wiring webhooks. `claude-sonnet-4.6` is the code-quality standard and costs significantly less.
-- The 1M window justification for Picard and Kirk is specific: loading entire governance artifact trees. Uhura's tasks rarely require ingesting the full artifact tree simultaneously. Applying the same override by default is cost without proportionate value.
+- Most of Uhura's work is targeted integration code — writing adapters, handling HTTP responses, wiring webhooks. `claude-sonnet-5` is the current code-quality standard.
+- Long context lets Uhura keep integration specifications and implementation code together when needed.
 
-**Override when:** A session explicitly requires reading discord.com API docs + STFC API specs + integration contracts together → reinstate 1m-internal for that session via directive.
+**Override when:** Narrow, single-file work may use the default context tier to reduce cost.
 
 ---
 
 ### Bashir — Tester
 
-**Current model:** Auto (no Layer 0 override) → task-aware auto → `claude-sonnet-4.6` for code tasks
+**Current model:** Auto (no Layer 0 override) → task-aware auto → `claude-sonnet-5` for code tasks
 **Workload mix:** Test authorship under Principle IX (test-first); edge-case coverage; integration test scaffolding.
 **Recommendation:** No override; leave at task-aware auto
 **Why:**
-- Tests are executable specifications under Principle IX. Quality matters as much as for production code; `claude-sonnet-4.6` is the right default.
+- Tests are executable specifications under Principle IX. Quality matters as much as for production code; `claude-sonnet-5` is the right default.
 - No evidence Bashir's workload needs premium reasoning or specialist code-gen volume. Adding a codex override would help LOC output but not behavioral-coverage reasoning.
 
-**Override when:** A session produces 500+ LOC of boilerplate test scaffolding → `gpt-5.3-codex` for that spawn only, then back to auto.
+**Override when:** A session produces 500+ LOC of boilerplate test scaffolding → `gpt-5.6-sol` for that spawn only, then back to auto.
 
 ---
 
 ### Garak — Critic
 
-**Current model:** Auto (no Layer 0 override)
+**Current model:** `gpt-5.6-sol` with `long_context` (Layer 0 config override)
 **Workload mix:** Hostile code reviews; security reviews; governance reviews; post-rejection architecture critiques.
-**Recommendation:** No fixed override; task-aware per-spawn selection
+**Recommendation:** `gpt-5.6-sol`
 **Why:**
-- Garak's authority derives partly from analytical independence. A fixed override to the same model family as Kirk reduces cross-family diversity on joint reviews — exactly the kind of diversity the squad.agent.md `gemini-3-pro-preview` recommendation was trying to preserve (that model is now unavailable).
-- Standard code reviews → `claude-sonnet-4.6`. High-stakes security/governance → `claude-opus-4.7-high`. Cross-provider diversity passes → `gpt-5.5` or `gpt-5.4` (dispatch Garak on an OpenAI model when Kirk has already reviewed on Anthropic).
+- Garak's authority derives partly from analytical independence. The GPT override preserves cross-family diversity when Kirk reviews on Anthropic.
+- Standard code reviews use `gpt-5.6-sol`; high-stakes reviews can raise reasoning effort without changing model family.
 
-**Override when:** Any review where Kirk has already approved → dispatch Garak on `gpt-5.5` or `gpt-5.4` via session directive for family diversity. Never add a permanent override — this must stay flexible.
+**Override when:** A second non-GPT perspective is explicitly required.
 
 ---
 
@@ -177,10 +173,10 @@ Fast:     claude-haiku-4.5 → gpt-5.4-mini → gpt-5-mini → gpt-4.1 → (omit
 **Recommendation:** Task-aware split — no single override
 **Why:**
 - Mechanical work (cross-ref grepping, table updates, surgical line edits) → `claude-haiku-4.5`. Adequate; cheapest.
-- Editorial work (agent prompts, amendment audit memos, this doc) → `claude-sonnet-4.6`. Agent prompts are executable text; sub-sonnet quality risks behavioral regression. Amendment audits require reasoning through cross-artifact consistency.
+- Editorial work (agent prompts, amendment audit memos, this doc) → `claude-sonnet-5`. Agent prompts are executable text; sub-sonnet quality risks behavioral regression. Amendment audits require reasoning through cross-artifact consistency.
 - A fixed sonnet override wastes cost on mechanical sessions. A fixed haiku override produces lower-quality agent prompts and audit memos.
 
-**Override when:** Task is unambiguously mechanical → explicit `claude-haiku-4.5` session directive. Task involves authoring executable text or governance artifacts → explicit `claude-sonnet-4.6` directive.
+**Override when:** Task is unambiguously mechanical → explicit `claude-haiku-4.5` session directive. Task involves authoring executable text or governance artifacts → explicit `claude-sonnet-5` directive.
 
 ---
 
@@ -199,10 +195,10 @@ Fast:     claude-haiku-4.5 → gpt-5.4-mini → gpt-5-mini → gpt-4.1 → (omit
 
 ### Ralph — Work Monitor
 
-**Current model:** N/A (Ralph is not dispatched via `task` tool — work-monitor pattern)
+**Current model:** `claude-sonnet-5` when dispatched
 **Workload mix:** Issue/PR list scanning; label routing; triage comments; digest summaries.
-**Recommendation:** N/A for current pattern. If Ralph ever becomes spawnable for batch ops → `claude-haiku-4.5` (cost-first; workload is mechanical scanning).
-**Why:** Ralph's current pattern does not use the `task` tool dispatch path. Model selection is not applicable. If spawnable batch ops are added, the workload profile is identical to Scribe — haiku is the right default, sonnet only for rare synthesis tasks.
+**Recommendation:** `claude-sonnet-5`; use Haiku only for purely mechanical scans.
+**Why:** Ralph performs structured polling and dispatch with moderate routing reasoning.
 
 ---
 
@@ -215,24 +211,27 @@ Cyrus reviewed § 5 open questions on 2026-05-17. Applied changes:
   "version": 1,
   "worktrees": true,
   "agentModelOverrides": {
-    "picard": "claude-opus-4.7-1m-internal",  // unchanged — long-context governance work
-    "kirk":   "claude-opus-4.7-1m-internal",  // unchanged in config; scoping rule deferred to issue #21
-    "uhura":  "claude-sonnet-4.6",             // CHANGED from 1m-internal — standard integration work
-    "scotty": "gpt-5.3-codex",                 // CHANGED from gpt-5.5 — code specialist for code role
-    "garak":  "gpt-5.5"                        // NEW — cross-provider diversity for hostile fact-check
-  }
+    "picard": "claude-opus-5",
+    "kirk":   "claude-opus-5",
+    "uhura":  "claude-sonnet-5",
+    "scotty": "gpt-5.6-sol",
+    "garak":  "gpt-5.6-sol"
+  },
+  "defaultContextTier": "long_context"
 }
 ```
 
 **Per-decision rationale:**
-- **Uhura → sonnet-4.6:** Integration code rarely needs 1M context. Reinstate per-session when explicitly required.
-- **Kirk:** Config unchanged. Scoping rule (opus-1m for architecture / sonnet-4.6 for narrow review) tracked in issue #21 — codifies behavior at the coordinator level.
-- **Scotty → gpt-5.3-codex:** Code-specialist model for code-writing role. Replaces the unanchored gpt-5.5 override; rationale now captured in decisions ledger.
-- **Garak → gpt-5.5:** New override. Cross-provider diversity from Claude-heavy reviewers. Replaces the `gemini-3-pro-preview` recommendation that's no longer in the CLI catalog.
+- **Picard/Kirk → Opus 5:** Latest Opus family with long context for governance and architecture.
+- **Uhura → Sonnet 5:** Latest Sonnet family for integration code.
+- **Scotty/Garak → GPT-5.6 Sol:** Latest GPT family while preserving coding and cross-provider intent.
+- **Context → `long_context`:** Largest selectable window by default; unsupported models clamp to their available tier.
 
 ---
 
-## 5. Open questions for Cyrus — RESOLVED 2026-05-17
+## 5. Historical decisions — superseded 2026-08-20
+
+These 2026-05-17 decisions explain the prior configuration and are retained as historical context. Section 4 is authoritative.
 
 | # | Question | Decision |
 |---|---|---|

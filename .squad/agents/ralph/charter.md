@@ -53,7 +53,7 @@
 
 ## Model
 
-- **Preferred:** `claude-sonnet-4.6` (platform default)
+- **Preferred:** `claude-sonnet-5`
 - **Rationale:** Ralph's work is structured polling and dispatch — moderate reasoning, no code generation. Sonnet provides the right balance of capability and cost.
 - **Config:** No `.squad/config.json` override.
 

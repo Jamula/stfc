@@ -50,8 +50,8 @@ If a technical decision has scope implications (e.g., "this approach will add a 
 
 ## Model
 
-- **Preferred:** `claude-opus-4.7-1m-internal`
-- **Rationale:** Architecture proposals, reviewer gates, and multi-file technical decisions benefit from the premium reasoning + 1M context window. Coordinator may downgrade for narrow technical lookups.
+- **Preferred:** `claude-opus-5`
+- **Rationale:** Architecture proposals, reviewer gates, and multi-file technical decisions benefit from the latest Opus reasoning with the `long_context` tier. Coordinator may downgrade for narrow technical lookups.
 - **Fallback:** Standard chain.
 
 ## Collaboration
