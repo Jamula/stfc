@@ -103,22 +103,34 @@ jobs:
             --label "squad,squad:uhura,bug,priority:p1" \
             --body-file /tmp/alert-body.md
 
-      - name: Commit redeem history (if changed)
+      - name: Commit redeem history and dead-code cache (if changed)
         if: always()
         run: |
           set -euo pipefail
-          if [ -z "$(git status --porcelain docs/redeem-history.md)" ]; then
-            echo "No new redeem history rows to commit."
+          HISTORY_CHANGED="$(git status --porcelain docs/redeem-history.md)"
+          DEAD_CHANGED="$(git status --porcelain data/promo-code-dead.json)"
+          if [ -z "$HISTORY_CHANGED" ] && [ -z "$DEAD_CHANGED" ]; then
+            echo "Neither redeem history nor dead-code cache changed — nothing to commit."
             exit 0
           fi
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add docs/redeem-history.md
-          NEW_LINES=$(git diff --cached --numstat docs/redeem-history.md | awk '{print $1}')
+          [ -n "$HISTORY_CHANGED" ] && git add docs/redeem-history.md
+          [ -n "$DEAD_CHANGED"   ] && git add data/promo-code-dead.json
+          NEW_LINES=$(git diff --cached --numstat docs/redeem-history.md 2>/dev/null | awk '{print $1}')
+          NEW_LINES="${NEW_LINES:-0}"
           # --no-verify: npm ci installs the developer pre-commit hook, which
           # runs the full test suite. CI must not gate recording claims on that.
           git commit --no-verify -m "chore(history): append ${NEW_LINES} new claim row(s) [skip ci]"
-          # Retry-once on push race against a concurrent workflow.
-          git pull --rebase origin "$GITHUB_REF_NAME" || true
-          git push origin "HEAD:$GITHUB_REF_NAME"
+          # Bounded rebase-then-push retry: up to 3 attempts to absorb a
+          # concurrent push. A failed rebase is always visible — never swallowed.
+          for attempt in 1 2 3; do
+            if git push origin "HEAD:$GITHUB_REF_NAME"; then
+              exit 0
+            fi
+            echo "Push attempt $attempt failed; pulling with rebase before retry…"
+            git pull --rebase origin "$GITHUB_REF_NAME"
+          done
+          echo "::error::All 3 push attempts failed — investigate concurrent workflow conflicts."
+          exit 1
 
