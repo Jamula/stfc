@@ -44,6 +44,9 @@
 		"yaml": "^2.9.0",
 		"zod": "^4.4.3"
 	},
+	"overrides": {
+		"sharp": "^0.35.0"
+	},
 	"devDependencies": {
 		"@azure/static-web-apps-cli": "^2.0.10",
 		"@types/node": "^26.2.0",
