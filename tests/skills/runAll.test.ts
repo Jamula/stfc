@@ -12,6 +12,7 @@ import {
   ApiError,
   TokenExpiredError,
   SchemaMismatchError,
+  TransientError,
 } from "../../src/api/client.ts";
 
 // ----------------------------------------------------------------------------
@@ -235,6 +236,69 @@ describe("runAll", () => {
 
     const summary = fs.readFileSync(summaryFile, "utf8");
     assert.match(summary, /secret rotation/i);
+  });
+
+  it("records TRANSIENT after a single transient gift-claim failure without replaying the POST", async () => {
+    let attempts = 0;
+    const sleepCalls: number[] = [];
+    const fake = makeFakeClient({
+      listGifts: async () => ({
+        items: [{ bundleId: 77, title: "30 Day Loyalty Chest", isClaimable: true }],
+      }),
+      claimGift: async (bundleId: number) => {
+        attempts += 1;
+        if (attempts === 1) {
+          throw new TransientError(`Server error 500 on POST /offers/gifts/claim (${bundleId})`, 500);
+        }
+        return { success: true, bundleId };
+      },
+    });
+
+    const { result, exitCode } = await runAll({
+      accounts: [{ name: "main", token: makeJwt({ exp: 9999999999 }) }],
+      clientFactory: () => fake as unknown as ApiClient,
+      summary: createSummaryWriter(undefined),
+      promoCodesPath: emptyPromoFile(),
+      sleep: async (ms) => {
+        sleepCalls.push(ms);
+      },
+    });
+
+    assert.equal(exitCode, 0);
+    assert.equal(attempts, 1);
+    assert.deepEqual(sleepCalls, []);
+    assert.equal(result.accounts[0]?.items[0]?.outcome, Outcomes.TRANSIENT);
+    assert.equal(result.accounts[0]?.ok, false);
+  });
+
+  it("does not retry non-transient gift-claim failures", async () => {
+    let attempts = 0;
+    const sleepCalls: number[] = [];
+    const fake = makeFakeClient({
+      listGifts: async () => ({
+        items: [{ bundleId: 88, title: "7 Day Loyalty Chest", isClaimable: true }],
+      }),
+      claimGift: async () => {
+        attempts += 1;
+        throw new ApiError("HTTP 400 on POST /offers/gifts/claim: Bad request.", 400);
+      },
+    });
+
+    const { result, exitCode } = await runAll({
+      accounts: [{ name: "main", token: makeJwt({ exp: 9999999999 }) }],
+      clientFactory: () => fake as unknown as ApiClient,
+      summary: createSummaryWriter(undefined),
+      promoCodesPath: emptyPromoFile(),
+      sleep: async (ms) => {
+        sleepCalls.push(ms);
+      },
+    });
+
+    assert.equal(exitCode, 0);
+    assert.equal(attempts, 1);
+    assert.deepEqual(sleepCalls, []);
+    assert.equal(result.accounts[0]?.items[0]?.outcome, Outcomes.UNKNOWN_RESULT);
+    assert.equal(result.accounts[0]?.ok, false);
   });
 
   it("promo codes mix: success / used / invalid / unknown classified correctly", async () => {    const codeFile = path.join(dir, "promo.txt");

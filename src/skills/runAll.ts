@@ -34,7 +34,7 @@ import {
 import { PromoCodesFileError, readPromoCodes } from "../lib/promoCodes.ts";
 import { redactForLog } from "../lib/redact.ts";
 import { heading, table, type SummaryWriter } from "../lib/summary.ts";
-import { ApiClient, ApiError, SchemaMismatchError, TokenExpiredError } from "../api/client.ts";
+import { ApiClient, ApiError, SchemaMismatchError, TokenExpiredError, TransientError } from "../api/client.ts";
 import { claimGift, getMe, listGifts, redeemCode } from "../api/endpoints.ts";
 import type { Gift } from "../api/schemas.ts";
 
@@ -299,6 +299,12 @@ async function processOneGift(
     // not an error.
     if (err instanceof ApiError && err.status === 404 && /not available/i.test(err.message)) {
       return { id, outcome: Outcomes.ALREADY_CLAIMED };
+    }
+    if (err instanceof TransientError) {
+      // We do not replay ambiguous gift-claim POSTs inside the same run
+      // without stronger idempotency evidence. The scheduled workflow will
+      // naturally re-attempt claimable gifts on the next cycle.
+      return { id, outcome: Outcomes.TRANSIENT, detail: redactForLog(err) };
     }
     return { id, outcome: classifyHttpError(err), detail: redactForLog(err) };
   }
