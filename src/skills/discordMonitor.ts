@@ -75,6 +75,18 @@ const log = createLogger("discordMonitor");
  *  in tests/skills/discordMonitor.test.ts (T018). */
 export const AUTO_COMMIT_PER_RUN_CAP = 10;
 
+/** Exit codes returned by {@link discordMonitor} (and propagated to `process.exit`
+ *  via `src/cli.ts`).  Auth and infrastructure failures are intentionally
+ *  distinct so a monitoring dashboard can page on the right team.
+ *
+ *  0 — success / graceful no-op (empty allowlist, normal run).
+ *  1 — infrastructure failure (digest could not be written).
+ *  2 — Discord auth / token failure (DiscordAuthError or DiscordTokenMissingError).
+ */
+export const DISCORD_MONITOR_EXIT_OK = 0;
+export const DISCORD_MONITOR_EXIT_INFRA_FAILURE = 1;
+export const DISCORD_MONITOR_EXIT_AUTH_FAILURE = 2;
+
 export interface DiscordMonitorOptions {
   accounts?: Account[];
   promoCodesPath?: string;
@@ -179,12 +191,14 @@ export async function discordMonitor(
 
   // ── Step 2: token check ───────────────────────────────────────────────────
   let token: string | null = null;
+  let failureExitCode = DISCORD_MONITOR_EXIT_OK;
   try {
     token = loadDiscordToken();
   } catch (err) {
     if (err instanceof DiscordTokenMissingError) {
       log.error(`Discord token missing — skipping Discord half. ${redactForLog(err)}`);
       recordError(health, "DiscordTokenMissingError");
+      failureExitCode = DISCORD_MONITOR_EXIT_AUTH_FAILURE;
     } else {
       throw err;
     }
@@ -242,6 +256,7 @@ export async function discordMonitor(
       if (err instanceof DiscordAuthError) {
         log.error(`Discord auth failed — skipping Discord half. ${redactForLog(err)}`);
         recordError(health, "DiscordAuthError");
+        failureExitCode = DISCORD_MONITOR_EXIT_AUTH_FAILURE;
       } else {
         recordError(health, (err as Error).name ?? "Error");
         throw err;
@@ -470,6 +485,7 @@ export async function discordMonitor(
     redeemedCodes,
     deferredCodes,
     botUsername,
+    failureExitCode,
   });
 }
 
@@ -520,6 +536,10 @@ interface FinalizeArgs {
    *  the digest health header. Undefined when token was missing or
    *  ingest never ran (e.g. allowlist empty). */
   botUsername?: string;
+  /** Non-zero when auth or token failure was recorded earlier in the run.
+   *  Preserved through `finalize` so that a digest-write error can only
+   *  raise, never lower, the exit code. */
+  failureExitCode?: number;
 }
 
 async function finalize(args: FinalizeArgs): Promise<DiscordMonitorOutput> {
@@ -553,10 +573,12 @@ async function finalize(args: FinalizeArgs): Promise<DiscordMonitorOutput> {
   };
 
   let digestPath: string | undefined;
+  let digestWriteFailed = false;
   try {
     digestPath = (await writeDigest(digest, { outputDir: args.digestsDir })).filePath;
   } catch (err) {
     log.warn(`could not write digest: ${redactForLog(err)}`);
+    digestWriteFailed = true;
   }
 
   // ── Step 10: Job Summary (T038 — FR-027) ────────────────────────────────
@@ -574,7 +596,11 @@ async function finalize(args: FinalizeArgs): Promise<DiscordMonitorOutput> {
     deferredCodes: args.deferredCodes ?? [],
     ...(args.reason ? { reason: args.reason } : {}),
   };
-  return { result, exitCode: 0 };
+  const exitCode = Math.max(
+    args.failureExitCode ?? DISCORD_MONITOR_EXIT_OK,
+    digestWriteFailed ? DISCORD_MONITOR_EXIT_INFRA_FAILURE : DISCORD_MONITOR_EXIT_OK,
+  );
+  return { result, exitCode };
 }
 
 function sourceRef(c: CandidateCode): SourceRef {
