@@ -45,7 +45,7 @@ jobs:
           # Every heading of the form "## N." is a valid rule slot, including
           # "RESERVED — see Rule X" entries (they still have a heading).
           CANONICAL=$(grep -oE '^## [0-9]+\.' .github/copilot-instructions.md \
-            | grep -oE '[0-9]+' | sort -n)
+            | grep -oE '[0-9]+' | sort -n || true)
 
           echo "Canonical rule numbers: $(echo "$CANONICAL" | tr '\n' ' ')"
 

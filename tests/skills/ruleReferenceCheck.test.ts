@@ -131,6 +131,11 @@ describe("rule-reference-check.yml / contract pinning", () => {
       /grep -oE '\^## \[0-9\]\+\\.'/,
       "canonical-extraction must use grep pattern '^## [0-9]+.' on copilot-instructions.md",
     );
+    assert.match(
+      yaml,
+      /\| sort -n \|\| true/,
+      "canonical extraction must allow an instruction file with no numbered headings",
+    );
   });
 
   it("diff is scoped to origin/<base_ref>...HEAD (three-dot range)", () => {
