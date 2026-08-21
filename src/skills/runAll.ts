@@ -172,7 +172,7 @@ async function processAccount(
   let effectiveTokenStatus = tokenStatus;
 
   if (tokenStatus === Outcomes.TOKEN_VALID) {
-    items.push(...(await processGifts(client, account.name, report, sleep)));
+    items.push(...(await processGifts(client, account.name, report)));
     // /auth/me can answer 200 with a JWT the store itself rejects. Trust the
     // endpoint that does the real work, so the run reports "rotate the
     // secret" instead of a healthy token that silently claims nothing.
@@ -230,7 +230,6 @@ async function processGifts(
   client: ApiClient,
   accountName: string,
   report: RunAllReport,
-  sleep: SleepFn,
 ): Promise<ItemResult[]> {
   let gifts: Gift[];
   try {
