@@ -131,6 +131,23 @@ describe("rule-reference-check.yml / contract pinning", () => {
       /grep -oE '\^## \[0-9\]\+\\.'/,
       "canonical-extraction must use grep pattern '^## [0-9]+.' on copilot-instructions.md",
     );
+    assert.match(
+      yaml,
+      /\| sort -n \|\| true/,
+      "canonical extraction must allow an instruction file with no numbered headings",
+    );
+    assert.match(
+      yaml,
+      /No numbered canonical rules found — every cited Rule N is dangling\./,
+      "workflow must warn (not skip) when no numbered canonical rules exist",
+    );
+    // An empty canonical set must not short-circuit the check: citation
+    // extraction has to keep running so `Rule 999` is still reported dangling.
+    assert.doesNotMatch(
+      yaml,
+      /No numbered canonical rules found[^\n]*\n\s*exit 0/,
+      "workflow must not exit early when the canonical set is empty",
+    );
   });
 
   it("skips validation when copilot instructions contain no numbered rule headings", () => {
