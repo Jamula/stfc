@@ -222,4 +222,88 @@ describe("redeemCodes seam (T023)", () => {
     assert.equal(byCode.get("USED"), Outcomes.CODE_ALREADY_USED);
     assert.equal(byCode.get("WEIRD"), Outcomes.UNKNOWN_RESULT);
   });
+
+  // Regression for issue #209: live API returns numeric redeem_result (not code).
+  // A successful Discord-discovered code must be classified CODE_REDEEMED, not
+  // UNKNOWN_RESULT, so it is never put into Discord cooldown/suppression.
+  it("#209: numeric redeem_result=0 (no legacy code field) → CODE_REDEEMED, not UNKNOWN_RESULT", async () => {
+    const client = {
+      redeemCode: async (_code: string) => ({
+        // Simulate live API response: only redeem_result present, no code field.
+        redeem_result: 0,
+        promo_code: "DISCORD123",
+      }),
+    } as unknown as ApiClient;
+
+    const { result } = await redeemCodes({
+      accounts: [{ name: "main", token: makeJwt() }],
+      extraCandidates: ["DISCORD123"],
+      clientFactory: () => client,
+    });
+
+    const attempt = result.rows[0]!.attempts[0]!;
+    assert.equal(
+      attempt.outcome,
+      Outcomes.CODE_REDEEMED,
+      "numeric redeem_result=0 must classify as CODE_REDEEMED (not UNKNOWN_RESULT)",
+    );
+  });
+
+  it("#209: numeric redeem_result=0 with no message is not classified as UNKNOWN_RESULT", async () => {
+    const client = {
+      redeemCode: async (_code: string) => ({ redeem_result: 0 }),
+    } as unknown as ApiClient;
+
+    const { result } = await redeemCodes({
+      accounts: [{ name: "discord", token: makeJwt() }],
+      extraCandidates: ["TESTCODE"],
+      clientFactory: () => client,
+    });
+
+    assert.notEqual(
+      result.rows[0]!.attempts[0]!.outcome,
+      Outcomes.UNKNOWN_RESULT,
+      "successful redeem via numeric redeem_result must never produce UNKNOWN_RESULT",
+    );
+  });
+
+  it("#209: redeem_result takes precedence over legacy code when both present", async () => {
+    // Edge case: both fields present — redeem_result (live) wins over code (legacy).
+    const client = {
+      redeemCode: async (_code: string) => ({
+        redeem_result: 0, // success
+        code: 3,         // legacy field would have been CODE_INVALID_OR_EXPIRED
+      }),
+    } as unknown as ApiClient;
+
+    const { result } = await redeemCodes({
+      accounts: [{ name: "main", token: makeJwt() }],
+      extraCandidates: ["AMBIGUOUS"],
+      clientFactory: () => client,
+    });
+
+    assert.equal(
+      result.rows[0]!.attempts[0]!.outcome,
+      Outcomes.CODE_REDEEMED,
+      "redeem_result=0 must win over legacy code=3 when both are present",
+    );
+  });
+
+  it("#209: legacy code field still works when redeem_result is absent (backward compat)", async () => {
+    const client = {
+      redeemCode: async (_code: string) => ({ code: 0, message: "redeem_success" }),
+    } as unknown as ApiClient;
+
+    const { result } = await redeemCodes({
+      accounts: [{ name: "main", token: makeJwt() }],
+      extraCandidates: ["LEGACY"],
+      clientFactory: () => client,
+    });
+
+    assert.equal(
+      result.rows[0]!.attempts[0]!.outcome,
+      Outcomes.CODE_REDEEMED,
+      "legacy code=0 fallback must still classify as CODE_REDEEMED",
+    );
+  });
 });

@@ -78,7 +78,9 @@ export async function redeemCodes(opts: RedeemCodesOptions): Promise<RedeemCodes
 async function tryRedeem(client: ApiClient, accountName: string, code: string): Promise<RedeemAttempt> {
   try {
     const res = await apiRedeemCode(client, code);
-    const outcome = classifyRedeemResult({ code: res.code, message: res.message });
+    // Live API returns numeric `redeem_result`; fall back to legacy `code` field.
+    const resultCode = res.redeem_result ?? res.code;
+    const outcome = classifyRedeemResult({ code: resultCode, message: res.message });
     log.info(`[${accountName}] code "${code}" → ${outcome}${res.message ? ` (${res.message})` : ""}`);
     return { code, outcome, detail: res.message };
   } catch (err) {
