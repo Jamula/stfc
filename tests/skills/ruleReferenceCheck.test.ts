@@ -133,6 +133,21 @@ describe("rule-reference-check.yml / contract pinning", () => {
     );
   });
 
+  it("empty canonical set is tolerated and skips the check with a warning", () => {
+    // grep exits 1 when copilot-instructions.md has no "## N." headings;
+    // under `set -euo pipefail` that aborted the step with no output.
+    assert.match(
+      yaml,
+      /\| sort -n \|\| true\)/,
+      "canonical extraction must tolerate zero matches with '|| true'",
+    );
+    assert.match(
+      yaml,
+      /::warning::No '## N\.' rule headings found/,
+      "must emit a ::warning:: annotation when the canonical rule set is empty",
+    );
+  });
+
   it("diff is scoped to origin/<base_ref>...HEAD (three-dot range)", () => {
     // YAML contains: "${BASE_REF}...HEAD" — match with curly braces
     assert.match(

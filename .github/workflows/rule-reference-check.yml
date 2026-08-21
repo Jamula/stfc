@@ -44,8 +44,18 @@ jobs:
           # ── 1. Extract canonical rule numbers ────────────────────────────
           # Every heading of the form "## N." is a valid rule slot, including
           # "RESERVED — see Rule X" entries (they still have a heading).
+          # `|| true` keeps `set -euo pipefail` from aborting the whole step
+          # with no output when the file holds no numbered headings.
           CANONICAL=$(grep -oE '^## [0-9]+\.' .github/copilot-instructions.md \
-            | grep -oE '[0-9]+' | sort -n)
+            | grep -oE '[0-9]+' | sort -n || true)
+
+          # An empty canonical set means the rule ledger no longer lives in
+          # copilot-instructions.md. Every citation would then look dangling,
+          # so warn loudly and skip instead of failing every PR.
+          if [ -z "$CANONICAL" ]; then
+            echo "::warning::No '## N.' rule headings found in .github/copilot-instructions.md — Rule N citations cannot be validated. Restore the rule ledger or point this workflow at its new home."
+            exit 0
+          fi
 
           echo "Canonical rule numbers: $(echo "$CANONICAL" | tr '\n' ' ')"
 
