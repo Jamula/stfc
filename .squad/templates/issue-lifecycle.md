@@ -178,7 +178,7 @@ git push -u origin squad/{issue-number}-{slug}
 
 **PR creation commands:**
 
-**GitHub:**
+**GitHub (CLI — required path):**
 ```bash
 gh pr create --draft --title "{title}" \
   --body "Closes #{issue-number}\n\n{description}" \
@@ -189,6 +189,16 @@ gh pr create --draft --title "{title}" \
 > ⚠️ **All issue-session PRs MUST be opened as drafts.** Draft state prevents any merge
 > path (UI, API, `gh pr merge`) until a human explicitly runs `gh pr ready {pr-number}`.
 > This is the required gate — never omit `--draft`.
+>
+> ⚠️ **App `create_pull_request` tool does not support `--draft`.** When creating PRs via
+> the Copilot App's `create_pull_request` tool (or any SDK path that does not accept a
+> draft flag), immediately verify draft status after creation and convert to draft if
+> needed:
+> ```bash
+> gh pr view {pr-number} --json isDraft --jq '.isDraft'
+> # If false: gh api repos/{owner}/{repo}/pulls/{pr-number} -X PATCH -f 'draft=true'
+> ```
+> Do not proceed with any further PR steps until draft status is confirmed.
 
 **Azure DevOps:**
 ```bash
@@ -250,7 +260,7 @@ gh pr ready {pr-number}
 
 ### 6. PR Merge (human-only gate)
 
-**Trigger:** A human operator or coordinator reviews Ralph's merge-ready report, confirms the PR is approved and CI is genuinely green, and performs the merge.
+**Trigger:** A human operator reviews Ralph's merge-ready report, confirms the PR is approved and CI is genuinely green, and performs the merge. The Squad coordinator is itself an agent and MUST NOT trigger the merge; only a human may act on the merge-ready report.
 
 > ⚠️ **Agents (including Ralph) MUST NOT call `gh pr merge` or enable auto-merge.**
 > Issue-session PRs are opened as drafts. The workflow is:

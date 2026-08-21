@@ -39,11 +39,11 @@ gh issue list --label "squad" --state open --json number,title,labels,assignees 
 # Member-assigned issues (labeled squad:{member}, still open)
 gh issue list --state open --json number,title,labels,assignees --limit 20 | # filter for squad:* labels
 
-# Open PRs from squad members
-gh pr list --state open --json number,title,author,labels,isDraft,reviewDecision --limit 20
+# Open PRs from squad members (includes CI status via statusCheckRollup)
+gh pr list --state open --json number,title,author,labels,isDraft,reviewDecision,statusCheckRollup --limit 20
 
-# Draft PRs (agent work in progress)
-gh pr list --state open --draft --json number,title,author,labels,checks --limit 20
+# Draft PRs (agent work in progress; statusCheckRollup distinguishes green/pending/failed)
+gh pr list --state open --draft --json number,title,author,labels,isDraft,statusCheckRollup --limit 20
 ```
 
 **Step 2 — Categorize findings:**
@@ -154,6 +154,6 @@ After the coordinator's step 6 ("Immediately assess: Does anything trigger follo
   - Any check shows `FAILURE`, `CANCELLED`, or `SKIPPED` where a pass was expected
   - Checks are unavailable (billing-blocked, runner offline, quota exceeded)
   - A billing-blocked check surfaces as `FAILURE` — this is NOT a green signal; it is an infrastructure failure
-- When CI is unavailable or red, Ralph sets the PR board state to `ciBlocked`, reports it to the user, and waits. Ralph does not advance the PR.
+- When CI is unavailable or red, Ralph reports the PR as CI-blocked, does not advance it, and waits. Ralph does not assign a new board state beyond `ciFailure` — the established state for any non-green CI condition.
 
 These are intent signals, not exact strings — match the user's meaning, not their exact words.
