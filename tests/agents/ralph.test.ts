@@ -20,6 +20,19 @@ const charterPath = resolve(
 const charterExists = existsSync(charterPath);
 const charter = charterExists ? readFileSync(charterPath, "utf-8") : "";
 
+const ralphInstructions = readFileSync(
+  resolve(process.cwd(), ".squad/ralph-instructions.md"),
+  "utf-8",
+);
+const issueLifecycle = readFileSync(
+  resolve(process.cwd(), ".squad/templates/issue-lifecycle.md"),
+  "utf-8",
+);
+const ralphReference = readFileSync(
+  resolve(process.cwd(), ".squad/templates/ralph-reference.md"),
+  "utf-8",
+);
+
 describe("Ralph — team roster", () => {
   it("Ralph appears in team.md as Work Monitor", () => {
     assert.ok(
@@ -108,6 +121,118 @@ describe("Ralph — role identity", () => {
     assert.ok(
       ralphRow.includes("🔄") || ralphRow.includes("Monitor"),
       "Ralph's row should show monitor status",
+    );
+  });
+});
+
+// ─── Regression: issue #220 — no unconditional auto-merge authority ───────────
+
+describe("Ralph — merge authority restrictions (issue #220)", () => {
+  it("charter does NOT grant unconditional auto-merge authority", () => {
+    // The old Rule 7 phrasing "auto-merge on reviewer-approved + CI-green" must be gone
+    assert.ok(
+      !charter.includes("auto-merge on reviewer-approved"),
+      "Charter must not grant unconditional auto-merge authority",
+    );
+  });
+
+  it("charter explicitly states Ralph does NOT call gh pr merge", () => {
+    assert.ok(
+      charter.toLowerCase().includes("never") &&
+        charter.includes("gh pr merge"),
+      "Charter must contain an explicit prohibition on calling 'gh pr merge'",
+    );
+  });
+
+  it("charter describes merge-hold posture for non-green CI", () => {
+    assert.ok(
+      charter.toLowerCase().includes("billing-blocked") ||
+        charter.toLowerCase().includes("ci-unavailable") ||
+        charter.toLowerCase().includes("hold"),
+      "Charter must describe the CI-unavailable / red / pending hold posture",
+    );
+  });
+
+  it("ralph-instructions.md prohibits gh pr merge and auto-merge", () => {
+    assert.ok(
+      ralphInstructions.toLowerCase().includes("must not") ||
+        ralphInstructions.toLowerCase().includes("never"),
+      "ralph-instructions must contain a prohibition keyword",
+    );
+    assert.ok(
+      ralphInstructions.includes("gh pr merge") ||
+        ralphInstructions.includes("auto-merge"),
+      "ralph-instructions must reference the prohibited actions by name",
+    );
+  });
+
+  it("ralph-instructions.md requires --draft flag on PR creation", () => {
+    assert.ok(
+      ralphInstructions.includes("--draft"),
+      "ralph-instructions must require --draft when creating PRs",
+    );
+  });
+
+  it("issue-lifecycle.md PR creation command uses --draft", () => {
+    // Every gh pr create example in the lifecycle doc must include --draft
+    const prCreateLines = issueLifecycle
+      .split("\n")
+      .filter((l) => l.includes("gh pr create") && !l.startsWith("#"));
+    assert.ok(
+      prCreateLines.length > 0,
+      "issue-lifecycle.md should contain at least one gh pr create command",
+    );
+    for (const line of prCreateLines) {
+      assert.ok(
+        line.includes("--draft"),
+        `All gh pr create commands must include --draft, but found: ${line.trim()}`,
+      );
+    }
+  });
+
+  it("issue-lifecycle.md anti-patterns list --draft omission as prohibited", () => {
+    assert.ok(
+      issueLifecycle.includes("--draft"),
+      "issue-lifecycle.md must mention --draft in anti-patterns or requirements",
+    );
+  });
+
+  it("issue-lifecycle.md PR merge section is human-only", () => {
+    assert.ok(
+      issueLifecycle.toLowerCase().includes("human") &&
+        issueLifecycle.toLowerCase().includes("merge"),
+      "issue-lifecycle.md must describe human-only merge authority",
+    );
+    // Must not describe Ralph auto-merging
+    assert.ok(
+      !issueLifecycle.includes("Ralph auto-merges"),
+      "issue-lifecycle.md must not describe Ralph auto-merging",
+    );
+  });
+
+  it("ralph-reference.md merge trigger does NOT map to gh pr merge", () => {
+    // The triggers table row for "merge PR #N" must NOT say 'Merge via `gh pr merge`'
+    assert.ok(
+      !ralphReference.includes("Merge via `gh pr merge`"),
+      "ralph-reference.md must not map 'merge PR #N' to 'gh pr merge'",
+    );
+  });
+
+  it("ralph-reference.md CI-unavailable / billing-blocked hold policy is documented", () => {
+    assert.ok(
+      ralphReference.toLowerCase().includes("billing-blocked"),
+      "ralph-reference.md must document billing-blocked as a CI-hold trigger",
+    );
+    assert.ok(
+      ralphReference.toLowerCase().includes("hold"),
+      "ralph-reference.md must document the hold posture for non-green CI",
+    );
+  });
+
+  it("ralph-reference.md explicitly requires draft PRs", () => {
+    assert.ok(
+      ralphReference.includes("draft"),
+      "ralph-reference.md must mention draft PR requirement",
     );
   });
 });

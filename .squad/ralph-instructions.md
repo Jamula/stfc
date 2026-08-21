@@ -47,10 +47,35 @@
 Read this file for your full instructions.  Follow ALL sections.
 MAXIMIZE PARALLELISM — spawn agents for ALL actionable issues simultaneously.
 
+> ⚠️ **MERGE AUTHORITY RESTRICTION (non-negotiable)**
+> Ralph MUST NOT call `gh pr merge`, enable auto-merge, or run `gh pr ready` autonomously.
+> All issue-session PRs are opened as drafts.  A human must explicitly approve and mark
+> the PR ready before any merge can proceed.  Ralph's job is to surface merge-ready PRs
+> in status reports — the human operator performs the merge.
+>
+> **CI-hold rule:** Any PR whose checks are not explicitly green (including pending,
+> in-progress, billing-blocked, failed, cancelled, or unavailable) is treated as NOT
+> merge-ready.  A billing-blocked workflow that shows FAILURE is NOT a green signal.
+> Ralph reports these as blocked and waits for human triage.
+
 ### Issue Selection
 
 Work on every open, unblocked, unassigned issue labeled `squad` or `squad:{member}`.
 Skip issues that are assigned to a human, blocked, or marked `status:on-hold`.
+
+### PR Creation
+
+When spawning an agent to work on an issue, instruct it to open its PR as a draft:
+
+```bash
+gh pr create --draft --title "{title}" \
+  --body "Closes #{issue-number}\n\n{description}" \
+  --head squad/{issue-number}-{slug} \
+  --base main
+```
+
+Draft PRs cannot be merged until a human runs `gh pr ready {pr-number}`.  This is
+the intended gate.  Never omit `--draft`.
 
 ### Post-Task Actions
 

@@ -180,11 +180,15 @@ git push -u origin squad/{issue-number}-{slug}
 
 **GitHub:**
 ```bash
-gh pr create --title "{title}" \
+gh pr create --draft --title "{title}" \
   --body "Closes #{issue-number}\n\n{description}" \
   --head squad/{issue-number}-{slug} \
   --base main
 ```
+
+> ⚠️ **All issue-session PRs MUST be opened as drafts.** Draft state prevents any merge
+> path (UI, API, `gh pr merge`) until a human explicitly runs `gh pr ready {pr-number}`.
+> This is the required gate — never omit `--draft`.
 
 **Azure DevOps:**
 ```bash
@@ -242,20 +246,32 @@ git push
 gh pr ready {pr-number}
 ```
 
-### 6. PR Merge
+### 6. PR Merge (human-only gate)
 
-**Trigger:** PR is approved and CI passes.
+**Trigger:** A human operator or coordinator reviews Ralph's merge-ready report, confirms the PR is approved and CI is genuinely green, and performs the merge.
+
+> ⚠️ **Agents (including Ralph) MUST NOT call `gh pr merge` or enable auto-merge.**
+> Issue-session PRs are opened as drafts. The workflow is:
+> 1. Human runs `gh pr ready {pr-number}` to mark the PR as ready for review.
+> 2. A reviewer approves the PR.
+> 3. CI must be explicitly green — not pending, not billing-blocked, not failed.
+> 4. Human runs one of the commands below.
+
+> **CI-unavailable / red / pending hold:** If CI checks are in any state other than
+> explicitly green — including pending, queued, in-progress, billing-blocked (which
+> surfaces as `FAILURE`), or cancelled — the PR MUST NOT be merged. A billing-blocked
+> check is NOT a passing check. Wait for CI to be restored and rerun before merging.
 
 **Merge strategies:**
+
+**GitHub (squash — preferred):**
+```bash
+gh pr merge {pr-number} --squash --delete-branch
+```
 
 **GitHub (merge commit):**
 ```bash
 gh pr merge {pr-number} --merge --delete-branch
-```
-
-**GitHub (squash):**
-```bash
-gh pr merge {pr-number} --squash --delete-branch
 ```
 
 **Azure DevOps:**
@@ -313,11 +329,12 @@ When spawning an agent to work on an issue, include this context block:
 **After completing work:**
 1. Commit with message referencing issue number
 2. Push branch
-3. Open PR using:
+3. Open PR as a **draft** using:
    ```
-   gh pr create --title "{title}" --body "Closes #{number}\n\n{description}" --head squad/{issue-number}-{slug} --base {base-branch}
+   gh pr create --draft --title "{title}" --body "Closes #{number}\n\n{description}" --head squad/{issue-number}-{slug} --base {base-branch}
    ```
 4. Report PR URL to coordinator
+5. **Stop here.** Do not mark the PR ready; do not call `gh pr merge`. A human must run `gh pr ready` and approve the merge after CI passes and a reviewer approves.
 ```
 
 ## Ralph's Role in Issue Lifecycle
@@ -339,22 +356,31 @@ See `.squad/templates/ralph-reference.md` for Ralph's full lifecycle.
 
 ## PR Review Handling
 
+### Draft PR Policy
+
+All issue-session PRs MUST be opened as drafts. A human must explicitly run
+`gh pr ready {pr-number}` before review or merge can proceed. This applies
+regardless of CI status or reviewer configuration.
+
 ### Automated Approval (CI-only projects)
 
-If the project has no human reviewers configured:
-1. PR opens
+⚠️ **This pattern is DISABLED for issue-session PRs.** Even if the project has no
+human reviewers configured, an automated agent must not merge its own PR. The
+correct posture is:
+
+1. PR opens (as draft)
 2. CI runs
-3. If CI passes, Ralph auto-merges
-4. Issue closes
+3. If CI passes, Ralph reports it as merge-ready in the next status scan
+4. A human runs `gh pr ready` and then merges manually
 
-### Human Review Required
+### Human Review Required (all issue-session PRs)
 
-If the project requires human approval:
-1. PR opens
-2. Human reviewer is notified (GitHub/ADO notifications)
-3. Reviewer approves or requests changes
-4. If approved + CI passes, Ralph merges
-5. If changes requested, agent addresses feedback
+1. PR opens as draft
+2. Human runs `gh pr ready {pr-number}` to open for review
+3. Human reviewer is notified (GitHub/ADO notifications)
+4. Reviewer approves or requests changes
+5. If approved + CI is explicitly green, **human** merges (not Ralph, not an agent)
+6. If changes requested, agent addresses feedback (opens new commit on same branch)
 
 ### Squad Member Review
 
@@ -365,17 +391,18 @@ If the issue was assigned to a squad member and they authored the PR:
 
 ## Common Issue Lifecycle Patterns
 
-### Pattern 1: Quick Fix (Single Agent, No Review)
+### Pattern 1: Quick Fix (Single Agent + Human Merge)
 ```
-Issue created → Assigned to agent → Branch created → Code fixed → 
-PR opened → CI passes → Auto-merged → Issue closed
+Issue created → Assigned to agent → Branch created → Code fixed →
+Draft PR opened → CI runs → Human marks PR ready → Human reviews →
+CI passes → Human merges → Issue closed
 ```
 
 ### Pattern 2: Feature Development (Human Review)
 ```
-Issue created → Assigned to agent → Branch created → Feature implemented → 
-PR opened → Human reviews → Changes requested → Agent fixes → 
-Re-reviewed → Approved → Merged → Issue closed
+Issue created → Assigned to agent → Branch created → Feature implemented →
+Draft PR opened → Human marks PR ready → Human reviews → Changes requested →
+Agent fixes → Re-reviewed → Approved → CI passes → Human merges → Issue closed
 ```
 
 ### Pattern 3: Research-Then-Implement
@@ -402,6 +429,10 @@ All PRs reviewed → All PRs merged → Epic closed
 - ❌ Using `checkout -b` when parallel agents are active (causes working directory conflicts)
 - ❌ Manually transitioning issue states — let the platform and Squad automation handle it
 - ❌ Skipping the branch naming convention — breaks Ralph's tracking logic
+- ❌ **Opening issue-session PRs without `--draft`** — draft state is the only merge gate available on free-tier private repos
+- ❌ **Calling `gh pr merge` or enabling auto-merge from any agent or Ralph** — merge authority is human-only
+- ❌ **Treating a billing-blocked CI check as a passing check** — `FAILURE` from a billing block is not green
+- ❌ **Merging when CI is pending, queued, or unavailable** — hold until explicitly green
 
 ## Migration Notes
 

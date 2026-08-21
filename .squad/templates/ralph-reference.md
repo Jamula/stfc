@@ -24,7 +24,7 @@ Ralph always appears in `team.md`: `| Ralph | Work Monitor | — | 🔄 Monitor 
 | "Ralph, idle" / "Take a break" / "Stop monitoring" | Fully deactivate (stop loop + idle-watch) |
 | "Ralph, scope: just issues" / "Ralph, skip CI" | Adjust what Ralph monitors this session |
 | References PR feedback or changes requested | Spawn agent to address PR review feedback |
-| "merge PR #N" / "merge it" (recent context) | Merge via `gh pr merge` |
+| "merge PR #N" / "merge it" (recent context) | **Report PR status and surface it as merge-ready for human action — Ralph MUST NOT call `gh pr merge`** |
 
 These are intent signals, not exact strings — match meaning, not words.
 
@@ -55,7 +55,8 @@ gh pr list --state open --draft --json number,title,author,labels,checks --limit
 | **Draft PRs** | PR in draft from squad member | Check if agent needs to continue; if stalled, nudge |
 | **Review feedback** | PR has `CHANGES_REQUESTED` review | Route feedback to PR author agent to address |
 | **CI failures** | PR checks failing | Notify assigned agent to fix, or create a fix issue |
-| **Approved PRs** | PR approved, CI green, ready to merge | Merge and close related issue |
+| **Approved PRs** | PR approved, CI **explicitly green** (not pending, not billing-blocked, not failed), not draft | Surface as merge-ready in status report — **human performs merge** |
+| **CI unavailable / red / pending** | PR checks are non-green (pending, billing-blocked, failed, cancelled, or unavailable) | Hold — report as blocked; do NOT advance toward merge regardless of review state |
 | **No work found** | All clear | Report: "📋 Board is clear. Ralph is idling." Suggest `npx @bradygaster/squad-cli watch` for persistent polling. |
 
 **Step 3 — Act on highest-priority item:**
@@ -137,5 +138,22 @@ After the coordinator's step 6 ("Immediately assess: Does anything trigger follo
 6. No more work → "📋 Board is clear. Ralph is idling." (suggest `npx @bradygaster/squad-cli watch` for persistent polling)
 
 **Ralph does NOT ask "should I continue?" — Ralph KEEPS GOING.** Only stops on explicit "idle"/"stop" or session end. A clear board → idle-watch, not full stop. For persistent monitoring after the board clears, use `npx @bradygaster/squad-cli watch`.
+
+### ⚠️ Merge Authority & CI-Hold Policy (non-negotiable)
+
+**Ralph MUST NOT call `gh pr merge`, enable auto-merge, or call `gh pr ready` autonomously.**
+
+- All issue-session PRs are opened as **drafts**. Draft PRs cannot merge until a human runs `gh pr ready`.
+- Ralph's role is to **report** merge-ready status — the human operator performs the merge.
+- A PR is only merge-ready when ALL of the following are true:
+  1. At least one human reviewer has approved (not just squad agent review)
+  2. CI checks are **explicitly green** — every required check shows `SUCCESS` or equivalent
+  3. The PR is no longer a draft (`gh pr ready` was run by a human)
+- **CI-hold cases — NEVER merge:**
+  - Checks are pending, queued, or in-progress
+  - Any check shows `FAILURE`, `CANCELLED`, or `SKIPPED` where a pass was expected
+  - Checks are unavailable (billing-blocked, runner offline, quota exceeded)
+  - A billing-blocked check surfaces as `FAILURE` — this is NOT a green signal; it is an infrastructure failure
+- When CI is unavailable or red, Ralph sets the PR board state to `ciBlocked`, reports it to the user, and waits. Ralph does not advance the PR.
 
 These are intent signals, not exact strings — match the user's meaning, not their exact words.
