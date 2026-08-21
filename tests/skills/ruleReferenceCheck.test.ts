@@ -214,13 +214,44 @@ describe("rule-reference-check.yml / contract pinning", () => {
     assert.match(yaml, /exit 1/, "workflow must exit 1 when dangling references are found");
   });
 
-  it("prints the file name or number of each dangling reference on failure (invalid-citation fail)", () => {
-    // The failure message must identify the offending Rule number so reviewers
-    // can find and fix the citation without guessing.
+  it("failure output shape includes both Rule number and file path (invalid-citation fail)", () => {
+    // The failure message must include both the Rule number and the file path
+    // that introduced the dangling citation. This pins the fix from issue #224
+    // acceptance criterion: "a genuinely invalid Rule N citation fails with
+    // the number and file shown."
+    //
+    // The pattern "Rule ${n} in ${f}" is produced by the per-file iteration
+    // loop that replaced the combined-diff approach. A single-file match like
+    // "Rule 99 in .squad/foo.md" satisfies this regex.
+    assert.match(
+      yaml,
+      /Rule \$\{n\} in \$\{f\}/,
+      "failure output must embed both Rule number (${n}) and file path (${f}) in the dangling line",
+    );
+  });
+
+  it("per-file iteration loop is present (multi-file path attribution)", () => {
+    // Pins that extraction is done per-file via a while-read-f loop rather
+    // than a combined diff. This is the structural guarantee that two files
+    // adding Rule 99 each produce their own attributed output line, and that
+    // different Rule numbers in different files are attributed independently.
+    assert.match(
+      yaml,
+      /while IFS= read -r f;/,
+      "must iterate over target files individually to preserve path attribution",
+    );
+    assert.match(
+      yaml,
+      /git diff.*-- "\$f"/,
+      "per-file diff must quote the file variable to handle paths with spaces",
+    );
+  });
+
+  it("dangling check emits section header (fail loud)", () => {
     assert.match(
       yaml,
       /Dangling Rule references/,
-      "failure output must name the dangling Rule references",
+      "failure output must include the dangling-references section header",
     );
   });
 });

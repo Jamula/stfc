@@ -73,36 +73,47 @@ jobs:
           echo "Checking files:"
           echo "$TARGET"
 
-          # ── 3. Extract Rule N citations from ADDED lines only ────────────
-          # Using added-lines-only prevents false positives from historical
-          # records (e.g. .squad/decisions.md referencing deferred Rule 23).
-          # shellcheck disable=SC2086
-          ADDED=$(git diff "${BASE_REF}...HEAD" -- $TARGET \
-            | grep '^+' | grep -v '^+++' || true)
+          # ── 3. Extract Rule N citations per file, preserving path attribution ──
+          # Iterate over each target file individually so that the file path can
+          # be associated with every dangling citation it introduces. This avoids
+          # the path-loss that occurs when a combined diff is stripped of its
+          # "+++ b/<path>" headers before citation extraction. Duplicate Rule
+          # numbers across different files each produce their own attribution line.
+          ANY_ADDED=0
+          ANY_CITED=0
+          DANGLING=""
 
-          if [ -z "$ADDED" ]; then
+          while IFS= read -r f; do
+            [ -z "$f" ] && continue
+
+            file_added=$(git diff "${BASE_REF}...HEAD" -- "$f" \
+              | grep '^+' | grep -v '^+++' || true)
+            [ -z "$file_added" ] && continue
+            ANY_ADDED=1
+
+            file_cited=$(echo "$file_added" | grep -oE 'Rule [0-9]+' \
+              | grep -oE '[0-9]+' | sort -un || true)
+            [ -z "$file_cited" ] && continue
+            ANY_CITED=1
+
+            while IFS= read -r n; do
+              if ! echo "$CANONICAL" | grep -qw "$n"; then
+                DANGLING="${DANGLING}  Rule ${n} in ${f}\n"
+              fi
+            done <<< "$file_cited"
+          done <<< "$TARGET"
+
+          if [ "$ANY_ADDED" -eq 0 ]; then
             echo "No added lines in target files — nothing to check."
             exit 0
           fi
 
-          CITED=$(echo "$ADDED" | grep -oE 'Rule [0-9]+' \
-            | grep -oE '[0-9]+' | sort -un || true)
-
-          if [ -z "$CITED" ]; then
+          if [ "$ANY_CITED" -eq 0 ]; then
             echo "✅ No 'Rule N' references in added content."
             exit 0
           fi
 
-          echo "Cited rule numbers: $(echo "$CITED" | tr '\n' ' ')"
-
-          # ── 4. Diff: cited minus canonical ────────────────────────────────
-          DANGLING=""
-          while IFS= read -r n; do
-            if ! echo "$CANONICAL" | grep -qw "$n"; then
-              DANGLING="${DANGLING}  Rule ${n}\n"
-            fi
-          done <<< "$CITED"
-
+          # ── 4. Report dangling citations ──────────────────────────────────
           if [ -n "$DANGLING" ]; then
             echo ""
             echo "❌ Dangling Rule references in this PR's added lines:"
