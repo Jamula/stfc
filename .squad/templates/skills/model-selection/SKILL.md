@@ -49,9 +49,9 @@ Resolution is **first-match-wins** — the highest layer with a value wins.
 3. CHECK Layer 1: Did the user give a session directive? → Use it.
 4. CHECK Layer 2: Does the agent's charter have a `## Model` section? → Use it.
 5. CHECK Layer 3: Determine task type:
-   - Code (implementation, tests, refactoring, bug fixes) → `claude-sonnet-4.6`
-   - Prompts, agent designs → `claude-sonnet-4.6`
-   - Visual/design with image analysis → `claude-opus-4.6`
+   - Code (implementation, tests, refactoring, bug fixes) → `claude-sonnet-5`
+   - Prompts, agent designs → `claude-sonnet-5`
+   - Visual/design with image analysis → `claude-opus-5`
    - Non-code (docs, planning, triage, changelogs) → `claude-haiku-4.5`
 6. FALLBACK Layer 4: `claude-haiku-4.5`
 7. INCLUDE model in spawn acknowledgment: `🔧 {Name} ({resolved_model}) — {task}`
@@ -92,9 +92,9 @@ After resolving the model and including it in the spawn template, this skill is 
 ```json
 {
   "version": 1,
-  "defaultModel": "claude-opus-4.6",
+  "defaultModel": "claude-opus-5",
   "agentModelOverrides": {
-    "fenster": "claude-sonnet-4.6",
+    "fenster": "claude-sonnet-5",
     "mcmanus": "claude-haiku-4.5"
   }
 }
@@ -109,9 +109,9 @@ After resolving the model and including it in the spawn template, this skill is 
 If a model is unavailable (rate limit, plan restriction), retry within the same tier:
 
 ```
-Premium:  claude-opus-4.6 → claude-opus-4.6-fast → claude-opus-4.5 → claude-sonnet-4.6
-Standard: claude-sonnet-4.6 → gpt-5.4 → claude-sonnet-4.5 → gpt-5.3-codex → claude-sonnet-4
-Fast:     claude-haiku-4.5 → gpt-5.1-codex-mini → gpt-4.1 → gpt-5-mini
+Premium:  claude-opus-5 → claude-opus-4.8 → claude-opus-4.7 → claude-opus-4.6 → claude-sonnet-5
+Standard: claude-sonnet-5 → claude-sonnet-4.6 → gpt-5.6-sol → gpt-5.6-terra → gpt-5.6-luna → gpt-5.5 → gpt-5.4 → gpt-5.3-codex
+Fast:     claude-haiku-4.5 → gpt-5.4-mini → gpt-5-mini
 ```
 
 **Never fall UP in tier.** A fast task won't land on a premium model via fallback.

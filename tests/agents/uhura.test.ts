@@ -112,13 +112,13 @@ describe("Uhura — boundary declarations", () => {
 });
 
 describe("Uhura — model preference", () => {
-  it("declares auto/claude-sonnet-4.6 for integration code", () => {
+  it("declares auto/claude-sonnet-5 for integration code", () => {
     const modelSection = charter.match(/## Model[\s\S]*?(?=\n## |\n# |$)/);
     assert.ok(modelSection, "Charter must have a ## Model section");
     assert.ok(
       modelSection[0].includes("auto") ||
-        modelSection[0].includes("claude-sonnet-4.6"),
-      "Model section should declare auto or claude-sonnet-4.6",
+        modelSection[0].includes("claude-sonnet-5"),
+      "Model section should declare auto or claude-sonnet-5",
     );
   });
 });

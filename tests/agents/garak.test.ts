@@ -123,12 +123,12 @@ describe("Garak — signal-to-noise contract", () => {
 });
 
 describe("Garak — model preference", () => {
-  it("declares auto/claude-sonnet-4.6 with premium escalation for high-stakes", () => {
+  it("declares auto/claude-sonnet-5 with premium escalation for high-stakes", () => {
     const modelSection = charter.match(/## Model[\s\S]*?(?=\n## |\n# |$)/);
     assert.ok(modelSection, "Charter must have a ## Model section");
     assert.ok(
-      modelSection[0].includes("claude-sonnet-4.6"),
-      "Model section should declare claude-sonnet-4.6",
+      modelSection[0].includes("claude-sonnet-5"),
+      "Model section should declare claude-sonnet-5",
     );
     assert.ok(
       modelSection[0].toLowerCase().includes("premium"),

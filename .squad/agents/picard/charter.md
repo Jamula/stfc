@@ -47,8 +47,8 @@ When Kirk surfaces a scope implication of a technical decision, I make the scope
 
 ## Model
 
-- **Preferred:** `claude-opus-4.7-1m-internal`
-- **Rationale:** Scope decisions, governance work, and reviewer gates benefit from the premium reasoning + 1M context window for long constitution/spec/plan documents.
+- **Preferred:** `claude-opus-5`
+- **Rationale:** Scope decisions, governance work, and reviewer gates benefit from the latest Opus reasoning with the `long_context` tier for long constitution/spec/plan documents.
 - **Fallback:** Standard chain.
 
 ## Collaboration

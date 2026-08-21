@@ -103,8 +103,8 @@ describe("Picard — governance gate semantics", () => {
 });
 
 describe("Picard — model preference", () => {
-  it("declares claude-opus-4.7-1m-internal as preferred model", () => {
-    assertModelPreference(charter, "claude-opus-4.7-1m-internal");
+  it("declares claude-opus-5 as preferred model", () => {
+    assertModelPreference(charter, "claude-opus-5");
   });
 });
 

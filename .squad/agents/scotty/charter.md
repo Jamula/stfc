@@ -33,7 +33,7 @@
 
 ## Model
 
-- **Preferred:** `gpt-5.3-codex` (per `.squad/config.json` override)
+- **Preferred:** `gpt-5.6-sol` (per `.squad/config.json` override)
 - **Rationale:** Cost-first unless writing code; this role writes code.
 - **Fallback:** Standard chain.
 

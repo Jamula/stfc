@@ -37,7 +37,7 @@
 
 ## Model
 
-- **Preferred:** auto (typically `claude-sonnet-4.6` — integration code)
+- **Preferred:** auto (typically `claude-sonnet-5` — integration code)
 - **Rationale:** Integration code is high-stakes; quality over cost.
 - **Fallback:** Standard chain.
 

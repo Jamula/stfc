@@ -110,13 +110,13 @@ describe("Bashir — test-first discipline", () => {
 });
 
 describe("Bashir — model preference", () => {
-  it("declares auto/claude-sonnet-4.6 for test code", () => {
+  it("declares auto/claude-sonnet-5 for test code", () => {
     const modelSection = charter.match(/## Model[\s\S]*?(?=\n## |\n# |$)/);
     assert.ok(modelSection, "Charter must have a ## Model section");
     assert.ok(
       modelSection[0].includes("auto") ||
-        modelSection[0].includes("claude-sonnet-4.6"),
-      "Model section should declare auto or claude-sonnet-4.6",
+        modelSection[0].includes("claude-sonnet-5"),
+      "Model section should declare auto or claude-sonnet-5",
     );
   });
 });

@@ -67,13 +67,13 @@ the speckit chain gate), I surface to Kirk before shipping.
 
 ## Model
 
-- **Default:** `claude-sonnet-4.6` — writes scripts and YAML; needs code-tier
+- **Default:** `claude-sonnet-5` — writes scripts and YAML; needs code-tier
   reasoning + tool fluency.
-- **Bump to `gpt-5.3-codex`** for heavy multi-file workflow refactors (e.g.
+- **Bump to `gpt-5.6-sol`** for heavy multi-file workflow refactors (e.g.
   splitting one mega-workflow into several, large-scale required-check graph
   changes, release-pipeline introductions that touch 5+ YAML files at once).
 - **Rationale:** This role is 95% scripting/config and 5% diagnosis prose.
-  Sonnet 4.6 is the right default; codex when fan-out exceeds ~3 files.
+  Sonnet 5 is the right default; GPT-5.6 Sol when fan-out exceeds ~3 files.
 
 ## How I Work
 
