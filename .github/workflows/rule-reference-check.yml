@@ -49,6 +49,11 @@ jobs:
 
           echo "Canonical rule numbers: $(echo "$CANONICAL" | tr '\n' ' ')"
 
+          if [ -z "$CANONICAL" ]; then
+            echo "⚠️ No numbered '## N.' headings found in .github/copilot-instructions.md — skipping Rule N citation check."
+            exit 0
+          fi
+
           # ── 2. Get files changed in this PR ───────────────────────────────
           BASE_REF="origin/${{ github.base_ref }}"
           CHANGED=$(git diff --name-only "${BASE_REF}...HEAD")
