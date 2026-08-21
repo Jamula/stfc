@@ -111,8 +111,8 @@ c. **Create the worktree:**
 d. **Set up dependencies:**
    - Link `node_modules` from main repo to avoid reinstalling:
      - Windows: `cmd /c "mklink /J {worktree-path}\node_modules {main-repo-path}\node_modules"`
-     - Unix: `ln -s {main-repo}/node_modules {worktree}/node_modules`
-   - If linking fails (error), fall back: `cd {worktree} && npm install`
+     - Unix: `ln -s {main-repo-path}/node_modules {worktree-path}/node_modules`
+   - If linking fails (error), fall back: `cd {worktree-path} && npm install`
    - Verify the worktree is ready: check build tools are accessible
 
 e. **Include worktree context in spawn:**
