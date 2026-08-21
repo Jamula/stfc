@@ -35,7 +35,7 @@ Each platform tracks issue lifecycle differently. Squad normalizes these into a 
 | Open, assigned, no branch | `state: open`, `assignee: @user`, no linked PR | `assigned` |
 | Open, branch exists | `state: open`, linked branch exists | `inProgress` |
 | Open, PR opened | `state: open`, PR exists, `reviewDecision: null` | `needsReview` |
-| Open, PR approved | `state: open`, PR `reviewDecision: APPROVED` | `readyToMerge` |
+| Open, PR approved, CI green, non-draft | `state: open`, PR `reviewDecision: APPROVED`, `statusCheckRollup: SUCCESS`, `isDraft: false` | `readyToMerge` |
 | Open, changes requested | `state: open`, PR `reviewDecision: CHANGES_REQUESTED` | `changesRequested` |
 | Open, CI failure | `state: open`, PR `statusCheckRollup: FAILURE` | `ciFailure` |
 | Closed | `state: closed` | `done` |
@@ -222,7 +222,9 @@ Working as {member} ({role})
 ### 5. PR Review & Updates
 
 **Review states:**
-- **Approved** → `readyToMerge`
+- **Approved AND CI explicitly green (`statusCheckRollup: SUCCESS`) AND non-draft** → `readyToMerge` (reporting-only; Ralph never calls `gh pr merge`)
+- **Approved but CI pending, billing-blocked, or failed** → hold; do NOT set `readyToMerge`
+- **Approved but PR is still a draft** → hold; do NOT set `readyToMerge`
 - **Changes requested** → `changesRequested`
 - **CI failure** → `ciFailure`
 
@@ -344,7 +346,7 @@ Ralph (the work monitor) continuously checks issue and PR state:
 1. **Triage:** Detects untriaged issues, assigns `squad:{member}` labels
 2. **Spawn:** Launches agents for assigned issues
 3. **Monitor:** Tracks PR state transitions (needsReview → changesRequested → readyToMerge)
-4. **Merge:** Automatically merges approved PRs
+4. **Report merge readiness:** Reports when a non-draft PR has a reviewer APPROVE and CI is explicitly green (`statusCheckRollup: SUCCESS`). Ralph NEVER calls `gh pr merge` or enables auto-merge; a human must perform the merge.
 5. **Cleanup:** Marks issues as done when PRs merge
 
 **Ralph's work-check cycle:**

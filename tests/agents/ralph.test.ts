@@ -210,6 +210,76 @@ describe("Ralph — merge authority restrictions (issue #220)", () => {
     );
   });
 
+  it("issue-lifecycle.md Ralph role list does not grant auto-merge authority", () => {
+    // Extract the "Ralph's Role in Issue Lifecycle" section
+    const ralphRoleStart = issueLifecycle.indexOf("## Ralph's Role in Issue Lifecycle");
+    const ralphRoleEnd = issueLifecycle.indexOf("\n## ", ralphRoleStart + 1);
+    const ralphRoleSection =
+      ralphRoleStart >= 0
+        ? issueLifecycle.slice(
+            ralphRoleStart,
+            ralphRoleEnd > ralphRoleStart ? ralphRoleEnd : undefined,
+          )
+        : issueLifecycle;
+    // The role-list bullet must not contain wording that grants merge authority
+    assert.ok(
+      !ralphRoleSection.includes("Automatically merges"),
+      "issue-lifecycle.md Ralph role list must not say 'Automatically merges'",
+    );
+    // The role section must not instruct Ralph to call gh pr merge
+    // (prohibition notices like "Ralph NEVER calls `gh pr merge`" are fine)
+    const roleLines = ralphRoleSection
+      .split("\n")
+      .filter((l) => /^\d+\./.test(l.trim())); // numbered list items only
+    const mergeActionLine = roleLines.find(
+      (l) =>
+        l.includes("gh pr merge") &&
+        !l.toLowerCase().includes("never") &&
+        !l.toLowerCase().includes("must not") &&
+        !l.toLowerCase().includes("do not"),
+    );
+    assert.ok(
+      !mergeActionLine,
+      `issue-lifecycle.md Ralph's Role numbered list must not instruct calling \`gh pr merge\`: "${mergeActionLine}"`,
+    );
+    // The role section must describe reporting, not acting
+    assert.ok(
+      ralphRoleSection.toLowerCase().includes("report") ||
+        ralphRoleSection.toLowerCase().includes("readiness"),
+      "issue-lifecycle.md Ralph role list must describe merge-readiness reporting, not merging",
+    );
+  });
+
+  it("issue-lifecycle.md readyToMerge mapping requires non-draft + APPROVE + green CI", () => {
+    // The state table row that maps to readyToMerge must gate on draft status and CI
+    const readyLine = issueLifecycle
+      .split("\n")
+      .find((l) => l.includes("readyToMerge"));
+    assert.ok(readyLine, "issue-lifecycle.md must have a readyToMerge mapping");
+    assert.ok(
+      readyLine!.toLowerCase().includes("isdraft") ||
+        readyLine!.toLowerCase().includes("non-draft"),
+      "readyToMerge mapping must check draft status (isDraft or non-draft)",
+    );
+    assert.ok(
+      readyLine!.toLowerCase().includes("statuscheckrollup") ||
+        readyLine!.toLowerCase().includes("success"),
+      "readyToMerge mapping must require explicitly green CI (statusCheckRollup: SUCCESS)",
+    );
+  });
+
+  it("issue-lifecycle.md review states block readyToMerge for pending/failed CI", () => {
+    assert.ok(
+      issueLifecycle.toLowerCase().includes("pending") &&
+        issueLifecycle.toLowerCase().includes("hold"),
+      "issue-lifecycle.md review states must hold (not readyToMerge) when CI is pending",
+    );
+    assert.ok(
+      issueLifecycle.toLowerCase().includes("billing-blocked"),
+      "issue-lifecycle.md must mention billing-blocked as a hold condition",
+    );
+  });
+
   it("ralph-reference.md merge trigger does NOT map to gh pr merge", () => {
     // The triggers table row for "merge PR #N" must NOT say 'Merge via `gh pr merge`'
     assert.ok(
