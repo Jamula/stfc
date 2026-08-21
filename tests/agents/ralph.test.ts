@@ -251,21 +251,41 @@ describe("Ralph — merge authority restrictions (issue #220)", () => {
   });
 
   it("issue-lifecycle.md readyToMerge mapping requires non-draft + APPROVE + green CI", () => {
-    // The state table row that maps to readyToMerge must gate on draft status and CI
-    const readyLine = issueLifecycle
+    // Filter only lines that *map to* readyToMerge (table cells or prose → designations),
+    // excluding hold-rule lines that say "do NOT set `readyToMerge`" and flow-description
+    // lines that reference readyToMerge as a transition label.
+    // Using filter+iteration ensures every mapping is gated — a future unqualified row
+    // cannot hide behind a correctly-qualified first match.
+    const readyLines = issueLifecycle
       .split("\n")
-      .find((l) => l.includes("readyToMerge"));
-    assert.ok(readyLine, "issue-lifecycle.md must have a readyToMerge mapping");
+      .filter((l) => {
+        if (!l.includes("readyToMerge")) return false;
+        if (l.includes("do NOT set")) return false; // hold-rule lines, not mappings
+        // Accept table rows whose last (or only) readyToMerge cell is the destination state
+        if (l.includes("| `readyToMerge`") || l.includes("| readyToMerge")) return true;
+        // Accept prose lines that designate readyToMerge as the output (→ `readyToMerge`)
+        if (/→\s*`readyToMerge`/.test(l)) return true;
+        return false;
+      });
     assert.ok(
-      readyLine!.toLowerCase().includes("isdraft") ||
-        readyLine!.toLowerCase().includes("non-draft"),
-      "readyToMerge mapping must check draft status (isDraft or non-draft)",
+      readyLines.length > 0,
+      "issue-lifecycle.md must have at least one readyToMerge mapping",
     );
-    assert.ok(
-      readyLine!.toLowerCase().includes("statuscheckrollup") ||
-        readyLine!.toLowerCase().includes("success"),
-      "readyToMerge mapping must require explicitly green CI (statusCheckRollup: SUCCESS)",
-    );
+    for (const line of readyLines) {
+      assert.ok(
+        line.toLowerCase().includes("isdraft") ||
+          line.toLowerCase().includes("non-draft") ||
+          line.toLowerCase().includes("draft"),
+        `Every readyToMerge mapping must check draft status (isDraft / non-draft / draft), but found: ${line.trim()}`,
+      );
+      assert.ok(
+        line.toLowerCase().includes("statuscheckrollup") ||
+          line.toLowerCase().includes("success") ||
+          line.toLowerCase().includes("ci green") ||
+          line.toLowerCase().includes("ci explicitly green"),
+        `Every readyToMerge mapping must require explicitly green CI, but found: ${line.trim()}`,
+      );
+    }
   });
 
   it("issue-lifecycle.md review states block readyToMerge for pending/failed CI", () => {

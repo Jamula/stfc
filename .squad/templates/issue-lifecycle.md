@@ -62,7 +62,7 @@ Example: `squad/42-fix-login-validation`
 | Active, no branch | `assigned` |
 | Active, branch exists | `inProgress` |
 | Active, PR opened | `needsReview` |
-| Active, PR approved | `readyToMerge` |
+| Active, PR approved, CI green, non-draft | `readyToMerge` — requires: PR `reviewDecision: Approved`, CI explicitly green, `isDraft: false`; see review-states hold rules below |
 | Resolved | `done` |
 | Closed | `done` |
 
