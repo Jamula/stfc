@@ -10,7 +10,6 @@
 
 import { execSync } from 'child_process';
 import {
-  checkConstitutionSync,
   checkSquadBoundary,
   checkPortableFilenames,
   checkWorkflowPinningTests,
@@ -24,7 +23,6 @@ const staged = execSync('git diff --cached --name-only', { encoding: 'utf8' })
   .split('\n')
   .filter(Boolean);
 
-checkConstitutionSync(staged);
 checkSquadBoundary(staged);
 checkPortableFilenames(staged);
 checkWorkflowPinningTests(staged);

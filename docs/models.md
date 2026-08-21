@@ -95,7 +95,7 @@ Fast:     claude-haiku-4.5 → gpt-5.4-mini → gpt-5-mini → gpt-4.1 → (omit
 ### Picard — M2 / Engineering Manager
 
 **Current model:** `claude-opus-4.7-1m-internal` (Layer 0 config override)
-**Workload mix:** Scope and governance reviews; speckit chain integrity; constitution review; triage; long multi-file artifact reads.
+**Workload mix:** Scope and governance reviews; constitution review; triage; long multi-file artifact reads.
 **Recommendation:** `claude-opus-4.7-1m-internal` — **unchanged**
 **Why:**
 - Session `06e05633` (105 turns) is the evidence base: full constitution + plan + spec tree read in a single pass. The 1M window is what makes that coherent. Standard-window models require chunking; chunked governance reviews lose cross-document consistency.

@@ -1,5 +1,5 @@
 /**
- * Tests for pre-commit enforcement checks (#8, #9, #10).
+ * Tests for pre-commit enforcement checks (#9, #10, #11).
  *
  * The check functions are pure-ish: they read staged file lists, env vars,
  * and the filesystem. We use node:test mocking to isolate them.
@@ -23,82 +23,6 @@ function captureExit(): { code: number | null } {
   }) as any);
   return state;
 }
-
-// ── #8 — Constitution sync ──────────────────────────────────────────
-
-describe("checkConstitutionSync", () => {
-  let checkConstitutionSync: (
-    staged: string[],
-    readFile?: (p: string) => string,
-    exists?: (p: string) => boolean,
-  ) => void;
-  let exitState: { code: number | null };
-
-  beforeEach(async () => {
-    exitState = captureExit();
-    mock.method(console, "error", () => {});
-    const mod = await import("../../scripts/pre-commit-checks.mjs");
-    checkConstitutionSync = mod.checkConstitutionSync;
-  });
-
-  afterEach(() => {
-    mock.restoreAll();
-  });
-
-  it("passes when constitution.md is not staged", () => {
-    checkConstitutionSync(["src/index.ts"]);
-    assert.equal(exitState.code, null);
-  });
-
-  it("passes when both constitution.md and plan-template.md are staged", () => {
-    checkConstitutionSync([
-      ".specify/memory/constitution.md",
-      ".specify/templates/plan-template.md",
-    ]);
-    assert.equal(exitState.code, null);
-  });
-
-  it("passes when constitution staged, template not staged, but no drift", () => {
-    const content = "line about STFC_ACCOUNTS and discord.com\n";
-    const readFile = () => content;
-    const exists = () => true;
-
-    checkConstitutionSync([".specify/memory/constitution.md"], readFile, exists);
-    assert.equal(exitState.code, null);
-  });
-
-  it("fails when constitution staged, template not staged, and keywords drift", () => {
-    const readFile = (p: string) => {
-      if (p.includes("constitution")) {
-        return "STFC_ACCOUNTS\nDISCORD_BOT_TOKEN\nhuggingface\n";
-      }
-      return "STFC_ACCOUNTS\nhuggingface\n";
-    };
-    const exists = () => true;
-
-    assert.throws(
-      () => checkConstitutionSync([".specify/memory/constitution.md"], readFile, exists),
-      /process\.exit\(1\)/,
-    );
-    assert.equal(exitState.code, 1);
-  });
-
-  it("fails when template has extra keywords not in constitution", () => {
-    const readFile = (p: string) => {
-      if (p.includes("constitution")) {
-        return "STFC_ACCOUNTS\n";
-      }
-      return "STFC_ACCOUNTS\nDISCORD_BOT_TOKEN\n";
-    };
-    const exists = () => true;
-
-    assert.throws(
-      () => checkConstitutionSync([".specify/memory/constitution.md"], readFile, exists),
-      /process\.exit\(1\)/,
-    );
-    assert.equal(exitState.code, 1);
-  });
-});
 
 // ── #9 — Squad boundary ─────────────────────────────────────────────
 

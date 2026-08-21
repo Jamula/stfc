@@ -104,8 +104,8 @@ describe("deriveTaskCategory", () => {
     assert.equal(deriveTaskCategory("Run tests for the API"), "testing");
   });
 
-  it("detects 'planning' from speckit reference", () => {
-    assert.equal(deriveTaskCategory("speckit.plan for feature 002"), "planning");
+  it("detects 'planning' from planning reference", () => {
+    assert.equal(deriveTaskCategory("planning session for feature 002"), "planning");
   });
 
   it("returns 'uncategorized' for unrecognized summaries", () => {

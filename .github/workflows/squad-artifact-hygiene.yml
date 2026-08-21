@@ -15,8 +15,6 @@ on:
       - 'specs/**'
       - 'plans/**'
       - 'tasks/**'
-      - '.specify/memory/**'
-      - '.specify/templates/**'
       - 'docs/**'
       - '.github/**/*.md'
 
@@ -64,7 +62,7 @@ jobs:
           FILES=$(git diff --name-only \
             "origin/${{ github.base_ref }}"...HEAD \
             | grep -E '\.(md|yaml|yml|txt|json)$' \
-            | grep -E '^(specs/|plans/|tasks/|\.specify/memory/|\.specify/templates/|docs/|\.github/)' \
+            | grep -E '^(specs/|plans/|tasks/|docs/|\.github/)' \
             || true)
 
           if [ -z "$FILES" ]; then

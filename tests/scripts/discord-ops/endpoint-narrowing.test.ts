@@ -40,8 +40,7 @@ const scriptText = scriptExists ? fs.readFileSync(SCRIPT, "utf8") : undefined;
 
 // Discord REST path prefixes we explicitly forbid in this script. Each
 // would represent a broader-than-authorized write surface and demand
-// a constitution amendment per .specify/memory/constitution.md
-// (Principle V, lines ~444-448).
+// a constitution amendment per repository governance docs.
 const FORBIDDEN_PREFIXES = [
   "/channels/",
   "/guilds/",
@@ -111,7 +110,7 @@ describe(
           !scriptText!.includes(forbidden),
           `forbidden Discord REST prefix ${JSON.stringify(forbidden)} appears in ` +
             `scripts/discord-ops/set-discord-app-metadata.mjs — broader writes ` +
-            `require a constitution amendment (Principle V, line ~444-448)`,
+            "require a constitution amendment under repository governance rules",
         );
       }
     });

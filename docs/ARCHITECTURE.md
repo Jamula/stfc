@@ -109,8 +109,7 @@ Only the meaningful top-level directories. Per-subsystem detail lives in §3.
 │
 ├── promo-codes.txt            # Append-only promo-code list (the redeemer's input)
 ├── docs/                      # User & operator docs (THIS file + per-subsystem)
-├── specs/                     # Speckit features (NNN-feature-slug/{spec,plan,tasks}.md)
-├── .specify/                  # Speckit templates + constitution
+├── specs/                     # Feature specs and contract references
 ├── .squad/                    # Squad governance state (agent histories, decisions, etc.)
 ├── .copilot/skills/           # 11 coordinator-level skills (SKILL.md packages)
 ├── .github/
@@ -389,11 +388,9 @@ node_modules symlink). Worktree teardown sweeps any uncommitted `.squad/`
 artifacts back to the main checkout first (Rule 8).
 
 **Skills.**
-- `.copilot/skills/` (11 SKILL.md packages — Coordinator-level
-  process knowledge: dispatch-precheck, reviewer-protocol,
-  test-discipline, secret-handling, session-recovery, agent-collaboration,
-  issue-creation, scope-override-fanout, squad-conventions, git-workflow,
-  error-recovery).
+- `.copilot/skills/` (3 SKILL.md packages — Coordinator-level
+  process knowledge: issue-creation, scope-override-fanout,
+  squad-commands).
 - `.squad/skills/` (22+ team-level reusable workflows — e.g.
   hostile-fact-check, plan-review-gate, structural-workflow-pin-tests,
   swa-operator-runbook).
@@ -418,7 +415,7 @@ skill"*).
 | `storage-size-monitor.yml` | Alert when `data/discord/game-state` exceeds 100 MB | `0 6 * * *` + dispatch |
 | `test.yml` | Typecheck + npm test gate | every push + PR |
 | `squad-test-gate.yml` | Dedicated required-check wrapper | PR |
-| `squad-artifact-hygiene.yml` | Secret + JWT leak scanner | PR touching `specs/`, `docs/`, `.specify/`, `.github/**/*.md` |
+| `squad-artifact-hygiene.yml` | Secret + JWT leak scanner | PR touching `specs/`, `docs/`, `.github/**/*.md` |
 | `squad-heartbeat.yml` | Ralph heartbeat (issues/PRs closed/labeled) | event-only (no cron — see existing rules) |
 | `squad-issue-assign.yml` | `squad:{member}` label → agent dispatch | `issues: labeled` |
 | `squad-triage.yml` | Initial `squad` label → Picard triage | `issues: labeled` |
@@ -427,15 +424,15 @@ skill"*).
 
 **Pre-commit.** `scripts/pre-commit.mjs` (installed by `simple-git-hooks`):
 
-1. Reads staged files (`git diff --cached --name-only`).
-2. Runs `checkConstitutionSync` — if `constitution.md` is staged, asserts
-   `plan-template.md` was updated in the same commit (Rule 1).
+1. Runs `check-artifact-hygiene.mjs --staged` on staged content.
+2. Reads staged files (`git diff --cached --name-only`).
 3. Runs `checkSquadBoundary` — rejects mixed-author `.squad/` commits
    (Rule 2).
-4. Runs `checkWorkflowPinningTests` — if `.github/workflows/*.yml` is
+4. Runs `checkPortableFilenames` — blocks filenames illegal on Windows.
+5. Runs `checkWorkflowPinningTests` — if `.github/workflows/*.yml` is
    staged, asserts the matching `tests/skills/*` literal-pin test was
    updated (Rule 3).
-5. Runs `npm test` (~2-3 s, 900+ tests via `node:test` + `tsx`).
+6. Runs `npm test` (~2-3 s, 900+ tests via `node:test` + `tsx`).
 
 **Bypass.** `--no-verify` is **forbidden** per repo rules. Fix the
 failure instead. `SQUAD_SCRIBE=1` allows the boundary check to pass for
@@ -653,8 +650,8 @@ sequenceDiagram
 | Global repo rules (22 of them) | `.github/copilot-instructions.md` |
 | Squad roster + role hierarchy | `.squad/team.md` + `docs/squad.md` |
 | Work routing table | `.squad/routing.md` |
-| Speckit feature artefacts | `specs/NNN-feature-slug/` |
-| Constitution + Speckit templates | `.specify/memory/`, `.specify/templates/` |
+| Feature specifications | `specs/NNN-feature-slug/` |
+| Repository rules | `.github/copilot-instructions.md` |
 | Reviewer protocol skill | `.copilot/skills/reviewer-protocol/SKILL.md` |
 | Test discipline skill | `.copilot/skills/test-discipline/SKILL.md` |
 | Web panel setup | `docs/SWA-SETUP.md` |
