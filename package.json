@@ -45,9 +45,9 @@
 		"zod": "^4.4.3"
 	},
 	"overrides": {
+		"sharp": "^0.35.0",
 		"tmp": "0.2.6",
-		"adm-zip": "0.6.0",
-		"sharp": "^0.35.0"
+		"adm-zip": "0.6.0"
 	},
 	"devDependencies": {
 		"@azure/static-web-apps-cli": "^2.0.10",
