@@ -1,6 +1,7 @@
 {
   "mcpServers": {
     "squad_state": {
+      "type": "stdio",
       "command": "npx",
       "args": [
         "-y",
