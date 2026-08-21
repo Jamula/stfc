@@ -15,64 +15,12 @@ function fail(msg) {
   process.exit(1);
 }
 
-const CONSTITUTION_PATH = '.specify/memory/constitution.md';
-const PLAN_TEMPLATE_PATH = '.specify/templates/plan-template.md';
-
-const SYNC_KEYWORDS_RE =
-  /STFC_ACCOUNTS|promo-codes\.txt|DISCORD_BOT_TOKEN|data\/discord|data\/digests|huggingface|discord\.com/;
-
 function defaultReadFile(p) {
   return fs.readFileSync(p, 'utf8');
 }
 
 function defaultExists(p) {
   return fs.existsSync(p);
-}
-
-// ── Check #8 — Constitution amendments must re-sync templates ────────
-
-/**
- * If `constitution.md` is staged but `plan-template.md` is NOT staged,
- * verify the two files agree on every sanctioned keyword. If they drift,
- * abort.
- *
- * @param staged  List of staged file paths.
- * @param readFile Optional file reader (for testing). Defaults to fs.readFileSync.
- * @param exists   Optional existence check (for testing). Defaults to fs.existsSync.
- */
-export function checkConstitutionSync(staged, readFile = defaultReadFile, exists = defaultExists) {
-  if (!staged.includes(CONSTITUTION_PATH)) return;
-  if (staged.includes(PLAN_TEMPLATE_PATH)) return; // already staged — OK
-
-  if (!exists(CONSTITUTION_PATH) || !exists(PLAN_TEMPLATE_PATH)) return;
-
-  const constitutionLines = readFile(CONSTITUTION_PATH).split('\n');
-  const templateLines = readFile(PLAN_TEMPLATE_PATH).split('\n');
-
-  const inConstitution = new Set();
-  const inTemplate = new Set();
-
-  for (const line of constitutionLines) {
-    const m = line.match(SYNC_KEYWORDS_RE);
-    if (m) inConstitution.add(m[0]);
-  }
-  for (const line of templateLines) {
-    const m = line.match(SYNC_KEYWORDS_RE);
-    if (m) inTemplate.add(m[0]);
-  }
-
-  const missing = [...inConstitution].filter((k) => !inTemplate.has(k));
-  const extra = [...inTemplate].filter((k) => !inConstitution.has(k));
-
-  if (missing.length > 0 || extra.length > 0) {
-    const details = [];
-    if (missing.length) details.push(`missing from template: ${missing.join(', ')}`);
-    if (extra.length) details.push(`extra in template: ${extra.join(', ')}`);
-    fail(
-      `Constitution amended but plan-template.md has drifted (${details.join('; ')}). ` +
-        `Update ${PLAN_TEMPLATE_PATH} and stage it.`,
-    );
-  }
 }
 
 // ── Check #9 — Only Scribe stages .squad/ paths ─────────────────────

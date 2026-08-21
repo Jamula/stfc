@@ -31,10 +31,11 @@ export function deriveTaskCategory(summary: string | null | undefined): string {
   if (!summary) return "uncategorized";
   const s = summary.toLowerCase();
 
-  if (s.includes("speckit.plan") || s.includes("planning")) return "planning";
-  if (s.includes("speckit.specify") || s.includes("specification")) return "specification";
-  if (s.includes("speckit.tasks")) return "task-generation";
-  if (s.includes("speckit.implement")) return "implementation";
+  if (s.includes("planning")) return "planning";
+  if (s.includes("specification")) return "specification";
+  if (s.includes("task-generation") || s.includes("task generation") || s.includes("tasks")) {
+    return "task-generation";
+  }
   if (s.includes("implement") || s.includes("build") || s.includes("create") || s.includes("add")) return "implementation";
   if (s.includes("review") || s.includes("code-review")) return "review";
   if (s.includes("test") || s.includes("spec")) return "testing";

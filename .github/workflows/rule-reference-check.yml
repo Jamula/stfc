@@ -15,7 +15,6 @@ name: Rule Reference Check
 on:
   pull_request:
     paths:
-      - ".specify/**"
       - ".squad/**"
       - ".github/copilot-instructions.md"
       - ".github/agents/squad.agent.md"
@@ -55,7 +54,7 @@ jobs:
           CHANGED=$(git diff --name-only "${BASE_REF}...HEAD")
 
           TARGET=$(echo "$CHANGED" | grep -E \
-            '^(\.specify/|\.squad/|docs/|\.github/copilot-instructions\.md|\.github/agents/squad\.agent\.md)' \
+            '^(\.squad/|docs/|\.github/copilot-instructions\.md|\.github/agents/squad\.agent\.md)' \
             || true)
 
           if [ -z "$TARGET" ]; then
