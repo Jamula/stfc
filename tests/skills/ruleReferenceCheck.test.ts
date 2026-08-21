@@ -133,6 +133,14 @@ describe("rule-reference-check.yml / contract pinning", () => {
     );
   });
 
+  it("skips validation when copilot instructions contain no numbered rule headings", () => {
+    assert.match(
+      yaml,
+      /No numbered '## N\.' headings found/,
+      "must early-exit when no canonical numbered headings are present",
+    );
+  });
+
   it("diff is scoped to origin/<base_ref>...HEAD (three-dot range)", () => {
     // YAML contains: "${BASE_REF}...HEAD" — match with curly braces
     assert.match(
