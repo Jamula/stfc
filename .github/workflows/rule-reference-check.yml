@@ -49,8 +49,7 @@ jobs:
 
           echo "Canonical rule numbers: $(echo "$CANONICAL" | tr '\n' ' ')"
           if [ -z "$CANONICAL" ]; then
-            echo "No numbered canonical rules found — skipping Rule N citation validation."
-            exit 0
+            echo "No numbered canonical rules found — every cited Rule N is dangling."
           fi
 
           # ── 2. Get files changed in this PR ───────────────────────────────
