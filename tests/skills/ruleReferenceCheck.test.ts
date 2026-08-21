@@ -136,6 +136,11 @@ describe("rule-reference-check.yml / contract pinning", () => {
       /\| sort -n \|\| true/,
       "canonical extraction must allow an instruction file with no numbered headings",
     );
+    assert.match(
+      yaml,
+      /No numbered canonical rules found/,
+      "workflow must skip validation when no numbered canonical rules exist",
+    );
   });
 
   it("diff is scoped to origin/<base_ref>...HEAD (three-dot range)", () => {

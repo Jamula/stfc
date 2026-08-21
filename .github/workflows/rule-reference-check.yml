@@ -48,6 +48,10 @@ jobs:
             | grep -oE '[0-9]+' | sort -n || true)
 
           echo "Canonical rule numbers: $(echo "$CANONICAL" | tr '\n' ' ')"
+          if [ -z "$CANONICAL" ]; then
+            echo "No numbered canonical rules found — skipping Rule N citation validation."
+            exit 0
+          fi
 
           # ── 2. Get files changed in this PR ───────────────────────────────
           BASE_REF="origin/${{ github.base_ref }}"
