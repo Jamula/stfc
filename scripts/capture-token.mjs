@@ -229,14 +229,14 @@ function quoteEnvValue(v) {
   return `'${v.replace(/\\/g, "\\\\").replace(/'/g, "\\'")}'`;
 }
 
-async function readEnv() {
-  if (!existsSync(ENV_PATH)) return { exists: false, lines: [] };
-  const raw = await fs.readFile(ENV_PATH, "utf8");
+async function readEnv(envPath = ENV_PATH) {
+  if (!existsSync(envPath)) return { exists: false, lines: [] };
+  const raw = await fs.readFile(envPath, "utf8");
   return { exists: true, lines: raw.split(/\r?\n/) };
 }
 
-async function mergeIntoEnv({ name, token, force }) {
-  const { exists, lines } = await readEnv();
+async function mergeIntoEnv({ name, token, force, _envPath = ENV_PATH }) {
+  const { exists, lines } = await readEnv(_envPath);
   const newAccount = { name, token };
 
   let existingIdx = -1;
@@ -260,8 +260,7 @@ async function mergeIntoEnv({ name, token, force }) {
     } catch {
       if (!force) {
         throw new Error(
-          `${ENV_PATH} line ${existingIdx + 1} has STFC_ACCOUNTS that does not parse as JSON.\n` +
-          `Existing value: ${existingLine.trim()}\n` +
+          `${_envPath} line ${existingIdx + 1} has STFC_ACCOUNTS that does not parse as JSON.\n` +
           `Re-run with --force to overwrite, or fix the value manually.`,
         );
       }
@@ -270,7 +269,7 @@ async function mergeIntoEnv({ name, token, force }) {
     if (!Array.isArray(parsed)) {
       if (!force) {
         throw new Error(
-          `${ENV_PATH} line ${existingIdx + 1} STFC_ACCOUNTS is JSON but not an array.\n` +
+          `${_envPath} line ${existingIdx + 1} STFC_ACCOUNTS is JSON but not an array.\n` +
           `Re-run with --force to overwrite, or fix the value manually.`,
         );
       }
@@ -290,7 +289,7 @@ async function mergeIntoEnv({ name, token, force }) {
     newLines = [...lines];
     newLines[existingIdx] = newLine;
   }
-  await fs.writeFile(ENV_PATH, newLines.join("\n"), "utf8");
+  await fs.writeFile(_envPath, newLines.join("\n"), "utf8");
   return merged;
 }
 
@@ -973,4 +972,4 @@ if (isDirectRun) {
   });
 }
 
-export { findOtpEntry, fillOtp, OTP_SELECTORS, SPLIT_OTP_SELECTOR };
+export { findOtpEntry, fillOtp, OTP_SELECTORS, SPLIT_OTP_SELECTOR, mergeIntoEnv };
