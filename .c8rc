@@ -1,0 +1,7 @@
+{
+  "reporter": ["cobertura"],
+  "report-dir": "coverage",
+  "include": ["src/**/*.ts"],
+  "exclude": ["tests/**", "node_modules/**"],
+  "all": true
+}

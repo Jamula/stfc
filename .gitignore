@@ -45,3 +45,6 @@ summary.md
 .squad/agents/*/history.md
 .squad/fact-checker/audit-trail.md
 # /Squad: state owned by squad-state branch
+
+# Code coverage
+coverage/
