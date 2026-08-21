@@ -34,13 +34,14 @@ import {
 import { PromoCodesFileError, readPromoCodes } from "../lib/promoCodes.ts";
 import { redactForLog } from "../lib/redact.ts";
 import { heading, table, type SummaryWriter } from "../lib/summary.ts";
-import { ApiClient, ApiError, SchemaMismatchError, TokenExpiredError } from "../api/client.ts";
+import { ApiClient, ApiError, SchemaMismatchError, TokenExpiredError, TransientError } from "../api/client.ts";
 import { claimGift, getMe, listGifts, redeemCode } from "../api/endpoints.ts";
 import type { Gift } from "../api/schemas.ts";
 
 const log = createLogger("runAll");
 const DEFAULT_DEAD_CODES_PATH = "data/promo-code-dead.json";
 const RETRY_DELAYS_MS = [1000, 2000] as const;
+const GIFT_CLAIM_RETRY_DELAYS_MS = [1000, 2000] as const;
 const TRANSIENT_NETWORK_CODES = new Set(["ECONNRESET", "ETIMEDOUT", "ENOTFOUND", "EAI_AGAIN", "ECONNREFUSED"]);
 
 interface DeadCodeEntry {
@@ -172,7 +173,7 @@ async function processAccount(
   let effectiveTokenStatus = tokenStatus;
 
   if (tokenStatus === Outcomes.TOKEN_VALID) {
-    items.push(...(await processGifts(client, account.name, report)));
+    items.push(...(await processGifts(client, account.name, report, sleep)));
     // /auth/me can answer 200 with a JWT the store itself rejects. Trust the
     // endpoint that does the real work, so the run reports "rotate the
     // secret" instead of a healthy token that silently claims nothing.
@@ -230,6 +231,7 @@ async function processGifts(
   client: ApiClient,
   accountName: string,
   report: RunAllReport,
+  sleep: SleepFn,
 ): Promise<ItemResult[]> {
   let gifts: Gift[];
   try {
@@ -261,7 +263,7 @@ async function processGifts(
 
   const items: ItemResult[] = [];
   for (const gift of gifts) {
-    const result = await processOneGift(client, gift, accountName, report);
+    const result = await processOneGift(client, gift, accountName, report, sleep);
     log.info(`[${accountName}] gift "${result.id}" → ${result.outcome}${result.detail ? ` (${result.detail})` : ""}`);
     items.push(result);
   }
@@ -273,6 +275,7 @@ async function processOneGift(
   gift: Gift,
   accountName: string,
   report: RunAllReport,
+  sleep: SleepFn,
 ): Promise<ItemResult> {
   const id = describeGift(gift);
   const skip = classifyGiftSkip(gift);
@@ -285,23 +288,39 @@ async function processOneGift(
     return { id, outcome: Outcomes.UNKNOWN_RESULT, detail: "no bundleId/bundle_id/id field" };
   }
 
-  try {
-    await claimGift(client, bundleId);
-    return { id, outcome: Outcomes.CLAIMED };
-  } catch (err) {
-    if (err instanceof SchemaMismatchError) {
-      report.errors.push({ account: accountName, message: `gifts/claim schema mismatch: ${redactForLog(err)}` });
-      return { id, outcome: Outcomes.UNKNOWN_RESULT, detail: "schema mismatch" };
+  let lastTransientError: unknown;
+  for (let attempt = 1; attempt <= GIFT_CLAIM_RETRY_DELAYS_MS.length + 1; attempt += 1) {
+    try {
+      await claimGift(client, bundleId);
+      return { id, outcome: Outcomes.CLAIMED };
+    } catch (err) {
+      if (err instanceof SchemaMismatchError) {
+        report.errors.push({ account: accountName, message: `gifts/claim schema mismatch: ${redactForLog(err)}` });
+        return { id, outcome: Outcomes.UNKNOWN_RESULT, detail: "schema mismatch" };
+      }
+      // The API returns HTTP 404 with body "Bundle not available." for gifts
+      // that have already been claimed in the current cycle (or are otherwise
+      // no longer redeemable for this player). That's an expected outcome,
+      // not an error.
+      if (err instanceof ApiError && err.status === 404 && /not available/i.test(err.message)) {
+        return { id, outcome: Outcomes.ALREADY_CLAIMED };
+      }
+      if (!(err instanceof TransientError)) {
+        return { id, outcome: classifyHttpError(err), detail: redactForLog(err) };
+      }
+
+      lastTransientError = err;
+      if (attempt >= GIFT_CLAIM_RETRY_DELAYS_MS.length + 1) break;
+      // Issue #182: gift-claim POSTs appear idempotent from the caller's
+      // perspective because a replay after a server-side success resolves to
+      // 404 "Bundle not available.", which we already classify as
+      // ALREADY_CLAIMED. Retry only this endpoint, not generic POSTs.
+      log.warn(`[${accountName}] gift "${id}" transient claim failure; retrying attempt ${attempt + 1}`);
+      await sleep(GIFT_CLAIM_RETRY_DELAYS_MS[attempt - 1]!);
     }
-    // The API returns HTTP 404 with body "Bundle not available." for gifts
-    // that have already been claimed in the current cycle (or are otherwise
-    // no longer redeemable for this player). That's an expected outcome,
-    // not an error.
-    if (err instanceof ApiError && err.status === 404 && /not available/i.test(err.message)) {
-      return { id, outcome: Outcomes.ALREADY_CLAIMED };
-    }
-    return { id, outcome: classifyHttpError(err), detail: redactForLog(err) };
   }
+
+  return { id, outcome: Outcomes.TRANSIENT, detail: redactForLog(lastTransientError) };
 }
 
 function describeGift(gift: Gift): string {

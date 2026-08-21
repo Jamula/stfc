@@ -12,6 +12,7 @@ import {
   ApiError,
   TokenExpiredError,
   SchemaMismatchError,
+  TransientError,
 } from "../../src/api/client.ts";
 
 // ----------------------------------------------------------------------------
@@ -235,6 +236,100 @@ describe("runAll", () => {
 
     const summary = fs.readFileSync(summaryFile, "utf8");
     assert.match(summary, /secret rotation/i);
+  });
+
+  it("retries transient gift-claim failures and succeeds on the second attempt", async () => {
+    let attempts = 0;
+    const sleepCalls: number[] = [];
+    const fake = makeFakeClient({
+      listGifts: async () => ({
+        items: [{ bundleId: 77, title: "30 Day Loyalty Chest", isClaimable: true }],
+      }),
+      claimGift: async (bundleId: number) => {
+        attempts += 1;
+        if (attempts === 1) {
+          throw new TransientError(`Server error 500 on POST /offers/gifts/claim (${bundleId})`, 500);
+        }
+        return { success: true, bundleId };
+      },
+    });
+
+    const { result, exitCode } = await runAll({
+      accounts: [{ name: "main", token: makeJwt({ exp: 9999999999 }) }],
+      clientFactory: () => fake as unknown as ApiClient,
+      summary: createSummaryWriter(undefined),
+      promoCodesPath: emptyPromoFile(),
+      sleep: async (ms) => {
+        sleepCalls.push(ms);
+      },
+    });
+
+    assert.equal(exitCode, 0);
+    assert.equal(attempts, 2);
+    assert.deepEqual(sleepCalls, [1000]);
+    assert.equal(result.accounts[0]?.items[0]?.outcome, Outcomes.CLAIMED);
+  });
+
+  it("treats retry follow-up 404 Bundle not available as ALREADY_CLAIMED", async () => {
+    let attempts = 0;
+    const sleepCalls: number[] = [];
+    const fake = makeFakeClient({
+      listGifts: async () => ({
+        items: [{ bundleId: 88, title: "7 Day Loyalty Chest", isClaimable: true }],
+      }),
+      claimGift: async () => {
+        attempts += 1;
+        if (attempts === 1) {
+          throw new TransientError("Server error 500 on POST /offers/gifts/claim", 500);
+        }
+        throw new ApiError("HTTP 404 on POST /offers/gifts/claim: Bundle not available.", 404);
+      },
+    });
+
+    const { result, exitCode } = await runAll({
+      accounts: [{ name: "main", token: makeJwt({ exp: 9999999999 }) }],
+      clientFactory: () => fake as unknown as ApiClient,
+      summary: createSummaryWriter(undefined),
+      promoCodesPath: emptyPromoFile(),
+      sleep: async (ms) => {
+        sleepCalls.push(ms);
+      },
+    });
+
+    assert.equal(exitCode, 0);
+    assert.equal(attempts, 2);
+    assert.deepEqual(sleepCalls, [1000]);
+    assert.equal(result.accounts[0]?.items[0]?.outcome, Outcomes.ALREADY_CLAIMED);
+  });
+
+  it("records TRANSIENT when a gift claim keeps failing after bounded retries", async () => {
+    let attempts = 0;
+    const sleepCalls: number[] = [];
+    const fake = makeFakeClient({
+      listGifts: async () => ({
+        items: [{ bundleId: 99, title: "30 Day Loyalty Chest", isClaimable: true }],
+      }),
+      claimGift: async () => {
+        attempts += 1;
+        throw new TransientError("Server error 500 on POST /offers/gifts/claim", 500);
+      },
+    });
+
+    const { result, exitCode } = await runAll({
+      accounts: [{ name: "main", token: makeJwt({ exp: 9999999999 }) }],
+      clientFactory: () => fake as unknown as ApiClient,
+      summary: createSummaryWriter(undefined),
+      promoCodesPath: emptyPromoFile(),
+      sleep: async (ms) => {
+        sleepCalls.push(ms);
+      },
+    });
+
+    assert.equal(exitCode, 0);
+    assert.equal(attempts, 3);
+    assert.deepEqual(sleepCalls, [1000, 2000]);
+    assert.equal(result.accounts[0]?.items[0]?.outcome, Outcomes.TRANSIENT);
+    assert.equal(result.accounts[0]?.ok, false);
   });
 
   it("promo codes mix: success / used / invalid / unknown classified correctly", async () => {    const codeFile = path.join(dir, "promo.txt");
