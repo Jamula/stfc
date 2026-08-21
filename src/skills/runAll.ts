@@ -41,7 +41,6 @@ import type { Gift } from "../api/schemas.ts";
 const log = createLogger("runAll");
 const DEFAULT_DEAD_CODES_PATH = "data/promo-code-dead.json";
 const RETRY_DELAYS_MS = [1000, 2000] as const;
-const GIFT_CLAIM_RETRY_DELAYS_MS = [1000, 2000] as const;
 const TRANSIENT_NETWORK_CODES = new Set(["ECONNRESET", "ETIMEDOUT", "ENOTFOUND", "EAI_AGAIN", "ECONNREFUSED"]);
 
 interface DeadCodeEntry {
@@ -263,7 +262,7 @@ async function processGifts(
 
   const items: ItemResult[] = [];
   for (const gift of gifts) {
-    const result = await processOneGift(client, gift, accountName, report, sleep);
+    const result = await processOneGift(client, gift, accountName, report);
     log.info(`[${accountName}] gift "${result.id}" → ${result.outcome}${result.detail ? ` (${result.detail})` : ""}`);
     items.push(result);
   }
@@ -275,7 +274,6 @@ async function processOneGift(
   gift: Gift,
   accountName: string,
   report: RunAllReport,
-  sleep: SleepFn,
 ): Promise<ItemResult> {
   const id = describeGift(gift);
   const skip = classifyGiftSkip(gift);
@@ -288,39 +286,29 @@ async function processOneGift(
     return { id, outcome: Outcomes.UNKNOWN_RESULT, detail: "no bundleId/bundle_id/id field" };
   }
 
-  let lastTransientError: unknown;
-  for (let attempt = 1; attempt <= GIFT_CLAIM_RETRY_DELAYS_MS.length + 1; attempt += 1) {
-    try {
-      await claimGift(client, bundleId);
-      return { id, outcome: Outcomes.CLAIMED };
-    } catch (err) {
-      if (err instanceof SchemaMismatchError) {
-        report.errors.push({ account: accountName, message: `gifts/claim schema mismatch: ${redactForLog(err)}` });
-        return { id, outcome: Outcomes.UNKNOWN_RESULT, detail: "schema mismatch" };
-      }
-      // The API returns HTTP 404 with body "Bundle not available." for gifts
-      // that have already been claimed in the current cycle (or are otherwise
-      // no longer redeemable for this player). That's an expected outcome,
-      // not an error.
-      if (err instanceof ApiError && err.status === 404 && /not available/i.test(err.message)) {
-        return { id, outcome: Outcomes.ALREADY_CLAIMED };
-      }
-      if (!(err instanceof TransientError)) {
-        return { id, outcome: classifyHttpError(err), detail: redactForLog(err) };
-      }
-
-      lastTransientError = err;
-      if (attempt >= GIFT_CLAIM_RETRY_DELAYS_MS.length + 1) break;
-      // Issue #182: gift-claim POSTs appear idempotent from the caller's
-      // perspective because a replay after a server-side success resolves to
-      // 404 "Bundle not available.", which we already classify as
-      // ALREADY_CLAIMED. Retry only this endpoint, not generic POSTs.
-      log.warn(`[${accountName}] gift "${id}" transient claim failure; retrying attempt ${attempt + 1}`);
-      await sleep(GIFT_CLAIM_RETRY_DELAYS_MS[attempt - 1]!);
+  try {
+    await claimGift(client, bundleId);
+    return { id, outcome: Outcomes.CLAIMED };
+  } catch (err) {
+    if (err instanceof SchemaMismatchError) {
+      report.errors.push({ account: accountName, message: `gifts/claim schema mismatch: ${redactForLog(err)}` });
+      return { id, outcome: Outcomes.UNKNOWN_RESULT, detail: "schema mismatch" };
     }
+    // The API returns HTTP 404 with body "Bundle not available." for gifts
+    // that have already been claimed in the current cycle (or are otherwise
+    // no longer redeemable for this player). That's an expected outcome,
+    // not an error.
+    if (err instanceof ApiError && err.status === 404 && /not available/i.test(err.message)) {
+      return { id, outcome: Outcomes.ALREADY_CLAIMED };
+    }
+    if (err instanceof TransientError) {
+      // We do not replay ambiguous gift-claim POSTs inside the same run
+      // without stronger idempotency evidence. The scheduled workflow will
+      // naturally re-attempt claimable gifts on the next cycle.
+      return { id, outcome: Outcomes.TRANSIENT, detail: redactForLog(err) };
+    }
+    return { id, outcome: classifyHttpError(err), detail: redactForLog(err) };
   }
-
-  return { id, outcome: Outcomes.TRANSIENT, detail: redactForLog(lastTransientError) };
 }
 
 function describeGift(gift: Gift): string {
