@@ -8,6 +8,9 @@ import * as os from "node:os";
 import * as path from "node:path";
 import {
   AUTO_COMMIT_PER_RUN_CAP,
+  DISCORD_MONITOR_EXIT_AUTH_FAILURE,
+  DISCORD_MONITOR_EXIT_INFRA_FAILURE,
+  DISCORD_MONITOR_EXIT_OK,
   discordMonitor,
 } from "../../src/skills/discordMonitor.ts";
 import { ApiClient } from "../../src/api/client.ts";
@@ -623,7 +626,7 @@ describe("discordMonitor / RunHealth counters (T035 — US3)", () => {
     else process.env.DISCORD_BOT_TOKEN = savedToken;
   });
 
-  it("401 auth failure → DiscordAuthError in errorsByClass, exitCode 0, redeemer still runs (US3 Scenario 2)", async () => {
+  it("401 auth failure → DiscordAuthError in errorsByClass, exitCode 2 (issue-206), redeemer pipeline still reaches step 6 (US3 Scenario 2)", async () => {
     writeAllowlist(ds.allowlist, [{ id: "222222222222222222", label: "promos" }]);
     const client: IngestClient = {
       getMe: async () => { throw new (await import("../../src/discord/client.ts")).DiscordAuthError("401"); },
@@ -652,7 +655,7 @@ describe("discordMonitor / RunHealth counters (T035 — US3)", () => {
       },
     });
 
-    assert.equal(exitCode, 0, "exitCode must be 0 even on auth failure");
+    assert.equal(exitCode, 2, "exitCode must be 2 (DISCORD_MONITOR_EXIT_AUTH_FAILURE) on auth failure (issue-206)");
     assert.equal(result.errorsByClass["DiscordAuthError"], 1);
     // Redeemer is not called because there are zero fresh candidates (auth failed
     // before ingest could produce any), which is correct: redeemer still "runs"
@@ -1121,5 +1124,187 @@ describe("discordMonitor / GitHub Actions Job Summary (T036 — US3)", () => {
       runId: "run-no-summary",
     });
     assert.equal(exitCode, 0);
+  });
+});
+
+// ── issue-206 — exit-code regression tests ────────────────────────────────
+
+describe("discordMonitor / exit code semantics (issue-206)", () => {
+  let ds: DirSet;
+  let savedToken: string | undefined;
+
+  beforeEach(() => {
+    ds = setUpDirs();
+    savedToken = process.env.DISCORD_BOT_TOKEN;
+  });
+
+  afterEach(() => {
+    fs.rmSync(ds.dir, { recursive: true, force: true });
+    if (savedToken === undefined) delete process.env.DISCORD_BOT_TOKEN;
+    else process.env.DISCORD_BOT_TOKEN = savedToken;
+  });
+
+  it("DISCORD_MONITOR_EXIT_OK is 0", () => {
+    assert.equal(DISCORD_MONITOR_EXIT_OK, 0);
+  });
+
+  it("DISCORD_MONITOR_EXIT_INFRA_FAILURE is 1", () => {
+    assert.equal(DISCORD_MONITOR_EXIT_INFRA_FAILURE, 1);
+  });
+
+  it("DISCORD_MONITOR_EXIT_AUTH_FAILURE is 2", () => {
+    assert.equal(DISCORD_MONITOR_EXIT_AUTH_FAILURE, 2);
+  });
+
+  it("missing DISCORD_BOT_TOKEN → exitCode 2 (DISCORD_MONITOR_EXIT_AUTH_FAILURE)", async () => {
+    // Ensure the env var is absent so loadDiscordToken throws DiscordTokenMissingError.
+    delete process.env.DISCORD_BOT_TOKEN;
+    writeAllowlist(ds.allowlist, [{ id: "222222222222222222", label: "promos" }]);
+
+    const { exitCode, result } = await discordMonitor({
+      accounts: [],
+      paths: {
+        allowlist: ds.allowlist,
+        cursors: ds.cursors,
+        candidates: ds.candidates,
+        suppression: ds.suppression,
+        cooldowns: ds.cooldowns,
+        digestsDir: ds.digestsDir,
+        promoCodes: ds.promoCodes,
+        tipsSeen: path.join(ds.dir, "tips-seen.jsonl"),
+      },
+      now: () => NOW,
+      runId: "run-missing-token",
+    });
+
+    assert.equal(exitCode, DISCORD_MONITOR_EXIT_AUTH_FAILURE,
+      "missing token must return DISCORD_MONITOR_EXIT_AUTH_FAILURE (2)");
+    assert.equal(result.errorsByClass["DiscordTokenMissingError"], 1,
+      "DiscordTokenMissingError must be recorded in errorsByClass");
+  });
+
+  it("DiscordAuthError → exitCode 2 (DISCORD_MONITOR_EXIT_AUTH_FAILURE)", async () => {
+    process.env.DISCORD_BOT_TOKEN = "x";
+    writeAllowlist(ds.allowlist, [{ id: "222222222222222222", label: "promos" }]);
+    const { DiscordAuthError } = await import("../../src/discord/client.ts");
+    const client: IngestClient = {
+      getMe: async () => { throw new DiscordAuthError("401 Unauthorized"); },
+      getChannelMessages: async () => [],
+    };
+
+    const { exitCode, result } = await discordMonitor({
+      accounts: [],
+      paths: {
+        allowlist: ds.allowlist,
+        cursors: ds.cursors,
+        candidates: ds.candidates,
+        suppression: ds.suppression,
+        cooldowns: ds.cooldowns,
+        digestsDir: ds.digestsDir,
+        promoCodes: ds.promoCodes,
+        tipsSeen: path.join(ds.dir, "tips-seen.jsonl"),
+      },
+      clientFactory: () => client,
+      now: () => NOW,
+      runId: "run-discord-auth-error",
+    });
+
+    assert.equal(exitCode, DISCORD_MONITOR_EXIT_AUTH_FAILURE,
+      "DiscordAuthError must return DISCORD_MONITOR_EXIT_AUTH_FAILURE (2)");
+    assert.equal(result.errorsByClass["DiscordAuthError"], 1,
+      "DiscordAuthError must be recorded in errorsByClass");
+  });
+
+  it("digest write failure → exitCode 1 (DISCORD_MONITOR_EXIT_INFRA_FAILURE)", async () => {
+    process.env.DISCORD_BOT_TOKEN = "x";
+    writeEmptyAllowlist(ds.allowlist);
+    // Create a FILE at the path that writeDigest will try to use as a directory.
+    // mkdir({ recursive: true }) throws ENOTDIR when a path component is a file,
+    // which is the reliable way to force a digest-write failure without mocking.
+    const fileBlockingDir = path.join(ds.dir, "blocking-file");
+    fs.writeFileSync(fileBlockingDir, "blocker", "utf8");
+    const badDir = path.join(fileBlockingDir, "nested");
+
+    const { exitCode } = await discordMonitor({
+      accounts: [],
+      paths: {
+        allowlist: ds.allowlist,
+        cursors: ds.cursors,
+        candidates: ds.candidates,
+        suppression: ds.suppression,
+        cooldowns: ds.cooldowns,
+        digestsDir: badDir,
+        promoCodes: ds.promoCodes,
+        tipsSeen: path.join(ds.dir, "tips-seen.jsonl"),
+      },
+      now: () => NOW,
+      runId: "run-digest-fail",
+    });
+
+    assert.equal(exitCode, DISCORD_MONITOR_EXIT_INFRA_FAILURE,
+      "digest write failure must return DISCORD_MONITOR_EXIT_INFRA_FAILURE (1)");
+  });
+
+  it("auth failure + digest write failure → exitCode 2 (auth wins — higher code)", async () => {
+    // Missing token triggers auth failure code; bad digest dir triggers infra failure.
+    delete process.env.DISCORD_BOT_TOKEN;
+    writeAllowlist(ds.allowlist, [{ id: "222222222222222222", label: "promos" }]);
+    // Block the digest directory with a file (same technique as the infra test).
+    const fileBlockingDir = path.join(ds.dir, "blocking-file2");
+    fs.writeFileSync(fileBlockingDir, "blocker", "utf8");
+    const badDir = path.join(fileBlockingDir, "nested");
+
+    const { exitCode, result } = await discordMonitor({
+      accounts: [],
+      paths: {
+        allowlist: ds.allowlist,
+        cursors: ds.cursors,
+        candidates: ds.candidates,
+        suppression: ds.suppression,
+        cooldowns: ds.cooldowns,
+        digestsDir: badDir,
+        promoCodes: ds.promoCodes,
+        tipsSeen: path.join(ds.dir, "tips-seen.jsonl"),
+      },
+      now: () => NOW,
+      runId: "run-auth-and-digest-fail",
+    });
+
+    assert.equal(exitCode, DISCORD_MONITOR_EXIT_AUTH_FAILURE,
+      "when both auth (2) and infra (1) fail, exitCode must be 2 (auth wins)");
+    assert.equal(result.errorsByClass["DiscordTokenMissingError"], 1,
+      "DiscordTokenMissingError must still be recorded in errorsByClass");
+  });
+
+  it("successful run → exitCode 0 (DISCORD_MONITOR_EXIT_OK), health.errorsByClass preserved", async () => {
+    process.env.DISCORD_BOT_TOKEN = "x";
+    writeAllowlist(ds.allowlist, [{ id: "222222222222222222", label: "promos" }]);
+    const client: IngestClient = {
+      getMe: async () => ({ id: "bot", username: "stfc-monitor" }),
+      getChannelMessages: async () => [],
+    };
+
+    const { exitCode, result } = await discordMonitor({
+      accounts: [],
+      paths: {
+        allowlist: ds.allowlist,
+        cursors: ds.cursors,
+        candidates: ds.candidates,
+        suppression: ds.suppression,
+        cooldowns: ds.cooldowns,
+        digestsDir: ds.digestsDir,
+        promoCodes: ds.promoCodes,
+        tipsSeen: path.join(ds.dir, "tips-seen.jsonl"),
+      },
+      clientFactory: () => client,
+      now: () => NOW,
+      runId: "run-success-exit-code",
+    });
+
+    assert.equal(exitCode, DISCORD_MONITOR_EXIT_OK,
+      "clean run must return DISCORD_MONITOR_EXIT_OK (0)");
+    // errorsByClass should be empty (no errors on clean run).
+    assert.deepEqual(result.errorsByClass, {},
+      "errorsByClass must be empty on a clean run");
   });
 });
