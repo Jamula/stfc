@@ -133,6 +133,28 @@ describe("rule-reference-check.yml / contract pinning", () => {
     );
   });
 
+  it("canonical extraction uses || true to survive a zero-heading canonical file", () => {
+    // When .github/copilot-instructions.md has no ## N. headings (current format),
+    // grep exits 1. Without || true, set -euo pipefail aborts the step before any
+    // diagnostic is printed. This pins the fix from issue #224.
+    assert.match(
+      yaml,
+      /grep -oE '\[0-9\]\+' \| sort -n \|\| true/,
+      "canonical extraction pipeline must end with || true to prevent set -euo pipefail abort on zero matches",
+    );
+  });
+
+  it("emits a diagnostic when the canonical rule set is empty (zero-heading format)", () => {
+    // When no numbered headings are found the workflow must print an explicit
+    // message rather than silently proceeding with an empty set. This makes the
+    // current-format policy visible in CI logs.
+    assert.match(
+      yaml,
+      /No numbered headings found in copilot-instructions\.md/,
+      "must emit diagnostic when canonical rule set is empty",
+    );
+  });
+
   it("diff is scoped to origin/<base_ref>...HEAD (three-dot range)", () => {
     // YAML contains: "${BASE_REF}...HEAD" — match with curly braces
     assert.match(
@@ -165,6 +187,40 @@ describe("rule-reference-check.yml / contract pinning", () => {
       yaml,
       /No target files changed/,
       "must have explicit early-exit message when no target files changed",
+    );
+  });
+
+  it("exits 0 when no Rule N citations appear in added lines (current-format / no-citation pass)", () => {
+    // A governance PR that touches .squad/** but adds no "Rule N" text must pass.
+    // The workflow emits this message and exits 0 before reaching the dangling check.
+    assert.match(
+      yaml,
+      /No 'Rule N' references in added content/,
+      "must short-circuit with exit 0 when no Rule N citations are present",
+    );
+  });
+
+  it("exits 0 when all cited Rule N references are valid (valid-citation pass)", () => {
+    // When every cited number is in the canonical set the workflow emits this
+    // message and exits 0.
+    assert.match(
+      yaml,
+      /All Rule N references are valid/,
+      "must emit pass message when all citations resolve to canonical rule numbers",
+    );
+  });
+
+  it("exits 1 on dangling references (fail loud)", () => {
+    assert.match(yaml, /exit 1/, "workflow must exit 1 when dangling references are found");
+  });
+
+  it("prints the file name or number of each dangling reference on failure (invalid-citation fail)", () => {
+    // The failure message must identify the offending Rule number so reviewers
+    // can find and fix the citation without guessing.
+    assert.match(
+      yaml,
+      /Dangling Rule references/,
+      "failure output must name the dangling Rule references",
     );
   });
 });
