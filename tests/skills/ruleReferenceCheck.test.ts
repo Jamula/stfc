@@ -47,10 +47,6 @@ describe("rule-reference-check.yml / contract pinning", () => {
     assert.match(yaml, /pull_request:/, "must trigger on pull_request");
   });
 
-  it("trigger paths include .specify/**", () => {
-    assert.match(yaml, /\.specify\/\*\*/, "missing .specify/** trigger path");
-  });
-
   it("trigger paths include .squad/**", () => {
     assert.match(yaml, /\.squad\/\*\*/, "missing .squad/** trigger path");
   });

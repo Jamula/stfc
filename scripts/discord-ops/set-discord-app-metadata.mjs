@@ -38,7 +38,7 @@
 //   Principle V (Discord scope) is read-only-by-default. This script is
 //   the explicit operator-write carve-out: lives under `scripts/discord-ops/`,
 //   not imported by `src/`, and redacts `DISCORD_BOT_TOKEN` on every error
-//   path (FR-012). See `.specify/memory/constitution.md` and the
+//   path (FR-012). See `.github/copilot-instructions.md` and the
 //   `.squad/decisions/inbox/copilot-directive-override-picard-discord-avatar-(a).md`
 //   directive for the full scope.
 //

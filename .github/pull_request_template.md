@@ -1,7 +1,6 @@
 # STFC Gift Redeemer — Pull Request
 
-> **Speckit linkage:** If this PR was driven by a spec, link it under "Spec linkage" below.
-> Run `/speckit.analyze` before opening the PR for non-trivial changes.
+> If this PR was driven by a design doc or feature spec, link it under "Spec linkage" below.
 
 ---
 
@@ -67,7 +66,7 @@ _(Scotty's pre-commit hook should enforce this automatically. The checkbox creat
 
 ## Constitution check
 
-- [ ] This change does not violate any principle in `.specify/memory/constitution.md`.
+- [ ] This change does not violate repository rules in `.github/copilot-instructions.md`.
 
 _If there is a tension with a principle, describe it here and note how the plan's Constitution Check table addresses it:_
 

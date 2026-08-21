@@ -23,7 +23,7 @@
  * Principle VII — Artifact Hygiene
  *   Development artifacts MUST NOT contain real tokens, JWTs, or
  *   unsanitized account data. Use <REDACTED> placeholders instead.
- *   See: .specify/memory/constitution.md §VII
+ *   See: .github/copilot-instructions.md (artifact hygiene rules)
  */
 
 import { readFileSync, existsSync } from 'node:fs';
@@ -34,8 +34,6 @@ const WATCHED_PREFIXES = [
   'specs/',
   'plans/',
   'tasks/',
-  '.specify/memory/',
-  '.specify/templates/',
   'docs/',
   '.github/',
   'data/digests/',
@@ -232,7 +230,7 @@ if (totalViolations > 0) {
     `  2. Move raw API captures to .env or an untracked local location.\n` +
     `  3. Use tests/fixtures/artifact-hygiene/clean-spec.md as a spec template.\n` +
     `  4. For false positives: add [skip-token-scan] to your PR description.\n\n` +
-    `See: .specify/memory/constitution.md §VII — Artifact Hygiene\n`,
+    `See: .github/copilot-instructions.md — Artifact Hygiene\n`,
   );
   process.exit(1);
 }

@@ -1,8 +1,8 @@
 # Contributing to STFC Gift Redeemer
 
 This document covers the practices that keep the project healthy.
-For the authoritative rules, read `.specify/memory/constitution.md`.
-When this file conflicts with the constitution, the constitution wins.
+For the authoritative rules, read `.github/copilot-instructions.md`.
+When this file conflicts with repo rules, the repo rules win.
 
 ---
 
@@ -64,42 +64,19 @@ until the evidence is supplied.
 
 ---
 
-## Speckit usage
+## Planning expectations
 
-Use this decision tree to decide whether to open the Spec Kit workflow before
-writing code.
-
-### Is speckit required for my change?
-
-**Speckit is REQUIRED if ANY of these apply (Principle VI — Pragmatic threshold):**
-
-- The change touches more than one module or file boundary
-- The change crosses more than one skill entry point
-- It introduces a new user-facing capability
-- You estimate more than 4 hours of implementation effort
-- The change touches build configuration, CI workflows, or `package.json` scripts
-- The change modifies the STFC API contract (request/response shapes, auth flow)
-
-Start with `/speckit.specify`, then `/speckit.clarify` if anything is ambiguous,
-then `/speckit.plan`, `/speckit.tasks`, `/speckit.implement`.
-Run `/speckit.analyze` and `/speckit.checklist` before opening the PR.
-
-**Direct PR is allowed (speckit NOT required) for:**
-
-- One-line fixes and typos
-- Version bumps and routine dependency updates
-- Single-file bug fixes that do not cross module boundaries or touch the API contract
-- Documentation-only edits
-
-**If you're unsure:** Use speckit. The cost of an unnecessary spec is one hour.
-The cost of an unreviewed architectural decision can be weeks of rework.
+Use a short written plan in the issue or PR description for non-trivial work,
+especially when the change crosses modules, touches CI/build config, or changes
+API contracts. Single-file fixes, typos, and docs-only edits can go straight to
+implementation.
 
 ---
 
 ## Review gates
 
 PRs go through the following gates. Named reviewers hold explicit veto powers
-granted by the constitution (Speckit Reviewer Gates, Development Workflow & Quality Gates).
+granted by repository governance and reviewer protocols.
 
 For a detailed explanation of who does what and why, see [the Squad](docs/squad.md).
 For issue routing conventions, see [.squad/routing.md](.squad/routing.md).
@@ -108,11 +85,11 @@ For issue routing conventions, see [.squad/routing.md](.squad/routing.md).
 
 Bashir may issue `request-changes` or block merge at any of these four gates:
 
-1. **Spec testability** _(before `/speckit.tasks`)_ — Acceptance criteria that
+1. **Spec testability** _(before implementation)_ — Acceptance criteria that
    are untestable, vague, or lack Given/When/Then structure. Edge cases listed in
    the spec with no plan to cover them.
 
-2. **Task-level test requirements** _(before `/speckit.implement`)_ — Task lists
+2. **Task-level test requirements** _(before implementation)_ — Task lists
    that omit test tasks for user stories that have acceptance criteria. Task
    ordering that places implementation tasks before the corresponding test task
    (violates test-first).
@@ -126,9 +103,9 @@ Bashir may issue `request-changes` or block merge at any of these four gates:
 
 ### Picard (M2/EM) and Kirk (Lead) — veto powers
 
-**Picard (M2/EM)** may block at spec review (scope creep, constitutional
-conflicts) and at any review stage on governance grounds (speckit bypass
-without justification, scope expansion beyond the spec).
+**Picard (M2/EM)** may block at spec review (scope creep, governance
+conflicts) and at any review stage on governance grounds (scope expansion
+beyond the agreed plan).
 
 **Kirk (Lead)** may block at plan review (architectural violations, missing
 Constitution Check section) and at implementation review on technical-

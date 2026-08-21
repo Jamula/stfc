@@ -25,7 +25,7 @@ An AI team that lives in this repository under `.squad/`. Each member has a pers
 
 | Agent | Owns | Boundaries |
 |-------|------|------------|
-| **Picard** | Scope & roadmap · Priorities · Issue triage · Blocker removal · Governance (constitution, speckit chain, reviewer gates) · External comms | Does not write code. Delegates technical decisions to Kirk. |
+| **Picard** | Scope & roadmap · Priorities · Issue triage · Blocker removal · Governance (constitution, reviewer gates) · External comms | Does not write code. Delegates technical decisions to Kirk. |
 | **Kirk** | Technical direction (CLI, orchestrator, Discord, workflows) · Architecture (module boundaries, contracts, state layout, deps) · Code review (non-trivial) · Cross-cutting technical concerns · Reviewer-rejection lockout enforcement | Reports to Picard on scope/governance. |
 | **Scotty** | TypeScript `src/` codebase (orchestrator, CLI, config) · Build & tooling (`tsconfig`, `package.json`, deps) · Runtime (errors, retries, exit codes, logging) · Local DX · GitHub Actions workflows (build/test gates) | Architecture decisions → Kirk. |
 | **Uhura** | STFC web-store API (request/response, errors) · JWT token flows · Promo-code redemption · `STFC_ACCOUNTS` secret handling · Discord monitor (`DISCORD_BOT_TOKEN` custody, Discord API) · GitHub Actions (secrets & integrations) · Bookmarklet / client-side capture | Architecture decisions → Kirk. |
@@ -41,7 +41,7 @@ An AI team that lives in this repository under `.squad/`. Each member has a pers
 
 | Reviewer | Can Block On | On Rejection |
 |----------|-------------|--------------|
-| **Picard** | Scope creep · Governance violations · Speckit bypass without justification | Names a different agent to revise (never the original author) |
+| **Picard** | Scope creep · Governance violations · Process bypass without justification | Names a different agent to revise (never the original author) |
 | **Kirk** | Architectural violations · Technical-correctness gaps | Names a different agent to revise (never the original author) |
 | **Bashir** | Untestable acceptance criteria · Test-first violations · Missing implementation coverage · Bug-fix PRs without reproducing test | Names a different agent to revise |
 | **Garak** | _(advisory only — produces written findings)_ | Findings routed to Tuvok or another agent for edits |
@@ -81,7 +81,7 @@ An AI team that lives in this repository under `.squad/`. Each member has a pers
 
 ## Governance
 
-All squad work follows the constitution at `.specify/memory/constitution.md` (currently v1.3.0). Key principles:
+All squad work follows repository governance in `.github/copilot-instructions.md`. Key principles:
 
 | Principle | Summary |
 |-----------|---------|
