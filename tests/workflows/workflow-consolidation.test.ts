@@ -34,6 +34,180 @@ const workflowSteps = workflows.flatMap(({ file, workflow }) =>
   ),
 );
 
+// --- node --test guard helpers (#242, #214, #222) -------------------------
+//
+// This repo invokes Node's test runner in more than one shape:
+//   - `node --test test/*.test.cjs`              (the removed legacy form)
+//   - `node --import tsx --test tests/index.test.ts`         (npm's `test`)
+//   - `node --import tsx --test --watch tests/index.test.ts` (`test:watch`)
+//   - `npx tsx --test tests/**/*.test.ts`                    (ad hoc form)
+// A prior guard (`/\bnode\s+--test\s+(\S+)/g`) only matched the first shape:
+// it requires `--test` immediately after `node`, so it never matches when
+// `--import tsx` (or any other option) sits in between, and it never matches
+// an `npx tsx --test ...` invocation at all. It also only ever captured the
+// single token right after `--test`, so `node --test --watch <glob>` had it
+// capture `--watch` (never a glob character) instead of the actual target.
+//
+// findNodeTestInvocations tokenizes each shell command in a workflow `run`
+// step (handling `&&`/`;`/`|`/CRLF-or-LF separated commands and quoted
+// tokens), locates invocations of `node` or `npx ... tsx` that carry a bare
+// `--test` flag anywhere in their arguments, and returns the positional
+// test-target tokens that follow `--test` -- skipping every other flag and,
+// for flags known to consume a following value (e.g. `--test-name-pattern
+// foo`), that value too. A flag's own `--flag=value` form is always skipped
+// whole, so a pattern like `--test-name-pattern=foo*` is never mistaken for
+// a target. Concrete file targets (e.g. `tests/index.test.ts`) contain no
+// glob metacharacters and are therefore never flagged.
+
+// Node test-runner flags that consume a separate following token as their
+// value, so that token is never mistaken for a positional test target.
+const NODE_TEST_VALUE_FLAGS = new Set([
+  "--test-concurrency",
+  "--test-name-pattern",
+  "--test-reporter",
+  "--test-reporter-destination",
+  "--test-shard",
+  "--test-timeout",
+  "--import",
+  "--require",
+  "--experimental-loader",
+]);
+
+const GLOB_METACHARACTERS = /[*?[{]/;
+
+function tokenizeShellCommand(command: string): string[] {
+  const words = command.match(/'[^']*'|"[^"]*"|\S+/g) ?? [];
+  return words.map((word) => {
+    const isSingleQuoted = word.startsWith("'") && word.endsWith("'");
+    const isDoubleQuoted = word.startsWith('"') && word.endsWith('"');
+    return isSingleQuoted || isDoubleQuoted ? word.slice(1, -1) : word;
+  });
+}
+
+function findNodeTestInvocations(
+  runScript: string,
+): Array<{ command: string; targets: string[] }> {
+  // Split on both line breaks (CRLF-safe) and common shell separators, so a
+  // multi-line `run: |` block or a `cmd1 && cmd2` one-liner is examined
+  // command-by-command rather than as one opaque blob.
+  const commands = runScript
+    .split(/\r?\n/)
+    .flatMap((line) => line.split(/&&|\|\||[;|]/))
+    .map((segment) => segment.trim())
+    .filter((segment) => segment.length > 0);
+
+  const invocations: Array<{ command: string; targets: string[] }> = [];
+  for (const command of commands) {
+    const tokens = tokenizeShellCommand(command);
+    const first = tokens[0];
+    const isNodeInvocation = first === "node";
+    const isNpxTsxInvocation = first === "npx" && tokens.includes("tsx");
+    if (!isNodeInvocation && !isNpxTsxInvocation) continue;
+
+    const testFlagIndex = tokens.indexOf("--test");
+    if (testFlagIndex === -1) continue;
+
+    const targets: string[] = [];
+    for (let i = testFlagIndex + 1; i < tokens.length; i++) {
+      const token = tokens[i];
+      if (token === undefined) continue;
+      if (token.startsWith("-")) {
+        // A flag with an attached `=value` is self-contained; a flag known
+        // to take a separate value token consumes the next token too.
+        if (!token.includes("=") && NODE_TEST_VALUE_FLAGS.has(token)) {
+          i += 1;
+        }
+        continue;
+      }
+      targets.push(token);
+    }
+    invocations.push({ command, targets });
+  }
+  return invocations;
+}
+
+function globTestTargets(
+  runScript: string,
+): Array<{ command: string; target: string }> {
+  return findNodeTestInvocations(runScript).flatMap(({ command, targets }) =>
+    targets
+      .filter((target) => GLOB_METACHARACTERS.test(target))
+      .map((target) => ({ command, target })),
+  );
+}
+
+describe("findNodeTestInvocations guard (self-tests)", () => {
+  // These fixtures are not read from any workflow file -- they prove the
+  // helper itself is sound against the historical failure and every gap
+  // Kirk identified, plus common false-positive shapes, independent of
+  // whatever the live workflows currently contain.
+  const globCommandFixtures = [
+    ["historical bare form (#242 original)", "node --test test/*.test.cjs"],
+    [
+      "Kirk gap 1: options before --test",
+      "node --import tsx --test 'tests/**/*.test.ts'",
+    ],
+    [
+      "Kirk gap 2: options after --test",
+      "node --test --watch tests/**/*.test.ts",
+    ],
+    ["Kirk gap 3: npx tsx form", "npx tsx --test tests/**/*.test.ts"],
+    [
+      "glob target quoted with double quotes",
+      'node --import tsx --test "tests/**/*.test.ts"',
+    ],
+    [
+      "glob buried in a multi-command step",
+      "npm ci && node --test tests/*.test.cjs && echo done",
+    ],
+  ] as const;
+
+  const cleanCommandFixtures = [
+    ["npm's real test script", "node --import tsx --test tests/index.test.ts"],
+    [
+      "npm's real test:watch script",
+      "node --import tsx --test --watch tests/index.test.ts",
+    ],
+    [
+      "npx tsx form with a concrete file",
+      "npx tsx --test tests/index.test.ts",
+    ],
+    [
+      "attached pattern flag is not a target (false-positive guard)",
+      "node --test --test-name-pattern=foo* tests/index.test.ts",
+    ],
+    [
+      "separate-value flag does not leak its value as a target",
+      "node --test --test-reporter tap tests/index.test.ts",
+    ],
+    ["npm test indirection is not a node/npx invocation", "npm test"],
+    [
+      "quoted diagnostic string containing a wildcard",
+      'echo "no wildcards like * here"',
+    ],
+    ["unrelated command", 'git commit -m "test *"'],
+  ] as const;
+
+  for (const [label, command] of globCommandFixtures) {
+    it(`flags: ${label}`, () => {
+      assert.ok(
+        globTestTargets(command).length > 0,
+        `expected a glob-target violation in \`${command}\``,
+      );
+    });
+  }
+
+  for (const [label, command] of cleanCommandFixtures) {
+    it(`accepts: ${label}`, () => {
+      assert.deepStrictEqual(
+        globTestTargets(command),
+        [],
+        `expected no glob-target violation in \`${command}\``,
+      );
+    });
+  }
+});
+
 describe("workflow consolidation", () => {
   it("keeps one canonical repository test gate", () => {
     assert.deepStrictEqual(
@@ -81,26 +255,21 @@ describe("workflow consolidation", () => {
     }
   });
 
-  it("never invokes node --test against a glob that could match zero files (#242, #214, #222)", () => {
-    // `node --test <arg>` exits 0 when <arg> is a glob that matches zero
-    // files — that's exactly how the removed `test/*.test.cjs` reference
-    // (the legacy scaffold path; the real suite lives under tests/) passed
-    // vacuously instead of failing. Rather than pin the one literal string
-    // that has already been fixed, scan every workflow `run` step for ANY
-    // `node --test <arg>` invocation whose argument contains a glob
-    // metacharacter (`*`, `?`, `[`, `{`), so the same anti-pattern can't
-    // quietly return under a different path. Concrete file arguments (e.g.
-    // `tests/index.test.ts`) contain no glob metacharacters and are not
-    // flagged.
-    const nodeTestInvocation = /\bnode\s+--test\s+(\S+)/g;
-    const globMetacharacters = /[*?[{]/;
+  it("never invokes node's test runner against a glob that could match zero files (#242, #214, #222)", () => {
+    // See "findNodeTestInvocations guard (self-tests)" above for the full
+    // rationale and fixture coverage. In short: `node --test <target>` (in
+    // any of this repo's real forms -- bare, `node --import tsx --test`, or
+    // `npx tsx --test`, with options before or after `--test`) exits 0 when
+    // <target> is a glob matching zero files, which is exactly how the
+    // removed `test/*.test.cjs` reference passed vacuously instead of
+    // failing. Scan every workflow `run` step for such an invocation and
+    // reject any positional test-target argument containing a glob
+    // metacharacter (`*`, `?`, `[`, `{`).
     for (const { file, step } of workflowSteps) {
       if (!step.run) continue;
-      for (const match of step.run.matchAll(nodeTestInvocation)) {
-        const argument = match[1] ?? "";
-        assert.ok(
-          !globMetacharacters.test(argument),
-          `${file} must not run node --test against a glob (${argument}) that can silently match zero files`,
+      for (const { command, target } of globTestTargets(step.run)) {
+        assert.fail(
+          `${file} must not run node's test runner against a glob (${target}) in \`${command}\` that can silently match zero files`,
         );
       }
     }
