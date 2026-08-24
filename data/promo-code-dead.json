@@ -1,0 +1,233 @@
+{
+  "MACHINATIONS": {
+    "marked_dead_at": "2026-08-24T09:08:36.835Z",
+    "first_seen_outcome": "CODE_INVALID_OR_EXPIRED",
+    "accounts_tried": [
+      "main"
+    ]
+  },
+  "SFACPT1": {
+    "marked_dead_at": "2026-08-24T09:08:36.947Z",
+    "first_seen_outcome": "CODE_INVALID_OR_EXPIRED",
+    "accounts_tried": [
+      "main"
+    ]
+  },
+  "FCP2": {
+    "marked_dead_at": "2026-08-24T09:08:37.058Z",
+    "first_seen_outcome": "CODE_INVALID_OR_EXPIRED",
+    "accounts_tried": [
+      "main"
+    ]
+  },
+  "CNTCT": {
+    "marked_dead_at": "2026-08-24T09:08:37.187Z",
+    "first_seen_outcome": "CODE_INVALID_OR_EXPIRED",
+    "accounts_tried": [
+      "main"
+    ]
+  },
+  "FRACTURE": {
+    "marked_dead_at": "2026-08-24T09:08:37.254Z",
+    "first_seen_outcome": "CODE_INVALID_OR_EXPIRED",
+    "accounts_tried": [
+      "main"
+    ]
+  },
+  "WARPSPEED": {
+    "marked_dead_at": "2026-08-24T09:08:37.394Z",
+    "first_seen_outcome": "CODE_INVALID_OR_EXPIRED",
+    "accounts_tried": [
+      "main"
+    ]
+  },
+  "KIRK": {
+    "marked_dead_at": "2026-08-24T09:08:37.532Z",
+    "first_seen_outcome": "CODE_INVALID_OR_EXPIRED",
+    "accounts_tried": [
+      "main"
+    ]
+  },
+  "SPOCK": {
+    "marked_dead_at": "2026-08-24T09:08:37.669Z",
+    "first_seen_outcome": "CODE_INVALID_OR_EXPIRED",
+    "accounts_tried": [
+      "main"
+    ]
+  },
+  "COMMANDER": {
+    "marked_dead_at": "2026-08-24T09:08:41.122Z",
+    "first_seen_outcome": "CODE_INVALID_OR_EXPIRED",
+    "accounts_tried": [
+      "main"
+    ]
+  },
+  "FRONTIER": {
+    "marked_dead_at": "2026-08-24T09:08:41.189Z",
+    "first_seen_outcome": "CODE_INVALID_OR_EXPIRED",
+    "accounts_tried": [
+      "main"
+    ]
+  },
+  "TNG": {
+    "marked_dead_at": "2026-08-24T09:08:41.260Z",
+    "first_seen_outcome": "CODE_INVALID_OR_EXPIRED",
+    "accounts_tried": [
+      "main"
+    ]
+  },
+  "WOKPT1": {
+    "marked_dead_at": "2026-08-24T09:08:41.319Z",
+    "first_seen_outcome": "CODE_INVALID_OR_EXPIRED",
+    "accounts_tried": [
+      "main"
+    ]
+  },
+  "SECTION31": {
+    "marked_dead_at": "2026-08-24T09:08:41.393Z",
+    "first_seen_outcome": "CODE_INVALID_OR_EXPIRED",
+    "accounts_tried": [
+      "main"
+    ]
+  },
+  "RENEGADE": {
+    "marked_dead_at": "2026-08-24T09:08:41.523Z",
+    "first_seen_outcome": "CODE_INVALID_OR_EXPIRED",
+    "accounts_tried": [
+      "main"
+    ]
+  },
+  "ROGUE": {
+    "marked_dead_at": "2026-08-24T09:08:41.589Z",
+    "first_seen_outcome": "CODE_INVALID_OR_EXPIRED",
+    "accounts_tried": [
+      "main"
+    ]
+  },
+  "GQ7": {
+    "marked_dead_at": "2026-08-24T09:08:41.658Z",
+    "first_seen_outcome": "CODE_INVALID_OR_EXPIRED",
+    "accounts_tried": [
+      "main"
+    ]
+  },
+  "GQ5": {
+    "marked_dead_at": "2026-08-24T09:08:41.793Z",
+    "first_seen_outcome": "CODE_INVALID_OR_EXPIRED",
+    "accounts_tried": [
+      "main"
+    ]
+  },
+  "ALTEREGO": {
+    "marked_dead_at": "2026-08-24T09:08:41.852Z",
+    "first_seen_outcome": "CODE_INVALID_OR_EXPIRED",
+    "accounts_tried": [
+      "main"
+    ]
+  },
+  "REFLECTION": {
+    "marked_dead_at": "2026-08-24T09:08:41.912Z",
+    "first_seen_outcome": "CODE_INVALID_OR_EXPIRED",
+    "accounts_tried": [
+      "main"
+    ]
+  },
+  "THEMIRROR": {
+    "marked_dead_at": "2026-08-24T09:08:41.978Z",
+    "first_seen_outcome": "CODE_INVALID_OR_EXPIRED",
+    "accounts_tried": [
+      "main"
+    ]
+  },
+  "EVISCERATOR": {
+    "marked_dead_at": "2026-08-24T09:08:42.134Z",
+    "first_seen_outcome": "CODE_INVALID_OR_EXPIRED",
+    "accounts_tried": [
+      "main"
+    ]
+  },
+  "ENT3": {
+    "marked_dead_at": "2026-08-24T09:08:42.203Z",
+    "first_seen_outcome": "CODE_INVALID_OR_EXPIRED",
+    "accounts_tried": [
+      "main"
+    ]
+  },
+  "NX01": {
+    "marked_dead_at": "2026-08-24T09:08:42.271Z",
+    "first_seen_outcome": "CODE_INVALID_OR_EXPIRED",
+    "accounts_tried": [
+      "main"
+    ]
+  },
+  "VGER": {
+    "marked_dead_at": "2026-08-24T09:08:42.339Z",
+    "first_seen_outcome": "CODE_INVALID_OR_EXPIRED",
+    "accounts_tried": [
+      "main"
+    ]
+  },
+  "VGER2": {
+    "marked_dead_at": "2026-08-24T09:08:42.470Z",
+    "first_seen_outcome": "CODE_INVALID_OR_EXPIRED",
+    "accounts_tried": [
+      "main"
+    ]
+  },
+  "RESONANCE": {
+    "marked_dead_at": "2026-08-24T09:08:42.606Z",
+    "first_seen_outcome": "CODE_INVALID_OR_EXPIRED",
+    "accounts_tried": [
+      "main"
+    ]
+  },
+  "SNWD1GIFT": {
+    "marked_dead_at": "2026-08-24T09:08:42.667Z",
+    "first_seen_outcome": "CODE_INVALID_OR_EXPIRED",
+    "accounts_tried": [
+      "main"
+    ]
+  },
+  "OTPST2": {
+    "marked_dead_at": "2026-08-24T09:08:42.809Z",
+    "first_seen_outcome": "CODE_INVALID_OR_EXPIRED",
+    "accounts_tried": [
+      "main"
+    ]
+  },
+  "NEXUS": {
+    "marked_dead_at": "2026-08-24T09:08:42.868Z",
+    "first_seen_outcome": "CODE_INVALID_OR_EXPIRED",
+    "accounts_tried": [
+      "main"
+    ]
+  },
+  "SFACPT2": {
+    "marked_dead_at": "2026-08-24T09:08:42.935Z",
+    "first_seen_outcome": "CODE_INVALID_OR_EXPIRED",
+    "accounts_tried": [
+      "main"
+    ]
+  },
+  "SIMULATION": {
+    "marked_dead_at": "2026-08-24T09:08:43.075Z",
+    "first_seen_outcome": "CODE_INVALID_OR_EXPIRED",
+    "accounts_tried": [
+      "main"
+    ]
+  },
+  "SIMULATION1": {
+    "marked_dead_at": "2026-08-24T09:08:43.208Z",
+    "first_seen_outcome": "CODE_INVALID_OR_EXPIRED",
+    "accounts_tried": [
+      "main"
+    ]
+  },
+  "SIMULATION2": {
+    "marked_dead_at": "2026-08-24T09:08:43.272Z",
+    "first_seen_outcome": "CODE_INVALID_OR_EXPIRED",
+    "accounts_tried": [
+      "main"
+    ]
+  }
+}
