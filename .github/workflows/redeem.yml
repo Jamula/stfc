@@ -121,15 +121,7 @@ jobs:
         run: |
           set -euo pipefail
           run_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
-          matches=$(gh issue list --state open --search "$TITLE in:title" \
-            --json number,title,labels --limit 100 \
-            --jq '[.[] | select(.title == env.TITLE) | select(((env.REQUIRED_LABELS | split(",")) - [.labels[].name]) | length == 0)] | sort_by(.number)')
-          match_count=$(jq 'length' <<<"$matches")
-          existing=$(jq -r '.[0].number // empty' <<<"$matches")
-
-          if [ "$match_count" -gt 1 ]; then
-            echo "::warning::Found $match_count matching dead-token alerts; using oldest #$existing."
-          fi
+          existing=$(node scripts/dead-token-alert.mjs find)
 
           if [ -n "$existing" ]; then
             echo "Alert already open as #$existing — not filing a duplicate."
@@ -168,6 +160,10 @@ jobs:
       # again — a P1 that silently stays "open" long after it self-healed
       # trains the operator to distrust the channel. Close it automatically
       # the first time a run comes back with every token valid.
+      #
+      # Both halves share one selection implementation
+      # (scripts/dead-token-alert.mjs), so the create-side and resolve-side
+      # notions of "which issue is the alert" cannot drift apart.
       - name: Auto-resolve dead-token alert
         if: always() && steps.redeem.outputs.exit_code == '0'
         continue-on-error: true
@@ -175,25 +171,8 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TITLE: "STFC token rejected — redemption is stopped until STFC_ACCOUNTS is refreshed"
           REQUIRED_LABELS: "bug,priority:p1"
-        run: |
-          set -euo pipefail
-          matches=$(gh issue list --state open --search "$TITLE in:title" \
-            --json number,title,labels --limit 100 \
-            --jq '[.[] | select(.title == env.TITLE) | select(((env.REQUIRED_LABELS | split(",")) - [.labels[].name]) | length == 0)] | sort_by(.number)')
-          match_count=$(jq 'length' <<<"$matches")
-          existing=$(jq -r '.[0].number // empty' <<<"$matches")
-
-          if [ "$match_count" -gt 1 ]; then
-            echo "::warning::Found $match_count matching dead-token alerts; using oldest #$existing."
-          fi
-
-          if [ -z "$existing" ]; then
-            echo "No open dead-token alert — nothing to resolve."
-            exit 0
-          fi
-          run_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
-          gh issue close "$existing" \
-            --comment "Token accepted again as of $run_url — closing automatically."
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: node scripts/dead-token-alert.mjs resolve
 
       - name: Commit redeem state to automation-state (if changed)
         if: always() && steps.restore_state.outputs.complete == 'true'
