@@ -555,6 +555,9 @@ describe("discordMonitor / workflow YAML assertions (T027)", () => {
   });
 
   it("redeem.yml cron is `*/10 * * * *` (regression guard — bumped in #7, then again to */10)", () => {
+    // Reviewed for #243 (transient-401 corroboration + self-resolving
+    // dead-token alert): that change only touches the redeem/auth-alert
+    // steps, not the trigger or concurrency config pinned below.
     const yaml = fs.readFileSync(redeemYamlPath, "utf8");
     assert.match(yaml, /cron:\s*["']\*\/10 \* \* \* \*["']/);
   });

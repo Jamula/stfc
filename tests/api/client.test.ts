@@ -12,7 +12,10 @@ import {
 //   new ApiClient({ baseUrl, token })
 //   client.request({ path, method, body?, schema }) -> Promise<T>
 //   - GETs are retried once on 5xx / network error; POSTs are not retried.
-//   - 401/403 -> TokenExpiredError
+//   - 401/403 -> retried once regardless of method (a rejection has no
+//     side effect to double up on), then TokenExpiredError only if the
+//     retry also 401/403s. See issue #243: a single transient 401 must not
+//     be trusted as a dead token without that corroboration.
 //   - 5xx / fetch throw -> TransientError
 //   - non-JSON body or schema-mismatched body on 200 -> SchemaMismatchError
 //   - Authorization header value is never echoed in error messages.
@@ -77,22 +80,61 @@ describe("ApiClient", () => {
     assert.match(headers.get("content-type") ?? "", /application\/json/);
   });
 
-  it("401 → TokenExpiredError", async () => {
-    mockFetch(() => jsonResponse(401, { error: "unauthorized" }));
+  it("GET retries once on 401 then succeeds", async () => {
+    let n = 0;
+    const { calls } = mockFetch(() => {
+      n += 1;
+      if (n === 1) return jsonResponse(401, { error: "unauthorized" });
+      return jsonResponse(200, { ok: true });
+    });
     const client = new ApiClient({ baseUrl: "https://example.com", token: "tok" });
-    await assert.rejects(
-      () => client.request({ path: "/x", method: "GET", schema: OkSchema }),
-      (err: unknown) => err instanceof TokenExpiredError,
+    const result = await client.request({ path: "/x", method: "GET", schema: OkSchema });
+    assert.deepEqual(result, { ok: true });
+    assert.equal(
+      calls.length,
+      2,
+      "a single GET 401 must be corroborated before surfacing TokenExpiredError",
     );
   });
 
-  it("403 → TokenExpiredError", async () => {
-    mockFetch(() => jsonResponse(403, { error: "forbidden" }));
+  it("GET 401 twice → TokenExpiredError after corroboration", async () => {
+    const { calls } = mockFetch(() => jsonResponse(401, { error: "unauthorized" }));
     const client = new ApiClient({ baseUrl: "https://example.com", token: "tok" });
     await assert.rejects(
       () => client.request({ path: "/x", method: "GET", schema: OkSchema }),
       (err: unknown) => err instanceof TokenExpiredError,
     );
+    assert.equal(calls.length, 2, "401 should be retried exactly once before surfacing");
+  });
+
+  it("403 → TokenExpiredError", async () => {
+    const { calls } = mockFetch(() => jsonResponse(403, { error: "forbidden" }));
+    const client = new ApiClient({ baseUrl: "https://example.com", token: "tok" });
+    await assert.rejects(
+      () => client.request({ path: "/x", method: "GET", schema: OkSchema }),
+      (err: unknown) => err instanceof TokenExpiredError,
+    );
+    assert.equal(calls.length, 2, "403 should also be retried exactly once before surfacing");
+  });
+
+  it("POST retries once on 401 then succeeds", async () => {
+    let n = 0;
+    const { calls } = mockFetch(() => {
+      n += 1;
+      if (n === 1) return jsonResponse(401, { error: "unauthorized" });
+      return jsonResponse(200, { ok: true });
+    });
+    const client = new ApiClient({ baseUrl: "https://example.com", token: "tok" });
+    const result = await client.request({
+      path: "/x",
+      method: "POST",
+      body: { y: 1 },
+      schema: OkSchema,
+    });
+    assert.deepEqual(result, { ok: true });
+    assert.equal(calls.length, 2, "401 retry must apply to POST even though 5xx retry does not");
+    assert.equal(calls[0]!.init.method, "POST");
+    assert.equal(calls[1]!.init.method, "POST");
   });
 
   it("500 (POST) → TransientError, no retry", async () => {

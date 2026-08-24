@@ -208,4 +208,40 @@ describe(".github/workflows/redeem.yml", () => {
       );
     },
   );
+
+  it(
+    "includes an auto-resolve dead-token alert step gated on exit code 0",
+    { skip: yaml === undefined },
+    () => {
+      assert.match(
+        yaml!,
+        /- name: Auto-resolve dead-token alert[\s\S]*?if: always\(\) && steps\.redeem\.outputs\.exit_code == '0'/,
+        "auto-resolve step must only run after a green redeem exit code",
+      );
+    },
+  );
+
+  it(
+    "auto-resolve step searches open issues using the same alert title as the create-alert step",
+    { skip: yaml === undefined },
+    () => {
+      assert.match(
+        yaml!,
+        /- name: Alert on dead token[\s\S]*?TITLE: "([^"]+)"[\s\S]*?- name: Auto-resolve dead-token alert[\s\S]*?TITLE: "\1"[\s\S]*?gh issue list --state open --search "\$TITLE in:title"/,
+        "auto-resolve step must look up the same titled open alert before closing it",
+      );
+    },
+  );
+
+  it(
+    "auto-resolve step closes an existing issue with a comment",
+    { skip: yaml === undefined },
+    () => {
+      assert.match(
+        yaml!,
+        /- name: Auto-resolve dead-token alert[\s\S]*?if \[ -z "\$existing" \]; then[\s\S]*?gh issue close "\$existing"[\s\S]*?--comment "Token accepted again as of \$run_url — closing automatically\."/,
+        "auto-resolve step must close the existing alert and leave a comment trail",
+      );
+    },
+  );
 });

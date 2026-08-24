@@ -155,6 +155,28 @@ jobs:
             --label "squad,squad:uhura,bug,priority:p1" \
             --body-file /tmp/alert-body.md
 
+      # Self-resolving half of the alert (retro #243): a dead-token alert
+      # that's still open must not sit there once the token is accepted
+      # again — a P1 that silently stays "open" long after it self-healed
+      # trains the operator to distrust the channel. Close it automatically
+      # the first time a run comes back with every token valid.
+      - name: Auto-resolve dead-token alert
+        if: always() && steps.redeem.outputs.exit_code == '0'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TITLE: "STFC token rejected — redemption is stopped until STFC_ACCOUNTS is refreshed"
+        run: |
+          set -euo pipefail
+          existing=$(gh issue list --state open --search "$TITLE in:title" \
+            --json number --jq '.[0].number // empty')
+          if [ -z "$existing" ]; then
+            echo "No open dead-token alert — nothing to resolve."
+            exit 0
+          fi
+          run_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          gh issue close "$existing" \
+            --comment "Token accepted again as of $run_url — closing automatically."
+
       - name: Commit redeem state to automation-state (if changed)
         if: always() && steps.restore_state.outputs.complete == 'true'
         run: |
