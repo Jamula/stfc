@@ -206,21 +206,32 @@ describe("checkWorkflowPinningTests", () => {
       const dir = mkdtempSync(join(tmpdir(), "stfc-hygiene-index-"));
       const scanner = resolve("scripts/check-artifact-hygiene.mjs");
       const artifact = join(dir, "docs", "capture.md");
+      const isolatedGitEnv = { ...process.env };
+      for (const key of Object.keys(isolatedGitEnv)) {
+        if (key.startsWith("GIT_")) delete isolatedGitEnv[key];
+      }
       try {
         mkdirSync(join(dir, "docs"));
-        execFileSync("git", ["init", "--quiet"], { cwd: dir });
+        execFileSync("git", ["init", "--quiet"], {
+          cwd: dir,
+          env: isolatedGitEnv,
+        });
         const stagedSecret = [
           `eyJ${"a".repeat(10)}`,
           "b".repeat(10),
           "c".repeat(10),
         ].join(".");
         writeFileSync(artifact, stagedSecret);
-        execFileSync("git", ["add", "docs/capture.md"], { cwd: dir });
+        execFileSync("git", ["add", "docs/capture.md"], {
+          cwd: dir,
+          env: isolatedGitEnv,
+        });
         writeFileSync(artifact, "<REDACTED>");
 
         const result = spawnSync(process.execPath, [scanner, "--staged"], {
           cwd: dir,
           encoding: "utf8",
+          env: isolatedGitEnv,
         });
         assert.equal(result.status, 1);
         assert.match(result.stderr, /\[JWT\]/);

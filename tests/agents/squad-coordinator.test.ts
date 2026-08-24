@@ -7,9 +7,10 @@ import assert from "node:assert/strict";
  * Regression test for the Squad coordinator MCP config path references.
  *
  * The coordinator prompt (squad.agent.md) instructs agents on where to find
- * the state bridge. Copilot CLI loads .github/mcp.json directly, while Copilot
- * App project sessions discover .github/extensions. Keep both registration
- * paths pinned so either host can expose the same bridge definition.
+ * the state bridge. Copilot CLI discovers .github/mcp.json and .mcp.json,
+ * while Copilot App has both project config and extension registration paths.
+ * Keep every host-facing registration pinned so a Squad upgrade cannot silently
+ * break the bridge.
  */
 
 function readFile(relativePath: string): string {
@@ -25,6 +26,7 @@ describe("Squad coordinator — MCP bridge configuration", () => {
   const appExtension = readFile(
     ".github/extensions/squad-state/extension.mjs",
   );
+  const appMcpConfig = readFile(".copilot/mcp-config.json");
 
   it("coordinator references .github/mcp.json (not stale .mcp.json)", () => {
     // Both references in the state-backend handshake section must point to the
@@ -97,5 +99,24 @@ describe("Squad coordinator — MCP bridge configuration", () => {
       /joinSession\(\{\s*mcpServers:\s*\{\s*squad_state:\s*squadState/s,
       "squad-state extension must attach the squad_state MCP server to the App session",
     );
+  });
+
+  it(".copilot/mcp-config.json declares the state bridge for Copilot App", () => {
+    const config = JSON.parse(appMcpConfig) as Record<string, unknown>;
+    const servers = (
+      config["mcpServers"] as Record<string, Record<string, unknown>> | undefined
+    ) ?? {};
+    const server = servers["squad_state"];
+    assert.ok(
+      server,
+      ".copilot/mcp-config.json must declare squad_state for Copilot App sessions",
+    );
+    assert.equal(server["type"], "stdio");
+    assert.deepEqual(server["args"], [
+      "-y",
+      "@bradygaster/squad-cli@0.12.0",
+      "state-mcp",
+    ]);
+    assert.deepEqual(server["tools"], ["*"]);
   });
 });
