@@ -132,6 +132,21 @@ describe("check-retro-overdue CLI — strict usage-error contract (#248 Garak ro
     assert.equal(status, 2);
   });
 
+  it("exits 2 when --backend's value looks like another flag, instead of consuming it as a literal value (#248 Copilot review finding)", () => {
+    const { status } = runCli(["overdue", "--backend", "--entries-stdin"]);
+    assert.equal(status, 2);
+  });
+
+  it("exits 2 when --log-dir's value looks like another flag (a directory literally named '--entries-stdin' must not be silently accepted)", () => {
+    const { status } = runCli(["overdue", "--backend", "local", "--log-dir", "--entries-stdin"]);
+    assert.equal(status, 2);
+  });
+
+  it("exits 2 when --retro-log-path's value looks like another flag", () => {
+    const { status } = runCli(["action-items", "--backend", "local", "--retro-log-path", "--content-stdin"]);
+    assert.equal(status, 2);
+  });
+
   it("exits 2 for an unsupported --backend value", () => {
     const { status } = runCli(["overdue", "--backend", "some-made-up-backend"]);
     assert.equal(status, 2);

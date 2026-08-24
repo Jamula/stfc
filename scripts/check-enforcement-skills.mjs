@@ -114,12 +114,18 @@ export function extractEnforcementSkillIds(ceremoniesContent) {
 export function defaultReparsePointDetector(fullPath) {
   if (process.platform !== "win32") return false;
 
-  let stdout;
   try {
-    stdout = execFileSync("fsutil", ["reparsepoint", "query", fullPath], {
+    execFileSync("fsutil", ["reparsepoint", "query", fullPath], {
       encoding: "utf8",
       stdio: ["ignore", "pipe", "pipe"],
     });
+    // fsutil only exits 0 when the path genuinely IS a reparse point — a
+    // successful call is a confirmed positive regardless of the exact
+    // stdout wording, which can vary by locale/Windows version. Matching a
+    // fixed English "Reparse Tag" substring here would fail OPEN on any
+    // successful-but-differently-worded output (#248 Copilot review
+    // finding), exactly the bug this function exists to avoid.
+    return true;
   } catch (err) {
     const combined = `${err.stdout ?? ""}${err.stderr ?? ""}`;
     if (/is not a reparse point/i.test(combined)) {
@@ -127,7 +133,6 @@ export function defaultReparsePointDetector(fullPath) {
     }
     return true; // fail closed: uncertain result, treat as a reparse point
   }
-  return /Reparse Tag/i.test(stdout);
 }
 
 /**

@@ -238,33 +238,45 @@ function parseArgs(argv) {
     i = 1;
   }
 
+  // A flag's value must not itself look like another flag -- otherwise
+  // `--log-dir --entries-stdin` would silently read a directory literally
+  // named "--entries-stdin" and treat that as the (missing) value instead
+  // of rejecting it as a usage error (#248 Copilot review finding).
+  function takeValue(flagName, currentIndex) {
+    const v = argv[currentIndex + 1];
+    if (v === undefined || v.startsWith("--")) {
+      throw new CliUsageError(`${flagName} requires a value`);
+    }
+    return v;
+  }
+
   for (; i < argv.length; i++) {
     const a = argv[i];
     if (!KNOWN_FLAGS.has(a)) {
       throw new CliUsageError(`unknown option "${a}"`);
     }
     if (a === "--backend") {
-      const v = argv[++i];
-      if (v === undefined) throw new CliUsageError("--backend requires a value");
+      const v = takeValue("--backend", i);
+      i++;
       if (!VALID_BACKENDS.has(v)) {
         throw new CliUsageError(`unsupported backend "${v}" (expected one of: ${[...VALID_BACKENDS].join(", ")})`);
       }
       args.backend = v;
     } else if (a === "--log-dir") {
-      const v = argv[++i];
-      if (v === undefined) throw new CliUsageError("--log-dir requires a value");
+      const v = takeValue("--log-dir", i);
+      i++;
       args.logDir = v;
     } else if (a === "--window-days") {
-      const raw = argv[++i];
-      if (raw === undefined) throw new CliUsageError("--window-days requires a value");
+      const raw = takeValue("--window-days", i);
+      i++;
       const n = Number(raw);
       if (!Number.isFinite(n) || n <= 0) {
         throw new CliUsageError(`--window-days must be a positive finite number, got "${raw}"`);
       }
       args.windowDays = n;
     } else if (a === "--retro-log-path") {
-      const v = argv[++i];
-      if (v === undefined) throw new CliUsageError("--retro-log-path requires a value");
+      const v = takeValue("--retro-log-path", i);
+      i++;
       args.retroLogPath = v;
     } else if (a === "--entries-stdin" || a === "--content-stdin") {
       args.useStdin = true;

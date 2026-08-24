@@ -438,6 +438,20 @@ describe("check-enforcement-skills: injectable reparse-point adapter (determinis
       assert.equal(defaultReparsePointDetector(dir), false);
     });
   });
+
+  it("defaultReparsePointDetector treats ANY successful fsutil call as a confirmed reparse point, not just one whose output contains the literal English 'Reparse Tag' text (#248 Copilot review finding)", () => {
+    // fsutil only exits 0 when the target genuinely IS a reparse point --
+    // a locale, Windows-version, or wording difference in its stdout must
+    // never turn a real positive into a false negative. Pin this at the
+    // source level since simulating a real localized fsutil binary isn't
+    // practical in CI: the success path must return true unconditionally,
+    // with no substring match gating it.
+    const source = fs.readFileSync(path.join(repoRoot, "scripts", "check-enforcement-skills.mjs"), "utf8");
+    const fnStart = source.indexOf("export function defaultReparsePointDetector");
+    const fnBody = source.slice(fnStart, source.indexOf("\n}\n", fnStart));
+    assert.doesNotMatch(fnBody, /\/Reparse Tag\/i\.test/, "the success path must not gate on a stdout regex match for 'Reparse Tag'");
+    assert.doesNotMatch(fnBody, /return \/Reparse Tag/, "the success path must not conditionally return based on stdout content");
+  });
 });
 
 describe("check-enforcement-skills: exact discovery precedence and warning accuracy (#248 Garak round-3 finding 3)", () => {

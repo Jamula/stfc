@@ -155,7 +155,13 @@ export function checkActionItemsViaBridge({
     if (!retroLogPath) {
       return { evaluated: false, backend, ok: false, fault: "retroLogPath is required for local/worktree backends" };
     }
-    args.push("--retro-log-path", retroLogPath);
+    // As with logDir in checkOverdueViaBridge: a relative path must
+    // resolve against repoRoot, not the caller's own cwd, or invoking this
+    // bridge from a different working directory can verify an unrelated
+    // file while spawning the intended repository's checker (#248 Copilot
+    // review finding).
+    const resolvedRetroLogPath = repoRoot ? path.resolve(repoRoot, retroLogPath) : retroLogPath;
+    args.push("--retro-log-path", resolvedRetroLogPath);
   } else {
     if (typeof stateRead !== "function") {
       return { evaluated: false, backend, ok: false, fault: "stateRead callback is required for non-local backends" };

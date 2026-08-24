@@ -116,6 +116,20 @@ describe("retro-gate-bridge: checkActionItemsViaBridge — local (real file) and
     }
   });
 
+  it("resolves a RELATIVE retroLogPath against repoRoot, not the caller's own cwd (#248 Copilot review finding)", () => {
+    const relativeName = `bridge-retro-fixture-${Date.now()}.md`;
+    const absolutePath = path.join(repoRoot, relativeName);
+    fs.writeFileSync(absolutePath, "Fixed in #7\n");
+    try {
+      const result = checkActionItemsViaBridge({ backend: "local", repoRoot, retroLogPath: relativeName });
+      assert.equal(result.evaluated, true, JSON.stringify(result));
+      assert.equal(result.ok, true);
+      assert.equal(result.issueRefCount, 1);
+    } finally {
+      fs.rmSync(absolutePath, { force: true });
+    }
+  });
+
   it("tool-call -> JSON stdin -> decision: a fake stateRead callback (squad_state_read shape) feeds content through the real CLI", () => {
     const stateRead = ({ key }: { key: string }) => {
       assert.equal(key, "log/2026-08-24T00-00-00Z-retrospective.md");
