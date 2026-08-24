@@ -144,8 +144,7 @@ describe("automation-state scheduled workflow contract", () => {
       const loop = persist.slice(loopStart, finalError);
       assert.match(loop, /push origin "HEAD:automation-state"/);
       assert.match(loop, /if git ls-remote --exit-code --heads origin automation-state/);
-      assert.match(loop, /pull --rebase origin automation-state/);
-      assert.doesNotMatch(loop, /pull --rebase[^\n]*\|\| true/);
+      assert.match(loop, /node scripts\/automation-state-retry\.mjs/);
       assert.match(persist.slice(finalError), /exit 1/);
       assert.doesNotMatch(persist, /HEAD:\$GITHUB_REF_NAME/);
     });

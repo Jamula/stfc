@@ -7,6 +7,7 @@ import process from "node:process";
 import path from "node:path";
 import net from "node:net";
 import { fileURLToPath } from "node:url";
+import { reconcileAutomationStateAfterPushFailure } from "./automation-state-retry.mjs";
 
 const execFileAsync = promisify(execFile);
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -367,6 +368,7 @@ export async function handleGameStateCommand({
   renameImpl = rename,
   rmImpl = rm,
   nowFn = () => new Date(),
+  reconcileAutomationStateImpl = reconcileAutomationStateAfterPushFailure,
 }) {
   validateGameStatePayload(payload);
 
@@ -471,12 +473,11 @@ export async function handleGameStateCommand({
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     if (/non-fast-forward|fetch first|rejected/i.test(message)) {
-      await runGit([
-        "fetch",
-        "origin",
-        `refs/heads/${ref}:refs/remotes/origin/${ref}`,
-      ]);
-      await runGit(["rebase", `origin/${ref}`]);
+      await reconcileAutomationStateImpl({
+        stateDir: process.cwd(),
+        ref,
+        relativePaths: [outFile, lineagePath, indexPath],
+      });
       await doPush();
     } else {
       throw error;
@@ -493,7 +494,7 @@ export async function handleGameStateCommand({
   };
 }
 
-export async function resolveResponseText({ payload, repo, workflowRef, stateRef, serverUrl, historyPath, runGh, runGit, readFileImpl, writeFileImpl, mkdirImpl, renameImpl, rmImpl, fetchImpl, nowFn }) {
+export async function resolveResponseText({ payload, repo, workflowRef, stateRef, serverUrl, historyPath, runGh, runGit, readFileImpl, writeFileImpl, mkdirImpl, renameImpl, rmImpl, fetchImpl, nowFn, reconcileAutomationStateImpl }) {
   const command = payload.command;
 
   if (command === "redeem-status") {
@@ -526,6 +527,7 @@ export async function resolveResponseText({ payload, repo, workflowRef, stateRef
       renameImpl,
       rmImpl,
       nowFn,
+      reconcileAutomationStateImpl,
     });
     return responseText;
   }
@@ -544,6 +546,7 @@ export async function runCli({
   renameImpl = rename,
   rmImpl = rm,
   nowFn = () => new Date(),
+  reconcileAutomationStateImpl = reconcileAutomationStateAfterPushFailure,
   stdout = process.stdout,
   stderr = process.stderr,
 } = {}) {
@@ -584,6 +587,7 @@ export async function runCli({
       renameImpl,
       rmImpl,
       nowFn,
+      reconcileAutomationStateImpl,
     });
 
     await postDiscordFollowup({

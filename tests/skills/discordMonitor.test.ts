@@ -599,12 +599,11 @@ describe("discordMonitor / workflow YAML assertions (T027)", () => {
     assert.match(yaml, /add[^\n]*data\/digests/);
   });
 
-  it("commit-on-write step retries with rebase against automation-state (issue #241 — never main)", () => {
+  it("commit-on-write step retries against automation-state via the shared reconciliation helper (issue #241 — never main)", () => {
     const yaml = fs.readFileSync(yamlPath, "utf8");
     assert.match(yaml, /for attempt in 1 2 3; do/);
-    assert.match(yaml, /pull --rebase origin automation-state/);
+    assert.match(yaml, /node scripts\/automation-state-retry\.mjs/);
     assert.match(yaml, /push origin "HEAD:automation-state"/);
-    assert.doesNotMatch(yaml, /pull --rebase[^\n]*\|\| true/);
     assert.doesNotMatch(yaml, /push origin "HEAD:\$GITHUB_REF_NAME"/);
   });
 

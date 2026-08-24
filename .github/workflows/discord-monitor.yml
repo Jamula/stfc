@@ -150,7 +150,11 @@ jobs:
             if [ "$attempt" -lt 3 ]; then
               echo "Push attempt $attempt failed; pulling with rebase before retry…"
               if git ls-remote --exit-code --heads origin automation-state >/dev/null; then
-                git -C "$STATE_DIR" pull --rebase origin automation-state
+                node scripts/automation-state-retry.mjs \
+                  "$STATE_DIR" automation-state \
+                  data/discord/cursors.json data/discord/candidates.jsonl \
+                  data/discord/tips-seen.jsonl data/discord/cooldowns.json \
+                  data/digests promo-codes.txt
                 branch_exists=true
               else
                 status=$?

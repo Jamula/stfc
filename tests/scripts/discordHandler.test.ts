@@ -8,6 +8,11 @@ const mod = await import("../../scripts/discord-handler.mjs") as {
     env?: Record<string, string | undefined>;
     runGh?: (args: string[]) => Promise<string>;
     runGit?: (args: string[], opts?: { stdin?: string }) => Promise<string>;
+    reconcileAutomationStateImpl?: (args: {
+      stateDir: string;
+      ref: string;
+      relativePaths: string[];
+    }) => Promise<string>;
     fetchImpl?: (url: string, init?: any) => Promise<any>;
     readFileImpl?: (path: string, enc: string) => Promise<string>;
     writeFileImpl?: (path: string, data: any, enc?: string) => Promise<void>;
@@ -523,10 +528,11 @@ describe("scripts/discord-handler.mjs", () => {
     assert.equal(mem.files.has("data/discord/game-state/2026-06-02/_index.json.tmp"), false);
   });
 
-  it("game-state push race retries with fetch+rebase once", async () => {
+  it("game-state push race retries and preserves the upload commit", async () => {
     const mem = createMemFs();
     const calls: string[][] = [];
     let pushAttempts = 0;
+    const reconcileCalls: Array<{ stateDir: string; ref: string; relativePaths: string[] }> = [];
 
     const code = await mod.runCli({
       env: baseEnv(gameStatePayload()),
@@ -545,6 +551,10 @@ describe("scripts/discord-handler.mjs", () => {
         }
         if (args[0] === "rev-parse") return "abc123\n";
         return "";
+      },
+      reconcileAutomationStateImpl: async (args) => {
+        reconcileCalls.push(args);
+        return "replayed";
       },
       fetchImpl: async (url: string) => {
         if (url.includes("cdn.discordapp.com")) {
@@ -565,16 +575,13 @@ describe("scripts/discord-handler.mjs", () => {
 
     assert.equal(code, 0);
     assert.equal(pushAttempts, 2);
-    assert.equal(
-      calls.some(
-        (a) =>
-          a[0] === "fetch" &&
-          a[2] ===
-            "refs/heads/automation-state:refs/remotes/origin/automation-state",
-      ),
-      true,
-    );
-    assert.equal(calls.some((a) => a[0] === "rebase" && a[1] === "origin/automation-state"), true);
+    assert.equal(reconcileCalls.length, 1);
+    assert.equal(reconcileCalls[0]?.ref, "automation-state");
+    assert.deepEqual(reconcileCalls[0]?.relativePaths.sort(), [
+      "data/discord/game-state/2026-06-02/064800000-state.png",
+      "data/discord/game-state/2026-06-02/064800000-state.png.lineage.json",
+      "data/discord/game-state/2026-06-02/_index.json",
+    ]);
   });
 
   it("unknown command returns a helpful unknown message", async () => {
