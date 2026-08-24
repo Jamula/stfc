@@ -73,18 +73,23 @@ function parseLastJsonLine(stdout) {
 export function checkOverdueViaBridge({
   backend,
   repoRoot,
-  logDir = ".squad/log",
+  logDir,
   windowDays = 7,
   stateList,
   execFileSyncImpl = defaultExecFileSync,
 }) {
   const scriptPath = repoRoot ? path.join(repoRoot, "scripts", "check-retro-overdue.mjs") : CHECK_RETRO_OVERDUE_SCRIPT;
+  // A relative logDir must resolve against repoRoot, not the caller's own
+  // cwd — otherwise a coordinator invoking this bridge from a different
+  // working directory can spawn the intended repository's checker while
+  // inspecting an unrelated directory's log (#248 Copilot review finding).
+  const resolvedLogDir = repoRoot ? path.resolve(repoRoot, logDir ?? ".squad/log") : (logDir ?? ".squad/log");
 
   let input;
   const args = ["overdue", "--backend", backend, "--window-days", String(windowDays)];
 
   if (LOCAL_BACKENDS.has(backend)) {
-    args.push("--log-dir", logDir);
+    args.push("--log-dir", resolvedLogDir);
   } else {
     if (typeof stateList !== "function") {
       return { evaluated: false, backend, overdue: false, fault: "stateList callback is required for non-local backends" };
@@ -102,6 +107,18 @@ export function checkOverdueViaBridge({
   }
 
   const result = runCliChild({ scriptPath, args, input, execFileSyncImpl });
+  if (!result.ok) {
+    // A nonzero exit is a fault regardless of what the child printed
+    // before exiting — parsing its stdout anyway would let a crashed or
+    // killed child process still be promoted to a valid evaluated result
+    // (#248 Copilot review finding: "the bridge ignores result.ok").
+    return {
+      evaluated: false,
+      backend,
+      overdue: false,
+      fault: `check-retro-overdue.mjs exited with a fault (status ${result.status ?? "unknown"}): ${result.stderr || result.error?.message || "no stderr captured"}`,
+    };
+  }
   const parsed = parseLastJsonLine(result.stdout);
 
   if (!parsed || parsed.evaluated !== true || typeof parsed.overdue !== "boolean" || parsed.backend !== backend) {
@@ -143,9 +160,18 @@ export function checkActionItemsViaBridge({
     if (typeof stateRead !== "function") {
       return { evaluated: false, backend, ok: false, fault: "stateRead callback is required for non-local backends" };
     }
+    // For a governed backend there is no canonical "the retro log" key --
+    // logs are timestamped, and only the caller knows which retro is
+    // actually being verified. Silently substituting an invented default
+    // key can read an unrelated object and misreport ok:true (#248
+    // Copilot review finding), so retroLogKey is required here, not
+    // defaulted.
+    if (typeof retroLogKey !== "string" || retroLogKey.length === 0) {
+      return { evaluated: false, backend, ok: false, fault: "retroLogKey is required for non-local backends (no canonical default retro log key exists)" };
+    }
     let content;
     try {
-      content = stateRead({ key: retroLogKey ?? "log/retrospective.md" });
+      content = stateRead({ key: retroLogKey });
     } catch (err) {
       return { evaluated: false, backend, ok: false, fault: `stateRead failed: ${err.message}` };
     }
@@ -156,6 +182,17 @@ export function checkActionItemsViaBridge({
   }
 
   const result = runCliChild({ scriptPath, args, input, execFileSyncImpl });
+  if (!result.ok) {
+    // As in checkOverdueViaBridge: a failed child must never be promoted
+    // to a valid action-item decision merely because it produced JSON
+    // before exiting nonzero (#248 Copilot review finding).
+    return {
+      evaluated: false,
+      backend,
+      ok: false,
+      fault: `check-retro-overdue.mjs exited with a fault (status ${result.status ?? "unknown"}): ${result.stderr || result.error?.message || "no stderr captured"}`,
+    };
+  }
   const parsed = parseLastJsonLine(result.stdout);
 
   if (!parsed || parsed.evaluated !== true || typeof parsed.ok !== "boolean" || parsed.backend !== backend) {

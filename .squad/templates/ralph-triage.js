@@ -433,12 +433,21 @@ function findLeadFallback(roster) {
  * exists.
  */
 function readStateBackend(squadDir) {
+  const configPath = path.join(squadDir, 'config.json');
+  let raw;
   try {
-    const config = JSON.parse(fs.readFileSync(path.join(squadDir, 'config.json'), 'utf8'));
-    return typeof config.stateBackend === 'string' ? config.stateBackend : 'local';
-  } catch {
-    return 'local';
+    raw = fs.readFileSync(configPath, 'utf8');
+  } catch (err) {
+    if (err.code === 'ENOENT') return 'local'; // no config.json at all -> local is the documented default
+    throw new Error(`could not read ${configPath}: ${err.message}`);
   }
+  let config;
+  try {
+    config = JSON.parse(raw);
+  } catch (err) {
+    throw new Error(`${configPath} is not valid JSON: ${err.message}`);
+  }
+  return typeof config.stateBackend === 'string' ? config.stateBackend : 'local';
 }
 
 const RETRO_GATE_LOCAL_BACKENDS = new Set(['local', 'worktree']);
@@ -489,7 +498,16 @@ async function evaluateRetroGate({
   execFileSyncImpl = execFileSync,
   fetchRetroSignalImpl = fetchLatestRetroActionIssueDate,
 }) {
-  const backend = readStateBackend(squadDir);
+  let backend;
+  try {
+    backend = readStateBackend(squadDir);
+  } catch (err) {
+    // A malformed/unreadable config.json (as opposed to a simply-missing
+    // one) must never silently default to "local" — that would let a
+    // repository actually running a governed backend fail OPEN through a
+    // fresh retro-action signal. Report unevaluated instead.
+    return { evaluated: false, backend: 'unknown', overdue: false, reason: `could not determine stateBackend: ${err.message}` };
+  }
 
   if (!RETRO_GATE_LOCAL_BACKENDS.has(backend)) {
     return {

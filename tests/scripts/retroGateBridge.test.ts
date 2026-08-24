@@ -44,6 +44,18 @@ describe("retro-gate-bridge: checkOverdueViaBridge — local/worktree (no stateL
       fs.rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  it("resolves a RELATIVE logDir against repoRoot, not the caller's own cwd (#248 Copilot review finding)", () => {
+    // The real .squad/log under repoRoot has no *retrospective* files
+    // newer than 2026-06-02 (tracked-only, gitignored otherwise), so a
+    // relative "./.squad/log" resolved against repoRoot must report
+    // overdue:true. If this resolved against process.cwd() instead, the
+    // behavior would depend on whatever directory happens to be current
+    // when the bridge is invoked -- exactly the bug being guarded against.
+    const result = checkOverdueViaBridge({ backend: "local", repoRoot, logDir: ".squad/log" });
+    assert.equal(result.evaluated, true);
+    assert.equal(result.overdue, true);
+  });
 });
 
 describe("retro-gate-bridge: checkOverdueViaBridge — non-local, via a fake stateList callback (squad_state_list shape)", () => {
@@ -130,9 +142,16 @@ describe("retro-gate-bridge: checkActionItemsViaBridge — local (real file) and
     const stateRead = () => {
       throw new Error("simulated read failure");
     };
-    const result = checkActionItemsViaBridge({ backend: "orphan", repoRoot, stateRead });
+    const result = checkActionItemsViaBridge({ backend: "orphan", repoRoot, retroLogKey: "log/some-retro.md", stateRead });
     assert.equal(result.evaluated, false);
     assert.match(result.fault ?? "", /stateRead failed/);
+  });
+
+  it("evaluated:false when retroLogKey is missing for a non-local backend (#248 Copilot review: no canonical default retro log key exists)", () => {
+    const stateRead = () => "irrelevant, must not be called";
+    const result = checkActionItemsViaBridge({ backend: "orphan", repoRoot, stateRead });
+    assert.equal(result.evaluated, false);
+    assert.match(result.fault ?? "", /retroLogKey is required/);
   });
 
   it("evaluated:false when local backend is missing retroLogPath", () => {
@@ -156,5 +175,50 @@ describe("retro-gate-bridge: runCliChild — generic child-process runner", () =
     assert.equal(result.ok, false);
     assert.equal(result.status, 3);
     assert.match(result.stdout, /"evaluated":false/);
+  });
+});
+
+describe("retro-gate-bridge: a nonzero child exit is never promoted to a valid decision, even with apparently-valid JSON on stdout (#248 Copilot review finding)", () => {
+  it("checkOverdueViaBridge reports evaluated:false when the child exits nonzero despite printing valid-looking JSON", () => {
+    const execFileSyncImpl = () => {
+      const err = new Error("simulated nonzero exit");
+      // @ts-expect-error -- simulating Node's execFileSync error shape
+      err.status = 1;
+      // @ts-expect-error
+      err.stdout = JSON.stringify({ evaluated: true, backend: "two-layer", overdue: false, windowDays: 7 });
+      // @ts-expect-error
+      err.stderr = "";
+      throw err;
+    };
+    const result = checkOverdueViaBridge({
+      backend: "two-layer",
+      repoRoot,
+      stateList: () => [],
+      execFileSyncImpl: execFileSyncImpl as unknown as (...a: unknown[]) => string,
+    });
+    assert.equal(result.evaluated, false);
+    assert.match(result.fault ?? "", /exited with a fault/);
+  });
+
+  it("checkActionItemsViaBridge reports evaluated:false when the child exits nonzero despite printing valid-looking JSON", () => {
+    const execFileSyncImpl = () => {
+      const err = new Error("simulated nonzero exit");
+      // @ts-expect-error
+      err.status = 1;
+      // @ts-expect-error
+      err.stdout = JSON.stringify({ evaluated: true, backend: "orphan", ok: true, issueRefCount: 1, openCheckboxCount: 0 });
+      // @ts-expect-error
+      err.stderr = "";
+      throw err;
+    };
+    const result = checkActionItemsViaBridge({
+      backend: "orphan",
+      repoRoot,
+      retroLogKey: "log/some-retro.md",
+      stateRead: () => "content with #123",
+      execFileSyncImpl: execFileSyncImpl as unknown as (...a: unknown[]) => string,
+    });
+    assert.equal(result.evaluated, false);
+    assert.match(result.fault ?? "", /exited with a fault/);
   });
 });

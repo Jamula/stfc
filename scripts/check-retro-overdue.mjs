@@ -96,13 +96,14 @@ export function isRetroOverdue({ entries, windowDays = 7, now = new Date() }) {
 
 const LOCAL_BACKENDS = new Set(["local", "worktree"]);
 
-/** Filesystem reader for `local`/`worktree` backends. Never throws. */
+/** Filesystem reader for `local`/`worktree` backends. Missing directory (ENOENT) means an empty log — genuinely no retro yet. Any other read error (permissions, I/O) is a real fault and must propagate, not be silently treated as "no logs" (#248 Copilot review finding). */
 export function listLocalRetroLogs(logDir) {
   let names;
   try {
     names = fs.readdirSync(logDir);
-  } catch {
-    return [];
+  } catch (err) {
+    if (err.code === "ENOENT") return [];
+    throw new Error(`could not read log directory "${logDir}": ${err.message}`);
   }
   return names.filter((n) => RETRO_FILENAME_PATTERN.test(n));
 }
@@ -132,7 +133,7 @@ export function checkRetroOverdue({ backend, logDir = ".squad/log", entries, win
 
 // ── Test-RetroActionItemsCreated equivalent ───────────────────────────────
 
-const ISSUE_REF_RE = /(?:#\d{3,}|issues\/\d{3,})/g;
+const ISSUE_REF_RE = /(?:#\d+|issues\/\d+)/g;
 const OPEN_CHECKBOX_RE = /^[ \t]*[-+*][ \t]+\[[ \t]\]/gm;
 
 /**

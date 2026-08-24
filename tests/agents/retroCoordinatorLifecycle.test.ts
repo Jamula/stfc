@@ -116,9 +116,9 @@ describe("round-start retro gate — the real dispatcher (squad-heartbeat.yml �
 
   it("squad-heartbeat.yml consumes the { retroGate, results, canProceed } shape (not a bare array) written by ralph-triage.js", () => {
     const workflow = read(heartbeatWorkflowPath);
-    assert.match(workflow, /const retroGate = Array\.isArray\(data\) \? null : data\.retroGate/);
+    assert.match(workflow, /canProceed = data\.canProceed === true/);
+    assert.match(workflow, /const retroGate = data\.retroGate/);
     assert.match(workflow, /const results = Array\.isArray\(data\) \? data : data\.results/);
-    assert.match(workflow, /canProceed = !Array\.isArray\(data\) && data\.canProceed === true/);
   });
 
   it("squad-heartbeat.yml gates BOTH the triage-apply step and the Assign @copilot step on the same retro-gate output (#248 Garak round-3 finding 1)", () => {
@@ -134,26 +134,44 @@ describe("round-start retro gate — the real dispatcher (squad-heartbeat.yml �
     assert.match(assignIfLine, /steps\.retro-gate\.outputs\.can_proceed == 'true'/);
   });
 
-  it("squad-heartbeat.yml surfaces an overdue gate loudly (core.warning), not silently", () => {
+  it("squad-heartbeat.yml surfaces an overdue gate loudly (::warning::), not silently, from a step that actually runs regardless of canProceed (#248 Copilot review: prior warnings lived in a step gated to only run when canProceed was true, making them dead code)", () => {
     const workflow = read(heartbeatWorkflowPath);
-    assert.match(workflow, /retroGate\.evaluated && retroGate\.overdue/);
-    assert.match(workflow, /core\.warning\(`\[RETRO\] Overdue/);
+    const gateStepIndex = workflow.indexOf("Ralph — Check retro gate");
+    const applyStepIndex = workflow.indexOf("Ralph — Apply triage decisions");
+    const gateStepBlock = workflow.slice(gateStepIndex, applyStepIndex);
+
+    // The retro-gate step's own `if:` must NOT depend on can_proceed —
+    // otherwise the warning it emits would be exactly as unreachable as
+    // the code it replaced.
+    const gateIfStart = workflow.indexOf("if:", gateStepIndex);
+    const gateIfLine = workflow.slice(gateIfStart, workflow.indexOf("\n", gateIfStart));
+    assert.doesNotMatch(gateIfLine, /can_proceed/, "the gate-check step itself must not be gated on can_proceed, or its warning can never fire");
+
+    assert.match(gateStepBlock, /retroGate\.evaluated && retroGate\.overdue/);
+    assert.match(gateStepBlock, /::warning::\[RETRO\] Overdue/);
+    assert.match(gateStepBlock, /::warning::\[RETRO\] Round-start gate not evaluated/);
   });
 
-  it("both repo-local heartbeat workflow copies return on retro-gate block before the empty-results 'board is clear' message", () => {
+  it("both repo-local heartbeat workflow copies emit the retro warning from the gate-check step, not from the now-unreachable apply step", () => {
     for (const workflowPath of [heartbeatWorkflowPath, installedHeartbeatWorkflowPath]) {
       const workflow = read(workflowPath);
-      const overdueIndex = workflow.indexOf("if (retroGate.evaluated && retroGate.overdue) {");
-      const overdueReturnIndex = workflow.indexOf("return;", overdueIndex);
-      const unevaluatedIndex = workflow.indexOf('} else if (!retroGate.evaluated) {');
-      const unevaluatedReturnIndex = workflow.indexOf("return;", unevaluatedIndex);
-      const boardClearIndex = workflow.indexOf("if (!results || results.length === 0) {");
+      const gateStepIndex = workflow.indexOf("Ralph — Check retro gate");
+      const applyStepIndex = workflow.indexOf("Ralph — Apply triage decisions");
+      assert.ok(gateStepIndex !== -1 && applyStepIndex !== -1 && gateStepIndex < applyStepIndex, `${workflowPath} must have both steps in order`);
 
-      assert.ok(overdueIndex !== -1 && overdueReturnIndex !== -1, `${workflowPath} must return from the overdue branch`);
-      assert.ok(unevaluatedIndex !== -1 && unevaluatedReturnIndex !== -1, `${workflowPath} must return from the unevaluated branch`);
+      const gateStepBlock = workflow.slice(gateStepIndex, applyStepIndex);
+      const applyStepBlock = workflow.slice(applyStepIndex);
+
+      assert.match(gateStepBlock, /::warning::\[RETRO\] Overdue/, `${workflowPath}: the gate-check step must emit the overdue warning`);
+      assert.match(gateStepBlock, /::warning::\[RETRO\] Round-start gate not evaluated/, `${workflowPath}: the gate-check step must emit the unevaluated warning`);
+
+      // The apply step must no longer contain its own copy of these
+      // branches — that copy was unreachable dead code, since this step
+      // only ever runs once canProceed is already known true.
+      assert.doesNotMatch(applyStepBlock, /retroGate\.evaluated && retroGate\.overdue/, `${workflowPath}: the apply step must not duplicate the (unreachable) overdue branch`);
+
+      const boardClearIndex = applyStepBlock.indexOf("if (!results || results.length === 0) {");
       assert.ok(boardClearIndex !== -1, `${workflowPath} must still have the empty-results branch`);
-      assert.ok(overdueReturnIndex < boardClearIndex, `${workflowPath} must not fall through from overdue to 'board is clear'`);
-      assert.ok(unevaluatedReturnIndex < boardClearIndex, `${workflowPath} must not fall through from unevaluated to 'board is clear'`);
     }
   });
 });

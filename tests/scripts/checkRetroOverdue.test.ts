@@ -168,8 +168,23 @@ describe("check-retro-overdue: local/worktree filesystem adapter", () => {
     }
   });
 
-  it("listLocalRetroLogs returns [] for a missing directory (never throws)", () => {
+  it("listLocalRetroLogs returns [] for a missing directory (ENOENT is treated as 'no logs yet')", () => {
     assert.deepEqual(listLocalRetroLogs(path.join(os.tmpdir(), "definitely-does-not-exist-xyz")), []);
+  });
+
+  it("listLocalRetroLogs propagates a real read fault instead of masking it as an empty directory (#248 Copilot review finding)", () => {
+    // Passing a path to a FILE (not a directory) forces readdirSync to
+    // fail with ENOTDIR, not ENOENT -- a genuine I/O fault distinct from
+    // "the directory doesn't exist yet", which must not be silently
+    // swallowed into an empty listing.
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "retro-log-fault-"));
+    try {
+      const filePath = path.join(dir, "not-a-directory.txt");
+      fs.writeFileSync(filePath, "x");
+      assert.throws(() => listLocalRetroLogs(filePath), /could not read log directory/);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it("checkRetroOverdue(local) is NOT overdue when a fresh retro log exists on disk", () => {
@@ -267,6 +282,12 @@ describe("check-retro-overdue: checkActionItemsCreated (Test-RetroActionItemsCre
     const result = checkActionItemsCreated("Just some notes, no tracked items.\n");
     assert.equal(result.ok, false);
     assert.equal(result.issueRefCount, 0);
+  });
+
+  it("recognizes short issue references (#1 or fewer than 3 digits), not just 3+ digit numbers (#248 Copilot review finding)", () => {
+    const result = checkActionItemsCreated("Fixed in #1\nAlso see issues/42\n");
+    assert.equal(result.ok, true);
+    assert.equal(result.issueRefCount, 2);
   });
 
   it("readRetroLogContent reads from disk for local backend", () => {

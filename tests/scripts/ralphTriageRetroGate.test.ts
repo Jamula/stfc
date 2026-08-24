@@ -113,11 +113,37 @@ describe("ralph-triage.js: readStateBackend", () => {
     }
   });
 
-  it("defaults to local when config.json is missing", () => {
+  it("defaults to local when config.json is missing (ENOENT only)", () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "ralph-triage-"));
     try {
       fs.mkdirSync(path.join(root, ".squad"), { recursive: true });
       assert.equal(ralphTriage.readStateBackend(path.join(root, ".squad")), "local");
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("throws (does NOT silently default to local) when config.json exists but is malformed JSON (#248 Copilot review finding)", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "ralph-triage-"));
+    try {
+      const squadDir = path.join(root, ".squad");
+      fs.mkdirSync(squadDir, { recursive: true });
+      fs.writeFileSync(path.join(squadDir, "config.json"), "{ not valid json");
+      assert.throws(() => ralphTriage.readStateBackend(squadDir), /not valid JSON/);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("evaluateRetroGate reports evaluated:false (not a fabricated local-backend result) when config.json is malformed", async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "ralph-triage-"));
+    try {
+      const squadDir = path.join(root, ".squad");
+      fs.mkdirSync(squadDir, { recursive: true });
+      fs.writeFileSync(path.join(squadDir, "config.json"), "{ not valid json");
+      const result = await ralphTriage.evaluateRetroGate({ repoRoot, squadDir, owner: "o", repo: "r", token: "t" });
+      assert.equal(result.evaluated, false);
+      assert.match(result.reason ?? "", /could not determine stateBackend/);
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
     }
