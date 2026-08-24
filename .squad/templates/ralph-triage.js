@@ -457,6 +457,16 @@ const RETRO_GATE_LOCAL_BACKENDS = new Set(['local', 'worktree']);
  * recent `retro-action`-labeled GitHub issue, or `null` if none exists.
  * Injectable (`githubRequestJsonImpl`) so tests can simulate a fresh or
  * stale/absent retro without a network call.
+ *
+ * The REST Issues endpoint also returns pull requests carrying the same
+ * label (a PR is "an issue" in GitHub's API model), and `isUntriagedIssue`
+ * elsewhere in this file already has to account for that. Requesting only
+ * the newest match (`per_page: 1`) trusted whatever came back first, so a
+ * freshly-opened PR labeled `retro-action` could unblock the gate even
+ * though the ceremony's own agenda item requires a genuine GitHub Issue
+ * (#248 Copilot review finding). Fetch a page of candidates and skip any
+ * entry carrying a `pull_request` field, preserving "newest real issue"
+ * semantics.
  */
 async function fetchLatestRetroActionIssueDate({ owner, repo, token, githubRequestJsonImpl = githubRequestJson }) {
   const query = new URLSearchParams({
@@ -464,11 +474,13 @@ async function fetchLatestRetroActionIssueDate({ owner, repo, token, githubReque
     state: 'all',
     sort: 'created',
     direction: 'desc',
-    per_page: '1',
+    per_page: '30',
   });
-  const issues = await githubRequestJsonImpl(`/repos/${owner}/${repo}/issues?${query.toString()}`, token);
-  if (!Array.isArray(issues) || issues.length === 0) return null;
-  const createdAt = issues[0] && issues[0].created_at;
+  const items = await githubRequestJsonImpl(`/repos/${owner}/${repo}/issues?${query.toString()}`, token);
+  if (!Array.isArray(items)) return null;
+  const issue = items.find((item) => item && !item.pull_request);
+  if (!issue) return null;
+  const createdAt = issue.created_at;
   return typeof createdAt === 'string' ? createdAt : null;
 }
 

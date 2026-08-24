@@ -133,7 +133,7 @@ export function checkRetroOverdue({ backend, logDir = ".squad/log", entries, win
 
 // ── Test-RetroActionItemsCreated equivalent ───────────────────────────────
 
-const ISSUE_REF_RE = /(?:#\d+|issues\/\d+)/g;
+const ISSUE_REF_RE = /(?:#[1-9]\d*|issues\/[1-9]\d*)/g;
 const OPEN_CHECKBOX_RE = /^[ \t]*[-+*][ \t]+\[[ \t]\]/gm;
 
 /**
@@ -216,6 +216,15 @@ const KNOWN_FLAGS = new Set([
   "--entries-stdin",
   "--content-stdin",
 ]);
+// Flags are command-specific, not global (#248 Copilot review finding:
+// "overdue --retro-log-path some.md" silently ignored the path instead of
+// being rejected, and "overdue --content-stdin" was silently accepted as
+// the entries-stdin flag). Anything not in the selected command's set is a
+// usage error, even if it's a flag the OTHER command recognizes.
+const FLAGS_BY_COMMAND = {
+  overdue: new Set(["--backend", "--log-dir", "--window-days", "--entries-stdin"]),
+  "action-items": new Set(["--backend", "--retro-log-path", "--content-stdin"]),
+};
 
 class CliUsageError extends Error {}
 
@@ -238,6 +247,8 @@ function parseArgs(argv) {
     i = 1;
   }
 
+  const allowedFlags = FLAGS_BY_COMMAND[args.command];
+
   // A flag's value must not itself look like another flag -- otherwise
   // `--log-dir --entries-stdin` would silently read a directory literally
   // named "--entries-stdin" and treat that as the (missing) value instead
@@ -254,6 +265,9 @@ function parseArgs(argv) {
     const a = argv[i];
     if (!KNOWN_FLAGS.has(a)) {
       throw new CliUsageError(`unknown option "${a}"`);
+    }
+    if (!allowedFlags.has(a)) {
+      throw new CliUsageError(`option "${a}" is not valid for command "${args.command}"`);
     }
     if (a === "--backend") {
       const v = takeValue("--backend", i);

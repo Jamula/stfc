@@ -177,6 +177,37 @@ describe("ralph-triage.js: fetchLatestRetroActionIssueDate — injectable GitHub
     });
     assert.equal(date, null);
   });
+
+  it("skips a labeled pull request and uses the newest genuine issue instead (#248 Copilot review finding)", async () => {
+    // The REST Issues endpoint returns PRs too (a PR is "an issue" in
+    // GitHub's API model); a fresh retro-action-labeled PR must not
+    // unblock the gate, since the ceremony's own agenda item requires a
+    // real Issue.
+    const githubRequestJsonImpl = async () => [
+      { created_at: "2026-08-24T10:00:00Z", number: 300, pull_request: { url: "https://example.com/pr/300" } },
+      { created_at: "2026-08-23T02:17:11Z", number: 246 }, // the real issue, older than the PR above
+    ];
+    const date = await ralphTriage.fetchLatestRetroActionIssueDate({
+      owner: "o",
+      repo: "r",
+      token: "t",
+      githubRequestJsonImpl,
+    });
+    assert.equal(date, "2026-08-23T02:17:11Z");
+  });
+
+  it("returns null when only pull requests carry the label, not falling back to a PR's date", async () => {
+    const githubRequestJsonImpl = async () => [
+      { created_at: "2026-08-24T10:00:00Z", number: 301, pull_request: { url: "https://example.com/pr/301" } },
+    ];
+    const date = await ralphTriage.fetchLatestRetroActionIssueDate({
+      owner: "o",
+      repo: "r",
+      token: "t",
+      githubRequestJsonImpl,
+    });
+    assert.equal(date, null);
+  });
 });
 
 describe("ralph-triage.js: validateOverdueResult — reject malformed/mismatched child JSON before trusting it", () => {

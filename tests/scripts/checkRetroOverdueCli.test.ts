@@ -177,6 +177,38 @@ describe("check-retro-overdue CLI — strict usage-error contract (#248 Garak ro
     assert.equal(status, 3, "an unreadable file, once the arguments themselves are valid, is a runtime fault");
     assert.equal((json as { evaluated: boolean }).evaluated, false);
   });
+
+  it("exits 2 when --retro-log-path is passed to the overdue command (not valid for that command, #248 Copilot review finding)", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "retro-cli-flagscope-"));
+    try {
+      const { status } = runCli(["overdue", "--backend", "local", "--retro-log-path", path.join(dir, "some.md")]);
+      assert.equal(status, 2, "--retro-log-path is an action-items-only flag and must be rejected for overdue, not silently ignored");
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("exits 2 when --content-stdin is passed to the overdue command (must not be silently treated as --entries-stdin)", () => {
+    const { status } = runCli(["overdue", "--backend", "local", "--content-stdin"]);
+    assert.equal(status, 2, "--content-stdin is an action-items-only flag and must be rejected for overdue");
+  });
+
+  it("exits 2 when --entries-stdin is passed to the action-items command (must not be silently treated as --content-stdin)", () => {
+    const { status } = runCli(["action-items", "--backend", "local", "--entries-stdin"]);
+    assert.equal(status, 2, "--entries-stdin is an overdue-only flag and must be rejected for action-items");
+  });
+
+  it("exits 2 when --log-dir or --window-days is passed to the action-items command", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "retro-cli-flagscope-"));
+    try {
+      const first = runCli(["action-items", "--backend", "local", "--log-dir", dir]);
+      assert.equal(first.status, 2, "--log-dir is an overdue-only flag and must be rejected for action-items");
+      const second = runCli(["action-items", "--backend", "local", "--window-days", "7"]);
+      assert.equal(second.status, 2, "--window-days is an overdue-only flag and must be rejected for action-items");
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });
 
 describe("check-retro-overdue CLI — UTC boundary / future / unparseable, through the real process", () => {

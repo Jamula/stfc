@@ -290,6 +290,18 @@ describe("check-retro-overdue: checkActionItemsCreated (Test-RetroActionItemsCre
     assert.equal(result.issueRefCount, 2);
   });
 
+  it("does NOT recognize #0 or issues/0 as valid issue references — GitHub issue numbers are positive (#248 Copilot review finding)", () => {
+    const result = checkActionItemsCreated("See #0 and issues/0 for details\n");
+    assert.equal(result.ok, false);
+    assert.equal(result.issueRefCount, 0);
+  });
+
+  it("recognizes a real reference even when a #0/issues/0 false reference is also present", () => {
+    const result = checkActionItemsCreated("See #0 for the placeholder, real fix in #7\n");
+    assert.equal(result.ok, true);
+    assert.equal(result.issueRefCount, 1);
+  });
+
   it("readRetroLogContent reads from disk for local backend", () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "retro-content-"));
     try {
