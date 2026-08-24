@@ -166,7 +166,7 @@ For local diagnostics you can run individual steps:
 │       ├── redeem.yml              # scheduled gift redemption (every 15 min, ~96/day)
 │       ├── discord-monitor.yml     # optional: harvest codes & tips from Discord (every 4 hours)
 │       ├── refresh-token.yml       # weekly JWT refresh via Playwright auto-login
-│       └── test.yml                # typecheck + tests on push/PR
+│       └── squad-test-gate.yml      # required typecheck + test gate on PRs
 ├── docs/
 │   ├── SETUP.md                    # end-to-end setup guide
 │   ├── squad.md                    # AI team members, capabilities, and how they work
