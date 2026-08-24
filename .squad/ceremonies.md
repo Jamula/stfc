@@ -88,12 +88,25 @@
 > runs against) can never see a newly-written retro log, making the gate
 > permanently "overdue" no matter how many retrospectives actually ran.
 > `evaluateRetroGate` now reads the creation date of the most recent GitHub
-> issue labeled `retro-action` instead — the existing, policy-grounded
-> convention this ceremony's own agenda item 4 already requires, and one a
-> checkout-independent REST API call can always see. See
-> `tests/scripts/ralphTriageRetroGate.test.ts` for the regression proving a
-> fresh retro-action issue genuinely unblocks the queue, and for the pin
-> asserting the gate no longer reads `.squad/log/` directly. Fail-closed
+> Issue instead — a checkout-independent REST API call can always see this.
+>
+> **Completion-marker note (#248 Copilot review, second pass on the
+> satisfiability fix — "using the creation time of any retro-action issue
+> as the completion signal creates a race with this workflow's `issues:
+> labeled` trigger: creating/labeling the FIRST action item during a
+> retrospective can start a heartbeat that sees the fresh issue and resumes
+> triage before the retro log and remaining action items have been
+> verified"):** the signal is **not** the `retro-action` label those
+> individual action items carry (agenda item 4, unchanged — every action
+> item still MUST become a GitHub Issue labeled `retro-action`). It is a
+> distinct `retro-complete` label, applied to a GitHub Issue **only as the
+> final step of a completed retrospective**, after the log is written and
+> every action item has been verified as filed — see the new agenda item 5
+> below. See `tests/scripts/ralphTriageRetroGate.test.ts` for the regression
+> proving a fresh `retro-complete` issue genuinely unblocks the queue, a
+> labeled pull request is never mistaken for a genuine issue, and the
+> pagination behavior when many labeled PRs precede a genuine issue on a
+> later results page. Fail-closed
 > contract: `ralph-triage.js`'s `runRound()` proceeds with triage ONLY when
 > `retroGate.evaluated === true && retroGate.overdue === false` — an
 > unsupported backend, a fetch/spawn fault, or invalid child JSON all block
@@ -106,6 +119,7 @@
 2. What did not ship? (open issues, blockers)
 3. Root cause on any failures
 4. Action items -- each MUST become a GitHub Issue labeled retro-action
+5. **Completion marker (required, last step)** -- once the log above is written and every action item from step 4 is confirmed filed as a GitHub Issue (not a markdown checkbox), open or update a dedicated GitHub Issue labeled `retro-complete`. This is the CI-observable signal `ralph-triage.js`'s round-start gate reads (see the "Completion-marker note" above) -- it must be the LAST thing the ceremony does, never the first, so a heartbeat triggered by the first `retro-action` issue during an in-progress retro can never mistake that for completion.
 
 **Coordinator integration:**
 At round start — unconditionally, every round, per `squad.agent.md` → Ceremonies →

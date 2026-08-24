@@ -141,10 +141,17 @@ assumed recent), and separately rejects any timestamp in the future relative to
    `orphan`/`two-layer`/`git-notes` backends are honestly reported as
    `evaluated: false` rather than fabricated (see `evaluateRetroGate` in
    that file). **Satisfiability:** this dispatcher's retro signal is the
-   creation date of the most recent GitHub issue labeled `retro-action`
-   (see Action Item Enforcement below) — not `.squad/log/`, which is
-   gitignored and therefore invisible to a fresh CI checkout regardless of
-   how many retrospectives actually ran.
+   creation date of the most recent GitHub Issue labeled `retro-complete`
+   — a dedicated completion marker, distinct from the `retro-action` label
+   individual action items carry (see Action Item Enforcement below),
+   applied only as the FINAL step of a completed retrospective. Using the
+   in-progress `retro-action` signal instead would race this repo's
+   `issues: labeled` heartbeat trigger: labeling the very first action item
+   during an in-progress retro could start a heartbeat that sees that fresh
+   issue and resumes triage before the log and remaining action items are
+   verified. The signal is also not `.squad/log/`, which is gitignored and
+   therefore invisible to a fresh CI checkout regardless of how many
+   retrospectives actually ran.
 
 ```powershell
 # At round start — before any work queue construction (illustrative control

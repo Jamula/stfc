@@ -417,10 +417,14 @@ function findLeadFallback(roster) {
  * even after a real retrospective runs. That made the gate permanently
  * "overdue" on this dispatcher: a false gate is exactly the failure class
  * #245 exists to eliminate. The fix uses a source this CI checkout CAN
- * see: the creation date of the most recent GitHub issue labeled
- * `retro-action` — already the established, policy-grounded convention
- * this skill requires ("every retro action item MUST become a GitHub
- * Issue... labeled retro-action", `ceremonies.md` agenda item 4). GitHub
+ * see: the creation date of the most recent GitHub Issue carrying the
+ * dedicated `retro-complete` marker label, applied only as the FINAL step
+ * of a completed retrospective — after its log is written and every
+ * action item has been verified as filed (see `RETRO_COMPLETION_LABEL`
+ * below; this is deliberately NOT the `retro-action` label those action
+ * items themselves carry — using an in-progress action-item issue as the
+ * completion signal would race this workflow's own `issues: labeled`
+ * trigger, resuming triage before the retro actually finished). GitHub
  * Issues are reachable via the REST API regardless of what a checkout
  * contains.
  *
@@ -452,36 +456,64 @@ function readStateBackend(squadDir) {
 
 const RETRO_GATE_LOCAL_BACKENDS = new Set(['local', 'worktree']);
 
+// The retro ceremony's postcondition marker: a dedicated label applied to a
+// GitHub Issue ONLY as the final step of a completed retrospective, after
+// its log is written and every action item has been verified as filed
+// (#248 Copilot review finding, second pass — "using the creation time of
+// any retro-action issue as the completion signal creates a race with this
+// workflow's issues: labeled trigger: creating/labeling the FIRST action
+// item during a retrospective can start a heartbeat that sees the fresh
+// issue and resumes triage before the retro log and remaining action items
+// have been verified"). `retro-action` issues are still required and still
+// filed throughout the ceremony (Action Item Enforcement, unchanged); this
+// gate no longer reads that in-progress signal. See ceremonies.md's
+// "Retrospective with Enforcement" agenda and SKILL.md's Action Item
+// Enforcement section for the documented postcondition step that creates
+// this marker.
+const RETRO_COMPLETION_LABEL = 'retro-complete';
+// Safety cap on pagination so a pathological result set (thousands of
+// labeled PRs with no genuine issue among them) cannot loop indefinitely
+// or hammer the API; 10 pages of 100 is already far beyond any realistic
+// backlog for this signal.
+const MAX_RETRO_SIGNAL_PAGES = 10;
+
 /**
  * The CI-observable retro signal: the creation timestamp of the most
- * recent `retro-action`-labeled GitHub issue, or `null` if none exists.
- * Injectable (`githubRequestJsonImpl`) so tests can simulate a fresh or
- * stale/absent retro without a network call.
+ * recent GitHub Issue carrying the retro-completion marker label, or
+ * `null` if none exists. Injectable (`githubRequestJsonImpl`) so tests can
+ * simulate a fresh or stale/absent retro without a network call.
  *
  * The REST Issues endpoint also returns pull requests carrying the same
  * label (a PR is "an issue" in GitHub's API model), and `isUntriagedIssue`
- * elsewhere in this file already has to account for that. Requesting only
- * the newest match (`per_page: 1`) trusted whatever came back first, so a
- * freshly-opened PR labeled `retro-action` could unblock the gate even
- * though the ceremony's own agenda item requires a genuine GitHub Issue
- * (#248 Copilot review finding). Fetch a page of candidates and skip any
- * entry carrying a `pull_request` field, preserving "newest real issue"
- * semantics.
+ * elsewhere in this file already has to account for that. This paginates
+ * (up to `MAX_RETRO_SIGNAL_PAGES`) and skips any entry carrying a
+ * `pull_request` field until it finds a genuine Issue or exhausts the
+ * result set — a single page is not enough: if more labeled PRs exist than
+ * fit on one page, a genuine issue on a later page must not be missed and
+ * silently reported as "no retro signal" (#248 Copilot review finding).
  */
-async function fetchLatestRetroActionIssueDate({ owner, repo, token, githubRequestJsonImpl = githubRequestJson }) {
-  const query = new URLSearchParams({
-    labels: 'retro-action',
-    state: 'all',
-    sort: 'created',
-    direction: 'desc',
-    per_page: '30',
-  });
-  const items = await githubRequestJsonImpl(`/repos/${owner}/${repo}/issues?${query.toString()}`, token);
-  if (!Array.isArray(items)) return null;
-  const issue = items.find((item) => item && !item.pull_request);
-  if (!issue) return null;
-  const createdAt = issue.created_at;
-  return typeof createdAt === 'string' ? createdAt : null;
+async function fetchLatestRetroCompletionDate({ owner, repo, token, githubRequestJsonImpl = githubRequestJson }) {
+  for (let page = 1; page <= MAX_RETRO_SIGNAL_PAGES; page++) {
+    const query = new URLSearchParams({
+      labels: RETRO_COMPLETION_LABEL,
+      state: 'all',
+      sort: 'created',
+      direction: 'desc',
+      per_page: '100',
+      page: String(page),
+    });
+    const items = await githubRequestJsonImpl(`/repos/${owner}/${repo}/issues?${query.toString()}`, token);
+    if (!Array.isArray(items) || items.length === 0) return null;
+
+    const issue = items.find((item) => item && !item.pull_request);
+    if (issue) {
+      const createdAt = issue.created_at;
+      return typeof createdAt === 'string' ? createdAt : null;
+    }
+
+    if (items.length < 100) return null; // last page, and every entry was a PR
+  }
+  return null; // exhausted MAX_RETRO_SIGNAL_PAGES without finding a genuine issue
 }
 
 /**
@@ -508,7 +540,7 @@ async function evaluateRetroGate({
   token,
   windowDays = 7,
   execFileSyncImpl = execFileSync,
-  fetchRetroSignalImpl = fetchLatestRetroActionIssueDate,
+  fetchRetroSignalImpl = fetchLatestRetroCompletionDate,
 }) {
   let backend;
   try {
@@ -517,7 +549,7 @@ async function evaluateRetroGate({
     // A malformed/unreadable config.json (as opposed to a simply-missing
     // one) must never silently default to "local" — that would let a
     // repository actually running a governed backend fail OPEN through a
-    // fresh retro-action signal. Report unevaluated instead.
+    // fresh retro-completion signal. Report unevaluated instead.
     return { evaluated: false, backend: 'unknown', overdue: false, reason: `could not determine stateBackend: ${err.message}` };
   }
 
@@ -537,7 +569,7 @@ async function evaluateRetroGate({
   try {
     signalDate = await fetchRetroSignalImpl({ owner, repo, token });
   } catch (err) {
-    return { evaluated: false, backend, overdue: false, reason: `failed to fetch retro-action issue signal: ${err.message}` };
+    return { evaluated: false, backend, overdue: false, reason: `failed to fetch retro-completion issue signal: ${err.message}` };
   }
 
   const scriptPath = path.join(repoRoot, 'scripts', 'check-retro-overdue.mjs');
@@ -749,7 +781,7 @@ async function runRound({
   repo,
   windowDays = 7,
   execFileSyncImpl = execFileSync,
-  fetchRetroSignalImpl = fetchLatestRetroActionIssueDate,
+  fetchRetroSignalImpl = fetchLatestRetroCompletionDate,
   fetchSquadIssuesImpl = fetchSquadIssues,
 }) {
   const teamMd = fs.readFileSync(path.join(squadDir, 'team.md'), 'utf8');
@@ -823,7 +855,7 @@ if (require.main === module) {
 module.exports = {
   resolveGithubApiBase,
   readStateBackend,
-  fetchLatestRetroActionIssueDate,
+  fetchLatestRetroCompletionDate,
   validateOverdueResult,
   evaluateRetroGate,
   buildTriageQueue,

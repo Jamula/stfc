@@ -77,7 +77,7 @@ interface RalphTriageModule {
     fetchSquadIssuesImpl?: (owner: string, repo: string, token: string) => Promise<unknown[]>;
   }) => Promise<{ retroGate: RetroGateResult; results: unknown[]; canProceed: boolean }>;
   readStateBackend: (squadDir: string) => string;
-  fetchLatestRetroActionIssueDate: (opts: {
+  fetchLatestRetroCompletionDate: (opts: {
     owner: string;
     repo: string;
     token: string;
@@ -150,16 +150,17 @@ describe("ralph-triage.js: readStateBackend", () => {
   });
 });
 
-describe("ralph-triage.js: fetchLatestRetroActionIssueDate — injectable GitHub API call", () => {
+describe("ralph-triage.js: fetchLatestRetroCompletionDate — injectable GitHub API call", () => {
   it("returns the created_at of the newest matching issue", async () => {
     const githubRequestJsonImpl = async (pathname: string) => {
-      assert.match(pathname, /labels=retro-action/);
+      assert.match(pathname, /labels=retro-complete/);
       assert.match(pathname, /state=all/);
       assert.match(pathname, /sort=created/);
       assert.match(pathname, /direction=desc/);
+      assert.match(pathname, /[?&]page=1\b/);
       return [{ created_at: "2026-08-24T02:17:11Z", number: 246 }];
     };
-    const date = await ralphTriage.fetchLatestRetroActionIssueDate({
+    const date = await ralphTriage.fetchLatestRetroCompletionDate({
       owner: "o",
       repo: "r",
       token: "t",
@@ -169,7 +170,7 @@ describe("ralph-triage.js: fetchLatestRetroActionIssueDate — injectable GitHub
   });
 
   it("returns null when there are no matching issues", async () => {
-    const date = await ralphTriage.fetchLatestRetroActionIssueDate({
+    const date = await ralphTriage.fetchLatestRetroCompletionDate({
       owner: "o",
       repo: "r",
       token: "t",
@@ -180,14 +181,14 @@ describe("ralph-triage.js: fetchLatestRetroActionIssueDate — injectable GitHub
 
   it("skips a labeled pull request and uses the newest genuine issue instead (#248 Copilot review finding)", async () => {
     // The REST Issues endpoint returns PRs too (a PR is "an issue" in
-    // GitHub's API model); a fresh retro-action-labeled PR must not
-    // unblock the gate, since the ceremony's own agenda item requires a
-    // real Issue.
+    // GitHub's API model); a fresh retro-complete-labeled PR must not
+    // unblock the gate, since only a real Issue counts as the ceremony's
+    // completion marker.
     const githubRequestJsonImpl = async () => [
       { created_at: "2026-08-24T10:00:00Z", number: 300, pull_request: { url: "https://example.com/pr/300" } },
       { created_at: "2026-08-23T02:17:11Z", number: 246 }, // the real issue, older than the PR above
     ];
-    const date = await ralphTriage.fetchLatestRetroActionIssueDate({
+    const date = await ralphTriage.fetchLatestRetroCompletionDate({
       owner: "o",
       repo: "r",
       token: "t",
@@ -200,13 +201,64 @@ describe("ralph-triage.js: fetchLatestRetroActionIssueDate — injectable GitHub
     const githubRequestJsonImpl = async () => [
       { created_at: "2026-08-24T10:00:00Z", number: 301, pull_request: { url: "https://example.com/pr/301" } },
     ];
-    const date = await ralphTriage.fetchLatestRetroActionIssueDate({
+    const date = await ralphTriage.fetchLatestRetroCompletionDate({
       owner: "o",
       repo: "r",
       token: "t",
       githubRequestJsonImpl,
     });
     assert.equal(date, null);
+  });
+
+  it("paginates past a full page of labeled PRs to find a genuine issue on a later page (#248 Copilot review finding, second pass)", async () => {
+    const fullPageOfPrs = Array.from({ length: 100 }, (_, i) => ({
+      created_at: "2026-08-24T10:00:00Z",
+      number: 400 + i,
+      pull_request: { url: "https://example.com/pr" },
+    }));
+    const genuineIssue = { created_at: "2026-08-20T00:00:00Z", number: 246, pull_request: undefined };
+
+    const calls: number[] = [];
+    const githubRequestJsonImpl = async (pathname: string) => {
+      const pageMatch = /[?&]page=(\d+)/.exec(pathname);
+      const page = pageMatch ? Number(pageMatch[1]) : 1;
+      calls.push(page);
+      if (page === 1) return fullPageOfPrs;
+      if (page === 2) return [genuineIssue];
+      return [];
+    };
+
+    const date = await ralphTriage.fetchLatestRetroCompletionDate({
+      owner: "o",
+      repo: "r",
+      token: "t",
+      githubRequestJsonImpl,
+    });
+    assert.equal(date, "2026-08-20T00:00:00Z");
+    assert.deepEqual(calls, [1, 2], "must fetch page 2 after page 1 was entirely PRs");
+  });
+
+  it("returns null (not fabricated) after exhausting the page cap without finding a genuine issue", async () => {
+    let pagesRequested = 0;
+    const githubRequestJsonImpl = async () => {
+      pagesRequested++;
+      // Always return a full page of PR-only results, forcing the
+      // function to paginate all the way to its safety cap.
+      return Array.from({ length: 100 }, (_, i) => ({
+        created_at: "2026-08-24T10:00:00Z",
+        number: 500 + i,
+        pull_request: { url: "https://example.com/pr" },
+      }));
+    };
+    const date = await ralphTriage.fetchLatestRetroCompletionDate({
+      owner: "o",
+      repo: "r",
+      token: "t",
+      githubRequestJsonImpl,
+    });
+    assert.equal(date, null);
+    assert.ok(pagesRequested >= 2, "must have paginated at least once before giving up");
+    assert.ok(pagesRequested <= 10, "must respect the pagination safety cap, not loop forever");
   });
 });
 
@@ -300,8 +352,8 @@ describe("ralph-triage.js: evaluateRetroGate — real spawn boundary, satisfiabl
     const source = fs.readFileSync(path.join(repoRoot, ".squad", "templates", "ralph-triage.js"), "utf8");
     assert.match(
       source,
-      /fetchLatestRetroActionIssueDate/,
-      "evaluateRetroGate must use the GitHub retro-action issue signal, not a .squad/log/ directory scan",
+      /fetchLatestRetroCompletionDate/,
+      "evaluateRetroGate must use the GitHub retro-completion issue signal, not a .squad/log/ directory scan",
     );
     assert.doesNotMatch(
       source.slice(source.indexOf("async function evaluateRetroGate")),
@@ -351,7 +403,7 @@ describe("ralph-triage.js: evaluateRetroGate — real spawn boundary, satisfiabl
     }
   });
 
-  it("evaluated:false when fetching the retro-action signal itself fails", async () => {
+  it("evaluated:false when fetching the retro-completion signal itself fails", async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "ralph-triage-"));
     try {
       const squadDir = makeSquadDir(root, "local");
@@ -366,7 +418,7 @@ describe("ralph-triage.js: evaluateRetroGate — real spawn boundary, satisfiabl
         },
       });
       assert.equal(result.evaluated, false);
-      assert.match(result.reason ?? "", /failed to fetch retro-action issue signal/);
+      assert.match(result.reason ?? "", /failed to fetch retro-completion issue signal/);
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
     }
