@@ -7,10 +7,9 @@ import assert from "node:assert/strict";
  * Regression test for the Squad coordinator MCP config path references.
  *
  * The coordinator prompt (squad.agent.md) instructs agents on where to find
- * the state bridge. The config moved from .mcp.json to .github/mcp.json in
- * commit #200. squad upgrade regenerates squad.agent.md from an upstream
- * template that still carries the old path — so this test pins the correct
- * location and catches the regression before it silently breaks the bridge.
+ * the state bridge. Copilot CLI loads .github/mcp.json directly, while Copilot
+ * App project sessions discover .github/extensions. Keep both registration
+ * paths pinned so either host can expose the same bridge definition.
  */
 
 function readFile(relativePath: string): string {
@@ -23,6 +22,9 @@ function readFile(relativePath: string): string {
 describe("Squad coordinator — MCP bridge configuration", () => {
   const coordinator = readFile(".github/agents/squad.agent.md");
   const mcpConfig = readFile(".github/mcp.json");
+  const appExtension = readFile(
+    ".github/extensions/squad-state/extension.mjs",
+  );
 
   it("coordinator references .github/mcp.json (not stale .mcp.json)", () => {
     // Both references in the state-backend handshake section must point to the
@@ -81,6 +83,19 @@ describe("Squad coordinator — MCP bridge configuration", () => {
     assert.ok(
       Array.isArray(args) && args.includes("state-mcp"),
       "squad_state server args must include 'state-mcp'",
+    );
+  });
+
+  it("Copilot App extension registers the shared squad_state MCP definition", () => {
+    assert.match(
+      appExtension,
+      /new URL\("\.\.\/\.\.\/mcp\.json", import\.meta\.url\)/,
+      "squad-state extension must load the canonical .github/mcp.json",
+    );
+    assert.match(
+      appExtension,
+      /joinSession\(\{\s*mcpServers:\s*\{\s*squad_state:\s*squadState/s,
+      "squad-state extension must attach the squad_state MCP server to the App session",
     );
   });
 });
