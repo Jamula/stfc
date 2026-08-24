@@ -594,13 +594,18 @@ describe("discordMonitor / workflow YAML assertions (T027)", () => {
   it("commit-on-write step exists and stages data/digests (constitution v2.0.0 durable artifact)", () => {
     const yaml = fs.readFileSync(yamlPath, "utf8");
     // A step must git-add data/digests so digests are committed after each run.
-    assert.match(yaml, /git add\b[^\n]*data\/digests/);
+    // Issue #241: the add happens against a separate automation-state
+    // worktree ($STATE_DIR), not directly in the main checkout.
+    assert.match(yaml, /add[^\n]*data\/digests/);
   });
 
-  it("commit-on-write step has retry-once push (pull --rebase before push to handle cron contention)", () => {
+  it("commit-on-write step retries with rebase against automation-state (issue #241 — never main)", () => {
     const yaml = fs.readFileSync(yamlPath, "utf8");
-    assert.match(yaml, /git pull --rebase origin/);
-    assert.match(yaml, /git push origin/);
+    assert.match(yaml, /for attempt in 1 2 3; do/);
+    assert.match(yaml, /pull --rebase origin automation-state/);
+    assert.match(yaml, /push origin "HEAD:automation-state"/);
+    assert.doesNotMatch(yaml, /pull --rebase[^\n]*\|\| true/);
+    assert.doesNotMatch(yaml, /push origin "HEAD:\$GITHUB_REF_NAME"/);
   });
 
   // Note: ApiClient import is kept so the test file mirrors runAll.test.ts's

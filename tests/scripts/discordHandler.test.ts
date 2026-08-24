@@ -42,6 +42,7 @@ function baseEnv(payload: Record<string, unknown>): Record<string, string> {
     DISCORD_CLIENT_PAYLOAD: JSON.stringify(payload),
     GITHUB_REPOSITORY: "Jamula/stfc",
     GITHUB_REF_NAME: "main",
+    STFC_STATE_BRANCH: "automation-state",
     GITHUB_SERVER_URL: "https://github.com",
     ALLOWED_GUILD_IDS: "g1,g2",
   };
@@ -107,7 +108,7 @@ function gameStatePayload(overrides: Record<string, unknown> = {}) {
 describe("scripts/discord-handler.mjs", () => {
   it("scans staged game-state artifacts before bypassing commit hooks", () => {
     const source = readFileSync("scripts/discord-handler.mjs", "utf8");
-    const scanAt = source.indexOf('check-artifact-hygiene.mjs", "--staged');
+    const scanAt = source.indexOf('check-artifact-hygiene.mjs');
     const commitAt = source.indexOf('["commit", "--no-verify"');
     assert.ok(scanAt >= 0);
     assert.ok(commitAt > scanAt);
@@ -198,6 +199,7 @@ describe("scripts/discord-handler.mjs", () => {
     assert.equal(ghCalls.length, 2, `expected workflow run + run list, got ${ghCalls.length}`);
     assert.equal(ghCalls[0]?.[0], "workflow");
     assert.equal(ghCalls[0]?.[1], "run");
+    assert.deepEqual(ghCalls[0]?.slice(-2), ["--ref", "main"]);
     assert.equal(ghCalls[1]?.[0], "run");
     assert.equal(ghCalls[1]?.[1], "list");
     assert.match(postedBody, /Redeem triggered — run ID 123456/);
@@ -275,6 +277,10 @@ describe("scripts/discord-handler.mjs", () => {
     assert.ok(commit?.args.includes("--no-verify"));
     assert.ok(commit?.stdin?.includes("data(game-state): after raid"));
     assert.ok(commit?.stdin?.includes("Source: https://discord.com/channels/g1/c1/..."));
+    assert.deepEqual(
+      gitCalls.find((c) => c.args[0] === "push")?.args,
+      ["push", "origin", "HEAD:automation-state"],
+    );
   });
 
   it("game-state same-second same-name uploads get unique filenames — no collision", async () => {
@@ -559,8 +565,16 @@ describe("scripts/discord-handler.mjs", () => {
 
     assert.equal(code, 0);
     assert.equal(pushAttempts, 2);
-    assert.equal(calls.some((a) => a[0] === "fetch" && a[2] === "main"), true);
-    assert.equal(calls.some((a) => a[0] === "rebase" && a[1] === "origin/main"), true);
+    assert.equal(
+      calls.some(
+        (a) =>
+          a[0] === "fetch" &&
+          a[2] ===
+            "refs/heads/automation-state:refs/remotes/origin/automation-state",
+      ),
+      true,
+    );
+    assert.equal(calls.some((a) => a[0] === "rebase" && a[1] === "origin/automation-state"), true);
   });
 
   it("unknown command returns a helpful unknown message", async () => {

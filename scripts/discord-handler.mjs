@@ -6,8 +6,10 @@ import { promisify } from "node:util";
 import process from "node:process";
 import path from "node:path";
 import net from "node:net";
+import { fileURLToPath } from "node:url";
 
 const execFileAsync = promisify(execFile);
+const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const DISCORD_API_BASE = "https://discord.com/api/v10";
 const GAME_STATE_BASE_DIR = "data/discord/game-state";
 const MAX_ATTACHMENT_BYTES = 50 * 1024 * 1024;
@@ -446,7 +448,10 @@ export async function handleGameStateCommand({
   await runGit(["add", "--", outFile]);
   await runGit(["add", "--", lineagePath]);
   await runGit(["add", "--", indexPath]);
-  await runCommand(process.execPath, ["scripts/check-artifact-hygiene.mjs", "--staged"]);
+  await runCommand(
+    process.execPath,
+    [path.join(SCRIPT_DIR, "check-artifact-hygiene.mjs"), "--staged"],
+  );
 
   const commitMessage = [
     `data(game-state): ${safeNote || "no note"}`,
@@ -458,7 +463,7 @@ export async function handleGameStateCommand({
   await runGit(["commit", "--no-verify", "-F", "-"], { stdin: `${commitMessage}\n` });
 
   const doPush = async () => {
-    await runGit(["push", "origin", ref]);
+    await runGit(["push", "origin", `HEAD:${ref}`]);
   };
 
   try {
@@ -466,8 +471,12 @@ export async function handleGameStateCommand({
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     if (/non-fast-forward|fetch first|rejected/i.test(message)) {
-      await runGit(["fetch", "origin", "main"]);
-      await runGit(["rebase", "origin/main"]);
+      await runGit([
+        "fetch",
+        "origin",
+        `refs/heads/${ref}:refs/remotes/origin/${ref}`,
+      ]);
+      await runGit(["rebase", `origin/${ref}`]);
       await doPush();
     } else {
       throw error;
@@ -484,7 +493,7 @@ export async function handleGameStateCommand({
   };
 }
 
-export async function resolveResponseText({ payload, repo, ref, serverUrl, historyPath, runGh, runGit, readFileImpl, writeFileImpl, mkdirImpl, renameImpl, rmImpl, fetchImpl, nowFn }) {
+export async function resolveResponseText({ payload, repo, workflowRef, stateRef, serverUrl, historyPath, runGh, runGit, readFileImpl, writeFileImpl, mkdirImpl, renameImpl, rmImpl, fetchImpl, nowFn }) {
   const command = payload.command;
 
   if (command === "redeem-status") {
@@ -493,7 +502,13 @@ export async function resolveResponseText({ payload, repo, ref, serverUrl, histo
   }
 
   if (command === "trigger-redeem") {
-    const { runId, runUrl } = await triggerRedeemWorkflow({ runGh, repo, ref, serverUrl, nowFn });
+    const { runId, runUrl } = await triggerRedeemWorkflow({
+      runGh,
+      repo,
+      ref: workflowRef,
+      serverUrl,
+      nowFn,
+    });
     return `Redeem triggered — run ID ${runId}\n${runUrl}`;
   }
 
@@ -501,7 +516,7 @@ export async function resolveResponseText({ payload, repo, ref, serverUrl, histo
     const { responseText } = await handleGameStateCommand({
       payload,
       repo,
-      ref,
+      ref: stateRef,
       serverUrl,
       fetchImpl,
       runGit,
@@ -548,14 +563,16 @@ export async function runCli({
     const repo = env.GITHUB_REPOSITORY;
     if (!repo) throw new Error("GITHUB_REPOSITORY env var not set");
 
-    const ref = env.GITHUB_REF_NAME || "main";
+    const workflowRef = env.GITHUB_REF_NAME || "main";
+    const stateRef = env.STFC_STATE_BRANCH || "automation-state";
     const serverUrl = env.GITHUB_SERVER_URL || "https://github.com";
     const historyPath = env.REDEEM_HISTORY_PATH || "docs/redeem-history.md";
 
     const responseText = await resolveResponseText({
       payload,
       repo,
-      ref,
+      workflowRef,
+      stateRef,
       serverUrl,
       historyPath,
       runGh,

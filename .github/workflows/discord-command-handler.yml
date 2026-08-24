@@ -42,10 +42,60 @@ jobs:
             exit 1
           }
 
+      # Run the main-branch handler code with automation-state as its working
+      # repository. Existing state is clean at checkout, /redeem-status sees
+      # live history, and /game-state commits have an automation-state parent.
+      - name: Prepare automation-state handler worktree
+        id: state_worktree
+        run: |
+          set -euo pipefail
+          STATE_DIR="$RUNNER_TEMP/automation-state-handler"
+          rm -rf "$STATE_DIR"
+          git worktree prune
+
+          if git ls-remote --exit-code --heads origin automation-state >/dev/null; then
+            git fetch origin \
+              refs/heads/automation-state:refs/remotes/origin/automation-state
+            git worktree add -B automation-state "$STATE_DIR" origin/automation-state
+          else
+            status=$?
+            if [ "$status" -ne 2 ]; then
+              echo "::error::Unable to inspect origin/automation-state."
+              exit "$status"
+            fi
+            echo "Bootstrapping automation-state in an authenticated linked worktree."
+            git worktree add --detach "$STATE_DIR" HEAD
+            git -C "$STATE_DIR" switch --orphan automation-state
+            git -C "$STATE_DIR" rm -rf --cached --ignore-unmatch .
+          fi
+
+          if [ ! -f "$STATE_DIR/docs/redeem-history.md" ] \
+            && [ -f "$GITHUB_WORKSPACE/docs/redeem-history.md" ]; then
+            mkdir -p "$STATE_DIR/docs"
+            cp "$GITHUB_WORKSPACE/docs/redeem-history.md" \
+              "$STATE_DIR/docs/redeem-history.md"
+          fi
+          if [ ! -d "$STATE_DIR/data/discord/game-state" ] \
+            && [ -d "$GITHUB_WORKSPACE/data/discord/game-state" ]; then
+            mkdir -p "$STATE_DIR/data/discord"
+            cp -a "$GITHUB_WORKSPACE/data/discord/game-state" \
+              "$STATE_DIR/data/discord/game-state"
+          fi
+
+          echo "state_dir=$STATE_DIR" >> "$GITHUB_OUTPUT"
+          echo "complete=true" >> "$GITHUB_OUTPUT"
+
       - name: Route command and post Discord follow-up
+        if: steps.state_worktree.outputs.complete == 'true'
+        working-directory: ${{ steps.state_worktree.outputs.state_dir }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
           ALLOWED_GUILD_IDS: ${{ secrets.ALLOWED_GUILD_IDS }}
           DISCORD_CLIENT_PAYLOAD: ${{ toJson(github.event.client_payload) }}
-        run: node scripts/discord-handler.mjs
+          STFC_STATE_BRANCH: automation-state
+        run: node "$GITHUB_WORKSPACE/scripts/discord-handler.mjs"
+
+      - name: Remove automation-state handler worktree
+        if: always() && steps.state_worktree.outputs.complete == 'true'
+        run: git worktree remove "${{ steps.state_worktree.outputs.state_dir }}" --force

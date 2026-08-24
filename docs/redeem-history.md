@@ -5,6 +5,9 @@ Auto-appended log of every successful gift claim. Updated by the
 (rows are not added when there's nothing new to claim). **New rows are
 inserted at the top**, so the most recent run is always visible first.
 
+> This `main` copy is a frozen seed. Live history is
+> `docs/redeem-history.md` on the `automation-state` branch.
+
 | Date (UTC) | Time (UTC) | Account | Gifts claimed |
 | --- | --- | --- | --- |
 | 2026-08-21 | 03:33 | main | 4 Hr Free Chest, 10 Min Free Chest |

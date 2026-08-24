@@ -163,7 +163,7 @@ For local diagnostics you can run individual steps:
 .
 ├── .github/
 │   └── workflows/
-│       ├── redeem.yml              # scheduled gift redemption (every 15 min, ~96/day)
+│       ├── redeem.yml              # scheduled gift redemption (every 10 min, 144/day)
 │       ├── discord-monitor.yml     # optional: harvest codes & tips from Discord (every 4 hours)
 │       ├── refresh-token.yml       # weekly JWT refresh via Playwright auto-login
 │       └── squad-test-gate.yml      # required typecheck + test gate on PRs
@@ -174,7 +174,7 @@ For local diagnostics you can run individual steps:
 │   ├── stfc-knowledge/
 │   │   ├── README.md                       # knowledge-base lineage convention (6 fields)
 │   │   └── community-reference-sheet/      # mirror of the JulesVern/Quasel/BlueMandalorian sheet
-│   └── redeem-history.md           # auto-appended log of every successful claim
+│   └── redeem-history.md           # frozen main seed; live log is on automation-state
 ├── specs/
 │   └── 001-discord-monitor/
 │       ├── spec.md                 # feature specification
@@ -185,7 +185,7 @@ For local diagnostics you can run individual steps:
 │   └── fetch-community-sheet.mjs   # refresh docs/stfc-knowledge community sheet mirror
 ├── src/                            # TypeScript source (api client, orchestrator, skills)
 ├── tests/                          # node:test suite
-├── promo-codes.txt                 # one promo code per line, # for comments
+├── promo-codes.txt                 # human-maintained seed; operational copy is on automation-state
 ├── package.json
 └── README.md
 ```
@@ -210,9 +210,12 @@ Capture each token from a different browser profile (cookies are profile-scoped)
 
 ---
 
-## Promo codes
+## Promo codes and automation state
 
-Promo codes live in `promo-codes.txt`. The format is dead simple:
+Humans add and edit codes in `promo-codes.txt` on `main`. The scheduled
+workflows keep their live operational copy, current redeem history, dead-code
+cache, Discord state, and digests on the `automation-state` branch. The format
+is dead simple:
 
 - One code per line.
 - Lines starting with `#` are ignored.
@@ -224,11 +227,47 @@ STARTREKDAY2024
 FLEETCMD-WELCOME    # one-time welcome bonus
 ```
 
+Each redeem and Discord-monitor run builds an ephemeral additive union of:
+
+1. the human-maintained `main` file, in its existing comment/order form; and
+2. the operational `automation-state` file, including Discord discoveries.
+
+Codes are keyed by `trim().toUpperCase()` after stripping `#` comments. For a
+duplicate, the `main` line wins so a human can update casing or a comment.
+Automation-only codes are retained beneath a generated marker. Removing a code
+from `main` does **not** delete it from operational state; true deletion is
+intentionally deferred. The dead-cache lookup remains case-sensitive and is a
+separate known limitation.
+
 Codes are resubmitted on every scheduled run. If a code returns
 `CODE_INVALID_OR_EXPIRED`, the orchestrator marks it dead in
 `data/promo-code-dead.json` and skips it on future runs (no per-code API call
-for skipped entries). To reset and re-attempt all codes, delete
-`data/promo-code-dead.json`.
+for skipped entries). Deleting the frozen file on `main` no longer resets
+anything. To re-attempt all codes, make a normal forward commit on
+`automation-state` that removes `data/promo-code-dead.json`.
+
+### Automation-state operations
+
+- **First run:** the writer creates a linked worktree from the authenticated
+  checkout, switches it to an orphan `automation-state` branch, clears the
+  inherited index, and commits only allowlisted state. No PAT, deploy key,
+  bypass actor, or standalone `git init` repository is used.
+- **Consumers:** `/redeem-status` reads live `docs/redeem-history.md`;
+  `/game-state` reads and writes live `data/discord/game-state`; the storage
+  monitor checks out `automation-state` directly.
+- **Reset:** use `git revert` on `automation-state` to undo a bad state commit.
+  Do not force-push. A proposed deletion/non-fast-forward-only ruleset (no
+  required checks or bypass actors) is not installed and still requires fresh
+  Picard approval.
+- **Rollback:** preserve the live allowlisted files in a reviewed `main` PR,
+  then revert the workflow change. The state branch can remain for audit; there
+  are no credentials or live ruleset changes to unwind.
+- **Validation:** GitHub Actions currently provides zero execution evidence
+  while the account-level billing block in #218 prevents jobs from starting.
+  Local gates are `npm test` and `npm run typecheck`. After #218, dispatch
+  redeem twice (run 2 must retain run 1 history), dispatch Discord monitor,
+  exercise `/redeem-status` and `/game-state`, and verify `main`'s tip SHA is
+  unchanged while commits land on `automation-state`.
 
 Promo-code redemption retries transient failures up to **3 total attempts**
 (initial + 2 retries), sleeping **1s then 2s** by default:

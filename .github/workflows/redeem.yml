@@ -15,8 +15,8 @@ on:
   workflow_dispatch: {}
 
 permissions:
-  # `write` so the post-run step can commit any new rows in
-  # docs/redeem-history.md back to the repo using the default GITHUB_TOKEN.
+  # `write` so the post-run step can commit operational state to the
+  # automation-state branch using the default GITHUB_TOKEN.
   contents: write
   # `issues: write` so a dead token raises a visible alert (exit code 2).
   issues: write
@@ -41,6 +41,57 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: npm
+
+      # Issue #241: the ruleset that protects `main` cannot be satisfied by a
+      # direct scheduled push (required status checks only run on pull
+      # requests), and its bypass_actors cannot accept the built-in
+      # `github-actions` identity on this org/plan. State therefore lives on
+      # `automation-state` — a ref the ruleset's ~DEFAULT_BRANCH condition
+      # never matches — instead of on `main`. Restore it here so this run
+      # continues from the latest claims/dead-code cache rather than main's
+      # frozen, possibly-stale checked-out copies.
+      - name: Restore automation state from automation-state branch
+        id: restore_state
+        run: |
+          set -euo pipefail
+          RESTORE_DIR="$RUNNER_TEMP/automation-state-restore"
+          rm -rf "$RESTORE_DIR"
+          git worktree prune
+
+          if git ls-remote --exit-code --heads origin automation-state >/dev/null; then
+            git fetch origin \
+              refs/heads/automation-state:refs/remotes/origin/automation-state
+            git worktree add --detach "$RESTORE_DIR" origin/automation-state
+
+            if [ -f "$RESTORE_DIR/docs/redeem-history.md" ]; then
+              mkdir -p docs
+              cp "$RESTORE_DIR/docs/redeem-history.md" docs/redeem-history.md
+            else
+              echo "docs/redeem-history.md is not on automation-state yet; preserving the main seed."
+            fi
+            if [ -f "$RESTORE_DIR/data/promo-code-dead.json" ]; then
+              mkdir -p data
+              cp "$RESTORE_DIR/data/promo-code-dead.json" data/promo-code-dead.json
+            else
+              echo "data/promo-code-dead.json is not on automation-state yet; preserving the main seed."
+            fi
+            if [ -f "$RESTORE_DIR/promo-codes.txt" ]; then
+              node scripts/merge-promo-codes.mjs \
+                promo-codes.txt "$RESTORE_DIR/promo-codes.txt" promo-codes.txt
+            else
+              echo "promo-codes.txt is not on automation-state yet; preserving the main seed."
+            fi
+
+            git worktree remove "$RESTORE_DIR" --force
+          else
+            status=$?
+            if [ "$status" -ne 2 ]; then
+              echo "::error::Unable to inspect origin/automation-state."
+              exit "$status"
+            fi
+            echo "automation-state does not exist yet; main's files are the first-run seed."
+          fi
+          echo "complete=true" >> "$GITHUB_OUTPUT"
 
       - run: npm ci
 
@@ -103,34 +154,90 @@ jobs:
             --label "squad,squad:uhura,bug,priority:p1" \
             --body-file /tmp/alert-body.md
 
-      - name: Commit redeem history and dead-code cache (if changed)
-        if: always()
+      - name: Commit redeem state to automation-state (if changed)
+        if: always() && steps.restore_state.outputs.complete == 'true'
         run: |
           set -euo pipefail
-          HISTORY_CHANGED="$(git status --porcelain docs/redeem-history.md)"
-          DEAD_CHANGED="$(git status --porcelain data/promo-code-dead.json)"
-          if [ -z "$HISTORY_CHANGED" ] && [ -z "$DEAD_CHANGED" ]; then
-            echo "Neither redeem history nor dead-code cache changed — nothing to commit."
+          STATE_DIR="$RUNNER_TEMP/automation-state"
+          rm -rf "$STATE_DIR"
+          git worktree prune
+
+          branch_exists=false
+          if git ls-remote --exit-code --heads origin automation-state >/dev/null; then
+            git fetch origin \
+              refs/heads/automation-state:refs/remotes/origin/automation-state
+            git worktree add -B automation-state "$STATE_DIR" origin/automation-state
+            branch_exists=true
+          else
+            status=$?
+            if [ "$status" -ne 2 ]; then
+              echo "::error::Unable to inspect origin/automation-state."
+              exit "$status"
+            fi
+            echo "Bootstrapping automation-state in an authenticated linked worktree."
+            git worktree add --detach "$STATE_DIR" HEAD
+            git -C "$STATE_DIR" switch --orphan automation-state
+            git -C "$STATE_DIR" rm -rf --cached --ignore-unmatch .
+          fi
+
+          if [ -f docs/redeem-history.md ]; then
+            mkdir -p "$STATE_DIR/docs"
+            cp docs/redeem-history.md "$STATE_DIR/docs/redeem-history.md"
+          fi
+          if [ -f data/promo-code-dead.json ]; then
+            mkdir -p "$STATE_DIR/data"
+            cp data/promo-code-dead.json "$STATE_DIR/data/promo-code-dead.json"
+          fi
+          if [ -f promo-codes.txt ]; then
+            cp promo-codes.txt "$STATE_DIR/promo-codes.txt"
+          fi
+
+          git -C "$STATE_DIR" config user.name  "github-actions[bot]"
+          git -C "$STATE_DIR" config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if [ -f "$STATE_DIR/docs/redeem-history.md" ]; then
+            git -C "$STATE_DIR" add -A -- docs/redeem-history.md
+          fi
+          if [ -f "$STATE_DIR/data/promo-code-dead.json" ]; then
+            git -C "$STATE_DIR" add -A -- data/promo-code-dead.json
+          fi
+          if [ -f "$STATE_DIR/promo-codes.txt" ]; then
+            git -C "$STATE_DIR" add -A -- promo-codes.txt
+          fi
+          if git -C "$STATE_DIR" diff --cached --quiet; then
+            echo "Redeem history, dead-code cache, and promo codes are unchanged."
+            git worktree remove "$STATE_DIR" --force
             exit 0
           fi
-          git config user.name  "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          [ -n "$HISTORY_CHANGED" ] && git add docs/redeem-history.md
-          [ -n "$DEAD_CHANGED"   ] && git add data/promo-code-dead.json
-          NEW_LINES=$(git diff --cached --numstat docs/redeem-history.md 2>/dev/null | awk '{print $1}')
+          NEW_LINES=$(git -C "$STATE_DIR" diff --cached --numstat -- docs/redeem-history.md | awk '{print $1}')
           NEW_LINES="${NEW_LINES:-0}"
           # --no-verify: npm ci installs the developer pre-commit hook, which
           # runs the full test suite. CI must not gate recording claims on that.
-          git commit --no-verify -m "chore(history): append ${NEW_LINES} new claim row(s) [skip ci]"
+          git -C "$STATE_DIR" commit --no-verify -m "chore(history): append ${NEW_LINES} new claim row(s) [skip ci]"
           # Bounded rebase-then-push retry: up to 3 attempts to absorb a
           # concurrent push. A failed rebase is always visible — never swallowed.
           for attempt in 1 2 3; do
-            if git push origin "HEAD:$GITHUB_REF_NAME"; then
+            if git -C "$STATE_DIR" push origin "HEAD:automation-state"; then
+              git worktree remove "$STATE_DIR" --force
               exit 0
             fi
-            echo "Push attempt $attempt failed; pulling with rebase before retry…"
-            git pull --rebase origin "$GITHUB_REF_NAME"
+            if [ "$attempt" -lt 3 ]; then
+              echo "Push attempt $attempt failed; pulling with rebase before retry…"
+              if git ls-remote --exit-code --heads origin automation-state >/dev/null; then
+                git -C "$STATE_DIR" pull --rebase origin automation-state
+                branch_exists=true
+              else
+                status=$?
+                if [ "$status" -ne 2 ]; then
+                  echo "::error::Unable to inspect origin/automation-state before retry."
+                  exit "$status"
+                fi
+                if [ "$branch_exists" = true ]; then
+                  echo "::error::origin/automation-state disappeared during push retry."
+                  exit 1
+                fi
+                echo "origin/automation-state is still absent; retrying the first push without pull."
+              fi
+            fi
           done
           echo "::error::All 3 push attempts failed — investigate concurrent workflow conflicts."
           exit 1
-

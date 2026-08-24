@@ -2,9 +2,8 @@
 /**
  * Pre-push hook: auto-rebase main onto origin/main before push.
  *
- * The scheduled redeem.yml workflow commits to docs/redeem-history.md
- * every 15 minutes, causing constant divergence on origin/main.
- * Rebase is always conflict-free since feature work never touches that file.
+ * Automation state is pushed to automation-state, but human and release
+ * tooling can still advance main while a local main checkout is stale.
  *
  * Installed by simple-git-hooks. Emergency bypass (avoid routine use):
  *   git push --no-verify
