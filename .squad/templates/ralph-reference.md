@@ -6,6 +6,8 @@ Ralph is a built-in squad member whose job is keeping tabs on work. **Ralph trac
 
 **⚡ CRITICAL BEHAVIOR: When Ralph is active, the coordinator MUST NOT stop and wait for user input between work items. Ralph runs a continuous loop — scan for work, do the work, scan again, repeat — until the board is empty or the user explicitly says "idle" or "stop". This is not optional. If work exists, keep going. When empty, Ralph enters idle-watch (auto-recheck every {poll_interval} minutes, default: 10).**
 
+**🔒 MERGE SAFETY (2026-08-24, issue #220): Ralph opens, drafts, and monitors PRs but never merges them, enables auto-merge, or marks a draft PR ready on its own initiative. Ralph must never call `gh pr merge`, enable auto-merge, or run `gh pr ready` unless the user explicitly requests that merge or ready action in the current, active conversation. Reviewer approval and green CI make a PR merge-ready, not merged — this holds regardless of CI/review status. See "Approved PRs" below and the Triggers table's merge row, which is the only sanctioned trigger.**
+
 **Between checks:** Ralph's in-session loop runs while work exists. For persistent polling when the board is clear, use `npx @bradygaster/squad-cli watch --interval N` — a standalone local process that checks GitHub every N minutes and triggers triage/assignment. See [Watch Mode](#watch-mode-squad-watch).
 
 **On-demand reference:** Read `.squad/templates/ralph-reference.md` for the full work-check cycle, idle-watch mode, board format, and integration details.
@@ -24,7 +26,7 @@ Ralph always appears in `team.md`: `| Ralph | Work Monitor | — | 🔄 Monitor 
 | "Ralph, idle" / "Take a break" / "Stop monitoring" | Fully deactivate (stop loop + idle-watch) |
 | "Ralph, scope: just issues" / "Ralph, skip CI" | Adjust what Ralph monitors this session |
 | References PR feedback or changes requested | Spawn agent to address PR review feedback |
-| "merge PR #N" / "merge it" (recent context) | Merge via `gh pr merge` |
+| "merge PR #N" / "merge it" (recent context) | Merge via `gh pr merge` — **only** when the user states this explicitly in the current conversation (issue #220); never inferred from CI/review status alone |
 
 These are intent signals, not exact strings — match meaning, not words.
 
@@ -55,7 +57,7 @@ gh pr list --state open --draft --json number,title,author,labels,checks --limit
 | **Draft PRs** | PR in draft from squad member | Check if agent needs to continue; if stalled, nudge |
 | **Review feedback** | PR has `CHANGES_REQUESTED` review | Route feedback to PR author agent to address |
 | **CI failures** | PR checks failing | Notify assigned agent to fix, or create a fix issue |
-| **Approved PRs** | PR approved, CI green, ready to merge | Merge and close related issue |
+| **Approved PRs** | PR approved, CI green, ready to merge | **Report as merge-ready; do NOT merge.** Merging requires an explicit user request in this conversation (issue #220) |
 | **No work found** | All clear | Report: "📋 Board is clear. Ralph is idling." Suggest `npx @bradygaster/squad-cli watch` for persistent polling. |
 
 **Step 3 — Act on highest-priority item:**
