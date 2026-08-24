@@ -85,6 +85,33 @@ function makeFakeClient(overrides: Partial<FakeClient> = {}): FakeClient {
   };
 }
 
+function mockStoreFetch(giftStatuses: number[]): {
+  fetchImpl: typeof fetch;
+  calls: { auth: number; gifts: number };
+} {
+  const calls = { auth: 0, gifts: 0 };
+  const fetchImpl = (async (input: string | URL | Request) => {
+    const url = String(input);
+    if (url.endsWith("/auth/me")) {
+      calls.auth += 1;
+      return new Response(JSON.stringify({ id: 1, level: 50 }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    if (url.includes("/offers/gifts?available=true")) {
+      const status = giftStatuses[Math.min(calls.gifts, giftStatuses.length - 1)]!;
+      calls.gifts += 1;
+      return new Response(
+        JSON.stringify(status === 200 ? { items: [] } : { error: `HTTP ${status}` }),
+        { status, headers: { "content-type": "application/json" } },
+      );
+    }
+    throw new Error(`Unexpected store request: ${url}`);
+  }) as typeof fetch;
+  return { fetchImpl, calls };
+}
+
 describe("runAll", () => {
   let dir: string;
   let savedSummaryEnv: string | undefined;
@@ -206,23 +233,35 @@ describe("runAll", () => {
     assert.match(summary, /secret rotation/i);
   });
 
-  it("auth/me OK but gifts/list 401 → not a green run; flags secret rotation", async () => {
-    // Regression: the store can accept the JWT on /auth/me and still reject
-    // it on /offers/gifts. That used to report a healthy ✅ run with zero
-    // claims, because every outcome counted as "expected".
-    const fake = makeFakeClient({
-      getMe: async () => ({ id: 1, level: 50 }),
-      listGifts: async () => {
-        throw new TokenExpiredError("Authentication rejected (401) on GET /offers/gifts", 401);
-      },
+  it("auth/me 200 and gifts/list 401 then 200 remains TOKEN_VALID with exitCode 0", async () => {
+    const store = mockStoreFetch([401, 200]);
+
+    const { result, exitCode } = await runAll({
+      accounts: [{ name: "main", token: makeJwt({ exp: 9999999999 }) }],
+      fetchImpl: store.fetchImpl,
+      summary: createSummaryWriter(undefined),
+      promoCodesPath: emptyPromoFile(),
+      deadCodesPath: path.join(dir, "dead-store-recovered.json"),
     });
+
+    const account = result.accounts[0]!;
+    assert.equal(account.tokenStatus, Outcomes.TOKEN_VALID);
+    assert.equal(account.ok, true);
+    assert.equal(exitCode, 0);
+    assert.equal(store.calls.auth, 1);
+    assert.equal(store.calls.gifts, 2);
+    assert.ok(account.items.every((item) => item.outcome !== Outcomes.TOKEN_EXPIRED));
+  });
+
+  it("auth/me 200 but gifts/list rejects twice → TOKEN_EXPIRED and exitCode 2", async () => {
+    const store = mockStoreFetch([401, 401]);
     const summaryFile = path.join(dir, "summary-store-401.md");
     const codeFile = path.join(dir, "promo-store-401.txt");
     fs.writeFileSync(codeFile, "SHOULDNOTBETRIED\n", "utf8");
 
     const { result, exitCode } = await runAll({
       accounts: [{ name: "main", token: makeJwt({ exp: 9999999999 }) }],
-      clientFactory: () => fake as unknown as ApiClient,
+      fetchImpl: store.fetchImpl,
       summary: createSummaryWriter(summaryFile),
       promoCodesPath: codeFile,
       deadCodesPath: path.join(dir, "dead-store-401.json"),
@@ -233,6 +272,8 @@ describe("runAll", () => {
     assert.equal(account.tokenStatus, Outcomes.TOKEN_EXPIRED);
     assert.equal(exitCode, 2, "a dead token must ask for secret rotation, not exit 0");
     assert.equal(account.promoCodes.length, 0, "promo codes must not be burned against a dead token");
+    assert.equal(store.calls.auth, 1);
+    assert.equal(store.calls.gifts, 2);
 
     const summary = fs.readFileSync(summaryFile, "utf8");
     assert.match(summary, /secret rotation/i);

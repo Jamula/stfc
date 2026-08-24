@@ -78,30 +78,46 @@ export class ApiClient {
     const method: HttpMethod = args.method ?? "GET";
     const isSafe = method === "GET";
 
-    try {
-      return await this.attempt(args, method);
-    } catch (err) {
-      // A 401/403 can be a single transient rejection from the store rather
-      // than a genuinely dead token — the JWT can look valid to /auth/me yet
-      // still get bounced once by another endpoint (see issue #243). That is
-      // not enough evidence on its own for TokenExpiredError, a terminal,
-      // account-degrading outcome the orchestrator escalates to exit code 2.
-      // Retry once and require the rejection to repeat before trusting it —
-      // corroboration "within the same run" per the retro's action item.
-      // Safe to retry regardless of method: unlike a 5xx/network failure, a
-      // 401/403 means the request was rejected before any side effect could
-      // happen, so there's no double-submission risk to guard against here.
-      if (err instanceof TokenExpiredError) {
+    // One bounded sequence composes the existing single GET-transient retry
+    // with auth corroboration. A 401/403 is safe to replay for every method
+    // because the server rejected the request before applying side effects.
+    // Three total attempts cover either ordering of one transient failure and
+    // one auth rejection without allowing POST 5xx/network retries.
+    const maxAttempts = 3;
+    let authRejections = 0;
+    let transientRetries = 0;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      try {
+        return await this.attempt(args, method);
+      } catch (err) {
+        if (err instanceof TokenExpiredError) {
+          authRejections += 1;
+          if (authRejections >= 2) throw err;
+          if (attempt === maxAttempts) {
+            throw new TransientError(
+              redactString(
+                `Authentication rejection on ${method} ${args.path} could not be corroborated within the retry limit`,
+              ),
+              err.status,
+            );
+          }
+        } else if (
+          isSafe &&
+          transientRetries === 0 &&
+          (err instanceof TransientError || err instanceof TypeError) &&
+          attempt < maxAttempts
+        ) {
+          transientRetries += 1;
+        } else {
+          throw err;
+        }
+
         await sleep(jitter(500, 1000));
-        return this.attempt(args, method);
       }
-      if (!isSafe) throw err;
-      if (err instanceof TransientError || err instanceof TypeError) {
-        await sleep(jitter(500, 1000));
-        return this.attempt(args, method);
-      }
-      throw err;
     }
+
+    throw new Error("API request retry loop exhausted unexpectedly");
   }
 
   private async attempt<T>(args: RequestArgs<T>, method: HttpMethod): Promise<T> {

@@ -32,6 +32,20 @@ function readIfExists(p: string): string | undefined {
 
 const yaml = readIfExists(WORKFLOW);
 
+function getNamedStep(source: string, name: string): string {
+  const marker = `      - name: ${name}`;
+  const start = source.indexOf(marker);
+  assert.notEqual(start, -1, `expected workflow step "${name}"`);
+  const end = source.indexOf("\n      - ", start + marker.length);
+  return source.slice(start, end === -1 ? source.length : end);
+}
+
+function getMatchCommand(step: string): string {
+  const match = step.match(/matches=\$\(gh issue list[\s\S]*?sort_by\(\.number\)'\)/);
+  assert.ok(match, "expected cached exact-match issue lookup");
+  return match[0].replace(/\r/g, "");
+}
+
 describe(".github/workflows/redeem.yml", () => {
   it("workflow file exists", () => {
     assert.ok(yaml !== undefined, `expected ${WORKFLOW} to exist`);
@@ -210,37 +224,86 @@ describe(".github/workflows/redeem.yml", () => {
   );
 
   it(
-    "includes an auto-resolve dead-token alert step gated on exit code 0",
+    "declares issues: write permission for dead-token issue management",
     { skip: yaml === undefined },
     () => {
       assert.match(
         yaml!,
-        /- name: Auto-resolve dead-token alert[\s\S]*?if: always\(\) && steps\.redeem\.outputs\.exit_code == '0'/,
-        "auto-resolve step must only run after a green redeem exit code",
+        /permissions:[\s\S]*?issues:\s*write/,
+        "dead-token alert creation and closure require issues: write",
       );
     },
   );
 
   it(
-    "auto-resolve step searches open issues using the same alert title as the create-alert step",
+    "uses the same exact title and stable required labels for create and resolve",
     { skip: yaml === undefined },
     () => {
-      assert.match(
-        yaml!,
-        /- name: Alert on dead token[\s\S]*?TITLE: "([^"]+)"[\s\S]*?- name: Auto-resolve dead-token alert[\s\S]*?TITLE: "\1"[\s\S]*?gh issue list --state open --search "\$TITLE in:title"/,
-        "auto-resolve step must look up the same titled open alert before closing it",
+      const expectedTitle =
+        "STFC token rejected — redemption is stopped until STFC_ACCOUNTS is refreshed";
+      const titles = [...yaml!.matchAll(/^\s+TITLE: "([^"]+)"$/gm)].map((match) => match[1]);
+      const requiredLabels = [...yaml!.matchAll(/^\s+REQUIRED_LABELS: "([^"]+)"$/gm)].map(
+        (match) => match[1],
       );
+
+      assert.deepEqual(titles, [expectedTitle, expectedTitle]);
+      assert.deepEqual(requiredLabels, ["bug,priority:p1", "bug,priority:p1"]);
+      assert.ok(requiredLabels.every((labels) => !labels.includes("squad:")));
     },
   );
 
   it(
-    "auto-resolve step closes an existing issue with a comment",
+    "uses an identical exact-title and required-label predicate in both issue lookups",
     { skip: yaml === undefined },
     () => {
+      const createStep = getNamedStep(yaml!, "Alert on dead token");
+      const resolveStep = getNamedStep(yaml!, "Auto-resolve dead-token alert");
+      const createLookup = getMatchCommand(createStep);
+      const resolveLookup = getMatchCommand(resolveStep);
+
+      assert.equal(resolveLookup, createLookup, "create and resolve predicates must stay symmetric");
+      assert.match(createLookup, /--search "\$TITLE in:title"/);
+      assert.match(createLookup, /--json number,title,labels/);
+      assert.match(createLookup, /select\(\.title == env\.TITLE\)/);
+      assert.match(createLookup, /env\.REQUIRED_LABELS \| split\(","\)/);
+      assert.match(createLookup, /\[\.labels\[\]\.name\]/);
+      assert.match(createLookup, /sort_by\(\.number\)/);
+    },
+  );
+
+  it(
+    "caches matches, warns on duplicates, and selects only the oldest issue",
+    { skip: yaml === undefined },
+    () => {
+      for (const name of ["Alert on dead token", "Auto-resolve dead-token alert"]) {
+        const step = getNamedStep(yaml!, name);
+        assert.match(step, /match_count=\$\(jq 'length' <<<"\$matches"\)/);
+        assert.match(step, /existing=\$\(jq -r '\.\[0\]\.number \/\/ empty' <<<"\$matches"\)/);
+        assert.match(step, /if \[ "\$match_count" -gt 1 \]; then/);
+        assert.match(step, /::warning::Found \$match_count matching dead-token alerts/);
+      }
+    },
+  );
+
+  it(
+    "auto-resolve is exit-code-0 gated, non-fatal, and closes at most one issue",
+    { skip: yaml === undefined },
+    () => {
+      const resolveStep = getNamedStep(yaml!, "Auto-resolve dead-token alert");
       assert.match(
-        yaml!,
-        /- name: Auto-resolve dead-token alert[\s\S]*?if \[ -z "\$existing" \]; then[\s\S]*?gh issue close "\$existing"[\s\S]*?--comment "Token accepted again as of \$run_url — closing automatically\."/,
-        "auto-resolve step must close the existing alert and leave a comment trail",
+        resolveStep,
+        /if: always\(\) && steps\.redeem\.outputs\.exit_code == '0'/,
+      );
+      assert.match(resolveStep, /continue-on-error:\s*true/);
+      assert.match(resolveStep, /gh issue close "\$existing"/);
+      assert.match(
+        resolveStep,
+        /--comment "Token accepted again as of \$run_url — closing automatically\."/,
+      );
+      assert.equal(
+        (yaml!.match(/\bgh issue close\b/g) ?? []).length,
+        1,
+        "workflow must contain exactly one bounded close command",
       );
     },
   );

@@ -51,6 +51,17 @@ describe("ApiClient", () => {
     });
   }
 
+  function mockStatusSequence(...statuses: number[]): {
+    calls: Array<{ url: string; init: RequestInit }>;
+  } {
+    let index = 0;
+    return mockFetch(() => {
+      const status = statuses[Math.min(index, statuses.length - 1)]!;
+      index += 1;
+      return jsonResponse(status, status === 200 ? { ok: true } : { error: `HTTP ${status}` });
+    });
+  }
+
   const OkSchema = z.object({ ok: z.boolean() }).passthrough();
 
   it("GET sends Authorization: Bearer <token> and base URL prefix", async () => {
@@ -81,12 +92,7 @@ describe("ApiClient", () => {
   });
 
   it("GET retries once on 401 then succeeds", async () => {
-    let n = 0;
-    const { calls } = mockFetch(() => {
-      n += 1;
-      if (n === 1) return jsonResponse(401, { error: "unauthorized" });
-      return jsonResponse(200, { ok: true });
-    });
+    const { calls } = mockStatusSequence(401, 200);
     const client = new ApiClient({ baseUrl: "https://example.com", token: "tok" });
     const result = await client.request({ path: "/x", method: "GET", schema: OkSchema });
     assert.deepEqual(result, { ok: true });
@@ -97,33 +103,42 @@ describe("ApiClient", () => {
     );
   });
 
-  it("GET 401 twice → TokenExpiredError after corroboration", async () => {
-    const { calls } = mockFetch(() => jsonResponse(401, { error: "unauthorized" }));
+  it("GET retries once on 403 then succeeds", async () => {
+    const { calls } = mockStatusSequence(403, 200);
     const client = new ApiClient({ baseUrl: "https://example.com", token: "tok" });
-    await assert.rejects(
-      () => client.request({ path: "/x", method: "GET", schema: OkSchema }),
-      (err: unknown) => err instanceof TokenExpiredError,
-    );
-    assert.equal(calls.length, 2, "401 should be retried exactly once before surfacing");
+    const result = await client.request({ path: "/x", method: "GET", schema: OkSchema });
+    assert.deepEqual(result, { ok: true });
+    assert.equal(calls.length, 2);
   });
 
-  it("403 → TokenExpiredError", async () => {
-    const { calls } = mockFetch(() => jsonResponse(403, { error: "forbidden" }));
+  it("GET 401 then 403 → TokenExpiredError after corroboration", async () => {
+    const { calls } = mockStatusSequence(401, 403);
     const client = new ApiClient({ baseUrl: "https://example.com", token: "tok" });
     await assert.rejects(
       () => client.request({ path: "/x", method: "GET", schema: OkSchema }),
       (err: unknown) => err instanceof TokenExpiredError,
     );
-    assert.equal(calls.length, 2, "403 should also be retried exactly once before surfacing");
+    assert.equal(calls.length, 2, "two auth rejections should terminate the shared sequence");
+  });
+
+  it("GET 500 then 401 then 200 succeeds within the shared attempt bound", async () => {
+    const { calls } = mockStatusSequence(500, 401, 200);
+    const client = new ApiClient({ baseUrl: "https://example.com", token: "tok" });
+    const result = await client.request({ path: "/x", method: "GET", schema: OkSchema });
+    assert.deepEqual(result, { ok: true });
+    assert.equal(calls.length, 3, "one transient and one auth retry must share a three-call bound");
+  });
+
+  it("GET 401 then 500 then 200 succeeds within the shared attempt bound", async () => {
+    const { calls } = mockStatusSequence(401, 500, 200);
+    const client = new ApiClient({ baseUrl: "https://example.com", token: "tok" });
+    const result = await client.request({ path: "/x", method: "GET", schema: OkSchema });
+    assert.deepEqual(result, { ok: true });
+    assert.equal(calls.length, 3, "auth corroboration must compose with the GET transient retry");
   });
 
   it("POST retries once on 401 then succeeds", async () => {
-    let n = 0;
-    const { calls } = mockFetch(() => {
-      n += 1;
-      if (n === 1) return jsonResponse(401, { error: "unauthorized" });
-      return jsonResponse(200, { ok: true });
-    });
+    const { calls } = mockStatusSequence(401, 200);
     const client = new ApiClient({ baseUrl: "https://example.com", token: "tok" });
     const result = await client.request({
       path: "/x",
@@ -135,6 +150,35 @@ describe("ApiClient", () => {
     assert.equal(calls.length, 2, "401 retry must apply to POST even though 5xx retry does not");
     assert.equal(calls[0]!.init.method, "POST");
     assert.equal(calls[1]!.init.method, "POST");
+  });
+
+  it("POST retries once on 403 then succeeds", async () => {
+    const { calls } = mockStatusSequence(403, 200);
+    const client = new ApiClient({ baseUrl: "https://example.com", token: "tok" });
+    const result = await client.request({
+      path: "/x",
+      method: "POST",
+      body: { y: 1 },
+      schema: OkSchema,
+    });
+    assert.deepEqual(result, { ok: true });
+    assert.equal(calls.length, 2);
+  });
+
+  it("POST 401 twice → TokenExpiredError after exactly two calls", async () => {
+    const { calls } = mockStatusSequence(401, 401);
+    const client = new ApiClient({ baseUrl: "https://example.com", token: "tok" });
+    await assert.rejects(
+      () =>
+        client.request({
+          path: "/x",
+          method: "POST",
+          body: { y: 1 },
+          schema: OkSchema,
+        }),
+      (err: unknown) => err instanceof TokenExpiredError,
+    );
+    assert.equal(calls.length, 2, "POST auth corroboration must remain bounded");
   });
 
   it("500 (POST) → TransientError, no retry", async () => {
@@ -154,7 +198,7 @@ describe("ApiClient", () => {
   });
 
   it("network error → TransientError", async () => {
-    mockFetch(() => {
+    const { calls } = mockFetch(() => {
       throw new TypeError("network failure");
     });
     const client = new ApiClient({ baseUrl: "https://example.com", token: "tok" });
@@ -162,6 +206,7 @@ describe("ApiClient", () => {
       () => client.request({ path: "/x", method: "POST", body: {}, schema: OkSchema }),
       (err: unknown) => err instanceof TransientError,
     );
+    assert.equal(calls.length, 1, "POST network failures must not be retried");
   });
 
   it("non-JSON 200 response → SchemaMismatchError", async () => {
@@ -189,16 +234,21 @@ describe("ApiClient", () => {
   });
 
   it("GET retries once on 500 then succeeds", async () => {
-    let n = 0;
-    const { calls } = mockFetch(() => {
-      n += 1;
-      if (n === 1) return jsonResponse(500, { error: "transient" });
-      return jsonResponse(200, { ok: true });
-    });
+    const { calls } = mockStatusSequence(500, 200);
     const client = new ApiClient({ baseUrl: "https://example.com", token: "tok" });
     const result = await client.request({ path: "/x", method: "GET", schema: OkSchema });
     assert.deepEqual(result, { ok: true });
     assert.equal(calls.length, 2, "GET should retry exactly once on 5xx");
+  });
+
+  it("GET stops after one transient retry", async () => {
+    const { calls } = mockStatusSequence(500, 500, 200);
+    const client = new ApiClient({ baseUrl: "https://example.com", token: "tok" });
+    await assert.rejects(
+      () => client.request({ path: "/x", method: "GET", schema: OkSchema }),
+      (err: unknown) => err instanceof TransientError,
+    );
+    assert.equal(calls.length, 2, "GET must retain its exact one-transient-retry bound");
   });
 
   it("error messages NEVER leak the Bearer token", async () => {
