@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "fs";
-import { resolve } from "path";
+import { readFileSync, readdirSync, statSync } from "fs";
+import { resolve, join, relative } from "path";
 
 /**
  * Regression test for issue #220: prevent issue sessions and Ralph/coordinator
@@ -10,16 +10,28 @@ import { resolve } from "path";
  * Four PRs (#215-#217, #219) were merged by an automated session before
  * required CI could even start (account-billing block, issue #218) and before
  * any review existed. Draft-PR status alone was later proven insufficient —
- * external automation still merged already-drafted PRs. The only durable,
- * repo-controlled mitigation (this repo's GitHub plan does not support
- * branch-protection APIs — see issue #220) is an explicit, fail-loud
- * instruction invariant: Ralph/the coordinator/issue sessions may open PRs,
- * but must never call `gh pr merge`, enable auto-merge, or run `gh pr ready`
- * without an explicit user request in the current, active conversation.
+ * issue #220 comments report that external automation (not Ralph, not any
+ * squad-controlled agent) merged further PRs after Ralph converted open work
+ * to draft/hold and sessions had stopped. This test pins the repo-side fix
+ * only: removal of squad-controlled merge authority. It does not, and cannot,
+ * prove who or what the external merger is — identifying/disabling it is a
+ * separate, still-open concern (see issue #220), not something an
+ * instruction-file pin test can verify.
+ *
+ * The only durable, repo-controlled mitigation (this repo's GitHub plan does
+ * not support branch-protection APIs — see issue #220) is an explicit,
+ * fail-loud instruction invariant: Ralph/the coordinator/issue sessions may
+ * open PRs, but must never call `gh pr merge`, enable auto-merge, or run
+ * `gh pr ready` without an explicit user request in the current, active
+ * conversation. A request from a prior turn, stale context, or an inference
+ * from CI/review status never counts, no matter how recent.
  *
  * This test pins that invariant's presence (and the removal of the old
- * unconditional "auto-merge on reviewer-approved + CI-green" authorization)
- * across every prompt/runbook/template that could grant merge authority.
+ * unconditional "auto-merge on reviewer-approved + CI-green" authorization,
+ * the "(recent context)" stale-request bypass, and the dangling "Rule 7
+ * auto-merge gate" citation) across every prompt/runbook/template/skill that
+ * could grant merge authority, plus a bounded repo-wide scan so newly added
+ * instruction files can't silently reintroduce this class of bug.
  */
 
 function readRepoFile(relativePath: string): string {
@@ -27,6 +39,13 @@ function readRepoFile(relativePath: string): string {
     /\r\n/g,
     "\n",
   );
+}
+
+/** Collapses all runs of whitespace (including newlines) to a single space.
+ * Used for assertions whose meaning spans a line-wrap boundary, so a future
+ * re-wrap of the prose doesn't spuriously break the pin. */
+function collapseWhitespace(text: string): string {
+  return text.replace(/\s+/g, " ");
 }
 
 const ralphCharter = readRepoFile(".squad/agents/ralph/charter.md");
@@ -102,16 +121,16 @@ describe("Merge safety — ralph-instructions.md (issue #220)", () => {
 
   it("forbids unilateral gh pr merge / auto-merge / gh pr ready calls", () => {
     assert.match(
-      ralphInstructions,
-      /Ralph must never\s*\ncall `gh pr merge`, enable auto-merge, or run `gh pr ready` on its own initiative/,
+      collapseWhitespace(ralphInstructions),
+      /Ralph must never call `gh pr merge`, enable auto-merge, or run `gh pr ready` on its own initiative/,
       "must explicitly forbid unilateral merge/auto-merge/ready calls",
     );
   });
 
   it("requires the merge request to come from the user in the same conversation", () => {
     assert.match(
-      ralphInstructions,
-      /the user, in this same active conversation,\s*\nexplicitly asks for a specific PR to be merged or marked ready/,
+      collapseWhitespace(ralphInstructions),
+      /the user, in this same active conversation, explicitly asks for a specific PR to be merged or marked ready/,
       "must require an explicit, same-conversation user request as the only sanctioned merge path",
     );
   });
@@ -148,6 +167,28 @@ describe("Merge safety — ralph-reference.md (issue #220)", () => {
       mergeTriggerLine!,
       /only\*\* when the user states this explicitly in the current conversation/,
       "merge trigger must require an explicit statement in the current conversation",
+    );
+  });
+
+  it("does not offer a stale '(recent context)' bypass on the merge trigger", () => {
+    const mergeTriggerLine = ralphReference
+      .split("\n")
+      .find((l) => l.includes('"merge PR #N"'));
+    assert.ok(mergeTriggerLine, "trigger table must retain the merge PR row");
+    assert.doesNotMatch(
+      mergeTriggerLine!,
+      /recent context/i,
+      "merge trigger row must not authorize inferring a merge request from recent/stale conversational context",
+    );
+    assert.doesNotMatch(
+      ralphReference,
+      /recent context/i,
+      "ralph-reference.md must not mention 'recent context' anywhere as a merge-trigger bypass",
+    );
+    assert.match(
+      mergeTriggerLine!,
+      /a request from a prior turn or stale context does not count/i,
+      "merge trigger row must state that prior-turn/stale requests do not authorize merge",
     );
   });
 });
@@ -226,6 +267,353 @@ describe("Merge safety — issue-lifecycle.md (issue #220)", () => {
       "gh pr ready must be guarded by an explicit-user-request note immediately after it",
     );
   });
+});
+
+describe("Merge safety — git-workflow SKILL.md, both copies (issue #220)", () => {
+  const gitWorkflowSkillPaths = [
+    ".github/skills/git-workflow/SKILL.md",
+    ".squad/templates/skills/git-workflow/SKILL.md",
+  ];
+
+  for (const path of gitWorkflowSkillPaths) {
+    describe(path, () => {
+      const content = readRepoFile(path);
+
+      it("no longer runs gh pr ready unconditionally as a normal workflow step", () => {
+        assert.doesNotMatch(
+          content,
+          /Push and mark ready/i,
+          `${path} must not present "push and mark ready" as one unconditional step`,
+        );
+        assert.doesNotMatch(
+          collapseWhitespace(content),
+          /git push -u origin squad\/\{issue-number\}-\{slug\} gh pr ready/,
+          `${path} must not run \`gh pr ready\` immediately after push with no gate`,
+        );
+      });
+
+      it("still documents the push step", () => {
+        assert.match(
+          content,
+          /git push -u origin squad\/\{issue-number\}-\{slug\}/,
+          `${path} must retain the push command`,
+        );
+      });
+
+      it("gates gh pr ready behind an explicit current-conversation user request", () => {
+        assert.match(
+          content,
+          /gh pr ready` is a handoff action, not a normal workflow step/,
+          `${path} must describe gh pr ready as a handoff action, not routine`,
+        );
+        assert.match(
+          collapseWhitespace(content),
+          /Only run `gh pr ready` when the user explicitly requests that exact action in the current, active conversation/,
+          `${path} must require an explicit, current-conversation user request before gh pr ready`,
+        );
+        assert.match(
+          content,
+          /a prior turn, stale context, or an inference from CI\/review status never authorizes it/,
+          `${path} must state that prior-turn/stale/inferred requests do not authorize gh pr ready`,
+        );
+      });
+    });
+  }
+});
+
+describe("Merge safety — routing.md (issue #220)", () => {
+  const routing = readRepoFile(".squad/routing.md");
+
+  it("Rule 9 no longer describes a firing 'Rule 7 auto-merge gate'", () => {
+    assert.doesNotMatch(
+      routing,
+      /Rule 7 auto-merge gate does not fire/,
+      "Rule 9 must not reference a firing Rule 7 auto-merge gate",
+    );
+    assert.match(
+      collapseWhitespace(routing),
+      /does not become \*\*merge-ready\*\* until both verdicts are posted as APPROVE and CI is green/,
+      "Rule 9 must use merge-ready semantics instead of an auto-merge-gate-fires claim",
+    );
+  });
+
+  it("Rule 12 no longer describes the Rule 7 auto-merge gate firing on Kirk's own approval", () => {
+    assert.doesNotMatch(
+      routing,
+      /prevents the Rule 7 auto-merge gate from firing/,
+      "Rule 12 must not reference the Rule 7 auto-merge gate firing",
+    );
+    assert.match(
+      collapseWhitespace(routing),
+      /This prevents a PR from becoming \*\*merge-ready\*\* on Kirk-approves-Kirk's-own-call alone/,
+      "Rule 12 must use merge-ready semantics for the Kirk-as-author-and-reviewer mitigation",
+    );
+  });
+
+  it("reviewer-lane boilerplate no longer says a Rule 7 gate reads verdicts and fires auto-merge", () => {
+    assert.doesNotMatch(
+      routing,
+      /The Rule 7 auto-merge gate reads these comment headers/,
+      "reviewer-lane boilerplate must not describe a Rule 7 auto-merge gate reading verdicts",
+    );
+    assert.doesNotMatch(
+      routing,
+      /before auto-merge fires/,
+      "reviewer-lane boilerplate must not describe auto-merge firing",
+    );
+  });
+
+  it("no numbered Rule 7 auto-merge authorization is implied anywhere in routing.md", () => {
+    assert.doesNotMatch(
+      routing,
+      /Rule 7 auto-merge gate/,
+      "routing.md must not reference a 'Rule 7 auto-merge gate' — no such numbered rule exists",
+    );
+  });
+
+  it("states that merging still requires an explicit user request under #220", () => {
+    assert.match(
+      routing,
+      /merging still requires an explicit user request in the current,? active conversation under #220/,
+      "routing.md must state merging requires an explicit, current-conversation user request under #220",
+    );
+  });
+});
+
+describe("Merge safety — workflow-cron-review SKILL.md (issue #220)", () => {
+  const skill = readRepoFile(".squad/skills/workflow-cron-review/SKILL.md");
+
+  it("no longer chains 'then gh pr merge' onto the self-approval workaround", () => {
+    assert.doesNotMatch(
+      skill,
+      /then `gh pr merge`/,
+      "must not authorize gh pr merge as a follow-on to the approval-comment workaround",
+    );
+    assert.doesNotMatch(
+      skill,
+      /The squad's textual sign-off \+ the merge action are the record/,
+      "must not describe the merge action itself as part of the sign-off record",
+    );
+  });
+
+  it("makes the approval comment itself the record, and defers merge to the explicit-user handoff", () => {
+    assert.match(
+      skill,
+      /that comment \*\*is\*\* the record of sign-off/,
+      "approval comment must be documented as the record of sign-off",
+    );
+    assert.match(
+      skill,
+      /`gh pr merge` requires an explicit user request in the current, active conversation/,
+      "must defer gh pr merge to the explicit-user-request handoff (issue #220)",
+    );
+  });
+});
+
+describe("Merge safety — docs/ARCHITECTURE.md (issue #220)", () => {
+  const architecture = readRepoFile("docs/ARCHITECTURE.md");
+
+  it("no longer describes unconditional 'Auto-merge on green (Rule 7)'", () => {
+    assert.doesNotMatch(
+      architecture,
+      /\*\*Auto-merge on green\*\* \(Rule 7\)/,
+      "must not describe an unconditional auto-merge-on-green Rule 7 behavior",
+    );
+    assert.doesNotMatch(
+      architecture,
+      /Reviewer-approved \+ CI-green PRs\s*\n\s*merge without asking/,
+      "must not claim reviewer-approved + CI-green PRs merge without asking",
+    );
+  });
+
+  it("states merge-ready requires an explicit user request (issue #220)", () => {
+    assert.match(
+      collapseWhitespace(architecture),
+      /makes a PR merge-ready, not merged\*{0,2} \(issue #220\)/,
+      "must state reviewer-approved + CI-green makes a PR merge-ready, not merged",
+    );
+    assert.match(
+      collapseWhitespace(architecture),
+      /requires an explicit user request in the current, active conversation/,
+      "must require an explicit, current-conversation user request to merge",
+    );
+  });
+});
+
+describe("Merge safety — workflow-wiring-appendix-a-code-reviewer.md (issue #220)", () => {
+  const appendixA = readRepoFile(
+    ".squad/templates/workflow-wiring-appendix-a-code-reviewer.md",
+  );
+
+  it("no longer authorizes 'the coordinator merges via gh pr merge' on APPROVE alone", () => {
+    assert.doesNotMatch(
+      appendixA,
+      /On APPROVE, the coordinator merges via `gh pr merge`/,
+      "must not authorize an unconditional merge on reviewer APPROVE",
+    );
+  });
+
+  it("uses merge-ready semantics gated on an explicit user request (issue #220)", () => {
+    assert.match(
+      appendixA,
+      /On APPROVE, the PR becomes merge-ready/,
+      "APPROVE must produce merge-ready status, not an immediate merge",
+    );
+    assert.match(
+      collapseWhitespace(appendixA),
+      /the coordinator still never calls `gh pr merge` \(or enables auto-merge \/ runs `gh pr ready`\) except when the user explicitly requests that exact action in the current, active conversation/,
+      "must gate gh pr merge/auto-merge/gh pr ready behind an explicit, current-conversation user request",
+    );
+  });
+});
+
+describe("Merge safety — bounded repo-wide scan for unguarded merge authorization (issue #220)", () => {
+  /**
+   * Scans a fixed, known set of "live" instruction/skill/config surfaces —
+   * NOT historical logs, decision archives, or example fixtures — for any
+   * mention of `gh pr merge`, `gh pr ready`, or "auto-merge". Any file that
+   * mentions one of those MUST also carry the explicit-current-conversation
+   * guard language and cite issue #220 somewhere in the file, so a newly
+   * added instruction file cannot silently reintroduce unconditional merge
+   * authority.
+   *
+   * Deliberately excluded (bounded scope, not a full-repo grep):
+   * - `.squad/decisions.md` / `.squad/decisions-archive.md` — historical
+   *   decision record, not a live instruction surface.
+   * - `.squad/templates/orchestration-log.md`, `raw-agent-output.md`,
+   *   `run-output.md` — example output/log fixtures, not executable
+   *   instructions.
+   * - `specs/**`, `.squad/log/**` — point-in-time planning/log artifacts.
+   * - `docs/models.md` — model-selection rationale that references the
+   *   historical "Rule 7" name but contains no `gh pr merge`/`gh pr ready`/
+   *   `auto-merge` action text for this scanner to act on.
+   */
+  const SCAN_ROOTS = [
+    ".github/copilot-instructions.md",
+    ".github/skills",
+    ".squad/routing.md",
+    ".squad/ralph-instructions.md",
+    ".squad/agents",
+    ".squad/skills",
+    ".squad/templates",
+    "docs/ARCHITECTURE.md",
+  ];
+
+  const EXCLUDE_PATH_PATTERNS = [
+    /decisions-archive\.md$/i,
+    /(^|[\\/])decisions\.md$/i,
+    /history(-archive)?\.md$/i,
+    /orchestration-log\.md$/i,
+    /raw-agent-output\.md$/i,
+    /run-output\.md$/i,
+    /(^|[\\/])log([\\/]|$)/i,
+  ];
+
+  // Files that legitimately mention "auto-merge" in a sense unrelated to
+  // squad-agent merge authority (e.g. Dependabot's dependency auto-merge
+  // policy, or a description of GitHub's conflict-resolution bot). Each
+  // entry pins the EXACT allowlisted phrase so the allowlist can't quietly
+  // widen to cover a real regression.
+  const ALLOWLISTED_UNRELATED_MENTIONS: Record<string, RegExp> = {
+    ".squad/agents/obrien/charter.md":
+      /Dependabot triage \+ auto-merge policy/,
+    ".squad/skills/superseded-pr-detection/SKILL.md":
+      /GitHub auto-merge resolver/,
+  };
+
+  const ACTION_PATTERN = /gh pr merge|gh pr ready|auto-merge/i;
+  const GUARD_PATTERN =
+    /explicit[\s\S]{0,200}?(current|active)[\s\S]{0,100}?conversation|(current|active)[\s\S]{0,100}?conversation[\s\S]{0,200}?explicit/i;
+
+  function collectMarkdownFiles(root: string): string[] {
+    const abs = resolve(process.cwd(), root);
+    const st = statSync(abs);
+    if (st.isFile()) {
+      return abs.endsWith(".md") ? [abs] : [];
+    }
+    const out: string[] = [];
+    for (const entry of readdirSync(abs, { withFileTypes: true })) {
+      const full = join(abs, entry.name);
+      if (entry.isDirectory()) {
+        out.push(...collectMarkdownFiles(relative(process.cwd(), full)));
+      } else if (entry.name.endsWith(".md")) {
+        out.push(full);
+      }
+    }
+    return out;
+  }
+
+  function toRelPosix(absPath: string): string {
+    return relative(process.cwd(), absPath).split("\\").join("/");
+  }
+
+  const allFiles = SCAN_ROOTS.flatMap(collectMarkdownFiles);
+  const scannedRelPaths = new Set<string>();
+  for (const abs of allFiles) {
+    const rel = toRelPosix(abs);
+    if (EXCLUDE_PATH_PATTERNS.some((p) => p.test(rel))) continue;
+    scannedRelPaths.add(rel);
+  }
+
+  it("scan covers the known live surfaces (sanity check on the scanner itself)", () => {
+    assert.ok(
+      scannedRelPaths.has(".squad/routing.md"),
+      "scanner must include .squad/routing.md",
+    );
+    assert.ok(
+      scannedRelPaths.has(".squad/templates/ralph-reference.md"),
+      "scanner must include .squad/templates/ralph-reference.md",
+    );
+    assert.ok(
+      scannedRelPaths.has(
+        ".squad/templates/workflow-wiring-appendix-a-code-reviewer.md",
+      ),
+      "scanner must include the code-reviewer wiring appendix",
+    );
+    assert.ok(
+      !scannedRelPaths.has(".squad/decisions-archive.md"),
+      "scanner must exclude the historical decisions archive",
+    );
+  });
+
+  for (const rel of Array.from(scannedRelPaths).sort()) {
+    const content = readRepoFile(rel);
+    const allowlistPattern = ALLOWLISTED_UNRELATED_MENTIONS[rel];
+
+    if (allowlistPattern) {
+      it(`${rel} — 'auto-merge' mention is the allowlisted unrelated reference, not new merge authorization`, () => {
+        assert.match(
+          content,
+          allowlistPattern,
+          `${rel} was allowlisted for a specific unrelated phrase that is no longer present — re-check whether it now needs the explicit-user-request guard instead`,
+        );
+        const withoutAllowlisted = content.replace(allowlistPattern, "");
+        assert.doesNotMatch(
+          withoutAllowlisted,
+          /gh pr merge|gh pr ready/i,
+          `${rel} must not contain a literal gh pr merge/gh pr ready command outside the allowlisted mention`,
+        );
+      });
+      continue;
+    }
+
+    if (!ACTION_PATTERN.test(content)) {
+      continue;
+    }
+
+    it(`${rel} mentions gh pr merge/ready or auto-merge and must carry the explicit-conversation guard + #220 citation`, () => {
+      assert.match(
+        content,
+        GUARD_PATTERN,
+        `${rel} mentions gh pr merge/ready or auto-merge but is missing the "explicit ... current/active conversation" guard language required by issue #220`,
+      );
+      assert.match(
+        content,
+        /#220/,
+        `${rel} mentions gh pr merge/ready or auto-merge but does not cite issue #220`,
+      );
+    });
+  }
 });
 
 describe("Merge safety — .github/copilot-instructions.md (issue #220)", () => {

@@ -26,7 +26,7 @@ Ralph always appears in `team.md`: `| Ralph | Work Monitor | — | 🔄 Monitor 
 | "Ralph, idle" / "Take a break" / "Stop monitoring" | Fully deactivate (stop loop + idle-watch) |
 | "Ralph, scope: just issues" / "Ralph, skip CI" | Adjust what Ralph monitors this session |
 | References PR feedback or changes requested | Spawn agent to address PR review feedback |
-| "merge PR #N" / "merge it" (recent context) | Merge via `gh pr merge` — **only** when the user states this explicitly in the current conversation (issue #220); never inferred from CI/review status alone |
+| "merge PR #N" / "merge it" | Merge via `gh pr merge` — **only** when the user states this explicitly in the current conversation (issue #220); a request from a prior turn or stale context does not count — it must be stated now, and it is never inferred from CI/review status alone |
 
 These are intent signals, not exact strings — match meaning, not words.
 
