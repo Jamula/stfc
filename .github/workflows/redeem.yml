@@ -159,7 +159,7 @@ jobs:
       # that's still open must not sit there once the token is accepted
       # again — a P1 that silently stays "open" long after it self-healed
       # trains the operator to distrust the channel. Close it automatically
-      # the first time a run comes back with every token valid.
+      # the first time a run is no longer in the all-tokens-rejected state.
       #
       # Both halves share one selection implementation
       # (scripts/dead-token-alert.mjs), so the create-side and resolve-side
