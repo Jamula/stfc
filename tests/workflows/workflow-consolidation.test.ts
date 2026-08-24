@@ -44,13 +44,14 @@ describe("workflow consolidation", () => {
     );
   });
 
-  it("does not restore superseded Squad release-channel workflows", () => {
+  it("does not restore superseded workflows", () => {
     for (const file of [
       "squad-ci.yml",
       "squad-docs.yml",
       "squad-insider-release.yml",
       "squad-preview.yml",
       "squad-promote.yml",
+      "test.yml",
     ]) {
       assert.ok(!workflowFiles.includes(file), `${file} must remain removed`);
     }
