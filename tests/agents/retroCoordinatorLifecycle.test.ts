@@ -193,4 +193,19 @@ describe("round-start retro gate — ceremonies.md reflects the same honest scop
     assert.match(section, /ralph-triage\.js/);
     assert.match(section, /independently, externally verifiable|externally verifiable/);
   });
+
+  it("agenda item 5 requires a NEW retro-complete issue every time, never 'update'/'relabel' an existing one (#248 Copilot review: staleness finding)", () => {
+    const section = ceremonies.slice(ceremonies.indexOf("## Retrospective with Enforcement"));
+    const agendaMatch = /5\.\s*\*\*Completion marker[^\n]*\n?[^\n]*/i.exec(section);
+    assert.ok(agendaMatch, "expected a numbered agenda item 5 for the completion marker");
+    const agendaText = agendaMatch![0];
+    assert.match(agendaText, /\bnew\b/i, "agenda item 5 must require a NEW issue");
+    assert.doesNotMatch(agendaText, /open or update/i, "agenda item 5 must not offer an 'update' path — created_at never changes on edit/relabel");
+  });
+
+  it("documents that the retro-complete label has actually been provisioned on this repository, not merely described", () => {
+    const section = ceremonies.slice(ceremonies.indexOf("## Retrospective with Enforcement"));
+    assert.match(section, /Label provisioning/i);
+    assert.match(section, /has been created on this repository/i);
+  });
 });

@@ -113,13 +113,33 @@
 > the round exactly like a confirmed-overdue result, and
 > `squad-heartbeat.yml` gates its later "Assign @copilot issues" step on the
 > same condition (not just empty triage `results`).
+>
+> **Label provisioning (#248 Copilot review — "the repository's current
+> label inventory has no `retro-complete` label... every heartbeat blocked
+> until undocumented out-of-band setup occurs"):** the `retro-complete`
+> label has been created on this repository (color `#0E8A16`) as part of
+> this change — it is not merely documented, it exists and is queryable
+> today. Anyone re-provisioning this skill on a different repository must
+> create the same label before the gate can ever report not-overdue; until
+> it exists, `fetchLatestRetroCompletionDate` correctly returns `null` and
+> the gate fails closed (overdue), which is the intended behavior for an
+> unprovisioned signal, not a bug.
+>
+> **Staleness note (#248 Copilot review — "updating or relabeling an
+> existing dedicated issue does not refresh the completion timestamp...
+> following the documented 'update' path leaves the gate permanently
+> overdue"):** `fetchLatestRetroCompletionDate` sorts by `created_at`,
+> which never changes when an issue is edited or relabeled. Agenda item 5
+> above is worded to require opening a **new** Issue every time, never
+> reusing or relabeling a prior one — there is no "update" path to follow
+> incorrectly.
 
 **Agenda:**
 1. What shipped this week? (closed issues, merged PRs)
 2. What did not ship? (open issues, blockers)
 3. Root cause on any failures
 4. Action items -- each MUST become a GitHub Issue labeled retro-action
-5. **Completion marker (required, last step)** -- once the log above is written and every action item from step 4 is confirmed filed as a GitHub Issue (not a markdown checkbox), open or update a dedicated GitHub Issue labeled `retro-complete`. This is the CI-observable signal `ralph-triage.js`'s round-start gate reads (see the "Completion-marker note" above) -- it must be the LAST thing the ceremony does, never the first, so a heartbeat triggered by the first `retro-action` issue during an in-progress retro can never mistake that for completion.
+5. **Completion marker (required, last step)** -- once the log above is written and every action item from step 4 is confirmed filed as a GitHub Issue (not a markdown checkbox), open a **new** GitHub Issue labeled `retro-complete` (never update/relabel a prior one -- see the staleness note below). This is the CI-observable signal `ralph-triage.js`'s round-start gate reads (see the "Completion-marker note" above) -- it must be the LAST thing the ceremony does, never the first, so a heartbeat triggered by the first `retro-action` issue during an in-progress retro can never mistake that for completion.
 
 **Coordinator integration:**
 At round start — unconditionally, every round, per `squad.agent.md` → Ceremonies →
