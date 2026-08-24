@@ -1,0 +1,46 @@
+# One promo code per line. Lines beginning with # are ignored.
+# Inline comments after a code (whitespace + #) are also stripped.
+#
+# Codes are submitted on every scheduled run; the API returns
+# CODE_ALREADY_USED for codes that have already been redeemed,
+# so this file is naturally idempotent. No state is tracked.
+
+# --- Codes seeded from public lists (mrguider.org, gamerant.com,
+# --- levelgeeks.net, axeetech.com, gamesroid.com) — May 2026.
+# --- Some are level-gated; the API will tell us which.
+
+MACHINATIONS
+SFACPT1
+FCP2                # Ops 55+
+CNTCT               # Ops 51-54
+FRACTURE            # Ops 20-50
+WARPSPEED
+KIRK                # new accounts only — likely already used or invalid
+SPOCK
+CADET
+COMMANDER
+FRONTIER
+TNG
+WOKPT1
+SECTION31
+RENEGADE
+ROGUE
+GQ7
+GQ5
+ALTEREGO
+REFLECTION
+THEMIRROR
+EVISCERATOR         # Ops 10+
+ENT3                # Ops 38+
+NX01                # Ops 40+
+VGER
+VGER2
+RESONANCE
+SNWD1GIFT
+OTPST2
+NEXUS
+SFACPT2
+SIMULATION
+SIMULATION1
+SIMULATION2
+
