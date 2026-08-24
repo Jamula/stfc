@@ -76,8 +76,9 @@ jobs:
               echo "data/promo-code-dead.json is not on automation-state yet; preserving the main seed."
             fi
             if [ -f "$RESTORE_DIR/promo-codes.txt" ]; then
+              MAIN_SHA=$(git rev-parse HEAD)
               node scripts/merge-promo-codes.mjs \
-                promo-codes.txt "$RESTORE_DIR/promo-codes.txt" promo-codes.txt
+                promo-codes.txt "$RESTORE_DIR/promo-codes.txt" promo-codes.txt "$MAIN_SHA"
             else
               echo "promo-codes.txt is not on automation-state yet; preserving the main seed."
             fi

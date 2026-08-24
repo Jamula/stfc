@@ -60,27 +60,9 @@ jobs:
             git fetch origin \
               refs/heads/automation-state:refs/remotes/origin/automation-state
             git worktree add --detach "$RESTORE_DIR" origin/automation-state
-
-            if [ -d "$RESTORE_DIR/data/discord" ]; then
-              mkdir -p data
-              rm -rf data/discord
-              cp -a "$RESTORE_DIR/data/discord" data/discord
-            else
-              echo "data/discord is not on automation-state yet; preserving the main seed."
-            fi
-            if [ -d "$RESTORE_DIR/data/digests" ]; then
-              mkdir -p data
-              rm -rf data/digests
-              cp -a "$RESTORE_DIR/data/digests" data/digests
-            else
-              echo "data/digests is not on automation-state yet; preserving the main seed."
-            fi
-            if [ -f "$RESTORE_DIR/promo-codes.txt" ]; then
-              node scripts/merge-promo-codes.mjs \
-                promo-codes.txt "$RESTORE_DIR/promo-codes.txt" promo-codes.txt
-            else
-              echo "promo-codes.txt is not on automation-state yet; preserving the main seed."
-            fi
+            MAIN_SHA=$(git rev-parse HEAD)
+            node scripts/discord-monitor-state.mjs restore \
+              "$RESTORE_DIR" "$GITHUB_WORKSPACE" "$MAIN_SHA"
 
             git worktree remove "$RESTORE_DIR" --force
           else
@@ -131,24 +113,22 @@ jobs:
             git -C "$STATE_DIR" rm -rf --cached --ignore-unmatch .
           fi
 
-          if [ -d data/discord ]; then
-            mkdir -p "$STATE_DIR/data"
-            rm -rf "$STATE_DIR/data/discord"
-            cp -a data/discord "$STATE_DIR/data/discord"
-          fi
-          if [ -d data/digests ]; then
-            mkdir -p "$STATE_DIR/data"
-            rm -rf "$STATE_DIR/data/digests"
-            cp -a data/digests "$STATE_DIR/data/digests"
-          fi
-          if [ -f promo-codes.txt ]; then
-            cp promo-codes.txt "$STATE_DIR/promo-codes.txt"
-          fi
+          node scripts/discord-monitor-state.mjs persist \
+            "$GITHUB_WORKSPACE" "$STATE_DIR"
 
           git -C "$STATE_DIR" config user.name  "github-actions[bot]"
           git -C "$STATE_DIR" config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          if [ -d "$STATE_DIR/data/discord" ]; then
-            git -C "$STATE_DIR" add -A -- data/discord
+          if [ -f "$STATE_DIR/data/discord/cursors.json" ]; then
+            git -C "$STATE_DIR" add -A -- data/discord/cursors.json
+          fi
+          if [ -f "$STATE_DIR/data/discord/candidates.jsonl" ]; then
+            git -C "$STATE_DIR" add -A -- data/discord/candidates.jsonl
+          fi
+          if [ -f "$STATE_DIR/data/discord/tips-seen.jsonl" ]; then
+            git -C "$STATE_DIR" add -A -- data/discord/tips-seen.jsonl
+          fi
+          if [ -f "$STATE_DIR/data/discord/cooldowns.json" ]; then
+            git -C "$STATE_DIR" add -A -- data/discord/cooldowns.json
           fi
           if [ -d "$STATE_DIR/data/digests" ]; then
             git -C "$STATE_DIR" add -A -- data/digests

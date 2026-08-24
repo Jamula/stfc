@@ -52,7 +52,14 @@ const scheduled = [
     workflow: monitor,
     runStep: undefined,
     persistStep: "Commit state + digest + promo-codes to automation-state (if changed)",
-    paths: ["data/discord", "data/digests", "promo-codes.txt"],
+    paths: [
+      "data/discord/cursors.json",
+      "data/discord/candidates.jsonl",
+      "data/discord/tips-seen.jsonl",
+      "data/discord/cooldowns.json",
+      "data/digests",
+      "promo-codes.txt",
+    ],
   },
 ] as const;
 
@@ -139,10 +146,18 @@ describe("automation-state scheduled workflow contract", () => {
         workflow,
         "Restore automation state from automation-state branch",
       ).run ?? "";
+      assert.match(restore, /MAIN_SHA=\$\(git rev-parse HEAD\)/);
+      if (workflow === redeem) {
       assert.match(
         restore,
-        /node scripts\/merge-promo-codes\.mjs[\s\S]*promo-codes\.txt "\$RESTORE_DIR\/promo-codes\.txt" promo-codes\.txt/,
+        /node scripts\/merge-promo-codes\.mjs[\s\S]*promo-codes\.txt "\$RESTORE_DIR\/promo-codes\.txt" promo-codes\.txt "\$MAIN_SHA"/,
       );
+      } else {
+      assert.match(
+        restore,
+        /node scripts\/discord-monitor-state\.mjs restore[\s\S]*"\$RESTORE_DIR" "\$GITHUB_WORKSPACE" "\$MAIN_SHA"/,
+      );
+      }
     }
   });
 
@@ -157,6 +172,10 @@ describe("automation-state scheduled workflow contract", () => {
 });
 
 describe("automation-state Discord handler contract", () => {
+  it("serializes the handler under the shared automation-state writer lock", () => {
+    assert.equal((handler as { concurrency?: { group?: string } }).concurrency?.group, "stfc-gift-redeemer");
+  });
+
   it("executes main's handler code from the live state worktree", () => {
     const prepare = namedStep(handler, "Prepare automation-state handler worktree");
     const route = namedStep(handler, "Route command and post Discord follow-up");
@@ -191,5 +210,9 @@ describe("automation-state storage monitor contract", () => {
     assert.match(size, /if \[ ! -d data\/discord\/game-state \]/);
     assert.match(size, /::error::automation-state is missing/);
     assert.doesNotMatch(size, /\|\| echo 0/);
+  });
+
+  it("remains read-only and does not join the automation-state writer lock", () => {
+    assert.equal((storage as { concurrency?: { group?: string } }).concurrency?.group, "storage-size-monitor");
   });
 });

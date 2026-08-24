@@ -12,7 +12,9 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 concurrency:
-  group: stfc-discord-handler
+  # Shared with redeem.yml + discord-monitor.yml so every automation-state
+  # writer is serialized under one push lock.
+  group: stfc-gift-redeemer
   cancel-in-progress: false
 
 jobs:

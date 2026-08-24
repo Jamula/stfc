@@ -227,17 +227,19 @@ STARTREKDAY2024
 FLEETCMD-WELCOME    # one-time welcome bonus
 ```
 
-Each redeem and Discord-monitor run builds an ephemeral additive union of:
+Each redeem and Discord-monitor run builds an additive union rooted in
+`automation-state`:
 
-1. the human-maintained `main` file, in its existing comment/order form; and
-2. the operational `automation-state` file, including Discord discoveries.
+1. start from the operational `automation-state` file, preserving its existing
+   order and line representation (including Discord discoveries); then
+2. append any *main-only* seed codes beneath `# --- seeded from main@<sha> ---`.
 
-Codes are keyed by `trim().toUpperCase()` after stripping `#` comments. For a
-duplicate, the `main` line wins so a human can update casing or a comment.
-Automation-only codes are retained beneath a generated marker. Removing a code
-from `main` does **not** delete it from operational state; true deletion is
-intentionally deferred. The dead-cache lookup remains case-sensitive and is a
-separate known limitation.
+Codes are keyed by `trim().toUpperCase()` after stripping `#` comments.
+Duplicate normalized lines are collapsed within each input before merging. For
+a duplicate across both inputs, the `automation-state` line wins. Removing or
+editing a code on `main` does **not** rewrite or delete the operational copy;
+true deletion is intentionally deferred. The dead-cache lookup remains
+case-sensitive and is a separate known limitation.
 
 Codes are resubmitted on every scheduled run. If a code returns
 `CODE_INVALID_OR_EXPIRED`, the orchestrator marks it dead in

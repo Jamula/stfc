@@ -44,6 +44,7 @@ import "./scripts/pre-push.test.ts";
 import "./scripts/captureTokenOtp.test.ts";
 import "./scripts/captureTokenMerge.test.ts";
 import "./scripts/discordHandler.test.ts";
+import "./scripts/discordMonitorState.test.ts";
 import "./scripts/mergePromoCodes.test.ts";
 import "./scripts/discord-ops/set-discord-app-metadata.test.ts";
 import "./scripts/discord-ops/partial-success.test.ts";

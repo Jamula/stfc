@@ -12,58 +12,71 @@ describe("merge-promo-codes", () => {
     assert.equal(normalizePromoCodeLine("# comment"), "");
   });
 
-  it("keeps main ordering and representation while retaining automation-only codes", () => {
+  it("keeps automation-state ordering and representation while appending main-only seed codes", () => {
     const main = [
-      "# Human seed",
-      "Alpha # preferred human comment",
-      "BRAVO",
+      "# Human seed edits do not override operational lines",
+      "alpha # stale seed representation",
+      "BRAVO # stale seed comment",
+      "ECHO # seeded only on main",
       "",
     ].join("\n");
     const state = [
-      "alpha # stale automation representation",
-      "bravo",
+      "Alpha # operational comment wins",
+      "bravo # operational representation wins",
       "charlie # discovered",
       "DELTA",
       "",
     ].join("\n");
 
     assert.equal(
-      mergePromoCodeText(main, state),
+      mergePromoCodeText(main, state, "a1d97c3"),
       [
-        "# Human seed",
-        "Alpha # preferred human comment",
-        "BRAVO",
-        "",
-        GENERATED_MARKER,
-        "charlie # discovered",
-        "DELTA",
-        "",
+      "Alpha # operational comment wins",
+      "bravo # operational representation wins",
+      "charlie # discovered",
+      "DELTA",
+      "",
+      `${GENERATED_MARKER}a1d97c3 ---`,
+      "ECHO # seeded only on main",
+      "",
       ].join("\n"),
     );
   });
 
   it("is deterministic and additive when main adds, edits, or removes a code", () => {
-    const first = mergePromoCodeText("ALPHA\nbravo # main\n", "CHARLIE\n");
+    const first = mergePromoCodeText("ALPHA\nbravo # main\n", "CHARLIE\n", "main-1");
     const second = mergePromoCodeText(
       "alpha # edited by human\nDELTA\n",
       first,
+      "main-2",
     );
     const expected = [
-      "alpha # edited by human",
-      "DELTA",
-      "",
-      GENERATED_MARKER,
-      "bravo # main",
       "CHARLIE",
+      "",
+      `${GENERATED_MARKER}main-1 ---`,
+      "ALPHA",
+      "bravo # main",
+      "",
+      `${GENERATED_MARKER}main-2 ---`,
+      "DELTA",
       "",
     ].join("\n");
     assert.equal(second, expected);
-    assert.equal(mergePromoCodeText("alpha # edited by human\nDELTA\n", second), expected);
+    assert.equal(
+      mergePromoCodeText("alpha # edited by human\nDELTA\n", second, "main-3"),
+      expected,
+    );
   });
 
-  it("deduplicates automation entries by normalized code", () => {
-    const merged = mergePromoCodeText("ALPHA\n", "beta # first\nBETA # duplicate\ngamma\n");
+  it("deduplicates duplicate normalized lines within each input", () => {
+    const merged = mergePromoCodeText(
+      "ALPHA\nalpha # duplicate main\nBETA # first main line\n",
+      "beta # operational wins\nBETA # duplicate state\ngamma\ngamma # duplicate state\n",
+      "seed-sha",
+    );
+    assert.equal((merged.match(/ALPHA/gi) ?? []).length, 1);
     assert.equal((merged.match(/beta/gi) ?? []).length, 1);
     assert.equal((merged.match(/gamma/gi) ?? []).length, 1);
+    assert.match(merged, /beta # operational wins/);
   });
 });
