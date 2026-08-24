@@ -183,8 +183,9 @@ describe("automation-state scheduled workflow contract", () => {
 });
 
 describe("automation-state Discord handler contract", () => {
-  it("serializes the handler under the shared automation-state writer lock", () => {
-    assert.equal((handler as { concurrency?: { group?: string } }).concurrency?.group, "stfc-gift-redeemer");
+  it("keeps the handler on a dedicated queue so Discord commands are not displaced by scheduled runs", () => {
+    assert.equal((handler as { concurrency?: { group?: string } }).concurrency?.group, "stfc-discord-handler");
+    assert.notEqual((handler as { concurrency?: { group?: string } }).concurrency?.group, (redeem as { concurrency?: { group?: string } }).concurrency?.group);
   });
 
   it("executes main's handler code from the live state worktree", () => {
@@ -210,6 +211,14 @@ describe("automation-state Discord handler contract", () => {
       cleanup.if,
       "always() && steps.state_worktree.outputs.complete == 'true'",
     );
+  });
+
+  it("relies on path ownership rather than the shared writer lock to avoid the monitor overwrite race", () => {
+    const persist = namedStep(
+      monitor,
+      "Commit state + digest + promo-codes to automation-state (if changed)",
+    ).run ?? "";
+    assert.doesNotMatch(persist, /data\/discord\/game-state/);
   });
 });
 

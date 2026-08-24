@@ -35,8 +35,8 @@ describe(".github/workflows/discord-command-handler.yml", () => {
     assert.doesNotMatch(onBlock, /^\s+workflow_dispatch:/m, "must not trigger on workflow_dispatch");
   });
 
-  it("pins the shared automation-state writer concurrency group and does not cancel in-progress", { skip: yaml === undefined }, () => {
-    assert.match(yaml!, /concurrency:\s*\n(?:\s+#.*\n)*\s+group:\s*stfc-gift-redeemer\b/);
+  it("pins a dedicated Discord-command concurrency group and does not cancel in-progress", { skip: yaml === undefined }, () => {
+    assert.match(yaml!, /concurrency:\s*\n(?:\s+#.*\n)*\s+group:\s*stfc-discord-handler\b/);
     assert.match(yaml!, /cancel-in-progress:\s*false\b/);
   });
 

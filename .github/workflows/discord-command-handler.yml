@@ -12,9 +12,12 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 concurrency:
-  # Shared with redeem.yml + discord-monitor.yml so every automation-state
-  # writer is serialized under one push lock.
-  group: stfc-gift-redeemer
+  # Keep Discord commands responsive: the shared stfc-gift-redeemer queue keeps
+  # only one pending run by default, so a queued handler can be displaced by
+  # later redeem/monitor/refresh runs. The original monitor overwrite race is
+  # prevented instead by discord-monitor persisting only its owned paths and
+  # never touching data/discord/game-state.
+  group: stfc-discord-handler
   cancel-in-progress: false
 
 jobs:
