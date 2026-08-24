@@ -109,13 +109,16 @@
 
 **Coordinator integration:**
 At round start — unconditionally, every round, per `squad.agent.md` → Ceremonies →
-Core Logic step 0 — invoke `scripts/check-retro-overdue.mjs` (for `local`/`worktree`
-backends) or its exported `checkRetroOverdue`/`isRetroOverdue` functions with entries
-from `squad_state_list(dir: "log")` (for `orphan`/`two-layer`/`git-notes` backends).
-If it reports overdue, run this ceremony before any other `before` ceremony or
-work-batch spawn. This is the concrete implementation of the skill's
-`Test-RetroOverdue` — the skill file documents the shape, this script is what
-actually runs.
+Core Logic step 0 — invoke `node scripts/check-retro-overdue.mjs overdue --backend local
+--log-dir .squad/log` for `local`/`worktree` backends. For
+`orphan`/`two-layer`/`git-notes`, fetch entries with `squad_state_list(dir: "log")`
+and pipe `{"entries": [...]}` on stdin to
+`node scripts/check-retro-overdue.mjs overdue --backend <backend>`; the reusable
+JS adapter for that exact tool-call → JSON stdin → parsed-result boundary lives in
+`scripts/retro-gate-bridge.mjs`. Parse the single JSON line on stdout and read its
+`overdue` field; never infer overdue/not-overdue from the exit code alone. If it
+reports overdue, run this ceremony before any other `before` ceremony or work-batch
+spawn. This is the concrete implementation of the skill's `Test-RetroOverdue`.
 
 **Enforcement skill install path:** `.squad/skills/retro-enforcement/SKILL.md`
 (installed 2026-08-23, issue #245; previously only existed at

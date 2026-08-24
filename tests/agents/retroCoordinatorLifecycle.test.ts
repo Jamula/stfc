@@ -36,6 +36,7 @@ const ceremoniesPath = path.join(repoRoot, ".squad", "ceremonies.md");
 const scriptPath = path.join(repoRoot, "scripts", "check-retro-overdue.mjs");
 const ralphTriagePath = path.join(repoRoot, ".squad", "templates", "ralph-triage.js");
 const heartbeatWorkflowPath = path.join(repoRoot, ".github", "workflows", "squad-heartbeat.yml");
+const installedHeartbeatWorkflowPath = path.join(repoRoot, ".squad", "templates", "workflows", "squad-heartbeat.yml");
 
 function read(p: string): string {
   return fs.readFileSync(p, "utf8").replace(/\r\n/g, "\n");
@@ -137,6 +138,23 @@ describe("round-start retro gate â€” the real dispatcher (squad-heartbeat.yml â†
     const workflow = read(heartbeatWorkflowPath);
     assert.match(workflow, /retroGate\.evaluated && retroGate\.overdue/);
     assert.match(workflow, /core\.warning\(`\[RETRO\] Overdue/);
+  });
+
+  it("both repo-local heartbeat workflow copies return on retro-gate block before the empty-results 'board is clear' message", () => {
+    for (const workflowPath of [heartbeatWorkflowPath, installedHeartbeatWorkflowPath]) {
+      const workflow = read(workflowPath);
+      const overdueIndex = workflow.indexOf("if (retroGate.evaluated && retroGate.overdue) {");
+      const overdueReturnIndex = workflow.indexOf("return;", overdueIndex);
+      const unevaluatedIndex = workflow.indexOf('} else if (!retroGate.evaluated) {');
+      const unevaluatedReturnIndex = workflow.indexOf("return;", unevaluatedIndex);
+      const boardClearIndex = workflow.indexOf("if (!results || results.length === 0) {");
+
+      assert.ok(overdueIndex !== -1 && overdueReturnIndex !== -1, `${workflowPath} must return from the overdue branch`);
+      assert.ok(unevaluatedIndex !== -1 && unevaluatedReturnIndex !== -1, `${workflowPath} must return from the unevaluated branch`);
+      assert.ok(boardClearIndex !== -1, `${workflowPath} must still have the empty-results branch`);
+      assert.ok(overdueReturnIndex < boardClearIndex, `${workflowPath} must not fall through from overdue to 'board is clear'`);
+      assert.ok(unevaluatedReturnIndex < boardClearIndex, `${workflowPath} must not fall through from unevaluated to 'board is clear'`);
+    }
   });
 });
 

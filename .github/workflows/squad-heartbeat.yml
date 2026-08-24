@@ -95,8 +95,10 @@ jobs:
             if (retroGate) {
               if (retroGate.evaluated && retroGate.overdue) {
                 core.warning(`[RETRO] Overdue (backend: ${retroGate.backend}) — Ralph skipped issue triage this round. See .squad/skills/retro-enforcement/SKILL.md.`);
+                return;
               } else if (!retroGate.evaluated) {
                 core.warning(`[RETRO] Round-start gate not evaluated for backend "${retroGate.backend}" — blocked this round (fail closed): ${retroGate.reason}`);
+                return;
               }
             }
 

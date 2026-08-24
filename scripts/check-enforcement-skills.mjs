@@ -34,8 +34,9 @@ const ZERO_WIDTH = "\u200B\u200C\u200D\uFEFF";
 const ZERO_WIDTH_BOUNDARY_RE = new RegExp(`^[\\s${ZERO_WIDTH}]+|[\\s${ZERO_WIDTH}]+$`, "g");
 
 // Names containing these are rejected outright per skill-routing.md's
-// invalid-name denylist (null bytes, control chars, path separators).
-const INVALID_NAME_RE = /[\x00-\x1F\x7F]|\.\.|\/|\\/;
+// invalid-name denylist (null bytes, control chars, path separators,
+// including required homoglyph separator rejects U+FF0F and U+2044).
+const INVALID_NAME_RE = /[\x00-\x1F\x7F]|\.\.|\/|\\|\uFF0F|\u2044/;
 
 /** NFC-normalize and boundary-trim (incl. zero-width) a skill/dir name; does NOT lowercase. */
 export function normalizeSkillName(name) {

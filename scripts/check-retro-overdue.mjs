@@ -54,7 +54,10 @@ export function parseLogTimestamp(filename) {
   if (
     date.getUTCFullYear() !== Number(y) ||
     date.getUTCMonth() !== Number(mo) - 1 ||
-    date.getUTCDate() !== Number(d)
+    date.getUTCDate() !== Number(d) ||
+    date.getUTCHours() !== Number(h) ||
+    date.getUTCMinutes() !== Number(mi) ||
+    date.getUTCSeconds() !== Number(s)
   ) {
     return null;
   }
@@ -130,7 +133,7 @@ export function checkRetroOverdue({ backend, logDir = ".squad/log", entries, win
 // ── Test-RetroActionItemsCreated equivalent ───────────────────────────────
 
 const ISSUE_REF_RE = /(?:#\d{3,}|issues\/\d{3,})/g;
-const OPEN_CHECKBOX_RE = /- \[ \]/g;
+const OPEN_CHECKBOX_RE = /^[ \t]*[-+*][ \t]+\[[ \t]\]/gm;
 
 /**
  * Checks retro log content for GitHub Issue references and flags leftover

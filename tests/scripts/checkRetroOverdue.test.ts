@@ -45,6 +45,11 @@ describe("check-retro-overdue: parseLogTimestamp", () => {
     assert.equal(parseLogTimestamp("2026-13-40T25-99-99Z-retrospective.md"), null);
   });
 
+  it("returns null for time-field overflow that Date.UTC would otherwise normalize", () => {
+    assert.equal(parseLogTimestamp("2026-08-23T19-60-00Z-retrospective.md"), null);
+    assert.equal(parseLogTimestamp("2026-08-23T19-01-60Z-retrospective.md"), null);
+  });
+
   it("handles a full path, not just a basename", () => {
     const d = parseLogTimestamp(".squad/log/2026-08-23T19-01-46Z-retrospective.md");
     assert.ok(d);
@@ -248,6 +253,14 @@ describe("check-retro-overdue: checkActionItemsCreated (Test-RetroActionItemsCre
     const result = checkActionItemsCreated("- [ ] do the thing\n- Fixed in #1234\n");
     assert.equal(result.ok, false);
     assert.match(result.reason ?? "", /markdown checkbox/);
+  });
+
+  it("ok=false for open markdown checkboxes with other valid bullet markers or indentation", () => {
+    for (const content of ["* [ ] follow up\n- Fixed in #1234\n", "+ [ ] follow up\n- Fixed in #1234\n", "  - [ ] follow up\n- Fixed in #1234\n"]) {
+      const result = checkActionItemsCreated(content);
+      assert.equal(result.ok, false);
+      assert.match(result.reason ?? "", /markdown checkbox/);
+    }
   });
 
   it("ok=false when there are no issue references at all", () => {

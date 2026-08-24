@@ -80,8 +80,10 @@ describe("check-retro-overdue CLI — local backend, spawned as a real process",
 
 describe("check-retro-overdue CLI — non-local backend via documented JSON stdin bridge", () => {
   it("exits 0 with overdue:false when stdin supplies a recent entry (simulating squad_state_list output)", () => {
+    const recent = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
+    const recentEntry = `${recent.toISOString().slice(0, 19).replace(/:/g, "-")}Z-retrospective.md`;
     const { status, json } = runCli(["overdue", "--backend", "two-layer"], {
-      input: JSON.stringify({ entries: ["2026-08-22T00-00-00Z-retrospective.md"] }),
+      input: JSON.stringify({ entries: [recentEntry] }),
     });
     assert.equal(status, 0);
     assert.deepEqual(json, { evaluated: true, backend: "two-layer", overdue: false, windowDays: 7 });

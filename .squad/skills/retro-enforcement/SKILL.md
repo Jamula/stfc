@@ -81,17 +81,19 @@ check, using the concrete implementation in `scripts/check-retro-overdue.mjs`
   these backends.
 - `STATE_BACKEND ∈ {"orphan", "two-layer", "git-notes"}` → the canonical log
   listing is `squad_state_list(dir: "log")` (the governed state tool), **not**
-  `Get-ChildItem` and **not** the CLI form above (a standalone script cannot
-  call `squad_state_list`). Call the exported `checkRetroOverdue({ backend,
-  entries, windowDays })` function directly with `entries` set to the
-  filenames returned by `squad_state_list(dir: "log")` — the same
-  `isRetroOverdue` logic then applies identically (parsing each entry's
-  leading ISO-8601 timestamp from the filename, never filesystem
-  `LastWriteTime`, which reflects worktree checkout time, not log creation
-  time). This mirrors the existing state-backend handshake rule in
-  `squad.agent.md`: mutable `log/**` is runtime-owned and must be read
-  through `squad_state_*` / `memory.*` tools for these backends, never
-  assumed to be reflected on disk.
+  `Get-ChildItem` and **not** a direct in-process import from the coordinator.
+  Fetch those filenames first, then pipe them as `{"entries": [...]}` on stdin
+  to `node scripts/check-retro-overdue.mjs overdue --backend <backend>`. If the
+  caller is already in JS, `scripts/retro-gate-bridge.mjs` is the reusable adapter
+  for that exact boundary: it takes injected `stateList` callbacks, serializes the
+  result, spawns the CLI, and parses the single JSON line it prints. The same
+  `isRetroOverdue` logic still applies identically once `entries` are in hand
+  (parsing each entry's leading ISO-8601 timestamp from the filename, never
+  filesystem `LastWriteTime`, which reflects worktree checkout time, not log
+  creation time). This mirrors the existing state-backend handshake rule in
+  `squad.agent.md`: mutable `log/**` is runtime-owned and must be read through
+  `squad_state_*` / `memory.*` tools for these backends, never assumed to be
+  reflected on disk.
 
 This is not a new policy decision — it is the direct, mechanical consequence of the
 state-backend contract already established in `squad.agent.md` (Source of Truth /
@@ -293,7 +295,8 @@ missing" that lives exclusively inside skill X is unreadable in exactly the case
 it exists to catch. The authoritative, always-read copy of this procedure is
 inlined directly in `.squad/ceremonies.md` (which the coordinator reads regardless
 of whether this skill file is present), and it is additionally pinned by an
-executable CI check: `.github/workflows/protected-paths.yml` greps every
+executable CI check: `.github/workflows/protected-paths.yml` runs
+`node scripts/check-enforcement-skills.mjs`, and that script parses every
 `**Enforcement skill**` row out of `ceremonies.md` and fails the build if the named
 skill does not resolve at any of the 5 paths above. Pin test:
 `tests/skills/enforcementSkillCheck.test.ts`.

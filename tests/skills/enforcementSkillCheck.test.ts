@@ -29,6 +29,7 @@ import {
   SKILL_DIRS,
   normalizeSkillId,
   extractEnforcementSkillIds,
+  isInvalidSkillName,
   isSymlinkOrReparsePoint,
   defaultReparsePointDetector,
   resolveSkillId,
@@ -70,8 +71,11 @@ describe("protected-paths.yml / ceremony enforcement-skill check — structural"
   });
 
   it("delegates to the extracted, testable Node script instead of inline bash", () => {
-    const stepStart = yaml.indexOf("Assert ceremony enforcement skills are installed");
-    const nextStep = yaml.indexOf("\n  - name:", stepStart);
+    const stepLineMatch = /^(\s*)- name: Assert ceremony enforcement skills are installed$/m.exec(yaml);
+    assert.ok(stepLineMatch, "expected to find the named workflow step");
+    const stepIndent = stepLineMatch[1];
+    const stepStart = stepLineMatch.index;
+    const nextStep = yaml.indexOf(`\n${stepIndent}- name:`, stepStart + 1);
     const stepBlock = yaml.slice(stepStart, nextStep === -1 ? undefined : nextStep);
     assert.match(
       stepBlock,
@@ -208,6 +212,11 @@ describe("check-enforcement-skills: fixture negatives — CRLF, case, precedence
   it("normalizeSkillId trims boundary zero-width characters and normalizes to NFC", () => {
     const withBoundaryZeroWidth = "\u200Bretro-enforcement\uFEFF";
     assert.equal(normalizeSkillId(withBoundaryZeroWidth), "retro-enforcement");
+  });
+
+  it("rejects homoglyph path separators required by the routing contract", () => {
+    assert.equal(isInvalidSkillName("skill\uFF0Fname"), true);
+    assert.equal(isInvalidSkillName("skill\u2044name"), true);
   });
 
   it("normalizeSkillId does NOT strip a zero-width character in the middle of a name (boundary-only trim, #248 Garak finding 3)", () => {
