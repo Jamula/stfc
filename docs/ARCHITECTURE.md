@@ -402,19 +402,18 @@ skill"*).
 
 ### 3.6 CI/CD — `.github/workflows/` + `scripts/`
 
-15 workflows live in `.github/workflows/`. Grouped by purpose:
+The core application and required-check workflows are grouped by purpose:
 
 | Workflow | Purpose | Trigger |
 |---|---|---|
 | `redeem.yml` | Gift redeemer cron | `*/10 * * * *` + dispatch |
 | `discord-monitor.yml` | Discord ingest cron | `15 */4 * * *` + dispatch |
-| `optimize-crew.yml` | Re-run optimizer on roster update | push to `data/crew/**` + dispatch |
 | `refresh-token.yml` | STFC JWT refresh via Playwright | weekly cron + dispatch |
 | `discord-ops.yml` | Manual Discord app metadata setter | dispatch **only** (constitution carve-out) |
 | `swa-deploy.yml` | Azure SWA deploy | push to `main`, PR open/sync/close |
 | `storage-size-monitor.yml` | Alert when `data/discord/game-state` exceeds 100 MB | `0 6 * * *` + dispatch |
-| `test.yml` | Typecheck + npm test gate | every push + PR |
-| `squad-test-gate.yml` | Dedicated required-check wrapper | PR |
+| `squad-test-gate.yml` | Canonical typecheck + npm test required check; coverage uploads intentionally disabled | PR |
+| GitHub CodeQL default setup | Canonical `actions` + `javascript-typescript` security analysis | default branch + PRs |
 | `squad-artifact-hygiene.yml` | Secret + JWT leak scanner | PR touching `specs/`, `docs/`, `.github/**/*.md` |
 | `squad-heartbeat.yml` | Ralph heartbeat (issues/PRs closed/labeled) | event-only (no cron — see existing rules) |
 | `squad-issue-assign.yml` | `squad:{member}` label → agent dispatch | `issues: labeled` |
@@ -622,8 +621,15 @@ sequenceDiagram
   mode).
 - **Pre-commit hook** runs the full suite on every commit
   (`scripts/pre-commit.mjs`). `--no-verify` is forbidden.
-- **Required CI checks:** `squad-test-gate.yml` ("npm test (required)")
-  + `test.yml` typecheck + CodeQL.
+- **Required CI checks:** `squad-test-gate.yml` ("npm test (required)") +
+  GitHub CodeQL default setup ("Analyze (javascript-typescript)").
+- **CodeQL:** one canonical GitHub default-setup workflow analyzes Actions
+  workflow files and JavaScript/TypeScript. The two `Analyze (...)` jobs are
+  language jobs within that workflow, not duplicate workflows.
+- **Coverage:** GitHub Actions coverage upload is intentionally disconnected.
+  No repository workflow invokes `test:coverage` or
+  `actions/upload-code-coverage`; restoring both is the deliberate re-enable
+  path.
 - **Bundle budget:** 80 KiB gzipped JS for `web/dist/`
   (`scripts/ci/check-bundle-budget.mjs`).
 - **Artifact hygiene:** `squad-artifact-hygiene.yml` scans PR diffs for

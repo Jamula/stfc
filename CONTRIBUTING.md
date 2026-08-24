@@ -120,5 +120,6 @@ See Uhura's script for invocation instructions.
 
 ### CI
 
-All CI checks must be green before merge. The `test.yml` workflow runs
-`npm test`; Scotty's pre-commit hook enforces the same gate locally.
+All CI checks must be green before merge. The `squad-test-gate.yml` workflow
+runs `npm run typecheck` and `npm test`; Scotty's pre-commit hook enforces the
+test gate locally.
