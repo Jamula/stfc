@@ -16,7 +16,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const https = require('node:https');
-const { execSync } = require('node:child_process');
+const { execSync, execFileSync } = require('node:child_process');
 
 function parseArgs(argv) {
   let squadDir = '.squad';
@@ -394,6 +394,196 @@ function findLeadFallback(roster) {
   );
 }
 
+/**
+ * Real, executable round-start gate (#245; #248 Garak finding 1 — "the
+ * retro still is not wired into the real coordinator lifecycle"; #248
+ * Kirk finding — "the gate is unsatisfiable in the only place it actually
+ * enforces").
+ *
+ * squad-heartbeat.yml → this script is the one place in this repository
+ * where "before queue construction" is an actual process boundary, not
+ * prose read by an LLM: it runs as a GitHub Actions job on real triggers
+ * (issue closed/labeled, PR closed, workflow_dispatch) and constructs a
+ * real work queue (the triage `results` array) before that queue is acted
+ * on. Wiring the retro-overdue check in HERE, before `buildTriageQueue` is
+ * called, is genuine lifecycle enforcement — unlike the LLM coordinator's
+ * own "Core Logic" prose, which no external test can prove a live session
+ * actually executes.
+ *
+ * Satisfiability fix (Kirk, round 3): the first version of this gate
+ * scanned `.squad/log/` for a `*retrospective*` file. That directory is
+ * gitignored (see `.gitignore`), so a fresh `actions/checkout` — which
+ * contains only committed files — can NEVER see a newly-written retro log,
+ * even after a real retrospective runs. That made the gate permanently
+ * "overdue" on this dispatcher: a false gate is exactly the failure class
+ * #245 exists to eliminate. The fix uses a source this CI checkout CAN
+ * see: the creation date of the most recent GitHub issue labeled
+ * `retro-action` — already the established, policy-grounded convention
+ * this skill requires ("every retro action item MUST become a GitHub
+ * Issue... labeled retro-action", `ceremonies.md` agenda item 4). GitHub
+ * Issues are reachable via the REST API regardless of what a checkout
+ * contains.
+ *
+ * Honesty boundary: this script has a shell (it can spawn
+ * check-retro-overdue.mjs as a child process) and a GitHub token, but NO
+ * MCP/state-tool access, so it can only evaluate `local`/`worktree`
+ * backends end to end. For `orphan`/`two-layer`/`git-notes` it returns
+ * `evaluated: false` with an explicit reason rather than fabricating a
+ * result — per Garak's instruction not to claim execution where none
+ * exists.
+ */
+function readStateBackend(squadDir) {
+  try {
+    const config = JSON.parse(fs.readFileSync(path.join(squadDir, 'config.json'), 'utf8'));
+    return typeof config.stateBackend === 'string' ? config.stateBackend : 'local';
+  } catch {
+    return 'local';
+  }
+}
+
+const RETRO_GATE_LOCAL_BACKENDS = new Set(['local', 'worktree']);
+
+/**
+ * The CI-observable retro signal: the creation timestamp of the most
+ * recent `retro-action`-labeled GitHub issue, or `null` if none exists.
+ * Injectable (`githubRequestJsonImpl`) so tests can simulate a fresh or
+ * stale/absent retro without a network call.
+ */
+async function fetchLatestRetroActionIssueDate({ owner, repo, token, githubRequestJsonImpl = githubRequestJson }) {
+  const query = new URLSearchParams({
+    labels: 'retro-action',
+    state: 'all',
+    sort: 'created',
+    direction: 'desc',
+    per_page: '1',
+  });
+  const issues = await githubRequestJsonImpl(`/repos/${owner}/${repo}/issues?${query.toString()}`, token);
+  if (!Array.isArray(issues) || issues.length === 0) return null;
+  const createdAt = issues[0] && issues[0].created_at;
+  return typeof createdAt === 'string' ? createdAt : null;
+}
+
+/**
+ * Validate the JSON emitted by check-retro-overdue.mjs before trusting it
+ * (#248 Garak finding 1: "validate the child JSON... before accepting
+ * it"). Anything that does not match the exact expected shape is treated
+ * as a fault, never silently coerced into a domain result.
+ */
+function validateOverdueResult(parsed, expectedBackend) {
+  if (!parsed || typeof parsed !== 'object') return { ok: false, reason: 'result is not a JSON object' };
+  if (parsed.evaluated !== true) return { ok: false, reason: `evaluated is not true (${JSON.stringify(parsed.evaluated)})` };
+  if (typeof parsed.overdue !== 'boolean') return { ok: false, reason: `overdue is not a boolean (${JSON.stringify(parsed.overdue)})` };
+  if (parsed.backend !== expectedBackend) {
+    return { ok: false, reason: `backend mismatch: expected "${expectedBackend}", got ${JSON.stringify(parsed.backend)}` };
+  }
+  return { ok: true };
+}
+
+async function evaluateRetroGate({
+  repoRoot,
+  squadDir,
+  owner,
+  repo,
+  token,
+  windowDays = 7,
+  execFileSyncImpl = execFileSync,
+  fetchRetroSignalImpl = fetchLatestRetroActionIssueDate,
+}) {
+  const backend = readStateBackend(squadDir);
+
+  if (!RETRO_GATE_LOCAL_BACKENDS.has(backend)) {
+    return {
+      evaluated: false,
+      backend,
+      overdue: false,
+      reason:
+        `stateBackend "${backend}" cannot be evaluated by this CI dispatcher (no squad_state_list/MCP access from ` +
+        'a plain GitHub Actions Node process) — round-start retro gate is honestly skipped, not fabricated. ' +
+        'See issue #245: this backend requires a coordinator-side evaluation path that does not yet exist.',
+    };
+  }
+
+  let signalDate;
+  try {
+    signalDate = await fetchRetroSignalImpl({ owner, repo, token });
+  } catch (err) {
+    return { evaluated: false, backend, overdue: false, reason: `failed to fetch retro-action issue signal: ${err.message}` };
+  }
+
+  const scriptPath = path.join(repoRoot, 'scripts', 'check-retro-overdue.mjs');
+  // Synthesize a filename check-retro-overdue.mjs's parser understands, so
+  // the SAME tested overdue-window logic (UTC parsing, future-date
+  // rejection, fail-closed-on-ambiguity) is reused for this signal rather
+  // than duplicated. GitHub's `created_at` is `YYYY-MM-DDTHH:MM:SSZ` (no
+  // fractional seconds) — truncate to whole seconds defensively (in case
+  // any caller/mock supplies a value with milliseconds) before swapping
+  // colons for dashes, so the synthesized filename always matches
+  // check-retro-overdue.mjs's strict ISO_TIMESTAMP_RE (exactly HH-MM-SSZ,
+  // never a fractional-seconds suffix). A signalDate that fails to parse
+  // as a real Date yields no entry at all — the same fail-closed handling
+  // check-retro-overdue.mjs already applies to any unparseable filename.
+  let entries = [];
+  if (signalDate) {
+    const parsedDate = new Date(signalDate);
+    if (!Number.isNaN(parsedDate.getTime())) {
+      entries = [`${parsedDate.toISOString().slice(0, 19).replace(/:/g, '-')}Z-retrospective.md`];
+    }
+  }
+
+  let output;
+  try {
+    output = execFileSyncImpl(
+      process.execPath,
+      [scriptPath, 'overdue', '--backend', backend, '--entries-stdin', '--window-days', String(windowDays)],
+      { encoding: 'utf8', input: JSON.stringify({ entries }) },
+    );
+  } catch (err) {
+    // A nonzero exit from check-retro-overdue.mjs here is a dispatcher
+    // fault (bad args, unreadable script) — never silently treated as
+    // "not overdue".
+    return { evaluated: false, backend, overdue: false, reason: `check-retro-overdue.mjs invocation failed: ${err.message}` };
+  }
+
+  const lastLine = output.trim().split('\n').filter(Boolean).pop() || '{}';
+  let parsed;
+  try {
+    parsed = JSON.parse(lastLine);
+  } catch (err) {
+    return { evaluated: false, backend, overdue: false, reason: `check-retro-overdue.mjs produced unparseable output: ${err.message}` };
+  }
+
+  const validation = validateOverdueResult(parsed, backend);
+  if (!validation.ok) {
+    return { evaluated: false, backend, overdue: false, reason: `check-retro-overdue.mjs returned an unexpected result: ${validation.reason}` };
+  }
+
+  return { evaluated: true, backend, overdue: parsed.overdue, windowDays, signalDate };
+}
+
+/**
+ * Pure queue-construction step, extracted so tests can call it directly
+ * with a fake issue list (a "fake queue/spawn boundary") without touching
+ * the GitHub API. Called from `main()` AFTER `evaluateRetroGate` — when the
+ * gate reports overdue, `main()` does not call this at all, which is the
+ * "block other work" semantic from the retro-enforcement skill's
+ * documented Blocking Semantics.
+ */
+function buildTriageQueue(untriagedIssues, rules, modules, roster) {
+  const results = [];
+  for (const issue of untriagedIssues) {
+    const decision = triageIssue(issue, rules, modules, roster);
+    if (!decision) continue;
+    results.push({
+      issueNumber: issue.number,
+      assignTo: decision.agent.name,
+      label: decision.agent.label,
+      reason: decision.reason,
+      source: decision.source,
+    });
+  }
+  return results;
+}
+
 function parseOwnerRepoFromRemote(remoteUrl) {
   const sshMatch = remoteUrl.match(/^git@[^:]+:([^/]+)\/(.+?)(?:\.git)?$/);
   if (sshMatch) return { owner: sshMatch[1], repo: sshMatch[2] };
@@ -507,6 +697,74 @@ function isUntriagedIssue(issue, memberLabels) {
   return !memberLabels.some((label) => issueHasLabel(issue, label));
 }
 
+/**
+ * The full round, with every externally-effectful dependency injectable
+ * (#248 Garak finding 4: "export/inject main() dependencies and assert
+ * actual main-level queue fetch/build suppression" — not a reimplemented
+ * predicate). `main()` below is a thin CLI wrapper around this.
+ *
+ * Fail-closed contract (#248 Garak/Kirk finding 1): queue construction
+ * proceeds ONLY when `retroGate.evaluated === true && retroGate.overdue
+ * === false`. Any other outcome — unsupported backend, fetch/spawn fault,
+ * malformed/invalid child JSON, or a confirmed overdue result — blocks
+ * this round's triage. `canProceed` is written to the output file so
+ * squad-heartbeat.yml can gate the later "Assign @copilot issues" step on
+ * the exact same condition, not just empty `results`.
+ */
+async function runRound({
+  squadDir,
+  repoRoot,
+  token,
+  owner,
+  repo,
+  windowDays = 7,
+  execFileSyncImpl = execFileSync,
+  fetchRetroSignalImpl = fetchLatestRetroActionIssueDate,
+  fetchSquadIssuesImpl = fetchSquadIssues,
+}) {
+  const teamMd = fs.readFileSync(path.join(squadDir, 'team.md'), 'utf8');
+  const routingMd = fs.readFileSync(path.join(squadDir, 'routing.md'), 'utf8');
+
+  const roster = parseRoster(teamMd);
+  const rules = parseRoutingRules(routingMd);
+  const modules = parseModuleOwnership(routingMd);
+
+  // Round-start retro gate, evaluated BEFORE any queue construction
+  // (#245; #248 Garak finding 1).
+  const retroGate = await evaluateRetroGate({
+    repoRoot,
+    squadDir,
+    owner,
+    repo,
+    token,
+    windowDays,
+    execFileSyncImpl,
+    fetchRetroSignalImpl,
+  });
+
+  const canProceed = retroGate.evaluated === true && retroGate.overdue === false;
+
+  let results = [];
+  if (canProceed) {
+    const openSquadIssues = await fetchSquadIssuesImpl(owner, repo, token);
+    const memberLabels = roster.map((member) => member.label);
+    const untriaged = openSquadIssues
+      .filter((issue) => isUntriagedIssue(issue, memberLabels))
+      .map((issue) => ({ number: issue.number, title: issue.title || '', body: issue.body || '', labels: [] }));
+
+    results = buildTriageQueue(untriaged, rules, modules, roster);
+  } else if (retroGate.evaluated && retroGate.overdue) {
+    console.log(`[RETRO] Overdue — skipping issue triage this round (backend: ${retroGate.backend}).`);
+  } else {
+    console.log(
+      `[RETRO] Round-start gate not confirmed satisfied for backend "${retroGate.backend}" — blocking this ` +
+        `round's triage rather than proceeding open (fail closed). Reason: ${retroGate.reason || 'unknown'}`,
+    );
+  }
+
+  return { retroGate, results, canProceed };
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const token = process.env.GITHUB_TOKEN;
@@ -515,46 +773,14 @@ async function main() {
   }
 
   const squadDir = path.resolve(process.cwd(), args.squadDir);
-  const teamMd = fs.readFileSync(path.join(squadDir, 'team.md'), 'utf8');
-  const routingMd = fs.readFileSync(path.join(squadDir, 'routing.md'), 'utf8');
-
-  const roster = parseRoster(teamMd);
-  const rules = parseRoutingRules(routingMd);
-  const modules = parseModuleOwnership(routingMd);
-
+  const repoRoot = path.resolve(squadDir, '..');
   const { owner, repo } = getOwnerRepoFromGit();
-  const openSquadIssues = await fetchSquadIssues(owner, repo, token);
 
-  const memberLabels = roster.map((member) => member.label);
-  const untriaged = openSquadIssues.filter((issue) => isUntriagedIssue(issue, memberLabels));
-
-  const results = [];
-  for (const issue of untriaged) {
-    const decision = triageIssue(
-      {
-        number: issue.number,
-        title: issue.title || '',
-        body: issue.body || '',
-        labels: [],
-      },
-      rules,
-      modules,
-      roster,
-    );
-
-    if (!decision) continue;
-    results.push({
-      issueNumber: issue.number,
-      assignTo: decision.agent.name,
-      label: decision.agent.label,
-      reason: decision.reason,
-      source: decision.source,
-    });
-  }
+  const { retroGate, results, canProceed } = await runRound({ squadDir, repoRoot, token, owner, repo });
 
   const outputPath = path.resolve(process.cwd(), args.output);
   fs.mkdirSync(path.dirname(outputPath), { recursive: true });
-  fs.writeFileSync(outputPath, `${JSON.stringify(results, null, 2)}\n`, 'utf8');
+  fs.writeFileSync(outputPath, `${JSON.stringify({ retroGate, results, canProceed }, null, 2)}\n`, 'utf8');
 }
 
 if (require.main === module) {
@@ -564,4 +790,17 @@ if (require.main === module) {
   });
 }
 
-module.exports = { resolveGithubApiBase };
+module.exports = {
+  resolveGithubApiBase,
+  readStateBackend,
+  fetchLatestRetroActionIssueDate,
+  validateOverdueResult,
+  evaluateRetroGate,
+  buildTriageQueue,
+  runRound,
+  triageIssue,
+  isUntriagedIssue,
+  parseRoster,
+  parseRoutingRules,
+  parseModuleOwnership,
+};

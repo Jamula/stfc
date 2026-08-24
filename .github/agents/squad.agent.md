@@ -656,6 +656,42 @@ Ceremonies are structured team meetings where agents align before or after work.
 **On-demand reference:** Read `.squad/templates/ceremony-reference.md` for config format, facilitator spawn template, and execution rules.
 
 **Core logic (always loaded):**
+0. **Round-start retro gate — advisory instruction for THIS interactive/CLI
+   coordinator session, not independently verifiable execution (#248 Garak
+   finding 1: "no executable coordinator/round dispatcher calls it").**
+   Before step 1, resolve the `retro-enforcement` skill via the 5-path skill
+   resolution (see Skill-Aware Routing). If it does not resolve at any of
+   the 5 paths, treat the retro as overdue by definition per the skill's
+   Fail-loud install check — do not silently proceed — and surface a
+   decision naming the gap. If it resolves, evaluate overdue status by
+   running `node scripts/check-retro-overdue.mjs overdue --backend local
+   --log-dir .squad/log` via your shell tool (for `STATE_BACKEND ∈
+   {"local", "worktree"}`), or by fetching entries with
+   `squad_state_list(dir: "log")` and piping them as
+   `{"entries": [...]}` on stdin to `node scripts/check-retro-overdue.mjs
+   overdue --backend <backend>` (for `STATE_BACKEND ∈ {"orphan",
+   "two-layer", "git-notes"}`) — see the CLI's documented JSON stdin/stdout
+   protocol in `scripts/check-retro-overdue.mjs`'s header comment. Parse the
+   single line of JSON on stdout; exit code 0 means "evaluated" (check the
+   `overdue` field), never infer the result from the exit code alone. If
+   `overdue` is true, this satisfies the "Retrospective with Enforcement"
+   ceremony's schema-valid `before` trigger for this round — run it (per
+   step 3 below) ahead of any other `before` ceremony or work-batch spawn.
+   **Honesty boundary:** this is a prompt instruction the coordinator model
+   follows during its own turn — there is no separate process that can
+   verify a live session actually ran it, the same way there is for step 3.
+   The one place in this repository where an equivalent round-start gate
+   IS independently, externally verifiable is
+   `.github/workflows/squad-heartbeat.yml` → `.squad/templates/ralph-triage.js`,
+   which runs as a real GitHub Actions job on real triggers and evaluates
+   the retro gate (for `local`/`worktree` backends only — it has no MCP
+   access for the others) before constructing its own triage work queue.
+   See `tests/scripts/ralphTriageRetroGate.test.ts` for that dispatcher's
+   behavioral tests, and `tests/scripts/checkRetroOverdueCli.test.ts` for
+   the spawned-CLI protocol both paths share. Full round-start enforcement
+   for THIS interactive coordinator path — i.e., an external mechanism that
+   can prove a live session executed step 0 — does not exist yet and
+   remains tracked under issue #245.
 1. Before spawning a work batch, check `.squad/ceremonies.md` for auto-triggered `before` ceremonies matching the current task condition.
 2. After a batch completes, check for `after` ceremonies. Manual ceremonies run only when the user asks.
 3. Spawn the facilitator (sync) using the template in the reference file. Facilitator spawns participants as sub-tasks.
