@@ -2,19 +2,10 @@ import { afterEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-
-// @ts-ignore - untyped .mjs module imported in tests.
-const mod = await import("../../scripts/discord-monitor-state.mjs") as {
-  restoreDiscordMonitorState: (opts: {
-    restoreRoot: string;
-    workspaceRoot: string;
-    mainRef?: string;
-  }) => Promise<void>;
-  persistDiscordMonitorState: (opts: {
-    workspaceRoot: string;
-    stateRoot: string;
-  }) => Promise<void>;
-};
+import {
+  persistDiscordMonitorState,
+  restoreDiscordMonitorState,
+} from "../../scripts/discord-monitor-state.mjs";
 
 const scratchRoot = path.join(process.cwd(), ".test-scratch");
 const createdDirs = new Set<string>();
@@ -63,7 +54,7 @@ describe("scripts/discord-monitor-state.mjs", () => {
     writeFile(restoreRoot, "promo-codes.txt", "STATECODE\n");
     writeFile(workspaceRoot, "promo-codes.txt", "MAINCODE\n");
 
-    await mod.restoreDiscordMonitorState({
+    await restoreDiscordMonitorState({
       restoreRoot,
       workspaceRoot,
       mainRef: "a1d97c3",
@@ -85,7 +76,7 @@ describe("scripts/discord-monitor-state.mjs", () => {
     writeFile(workspaceRoot, "data/discord/tips-seen.jsonl", '{"contentHash":"tip"}\n');
     writeFile(workspaceRoot, "data/digests/2026-08-24.md", "new digest\n");
 
-    await mod.persistDiscordMonitorState({
+    await persistDiscordMonitorState({
       workspaceRoot,
       stateRoot,
     });

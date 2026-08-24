@@ -99,6 +99,17 @@ describe("automation-state scheduled workflow contract", () => {
       assert.doesNotMatch(persist, /\bgit remote add\b/);
     });
 
+    it(`${config.name} shallow-fetches automation-state before attaching a worktree`, () => {
+      const combined = [
+        namedStep(config.workflow, "Restore automation state from automation-state branch").run ?? "",
+        namedStep(config.workflow, config.persistStep).run ?? "",
+      ].join("\n");
+      const matches = combined.match(
+        /git fetch --depth=1 --no-tags origin \\\n\s+refs\/heads\/automation-state:refs\/remotes\/origin\/automation-state/g,
+      );
+      assert.equal(matches?.length, 2);
+    });
+
     it(`${config.name} preserves missing optional state and stages allowlisted paths individually`, () => {
       const persist = namedStep(config.workflow, config.persistStep).run ?? "";
       for (const statePath of config.paths) {

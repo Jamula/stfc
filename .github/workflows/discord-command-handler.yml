@@ -56,7 +56,7 @@ jobs:
           git worktree prune
 
           if git ls-remote --exit-code --heads origin automation-state >/dev/null; then
-            git fetch origin \
+            git fetch --depth=1 --no-tags origin \
               refs/heads/automation-state:refs/remotes/origin/automation-state
             git worktree add -B automation-state "$STATE_DIR" origin/automation-state
           else

@@ -153,11 +153,13 @@ decodes + describes expiry; expired tokens become `TOKEN_EXPIRED` outcomes
 
 **Promo-code source.** Humans maintain `promo-codes.txt` on `main`; scheduled
 jobs consume and persist its operational union on `automation-state`. Before
-both redeem and Discord-monitor runs, `scripts/merge-promo-codes.mjs` keeps the
-human file's ordering/comments, keys codes by the comment-stripped
-`trim().toUpperCase()` token, lets the human line win on duplicates, and appends
-automation-only discoveries beneath a generated marker. This contract is
-additive: deleting a code from `main` does not delete it operationally. The
+both redeem and Discord-monitor runs, `scripts/merge-promo-codes.mjs` starts
+from the operational `automation-state` file, keys codes by the
+comment-stripped `trim().toUpperCase()` token, collapses duplicate normalized
+lines within each input, preserves the `automation-state` line on cross-input
+duplicates, and appends only `main`-exclusive seed codes beneath
+`# --- seeded from main@<sha> ---`. This contract is additive: deleting or
+editing a code on `main` does not rewrite or delete the operational line. The
 case-sensitive dead-cache lookup is a separate deferred concern.
 
 **Idempotency.** Each promo code attempt is independent; outcomes
