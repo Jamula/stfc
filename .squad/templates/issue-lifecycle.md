@@ -318,7 +318,7 @@ When spawning an agent to work on an issue, include this context block:
 2. Push branch
 3. Open PR using:
    ```
-   gh pr create --title "{title}" --body "Closes #{number}\n\n{description}" --head squad/{issue-number}-{slug} --base {base-branch}
+   gh pr create --draft --title "{title}" --body "Closes #{number}\n\n{description}" --head squad/{issue-number}-{slug} --base {base-branch}
    ```
 4. Report PR URL to coordinator
 ```

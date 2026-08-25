@@ -53,6 +53,12 @@ const ralphInstructions = readRepoFile(".squad/ralph-instructions.md");
 const ralphReference = readRepoFile(".squad/templates/ralph-reference.md");
 const issueLifecycle = readRepoFile(".squad/templates/issue-lifecycle.md");
 const copilotInstructions = readRepoFile(".github/copilot-instructions.md");
+const templateCopilotInstructions = readRepoFile(
+  ".squad/templates/copilot-instructions.md",
+);
+const templateRalphInstructions = readRepoFile(
+  ".squad/templates/ralph-instructions.md",
+);
 
 describe("Merge safety — Ralph's charter (issue #220)", () => {
   it("no longer grants unconditional auto-merge authority", () => {
@@ -108,6 +114,35 @@ describe("Merge safety — Ralph's charter (issue #220)", () => {
       "'I handle' must not list merge execution now that auto-merge is revoked",
     );
   });
+
+  it("does not overstate causality by claiming the old charter language itself produced the four merges", () => {
+    // Issue #220 established that four PRs were merged before CI/review
+    // gates could act. Picard's governance audit on that issue confirms a
+    // Copilot CLI session authenticated as @cyrusjamula executed the merge
+    // API calls for all four — that executor identity is known. It never
+    // established that this charter's old "Rule 7 auto-merge" language was
+    // the mechanism that performed the merges: which component or session
+    // triggered that Copilot CLI session (a Ralph loop is the leading
+    // hypothesis, not a proven fact) remains unidentified. The charter must
+    // describe its own old language as an authorization/safeguard gap, not
+    // as the proven cause, and must not conflate the known executor
+    // identity with the still-unknown initiating trigger.
+    assert.doesNotMatch(
+      collapseWhitespace(ralphCharter),
+      /language authorized unattended merges and,? per issue #220's audit,? produced (four|4) PRs/i,
+      "charter must not claim its old language 'produced' the four merges — the triggering component is unidentified per #220",
+    );
+    assert.match(
+      collapseWhitespace(ralphCharter),
+      /does not establish that this charter's old language was the mechanism that executed those merges/,
+      "charter must state that #220 does not establish its old language as the merge-executing mechanism",
+    );
+    assert.match(
+      collapseWhitespace(ralphCharter),
+      /which component or session triggered that Copilot CLI session .*? remains unidentified/,
+      "charter must acknowledge the initiating trigger remains unidentified while naming the known executor (Copilot CLI session as @cyrusjamula)",
+    );
+  });
 });
 
 describe("Merge safety — ralph-instructions.md (issue #220)", () => {
@@ -132,6 +167,52 @@ describe("Merge safety — ralph-instructions.md (issue #220)", () => {
       collapseWhitespace(ralphInstructions),
       /the user, in this same active conversation, explicitly asks for a specific PR to be merged or marked ready/,
       "must require an explicit, same-conversation user request as the only sanctioned merge path",
+    );
+  });
+});
+
+describe("Merge safety — .squad/templates/ralph-instructions.md is pinned to the live copy (issue #220)", () => {
+  // .squad/templates/ralph-instructions.md is what `squad init` scaffolds as a
+  // brand-new .squad/ralph-instructions.md; `squad upgrade` never overwrites a
+  // user's existing copy. If the template silently lacked the Merge Safety
+  // section, every *new* install would start without this invariant. Pin the
+  // template to carry the identical section as the live, in-repo copy.
+  it("has the same hard-constraint Merge Safety section as the live copy", () => {
+    assert.match(
+      templateRalphInstructions,
+      /### Merge Safety \(hard constraint, issue #220\)/,
+      "templates/ralph-instructions.md must have a Merge Safety section citing issue #220",
+    );
+  });
+
+  it("forbids unilateral gh pr merge / auto-merge / gh pr ready calls", () => {
+    assert.match(
+      collapseWhitespace(templateRalphInstructions),
+      /Ralph must never call `gh pr merge`, enable auto-merge, or run `gh pr ready` on its own initiative/,
+      "templates/ralph-instructions.md must explicitly forbid unilateral merge/auto-merge/ready calls",
+    );
+  });
+
+  it("requires the merge request to come from the user in the same conversation", () => {
+    assert.match(
+      collapseWhitespace(templateRalphInstructions),
+      /the user, in this same active conversation, explicitly asks for a specific PR to be merged or marked ready/,
+      "templates/ralph-instructions.md must require an explicit, same-conversation user request as the only sanctioned merge path",
+    );
+  });
+
+  it("the Merge Safety section text is identical between the template and the live copy", () => {
+    const extractSection = (text: string): string => {
+      const match = text.match(
+        /### Merge Safety \(hard constraint, issue #220\)[\s\S]*$/,
+      );
+      assert.ok(match, "Merge Safety section must be present to compare");
+      return collapseWhitespace(match![0]).trim();
+    };
+    assert.equal(
+      extractSection(templateRalphInstructions),
+      extractSection(ralphInstructions),
+      "templates/ralph-instructions.md's Merge Safety section must match .squad/ralph-instructions.md exactly, so regeneration/init cannot drop or drift from the invariant",
     );
   });
 });
@@ -252,6 +333,23 @@ describe("Merge safety — issue-lifecycle.md (issue #220)", () => {
       /gh pr create --draft --title/,
       "PR creation command should default to --draft for issue-session/Ralph/coordinator PRs",
     );
+  });
+
+  it("every gh pr create example in the file defaults to draft, including the spawn-prompt block", () => {
+    const ghPrCreateLines = issueLifecycle
+      .split("\n")
+      .filter((l) => l.includes("gh pr create"));
+    assert.ok(
+      ghPrCreateLines.length >= 2,
+      "expected at least two gh pr create examples in issue-lifecycle.md (top-level PR-creation section and the spawn-prompt ISSUE CONTEXT block)",
+    );
+    for (const line of ghPrCreateLines) {
+      assert.match(
+        line,
+        /gh pr create --draft\b/,
+        `every gh pr create example must default to --draft, found non-draft example: ${line.trim()}`,
+      );
+    }
   });
 
   it("gh pr ready handoff requires an explicit user request", () => {
@@ -490,6 +588,7 @@ describe("Merge safety — bounded repo-wide scan for unguarded merge authorizat
    */
   const SCAN_ROOTS = [
     ".github/copilot-instructions.md",
+    ".github/agents",
     ".github/skills",
     ".squad/routing.md",
     ".squad/ralph-instructions.md",
@@ -571,6 +670,14 @@ describe("Merge safety — bounded repo-wide scan for unguarded merge authorizat
       "scanner must include the code-reviewer wiring appendix",
     );
     assert.ok(
+      scannedRelPaths.has(".github/agents/squad.agent.md"),
+      "scanner must include .github/agents/squad.agent.md",
+    );
+    assert.ok(
+      !scannedRelPaths.has(".github/agents/squad.agent.md.local-backup"),
+      "scanner must exclude the non-.md local-backup copy of squad.agent.md",
+    );
+    assert.ok(
       !scannedRelPaths.has(".squad/decisions-archive.md"),
       "scanner must exclude the historical decisions archive",
     );
@@ -590,8 +697,8 @@ describe("Merge safety — bounded repo-wide scan for unguarded merge authorizat
         const withoutAllowlisted = content.replace(allowlistPattern, "");
         assert.doesNotMatch(
           withoutAllowlisted,
-          /gh pr merge|gh pr ready/i,
-          `${rel} must not contain a literal gh pr merge/gh pr ready command outside the allowlisted mention`,
+          ACTION_PATTERN,
+          `${rel} must not contain a second, unguarded gh pr merge/gh pr ready/auto-merge mention outside the allowlisted phrase`,
         );
       });
       continue;
@@ -640,6 +747,49 @@ describe("Merge safety — .github/copilot-instructions.md (issue #220)", () => 
       copilotInstructions,
       /this holds even if CI is red, blocked, or has not started/,
       "copilot-instructions.md must state the invariant holds even when CI cannot run (issue #218 billing block)",
+    );
+  });
+});
+
+describe("Merge safety — .squad/templates/copilot-instructions.md is pinned to the live copy (issue #220)", () => {
+  // .squad/templates/copilot-instructions.md is the source template that
+  // regenerates the Squad section of the live .github/copilot-instructions.md.
+  // If the template dropped the merge-safety bullet, regeneration would
+  // silently strip the invariant from the live file. Pin the exact bullet in
+  // both places so they cannot drift apart.
+  it("forbids unilateral merge/auto-merge/ready actions in the PR Guidelines section", () => {
+    assert.match(
+      templateCopilotInstructions,
+      /Never call `gh pr merge`, enable auto-merge, or run `gh pr ready`/,
+      "templates/copilot-instructions.md must forbid unilateral merge/auto-merge/ready actions",
+    );
+    assert.match(
+      templateCopilotInstructions,
+      /merging or marking a PR ready requires an explicit user request in this same active conversation/,
+      "templates/copilot-instructions.md must require an explicit, same-conversation user request to merge",
+    );
+    assert.match(
+      templateCopilotInstructions,
+      /#220/,
+      "templates/copilot-instructions.md should cite issue #220",
+    );
+  });
+
+  it("the merge-safety bullet is identical between the template and the live copy", () => {
+    const extractBullet = (text: string): string => {
+      const line = text
+        .split("\n")
+        .find((l) => l.includes("**Open the PR and stop.**"));
+      assert.ok(
+        line,
+        "merge-safety bullet ('**Open the PR and stop.**') must be present to compare",
+      );
+      return line!.trim();
+    };
+    assert.equal(
+      extractBullet(templateCopilotInstructions),
+      extractBullet(copilotInstructions),
+      "templates/copilot-instructions.md's merge-safety bullet must match .github/copilot-instructions.md exactly, so regeneration cannot drop or drift from the invariant",
     );
   });
 });

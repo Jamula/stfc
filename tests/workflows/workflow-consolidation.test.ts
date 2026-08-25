@@ -4,6 +4,10 @@ import { describe, it } from "node:test";
 import path from "node:path";
 import { parse as parseYaml } from "yaml";
 
+const packageJson = JSON.parse(readFileSync("package.json", "utf8")) as {
+  scripts?: Record<string, string>;
+};
+
 const workflowsDirectory = ".github/workflows";
 const workflowFiles = readdirSync(workflowsDirectory)
   .filter((file) => /\.ya?ml$/.test(file))
@@ -330,6 +334,35 @@ describe("workflow consolidation", () => {
     assert.ok(
       steps.some((step) => step.run?.trim() === "npm run typecheck"),
       "squad-release.yml must run npm run typecheck alongside npm test",
+    );
+  });
+
+  it("pins npm's \"test\" script to the concrete tests/index.test.ts entry point, not a glob (#242, #222)", () => {
+    // The assertion above only proves squad-release.yml literally invokes
+    // the string `npm test`; it says nothing about what that indirection
+    // actually runs. Read package.json's "test" script through JSON.parse
+    // (not a raw-text regex, which would be brittle against reformatting)
+    // and run it through the same tokenizing guard used on workflow `run`
+    // steps, so this stays a single source of truth for "is this a real
+    // node --test invocation against a concrete file, or a glob that could
+    // silently match zero files".
+    const testScript = packageJson.scripts?.test;
+    assert.ok(testScript, 'package.json must define a "test" script');
+    const invocations = findNodeTestInvocations(testScript!);
+    assert.equal(
+      invocations.length,
+      1,
+      `expected exactly one node --test invocation in npm's "test" script, got: ${testScript}`,
+    );
+    assert.deepStrictEqual(
+      invocations[0]!.targets,
+      ["tests/index.test.ts"],
+      `npm's "test" script must target tests/index.test.ts directly, got: ${testScript}`,
+    );
+    assert.deepStrictEqual(
+      globTestTargets(testScript!),
+      [],
+      `npm's "test" script must not target a glob that could match zero files, got: ${testScript}`,
     );
   });
 });
