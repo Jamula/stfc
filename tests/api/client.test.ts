@@ -12,7 +12,7 @@ import {
 //   new ApiClient({ baseUrl, token })
 //   client.request({ path, method, body?, schema }) -> Promise<T>
 //   - GETs are retried once on 5xx / network error; POSTs are not retried.
-//   - 401/403 on a SAFE method (GET/HEAD/OPTIONS) is retried once, then
+//   - 401/403 on a SAFE method (GET/OPTIONS) is retried once, then
 //     TokenExpiredError only if the retry also 401/403s. See issue #243: a
 //     single transient 401 must not be trusted as a dead token without that
 //     corroboration.
@@ -159,14 +159,6 @@ describe("ApiClient", () => {
       (err: unknown) => err instanceof TransientError && !(err instanceof TokenExpiredError),
     );
     assert.equal(calls.length, 3);
-  });
-
-  it("HEAD is treated as safe and corroborates like GET", async () => {
-    const { calls } = mockStatusSequence(401, 200);
-    const client = new ApiClient({ baseUrl: "https://example.com", token: "tok" });
-    const result = await client.request({ path: "/x", method: "HEAD", schema: OkSchema });
-    assert.deepEqual(result, { ok: true });
-    assert.equal(calls.length, 2);
   });
 
   it("POST 401 is NOT replayed — surfaces TransientError after exactly one call", async () => {

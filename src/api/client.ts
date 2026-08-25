@@ -46,12 +46,16 @@ export class SchemaMismatchError extends ApiError {
   override readonly name = "SchemaMismatchError";
 }
 
-export type HttpMethod = "GET" | "HEAD" | "OPTIONS" | "POST" | "PUT" | "DELETE";
+export type HttpMethod = "GET" | "OPTIONS" | "POST" | "PUT" | "DELETE";
 
-// RFC 9110 safe methods. These are the ONLY methods this client will ever
-// re-send. Everything else is treated as side-effecting and is sent exactly
-// once, however the server answered — see the replay policy on request().
-const SAFE_METHODS: ReadonlySet<HttpMethod> = new Set<HttpMethod>(["GET", "HEAD", "OPTIONS"]);
+// RFC 9110 safe methods this client will re-send. HEAD is deliberately
+// omitted: this client always parses a JSON body (see parseAndValidate), and
+// a real HEAD response has none, so claiming HEAD support here would be
+// untested and unusable without separate bodyless-response handling that no
+// endpoint on this client actually needs. Everything not in this set is
+// treated as side-effecting and is sent exactly once, however the server
+// answered — see the replay policy on request().
+const SAFE_METHODS: ReadonlySet<HttpMethod> = new Set<HttpMethod>(["GET", "OPTIONS"]);
 
 export interface ApiClientOptions {
   token: string;
@@ -81,7 +85,7 @@ export class ApiClient {
 
   // Replay policy (#243, constrained by #204).
   //
-  // A request is re-sent ONLY when its method is safe (GET/HEAD/OPTIONS).
+  // A request is re-sent ONLY when its method is safe (GET/OPTIONS).
   // For those, one bounded sequence composes the pre-existing single
   // transient retry with a single auth corroboration, in either order, under
   // a shared three-attempt cap. `TokenExpiredError` therefore requires TWO

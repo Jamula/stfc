@@ -562,6 +562,15 @@ function isNotFoundError(err: unknown): boolean {
 
 function isTransientRedeemError(err: unknown): boolean {
   if (err instanceof ApiError) {
+    // A lone auth rejection on this side-effecting POST is reported by
+    // ApiClient as a TransientError (see client.ts's replay policy comment),
+    // but it must never be replayed here: the request already had its one
+    // and only send. Retrying it would resurrect the exact
+    // send-a-side-effecting-request-twice risk #204/#243 rejected — the
+    // request has status 401/403 preserved on the error even though its name
+    // is "TransientError", so check status before falling through to the
+    // name-based check below.
+    if (err.status === 401 || err.status === 403) return false;
     if (err.status === 429) return true;
     if (err.status !== undefined && err.status >= 500 && err.status <= 599) return true;
   }

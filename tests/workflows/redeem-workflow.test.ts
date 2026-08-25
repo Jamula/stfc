@@ -238,8 +238,8 @@ describe(".github/workflows/redeem.yml", () => {
     () => {
       const expectedTitle =
         "STFC token rejected — redemption is stopped until STFC_ACCOUNTS is refreshed";
-      const titles = [...yaml!.matchAll(/^\s+TITLE: "([^"]+)"$/gm)].map((match) => match[1]);
-      const requiredLabels = [...yaml!.matchAll(/^\s+REQUIRED_LABELS: "([^"]+)"$/gm)].map(
+      const titles = [...yaml!.matchAll(/^\s+TITLE: "([^"]+)"\r?$/gm)].map((match) => match[1]);
+      const requiredLabels = [...yaml!.matchAll(/^\s+REQUIRED_LABELS: "([^"]+)"\r?$/gm)].map(
         (match) => match[1],
       );
 

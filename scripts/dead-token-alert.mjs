@@ -4,8 +4,8 @@
  * as YAML substrings (#243).
  *
  * The workflow files ONE alert when every token is rejected (exit code 2) and
- * closes it again on the first fully-green run (exit code 0). Both halves must
- * agree, byte for byte, on which issue *is* the alert — a create-side predicate
+ * closes it again the first time a run is no longer in the all-tokens-rejected
+ * state (exit code 0). Both halves must agree, byte for byte, on which issue *is* the alert — a create-side predicate
  * that drifts from the resolve-side predicate either spams duplicates or closes
  * something unrelated. They agree here by construction: both call
  * `selectAlertIssues`.
@@ -106,7 +106,11 @@ export function findAlertIssue(options = {}) {
   const title = options.title;
   const requiredLabels = options.requiredLabels ?? DEFAULT_REQUIRED_LABELS;
   const listIssues = options.listIssues ?? ghListIssues;
-  const log = options.log ?? ((line) => console.log(line));
+  // stderr, not stdout: the `find` command's caller in redeem.yml captures
+  // this function's stdout via `existing=$(node ... find)` to get a single
+  // issue number. A diagnostic on stdout would corrupt that capture into a
+  // multi-line value the moment a duplicate warning fires.
+  const log = options.log ?? ((line) => console.error(line));
 
   const matches = selectAlertIssues(listIssues(title), { title, requiredLabels });
   if (matches.length > 1) {
@@ -123,7 +127,11 @@ export function findAlertIssue(options = {}) {
  * failed close is reported as a warning and swallowed.
  */
 export function resolveDeadTokenAlert(options = {}) {
-  const log = options.log ?? ((line) => console.log(line));
+  // stderr for the same reason as findAlertIssue: this function's caller does
+  // not capture stdout today, but keeping both halves consistent means a
+  // future refactor that starts capturing `resolve` output can't reintroduce
+  // the same corruption.
+  const log = options.log ?? ((line) => console.error(line));
   const closeIssue = options.closeIssue ?? ghCloseIssue;
   const runUrl = options.runUrl ?? '(unknown run)';
 

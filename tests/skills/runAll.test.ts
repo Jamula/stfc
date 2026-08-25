@@ -604,6 +604,46 @@ describe("runAll", () => {
     assert.equal(fs.existsSync(deadCodesPath), false, "transient exhaustion must not mark code dead");
   });
 
+  it("a rejected promo-code redeem is sent once, never replayed as a transient retry", async () => {
+    // ApiClient.request() reports an uncorroborated 401/403 on this
+    // side-effecting POST as a TransientError so it stays visible (see
+    // client.ts's replay policy comment), but that must not make
+    // processOneCode's transient-retry loop resend it — the request already
+    // had its one and only send, per #204/#243.
+    const codeFile = path.join(dir, "promo.txt");
+    const deadCodesPath = path.join(dir, "promo-code-dead.json");
+    fs.writeFileSync(codeFile, "AUTHFLAKY\n", "utf8");
+    let attempts = 0;
+    const sleepCalls: number[] = [];
+
+    const fake = makeFakeClient({
+      listGifts: async () => ({ items: [] }),
+      redeemCode: async () => {
+        attempts += 1;
+        throw new TransientError(
+          "Authentication rejected (401) on POST /redeem/claim; POST is not safe to replay, " +
+            "so this rejection is reported as transient rather than corroborated token expiry",
+          401,
+        );
+      },
+    });
+
+    const { result } = await runAll({
+      accounts: [{ name: "main", token: makeJwt({ exp: 9999999999 }) }],
+      clientFactory: () => fake as unknown as ApiClient,
+      promoCodesPath: codeFile,
+      deadCodesPath,
+      sleep: async (ms) => {
+        sleepCalls.push(ms);
+      },
+    });
+
+    assert.equal(attempts, 1, "an uncorroborated auth rejection on a promo-code POST must never be replayed");
+    assert.deepEqual(sleepCalls, []);
+    assert.equal(result.accounts[0]?.promoCodes[0]?.outcome, Outcomes.TRANSIENT);
+    assert.equal(fs.existsSync(deadCodesPath), false, "an uncorroborated auth rejection must not mark the code dead");
+  });
+
   it("honors Retry-After on HTTP 429 before retrying", async () => {
     const codeFile = path.join(dir, "promo.txt");
     fs.writeFileSync(codeFile, "RATECODE\n", "utf8");

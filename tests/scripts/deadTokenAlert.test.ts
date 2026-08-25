@@ -151,6 +151,34 @@ describe("dead-token-alert — find", () => {
     assert.match(lines.join("\n"), /Found 2 matching dead-token alerts; using oldest #101\./);
   });
 
+  it("routes its default diagnostics to stderr, never stdout", () => {
+    // The workflow's create step captures this function's stdout with
+    // `existing=$(node scripts/dead-token-alert.mjs find)` to get a single
+    // issue number. If the default logger wrote the duplicate warning to
+    // stdout too, `existing` would become a multi-line value and corrupt the
+    // downstream `gh issue comment "$existing"` call.
+    const originalLog = console.log;
+    const originalError = console.error;
+    const stdoutLines: string[] = [];
+    const stderrLines: string[] = [];
+    console.log = (line?: unknown) => stdoutLines.push(String(line));
+    console.error = (line?: unknown) => stderrLines.push(String(line));
+    try {
+      const result = findAlertIssue({
+        title: TITLE,
+        requiredLabels: REQUIRED,
+        listIssues: () => FIXTURE,
+      });
+      assert.equal(result.number, 101);
+    } finally {
+      console.log = originalLog;
+      console.error = originalError;
+    }
+
+    assert.deepEqual(stdoutLines, [], "duplicate-alert diagnostics must never reach stdout");
+    assert.equal(stderrLines.filter((l) => l.startsWith("::warning::")).length, 1);
+  });
+
   it("returns undefined and does not warn when nothing matches", () => {
     const { lines, log } = recorder();
     const result = findAlertIssue({
