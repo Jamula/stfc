@@ -18,11 +18,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.0
+        with:
+          # Live game-state is operational data on this branch. A missing
+          # branch must fail checkout rather than report a false zero.
+          ref: automation-state
 
       - name: Compute folder size
         id: size
         run: |
-          SIZE_BYTES=$(du -sb data/discord/game-state 2>/dev/null | awk '{print $1}' || echo 0)
+          set -euo pipefail
+          if [ ! -d data/discord/game-state ]; then
+            echo "::error::automation-state is missing data/discord/game-state."
+            exit 1
+          fi
+          SIZE_BYTES=$(du -sb data/discord/game-state | awk '{print $1}')
           SIZE_MB=$((SIZE_BYTES / 1048576))
           echo "size_mb=$SIZE_MB" >> "$GITHUB_OUTPUT"
 
@@ -73,4 +82,3 @@ jobs:
         run: |
           gh issue comment ${{ steps.issue.outputs.issue_number }} \
             --body 'Update: '"$(date -u '+%Y-%m-%dT%H:%M:%SZ')"'. Current size: ${{ steps.size.outputs.size_mb }} MB (exceeds 100 MB threshold).'
-

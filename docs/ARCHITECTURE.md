@@ -96,7 +96,7 @@ Only the meaningful top-level directories. Per-subsystem detail lives in §3.
 │   ├── pre-push.mjs           # pre-push checks
 │   └── ci/{check-api-auth,check-bundle-budget,check-contracts-types}.mjs
 │
-├── data/                      # Repo-tracked state
+├── data/                      # Seeds on main; selected live state on automation-state
 │   ├── crew/                  # officers.json, roster/, tasks/ (crew domain)
 │   ├── digests/               # Discord digest snapshots
 │   ├── discord/               # Cursor + cooldown state
@@ -107,7 +107,7 @@ Only the meaningful top-level directories. Per-subsystem detail lives in §3.
 │   ├── discord-allowlist.json
 │   └── model-tiers.json
 │
-├── promo-codes.txt            # Append-only promo-code list (the redeemer's input)
+├── promo-codes.txt            # Human seed; operational union is on automation-state
 ├── docs/                      # User & operator docs (THIS file + per-subsystem)
 ├── specs/                     # Feature specs and contract references
 ├── .squad/                    # Squad governance state (agent histories, decisions, etc.)
@@ -151,18 +151,25 @@ Each `token` is a JWT against the Scopely store API. `src/lib/jwt.ts`
 decodes + describes expiry; expired tokens become `TOKEN_EXPIRED` outcomes
 (non-fatal per-account).
 
-**Promo-code source.** `promo-codes.txt` (repo-tracked, append-only). The
-Discord monitor (§3.2) auto-appends newly classified codes in a separate
-workflow.
+**Promo-code source.** Humans maintain `promo-codes.txt` on `main`; scheduled
+jobs consume and persist its operational union on `automation-state`. Before
+both redeem and Discord-monitor runs, `scripts/merge-promo-codes.mjs` starts
+from the operational `automation-state` file, keys codes by the
+comment-stripped `trim().toUpperCase()` token, collapses duplicate normalized
+lines within each input, preserves the `automation-state` line on cross-input
+duplicates, and appends only `main`-exclusive seed codes beneath
+`# --- seeded from main@<sha> ---`. This contract is additive: deleting or
+editing a code on `main` does not rewrite or delete the operational line. The
+case-sensitive dead-cache lookup is a separate deferred concern.
 
 **Idempotency.** Each promo code attempt is independent; outcomes
 (`OK`, `CODE_USED`, `CODE_INVALID`, `RATE_LIMITED`, `TOKEN_EXPIRED`, etc.)
 are classified by `src/lib/outcomes.ts`. Re-runs are safe.
 
 **Scheduled by.** `.github/workflows/redeem.yml` — `*/10 * * * *` (every 10
-min, 144 runs/day). Commits any new `docs/redeem-history.md` rows back to
-the repo via `GITHUB_TOKEN` (`contents: write`). Local `main` therefore
-diverges from `origin/main` constantly — see §5.2 + repo Rule 4.
+min, 144 runs/day). It restores live history, dead-code cache, and promo codes
+from `automation-state`, then commits changed state there via `GITHUB_TOKEN`.
+The protected `main` tip is never the automation push target.
 
 ### 3.2 Discord Monitor — `src/discord/`
 
@@ -212,8 +219,8 @@ HTTP — never the real bot token.
 **Scheduled by.** `discord-monitor.yml` — `15 */4 * * *` (15 min past every
 4th hour). Staggered from the redeemer's `*/10` cadence to avoid the
 shared concurrency group `stfc-gift-redeemer` blocking. The shared group
-serializes all workflows that write `promo-codes.txt`, `data/`, or
-`docs/redeem-history.md`.
+serializes scheduled workflows that write `promo-codes.txt`, `data/`, or
+`docs/redeem-history.md` on `automation-state`.
 
 ### 3.3 Crew Optimizer — `src/crew/`
 
@@ -502,8 +509,8 @@ sequenceDiagram
   end
   Orch->>CLI: { report, exitCode }
   CLI->>Runner: process.exit(exitCode)
-  Runner->>Repo: commit any new docs/redeem-history.md row
-  Runner->>Repo: push to origin/main
+  Runner->>Repo: commit history/cache/promo state
+  Runner->>Repo: push to origin/automation-state
 ```
 
 Exit code semantics: 0 / 1 / 2 per `runAll.ts:399-407` (see §3.1).
@@ -593,18 +600,64 @@ sequenceDiagram
   compromised the moment it arrived — transcripts persist in the
   session store.
 
-### 5.2 Operating constraints
+### 5.2 Automation-state lifecycle
+
+Live automation data is intentionally split from reviewed source:
+
+| Store | Purpose |
+|---|---|
+| `main:promo-codes.txt` | Human seed and comment/casing authority |
+| `automation-state:promo-codes.txt` | Canonical operational additive list |
+| Runner working tree | Deterministic merged input for one run |
+
+The state allowlist is `docs/redeem-history.md`,
+`data/promo-code-dead.json`, `promo-codes.txt`, `data/discord`, and
+`data/digests`. Missing optional outputs preserve the branch's existing copy,
+and each path is staged separately so one missing path cannot suppress another.
+`discord-command-handler.yml` runs the current main-branch handler script with
+a linked `automation-state` worktree as its working repository:
+`/redeem-status` reads current history and `/game-state` reads/writes current
+game-state. `storage-size-monitor.yml` checks out that live ref directly.
+
+On first use, a writer adds a detached **linked worktree** from the authenticated
+Actions checkout, switches it to orphan branch `automation-state`, clears the
+inherited index, and copies only allowlisted state. This preserves
+`actions/checkout` credentials without a PAT, deploy key, bypass actor,
+standalone `git init`, or remote reconfiguration. Existing state uses
+`git worktree add -B` from `origin/automation-state`. Restore publishes a
+success output; `if: always()` persistence is gated on it and cannot overwrite
+live state after an incomplete restore.
+
+Operational rollback is forward-only: revert a bad state commit with
+`git revert`, never reset or force-push. To reset the dead cache, commit removal
+of `data/promo-code-dead.json` on `automation-state`; deleting the frozen
+`main` copy has no effect. To roll back the architecture, first copy live
+allowlisted data back through a reviewed `main` PR, then revert this workflow
+change. No credential or ruleset cleanup is required. A minimal
+deletion/non-fast-forward-only ruleset for `automation-state` (no required
+checks and no bypass actors) is a proposal pending fresh Picard approval, not a
+live mutation. #247 remains optional and any future bypass actor requires a
+fresh governance verdict.
+
+GitHub Actions has **zero CI execution evidence** for this revision while the
+account billing/spending block in #218 stops jobs before their first step.
+Local validation therefore runs targeted workflow/script tests, `npm test`,
+and `npm run typecheck` independently. After #218 is cleared, dispatch redeem
+twice and verify run 2 retains run 1's history, dispatch Discord monitor,
+exercise `/redeem-status` and `/game-state`, verify no-change/missing-cache
+paths, and prove `main`'s tip SHA is unchanged while state commits land on
+`automation-state`.
+
+### 5.3 Operating constraints
 
 - **Codespaces idle timeout.** Default 30 min — kills long fleets. Bump
   via `gh codespace edit -c "$CODESPACE_NAME" --idle-timeout 240m`
   (per-session) or set the user-default at
   https://github.com/settings/codespaces (Rule 20). Do **not** install
   `systemd`/`tmux`/cron-keepalive — the runtime is the authority.
-- **Local `main` diverges constantly.** `redeem.yml` commits
-  `chore(history): append N new claim row(s)` to `origin/main` every
-  ~10 min. Rebase before every push (Rule 4): `git fetch origin &&
-  git rebase origin/main`. These commits only touch
-  `docs/redeem-history.md` — rebases are conflict-free.
+- **Automation state diverges from main by design.** Scheduled state commits
+  land on `origin/automation-state`; source changes continue through reviewed
+  pull requests to `main`.
 - **CodeQL scan lag** can reject a push briefly even when the previous
   commit was green. Wait 30-60 s and retry (Rule 4 addendum). Never
   amend or `--no-verify`.
@@ -613,7 +666,7 @@ sequenceDiagram
   uncommitted `.squad/` artifacts back to main checkout BEFORE
   `git worktree remove` (Rule 8).
 
-### 5.3 Testing & quality gates
+### 5.4 Testing & quality gates
 
 - **900+ unit tests** via `node:test` + `tsx` (`npm test`, ~2-3 s
   total). Single entrypoint `tests/index.test.ts` aggregates.

@@ -63,6 +63,8 @@ describe('storageSizeMonitor workflow', () => {
     assert(sizeStep, 'size step not found');
     const run = sizeStep?.run as string | undefined;
     assert(run && run.includes('data/discord/game-state'), 'must monitor data/discord/game-state');
+    assert(run && run.includes('::error::automation-state is missing'), 'missing live state must fail loudly');
+    assert(!run?.includes('|| echo 0'), 'missing live state must not be reported as zero');
   });
 
   it('deduplicates alert issues by title search', () => {
@@ -104,5 +106,7 @@ describe('storageSizeMonitor workflow', () => {
       checkoutUses && checkoutUses.startsWith('actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5'),
       'checkout must use pinned SHA 34e114876b0b11c390a56381ad16ebd13914f8d5'
     );
+    const withConfig = checkout?.with as Record<string, unknown> | undefined;
+    assert.strictEqual(withConfig?.ref, 'automation-state', 'must measure the live state branch');
   });
 });

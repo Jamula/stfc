@@ -35,8 +35,8 @@ describe(".github/workflows/discord-command-handler.yml", () => {
     assert.doesNotMatch(onBlock, /^\s+workflow_dispatch:/m, "must not trigger on workflow_dispatch");
   });
 
-  it("pins concurrency group stfc-discord-handler and does not cancel in-progress", { skip: yaml === undefined }, () => {
-    assert.match(yaml!, /concurrency:\s*\n\s+group:\s*stfc-discord-handler\b/);
+  it("pins a dedicated Discord-command concurrency group and does not cancel in-progress", { skip: yaml === undefined }, () => {
+    assert.match(yaml!, /concurrency:\s*\n(?:\s+#.*\n)*\s+group:\s*stfc-discord-handler\b/);
     assert.match(yaml!, /cancel-in-progress:\s*false\b/);
   });
 
@@ -54,8 +54,10 @@ describe(".github/workflows/discord-command-handler.yml", () => {
     }
   });
 
-  it("invokes scripts/discord-handler.mjs and maps DISCORD_BOT_TOKEN from secrets", { skip: yaml === undefined }, () => {
-    assert.match(yaml!, /node\s+scripts\/discord-handler\.mjs/);
+  it("invokes main's scripts/discord-handler.mjs from the state worktree", { skip: yaml === undefined }, () => {
+    assert.match(yaml!, /node\s+"\$GITHUB_WORKSPACE\/scripts\/discord-handler\.mjs"/);
+    assert.match(yaml!, /working-directory:\s*\$\{\{\s*steps\.state_worktree\.outputs\.state_dir\s*\}\}/);
+    assert.match(yaml!, /STFC_STATE_BRANCH:\s*automation-state/);
     assert.match(yaml!, /DISCORD_BOT_TOKEN:\s*\$\{\{\s*secrets\.DISCORD_BOT_TOKEN\s*\}\}/);
     assert.match(yaml!, /ALLOWED_GUILD_IDS:\s*\$\{\{\s*secrets\.ALLOWED_GUILD_IDS\s*\}\}/);
   });
@@ -64,4 +66,20 @@ describe(".github/workflows/discord-command-handler.yml", () => {
     assert.doesNotMatch(yaml!, /echo\s+\"?\$DISCORD_BOT_TOKEN/);
     assert.doesNotMatch(yaml!, /set\s+-x/);
   });
+
+  it(
+    "prepares automation-state before invoking the handler (issue #241)",
+    { skip: yaml === undefined },
+    () => {
+      // main's checked-out copy of docs/redeem-history.md is frozen (issue
+      // #241 — automation state lives on automation-state, not main), so
+      // /redeem-status would report stale data without this restore step.
+      const restoreIdx = yaml!.indexOf("Prepare automation-state handler worktree");
+      const runIdx = yaml!.indexOf('node "$GITHUB_WORKSPACE/scripts/discord-handler.mjs"');
+      assert.notEqual(restoreIdx, -1, "must have a restore-state step");
+      assert.ok(restoreIdx < runIdx, "restore must precede the handler invocation");
+      assert.match(yaml!, /git worktree add -B automation-state/);
+      assert.doesNotMatch(yaml!, /git checkout origin\/automation-state --/);
+    },
+  );
 });

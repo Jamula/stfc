@@ -4,11 +4,15 @@
 // accidental regressions are caught by CI before they cause silent data loss
 // or swallowed push failures in production.
 //
-// Assertions mirror the acceptance criteria from issue #212:
-//   - Both docs/redeem-history.md AND data/promo-code-dead.json are staged.
-//   - No commit is created when neither file changed.
-//   - Rebase failures are retried with a bounded loop and fail visibly.
-//   - The generated commit continues to use --no-verify.
+// Assertions mirror the acceptance criteria from issue #212 (state must be
+// captured correctly) AND issue #241 (state must land on `automation-state`,
+// never on `main`, since the repository ruleset rejects direct pushes from
+// GITHUB_TOKEN's `github-actions` identity and cannot be given a bypass
+// actor for it on this org/plan — see the retro comments on #241 for the
+// live-verified evidence). Kirk/Picard's governance decision on #241
+// explicitly rejected any RepositoryRole/User/PAT-based bypass (it would
+// recreate #220's auto-landing vector), so these tests also assert that no
+// such bypass mechanism was reintroduced.
 
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
@@ -34,12 +38,42 @@ describe(".github/workflows/redeem.yml", () => {
   });
 
   it(
+    "restores state from automation-state before running the redeemer",
+    { skip: yaml === undefined },
+    () => {
+      const restoreIdx = yaml!.indexOf("Restore automation state from automation-state branch");
+      const redeemIdx = yaml!.indexOf("name: Redeem\n");
+      assert.notEqual(restoreIdx, -1, "must have a restore-state step");
+      assert.notEqual(redeemIdx, -1, "must have the Redeem step");
+      assert.ok(
+        restoreIdx < redeemIdx,
+        "restore step must precede the Redeem step so the run sees fresh state",
+      );
+      assert.match(
+        yaml!,
+        /cp "\$RESTORE_DIR\/docs\/redeem-history\.md" docs\/redeem-history\.md/,
+        "must restore docs/redeem-history.md from automation-state",
+      );
+      assert.match(
+        yaml!,
+        /cp "\$RESTORE_DIR\/data\/promo-code-dead\.json" data\/promo-code-dead\.json/,
+        "must restore data/promo-code-dead.json from automation-state",
+      );
+      assert.match(
+        yaml!,
+        /merge-promo-codes\.mjs[\s\S]*promo-codes\.txt/,
+        "must merge human promo seeds with operational promo codes",
+      );
+    },
+  );
+
+  it(
     "stages docs/redeem-history.md when changed",
     { skip: yaml === undefined },
     () => {
       assert.match(
         yaml!,
-        /git add docs\/redeem-history\.md/,
+        /add -A -- docs\/redeem-history\.md/,
         "commit step must stage docs/redeem-history.md",
       );
     },
@@ -51,31 +85,20 @@ describe(".github/workflows/redeem.yml", () => {
     () => {
       assert.match(
         yaml!,
-        /git add data\/promo-code-dead\.json/,
+        /add[^\n]*data\/promo-code-dead\.json/,
         "commit step must stage data/promo-code-dead.json",
       );
     },
   );
 
   it(
-    "skips commit when neither history nor dead-code cache changed",
+    "skips commit when nothing changed relative to automation-state",
     { skip: yaml === undefined },
     () => {
-      // Both porcelain checks must be present — the guard is conjunction, not disjunction.
       assert.match(
         yaml!,
-        /HISTORY_CHANGED.*porcelain.*redeem-history|porcelain.*redeem-history.*HISTORY_CHANGED/s,
-        "must gate on history change",
-      );
-      assert.match(
-        yaml!,
-        /DEAD_CHANGED.*porcelain.*promo-code-dead|porcelain.*promo-code-dead.*DEAD_CHANGED/s,
-        "must gate on dead-code cache change",
-      );
-      assert.match(
-        yaml!,
-        /\$HISTORY_CHANGED.*\$DEAD_CHANGED|\$DEAD_CHANGED.*\$HISTORY_CHANGED/,
-        "exit path must reference both change flags",
+        /git -C "\$STATE_DIR" diff --cached --quiet/,
+        "must gate the commit on a diff against automation-state's own history, not main's",
       );
     },
   );
@@ -86,27 +109,47 @@ describe(".github/workflows/redeem.yml", () => {
     () => {
       assert.match(
         yaml!,
-        /git commit --no-verify/,
+        /git -C "\$STATE_DIR" commit --no-verify/,
         "generated commit must use --no-verify so the pre-commit hook does not block CI",
       );
     },
   );
 
   it(
-    "retries the push with a bounded loop (does NOT use '|| true' to swallow rebase failures)",
+    "retries the push with a bounded loop against automation-state",
     { skip: yaml === undefined },
     () => {
-      // Must have a loop construct for bounded retry.
       assert.match(
         yaml!,
         /for attempt in \d/,
         "must retry push with a bounded loop",
       );
-      // The old swallowed-failure pattern must be gone.
+      assert.match(
+        yaml!,
+        /git -C "\$STATE_DIR" push origin "HEAD:automation-state"/,
+        "push target must be automation-state",
+      );
       assert.doesNotMatch(
         yaml!,
-        /git pull --rebase.*\|\| true/,
-        "rebase failures must NOT be swallowed with '|| true'",
+        /git -C "\$STATE_DIR" pull --rebase[^\n]*\|\| true/,
+        "rebase failures must not be swallowed (issue #212)",
+      );
+    },
+  );
+
+  it(
+    "never pushes to $GITHUB_REF_NAME (main)",
+    { skip: yaml === undefined },
+    () => {
+      assert.doesNotMatch(
+        yaml!,
+        /git push origin "HEAD:\$GITHUB_REF_NAME"/,
+        "must not push automation state directly to main — issue #241",
+      );
+      assert.doesNotMatch(
+        yaml!,
+        /git -C "\$STATE_DIR" push origin "HEAD:\$GITHUB_REF_NAME"/,
+        "must not push automation state directly to main — issue #241",
       );
     },
   );
@@ -145,6 +188,23 @@ describe(".github/workflows/redeem.yml", () => {
         yaml!,
         /contents:\s*write/,
         "must declare contents: write so the bot can push the generated commit",
+      );
+    },
+  );
+
+  it(
+    "does not introduce a PAT-based or deploy-key bypass secret (issue #241 governance decision)",
+    { skip: yaml === undefined },
+    () => {
+      assert.doesNotMatch(
+        yaml!,
+        /secrets\.[A-Z_]*PAT[A-Z_]*/,
+        "must not read a PAT secret for pushing — Kirk/Picard rejected RepositoryRole/User/PAT bypass on #241",
+      );
+      assert.doesNotMatch(
+        yaml!,
+        /secrets\.AUTOMATION_DEPLOY_KEY/,
+        "must not use a deploy key either — the approved fix is the automation-state branch, not a bypass actor",
       );
     },
   );

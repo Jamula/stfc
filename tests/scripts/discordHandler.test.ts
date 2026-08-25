@@ -8,6 +8,11 @@ const mod = await import("../../scripts/discord-handler.mjs") as {
     env?: Record<string, string | undefined>;
     runGh?: (args: string[]) => Promise<string>;
     runGit?: (args: string[], opts?: { stdin?: string }) => Promise<string>;
+    reconcileAutomationStateImpl?: (args: {
+      stateDir: string;
+      ref: string;
+      relativePaths: string[];
+    }) => Promise<string>;
     fetchImpl?: (url: string, init?: any) => Promise<any>;
     readFileImpl?: (path: string, enc: string) => Promise<string>;
     writeFileImpl?: (path: string, data: any, enc?: string) => Promise<void>;
@@ -42,6 +47,7 @@ function baseEnv(payload: Record<string, unknown>): Record<string, string> {
     DISCORD_CLIENT_PAYLOAD: JSON.stringify(payload),
     GITHUB_REPOSITORY: "Jamula/stfc",
     GITHUB_REF_NAME: "main",
+    STFC_STATE_BRANCH: "automation-state",
     GITHUB_SERVER_URL: "https://github.com",
     ALLOWED_GUILD_IDS: "g1,g2",
   };
@@ -107,7 +113,7 @@ function gameStatePayload(overrides: Record<string, unknown> = {}) {
 describe("scripts/discord-handler.mjs", () => {
   it("scans staged game-state artifacts before bypassing commit hooks", () => {
     const source = readFileSync("scripts/discord-handler.mjs", "utf8");
-    const scanAt = source.indexOf('check-artifact-hygiene.mjs", "--staged');
+    const scanAt = source.indexOf('check-artifact-hygiene.mjs');
     const commitAt = source.indexOf('["commit", "--no-verify"');
     assert.ok(scanAt >= 0);
     assert.ok(commitAt > scanAt);
@@ -198,6 +204,7 @@ describe("scripts/discord-handler.mjs", () => {
     assert.equal(ghCalls.length, 2, `expected workflow run + run list, got ${ghCalls.length}`);
     assert.equal(ghCalls[0]?.[0], "workflow");
     assert.equal(ghCalls[0]?.[1], "run");
+    assert.deepEqual(ghCalls[0]?.slice(-2), ["--ref", "main"]);
     assert.equal(ghCalls[1]?.[0], "run");
     assert.equal(ghCalls[1]?.[1], "list");
     assert.match(postedBody, /Redeem triggered — run ID 123456/);
@@ -275,6 +282,10 @@ describe("scripts/discord-handler.mjs", () => {
     assert.ok(commit?.args.includes("--no-verify"));
     assert.ok(commit?.stdin?.includes("data(game-state): after raid"));
     assert.ok(commit?.stdin?.includes("Source: https://discord.com/channels/g1/c1/..."));
+    assert.deepEqual(
+      gitCalls.find((c) => c.args[0] === "push")?.args,
+      ["push", "origin", "HEAD:automation-state"],
+    );
   });
 
   it("game-state same-second same-name uploads get unique filenames — no collision", async () => {
@@ -517,10 +528,11 @@ describe("scripts/discord-handler.mjs", () => {
     assert.equal(mem.files.has("data/discord/game-state/2026-06-02/_index.json.tmp"), false);
   });
 
-  it("game-state push race retries with fetch+rebase once", async () => {
+  it("game-state push race retries and preserves the upload commit", async () => {
     const mem = createMemFs();
     const calls: string[][] = [];
     let pushAttempts = 0;
+    const reconcileCalls: Array<{ stateDir: string; ref: string; relativePaths: string[] }> = [];
 
     const code = await mod.runCli({
       env: baseEnv(gameStatePayload()),
@@ -539,6 +551,10 @@ describe("scripts/discord-handler.mjs", () => {
         }
         if (args[0] === "rev-parse") return "abc123\n";
         return "";
+      },
+      reconcileAutomationStateImpl: async (args) => {
+        reconcileCalls.push(args);
+        return "replayed";
       },
       fetchImpl: async (url: string) => {
         if (url.includes("cdn.discordapp.com")) {
@@ -559,8 +575,13 @@ describe("scripts/discord-handler.mjs", () => {
 
     assert.equal(code, 0);
     assert.equal(pushAttempts, 2);
-    assert.equal(calls.some((a) => a[0] === "fetch" && a[2] === "main"), true);
-    assert.equal(calls.some((a) => a[0] === "rebase" && a[1] === "origin/main"), true);
+    assert.equal(reconcileCalls.length, 1);
+    assert.equal(reconcileCalls[0]?.ref, "automation-state");
+    assert.deepEqual(reconcileCalls[0]?.relativePaths.sort(), [
+      "data/discord/game-state/2026-06-02/064800000-state.png",
+      "data/discord/game-state/2026-06-02/064800000-state.png.lineage.json",
+      "data/discord/game-state/2026-06-02/_index.json",
+    ]);
   });
 
   it("unknown command returns a helpful unknown message", async () => {
