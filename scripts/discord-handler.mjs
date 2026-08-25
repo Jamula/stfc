@@ -465,7 +465,7 @@ export async function handleGameStateCommand({
   await runGit(["commit", "--no-verify", "-F", "-"], { stdin: `${commitMessage}\n` });
 
   const doPush = async () => {
-    await runGit(["push", "origin", `HEAD:${ref}`]);
+    await runGit(["push", "--no-verify", "origin", `HEAD:${ref}`]);
   };
 
   try {

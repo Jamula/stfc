@@ -1,16 +1,18 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
+  chmodSync,
   mkdirSync,
   mkdtempSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
 import path from "node:path";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { reconcileAutomationStateAfterPushFailure } from "../../scripts/automation-state-retry.mjs";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..", "..");
+const SCRATCH_ROOT = path.resolve(REPO_ROOT, "..");
 
 function git(cwd: string, ...args: string[]): string {
   const env = { ...process.env };
@@ -23,6 +25,24 @@ function git(cwd: string, ...args: string[]): string {
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
   }).trim();
+}
+
+function gitResult(cwd: string, ...args: string[]) {
+  const env = { ...process.env };
+  for (const key of Object.keys(env)) {
+    if (key.startsWith("GIT_")) delete env[key];
+  }
+  return spawnSync("git", args, {
+    cwd,
+    env,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+}
+
+function resolveGitCommonDir(cwd: string): string {
+  const commonDir = git(cwd, "rev-parse", "--git-common-dir");
+  return path.isAbsolute(commonDir) ? commonDir : path.resolve(cwd, commonDir);
 }
 
 describe("automation-state linked-worktree bootstrap", () => {
@@ -146,6 +166,60 @@ describe("automation-state linked-worktree bootstrap", () => {
         git(stateB, "rev-list", "--parents", "-n", "1", "HEAD").split(/\s+/).length,
         2,
         "replayed commit must sit on top of the winning remote root",
+      );
+    } finally {
+      rmSync(scratch, { recursive: true, force: true });
+    }
+  });
+
+  it("fails a linked-worktree push on the shared pre-push hook and succeeds with --no-verify", () => {
+    const scratch = mkdtempSync(path.join(SCRATCH_ROOT, "automation-state-hook-test-"));
+    try {
+      const remote = path.join(scratch, "remote.git");
+      const writer = path.join(scratch, "writer");
+      const state = path.join(scratch, "state");
+
+      mkdirSync(remote);
+      git(remote, "init", "--bare");
+      git(scratch, "clone", remote, writer);
+      git(writer, "config", "user.name", "Fixture User");
+      git(writer, "config", "user.email", "fixture@example.invalid");
+      writeFileSync(path.join(writer, "seed.txt"), "seed\n");
+      git(writer, "add", "seed.txt");
+      git(writer, "commit", "--no-verify", "-m", "seed");
+      git(writer, "branch", "-M", "main");
+      git(writer, "push", "origin", "HEAD:main");
+
+      git(writer, "worktree", "add", "--detach", state, "HEAD");
+      git(state, "switch", "--orphan", "automation-state");
+      git(state, "rm", "-rf", "--cached", "--ignore-unmatch", ".");
+      mkdirSync(path.join(state, "docs"), { recursive: true });
+      writeFileSync(path.join(state, "docs", "redeem-history.md"), "# history\n");
+      git(state, "add", "docs/redeem-history.md");
+      git(state, "commit", "--no-verify", "-m", "state seed");
+
+      const hookPath = path.join(resolveGitCommonDir(writer), "hooks", "pre-push");
+      writeFileSync(hookPath, "#!/bin/sh\nnode scripts/pre-push.mjs\n");
+      chmodSync(hookPath, 0o755);
+
+      const rejected = gitResult(state, "push", "origin", "HEAD:automation-state");
+      assert.notEqual(rejected.status, 0, "push without --no-verify must fail");
+      assert.match(
+        `${rejected.stdout}${rejected.stderr}`,
+        /MODULE_NOT_FOUND|Cannot find module/,
+      );
+      assert.match(
+        `${rejected.stdout}${rejected.stderr}`,
+        /scripts[\\/]+pre-push\.mjs/,
+      );
+
+      const bypassed = gitResult(state, "push", "--no-verify", "origin", "HEAD:automation-state");
+      assert.equal(bypassed.status, 0, bypassed.stderr);
+
+      git(writer, "fetch", "origin", "refs/heads/automation-state:refs/remotes/origin/automation-state");
+      assert.deepEqual(
+        git(writer, "ls-tree", "-r", "--name-only", "origin/automation-state").split(/\r?\n/),
+        ["docs/redeem-history.md"],
       );
     } finally {
       rmSync(scratch, { recursive: true, force: true });

@@ -137,7 +137,7 @@ describe(".github/workflows/redeem.yml", () => {
       );
       assert.match(
         yaml!,
-        /git -C "\$STATE_DIR" push origin "HEAD:automation-state"/,
+        /git -C "\$STATE_DIR" push --no-verify origin "HEAD:automation-state"/,
         "push target must be automation-state",
       );
       assert.doesNotMatch(

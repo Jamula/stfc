@@ -603,7 +603,7 @@ describe("discordMonitor / workflow YAML assertions (T027)", () => {
     const yaml = fs.readFileSync(yamlPath, "utf8");
     assert.match(yaml, /for attempt in 1 2 3; do/);
     assert.match(yaml, /node scripts\/automation-state-retry\.mjs/);
-    assert.match(yaml, /push origin "HEAD:automation-state"/);
+    assert.match(yaml, /push --no-verify origin "HEAD:automation-state"/);
     assert.doesNotMatch(yaml, /push origin "HEAD:\$GITHUB_REF_NAME"/);
   });
 
