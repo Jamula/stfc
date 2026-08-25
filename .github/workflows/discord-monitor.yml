@@ -27,10 +27,14 @@ permissions:
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
-# MUST match redeem.yml:28 bit-for-bit so cron + dispatch + redeem runs
-# serialize on a single push lock — preventing colliding git push attempts.
+# MUST match redeem.yml bit-for-bit (group AND queue) so cron + dispatch +
+# redeem runs serialize on a single push lock — preventing colliding git push
+# attempts. `queue: max` keeps up to 100 shared-group runs pending in FIFO
+# order; the default `single` would let this workflow's runs cancel a pending
+# `/game-state` upload. See docs/ARCHITECTURE.md → "Writer serialization".
 concurrency:
   group: stfc-gift-redeemer
+  queue: max
   cancel-in-progress: false
 
 jobs:

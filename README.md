@@ -257,14 +257,20 @@ anything. To re-attempt all codes, make a normal forward commit on
 - **Consumers:** `/redeem-status` reads live `docs/redeem-history.md`;
   `/game-state` reads and writes live `data/discord/game-state`; the storage
   monitor checks out `automation-state` directly.
-- **Writer serialization:** `redeem.yml`, `discord-monitor.yml`, and the
-  `/game-state` path of `discord-command-handler.yml` share one
-  `stfc-gift-redeemer` concurrency group so their `automation-state` pushes
-  never interleave (a monitor run fetching the tip after a handler push
-  landed previously let a wholesale directory replace silently delete the
-  handler's upload). `/redeem-status` and `/trigger-redeem` never write
-  `automation-state` themselves, so each is isolated on its own per-command
-  group instead of queuing behind scheduled runs.
+- **Writer serialization:** `redeem.yml`, `discord-monitor.yml`,
+  `refresh-token.yml`, and the `/game-state` path of
+  `discord-command-handler.yml` share one `stfc-gift-redeemer` concurrency
+  group so their `automation-state` pushes never interleave (a monitor run
+  fetching the tip after a handler push landed previously let a wholesale
+  directory replace silently delete the handler's upload). All four declare
+  `queue: max`: up to 100 runs wait pending in FIFO order instead of the
+  default `single`, which keeps only one pending run and lets a newer
+  shared-group run cancel it. Past 100 pending runs the extra run is
+  **cancelled visibly by Actions** and needs an operator re-dispatch — a
+  loss-bounded queue, not a durable one. `queue: max` must never be combined
+  with `cancel-in-progress: true`. `/redeem-status` and `/trigger-redeem`
+  never write `automation-state` themselves, so each is isolated on its own
+  per-command group instead of queuing behind scheduled runs.
 - **Reset:** use `git revert` on `automation-state` to undo a bad state commit.
   Do not force-push. A proposed deletion/non-fast-forward-only ruleset (no
   required checks or bypass actors) is not installed and still requires fresh

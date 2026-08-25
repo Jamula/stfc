@@ -192,6 +192,26 @@ describe(".github/workflows/redeem.yml", () => {
   );
 
   it(
+    "serializes on the shared writer group with a bounded FIFO queue, never the lossy default (Garak, PR #266 review)",
+    { skip: yaml === undefined },
+    () => {
+      // redeem.yml runs every 10 minutes, so it is the workflow most likely
+      // to arrive while something else is pending on stfc-gift-redeemer. On
+      // the default `queue: single` its arrival would cancel and replace that
+      // pending run — including a pending /game-state upload Discord has
+      // already acknowledged. `queue: max` queues up to 100 instead, FIFO.
+      assert.match(yaml!, /^concurrency:\s*$/m);
+      assert.match(yaml!, /^\s{2}group:\s*stfc-gift-redeemer\s*$/m);
+      assert.match(yaml!, /^\s{2}queue:\s*max\s*$/m);
+      assert.match(yaml!, /^\s{2}cancel-in-progress:\s*false\s*$/m);
+      assert.doesNotMatch(yaml!, /^\s*queue:\s*single\s*$/m);
+      // GitHub rejects queue: max + cancel-in-progress: true as a workflow
+      // validation error, which would take redemption offline entirely.
+      assert.doesNotMatch(yaml!, /^\s*cancel-in-progress:\s*true\b/m);
+    },
+  );
+
+  it(
     "declares contents: write permission for the commit step",
     { skip: yaml === undefined },
     () => {

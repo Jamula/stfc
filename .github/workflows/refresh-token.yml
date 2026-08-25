@@ -69,8 +69,12 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 # Don't race with the redeem workflow (both touch STFC_ACCOUNTS).
+# `queue: max` matches redeem.yml/discord-monitor.yml/discord-command-handler
+# .yml: a refresh run must queue behind the shared writer lock, never cancel a
+# pending run in it. See docs/ARCHITECTURE.md → "Writer serialization".
 concurrency:
   group: stfc-gift-redeemer
+  queue: max
   cancel-in-progress: false
 
 jobs:

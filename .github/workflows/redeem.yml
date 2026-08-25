@@ -26,8 +26,18 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 # Prevent cron + manual dispatch from racing.
+#
+# `queue: max` is mandatory for every workflow that can join this group
+# (Garak, PR #266 review). The default `queue: single` keeps at most ONE
+# pending run per group and cancels/replaces it whenever a newer run of ANY
+# workflow in the group arrives — so a 10-minute redeem run would silently
+# evict a pending `/game-state` upload that Discord has already acknowledged.
+# `max` holds up to 100 pending runs in FIFO order. See
+# docs/ARCHITECTURE.md → "Writer serialization" for the overflow contract.
+# `queue: max` must never be combined with `cancel-in-progress: true`.
 concurrency:
   group: stfc-gift-redeemer
+  queue: max
   cancel-in-progress: false
 
 jobs:

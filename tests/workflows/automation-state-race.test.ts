@@ -21,23 +21,36 @@
 // cannot) exercise that GitHub Actions scheduling guarantee; it proves the
 // second, independent line of defense (path-level ownership exclusion)
 // holds even in the worst case where serialization is somehow bypassed.
+//
+// Round 3 (Bashir, PR #266 review): every git call below is asynchronous.
+// The earlier execFileSync version blocked the shared node:test event loop
+// for ~10–20s per test, which starved unrelated suites' before-hooks and
+// made the required full `npm test` gate intermittently red (observed
+// failure: tests/ci/check-bundle-budget.test.ts, ~40% of full-suite runs).
+// Scratch roots also live under os.tmpdir(), never REPO_ROOT, so a run can
+// never leave untracked scratch directories behind in the working tree.
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync } from "node:fs";
+import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
-import { execFileSync } from "node:child_process";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { persistDiscordMonitorState } from "../../scripts/discord-monitor-state.mjs";
 
-const REPO_ROOT = path.resolve(import.meta.dirname, "..", "..");
+const execFileAsync = promisify(execFile);
 
-function git(cwd: string, ...args: string[]): string {
+/**
+ * Scratch lives in the OS temp dir, never the repo root: a crashed run can
+ * then never leave an untracked `.automation-state-*` directory sitting in
+ * the working tree (Picard, PR #266 review).
+ */
+async function makeScratch(prefix: string): Promise<string> {
+  return mkdtemp(path.join(os.tmpdir(), prefix));
+}
+
+async function git(cwd: string, ...args: string[]): Promise<string> {
   const env = { ...process.env };
   for (const key of Object.keys(env)) {
     if (key.startsWith("GIT_")) delete env[key];
@@ -46,61 +59,63 @@ function git(cwd: string, ...args: string[]): string {
   // (Windows commonly defaults this to true), so byte-for-byte assertions
   // below are stable across platforms per the project's cross-platform
   // convention (normalize CRLF, don't assume it away).
-  return execFileSync(
+  const { stdout } = await execFileAsync(
     "git",
     ["-c", "core.autocrlf=false", "-c", "core.safecrlf=false", ...args],
-    {
-      cwd,
-      env,
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "pipe"],
-    },
-  ).trim();
+    { cwd, env, encoding: "utf8" },
+  );
+  return stdout.trim();
+}
+
+async function initBareOrigin(scratch: string): Promise<string> {
+  const origin = path.join(scratch, "origin.git");
+  await git(scratch, "init", "-q", "--bare", "-b", "automation-state", origin);
+  return origin;
 }
 
 /** Builds the baseline `automation-state` tip: an old handler upload plus a monitor-owned file. */
-function seedBaseline(scratch: string, origin: string): void {
+async function seedBaseline(scratch: string, origin: string): Promise<void> {
   const seed = path.join(scratch, "seed");
-  mkdirSync(seed, { recursive: true });
-  git(seed, "init", "-q", "-b", "automation-state");
-  git(seed, "config", "user.name", "Test");
-  git(seed, "config", "user.email", "test@example.invalid");
-  git(seed, "remote", "add", "origin", origin);
+  await mkdir(seed, { recursive: true });
+  await git(seed, "init", "-q", "-b", "automation-state");
+  await git(seed, "config", "user.name", "Test");
+  await git(seed, "config", "user.email", "test@example.invalid");
+  await git(seed, "remote", "add", "origin", origin);
 
-  mkdirSync(path.join(seed, "data", "discord", "game-state", "2026-08-20"), { recursive: true });
-  writeFileSync(path.join(seed, "data", "discord", "cursors.json"), '{"cursor":"old"}\n');
-  writeFileSync(
+  await mkdir(path.join(seed, "data", "discord", "game-state", "2026-08-20"), { recursive: true });
+  await writeFile(path.join(seed, "data", "discord", "cursors.json"), '{"cursor":"old"}\n');
+  await writeFile(
     path.join(seed, "data", "discord", "game-state", "2026-08-20", "000000-old-upload.png"),
     "old-upload-bytes",
   );
-  writeFileSync(
+  await writeFile(
     path.join(seed, "data", "discord", "game-state", "2026-08-20", "_index.json"),
     '{"files":[{"filename":"000000-old-upload.png"}]}\n',
   );
-  git(seed, "add", "-A");
-  git(seed, "commit", "--no-verify", "-m", "baseline state");
-  git(seed, "push", "-q", "origin", "HEAD:automation-state");
+  await git(seed, "add", "-A");
+  await git(seed, "commit", "--no-verify", "-m", "baseline state");
+  await git(seed, "push", "-q", "origin", "HEAD:automation-state");
 }
 
 /** Simulates discord-command-handler.yml pushing a NEW game-state upload, advancing the tip. */
-function pushHandlerUpload(scratch: string, origin: string): void {
+async function pushHandlerUpload(scratch: string, origin: string): Promise<void> {
   const handlerDir = path.join(scratch, "handler");
-  git(scratch, "clone", "-q", "--branch", "automation-state", origin, handlerDir);
-  git(handlerDir, "config", "user.name", "Test");
-  git(handlerDir, "config", "user.email", "test@example.invalid");
+  await git(scratch, "clone", "-q", "--branch", "automation-state", origin, handlerDir);
+  await git(handlerDir, "config", "user.name", "Test");
+  await git(handlerDir, "config", "user.email", "test@example.invalid");
 
-  mkdirSync(path.join(handlerDir, "data", "discord", "game-state", "2026-08-23"), { recursive: true });
-  writeFileSync(
+  await mkdir(path.join(handlerDir, "data", "discord", "game-state", "2026-08-23"), { recursive: true });
+  await writeFile(
     path.join(handlerDir, "data", "discord", "game-state", "2026-08-23", "120000-new-upload.png"),
     "new-upload-bytes",
   );
-  writeFileSync(
+  await writeFile(
     path.join(handlerDir, "data", "discord", "game-state", "2026-08-23", "_index.json"),
     '{"files":[{"filename":"120000-new-upload.png"}]}\n',
   );
-  git(handlerDir, "add", "--", "data/discord/game-state/2026-08-23");
-  git(handlerDir, "commit", "--no-verify", "-m", "data(game-state): handler upload");
-  git(handlerDir, "push", "-q", "origin", "HEAD:automation-state");
+  await git(handlerDir, "add", "--", "data/discord/game-state/2026-08-23");
+  await git(handlerDir, "commit", "--no-verify", "-m", "data(game-state): handler upload");
+  await git(handlerDir, "push", "-q", "origin", "HEAD:automation-state");
 }
 
 /**
@@ -110,38 +125,48 @@ function pushHandlerUpload(scratch: string, origin: string): void {
  * at the root), matching what scripts/discord-monitor-state.mjs's
  * persistDiscordMonitorState() expects as `workspaceRoot`.
  */
-function buildStaleMonitorWorkspace(scratch: string): string {
+async function buildStaleMonitorWorkspace(scratch: string): Promise<string> {
   const workspaceRoot = path.join(scratch, "monitor-workspace");
-  mkdirSync(path.join(workspaceRoot, "data", "discord", "game-state", "2026-08-20"), { recursive: true });
-  writeFileSync(
+  await mkdir(path.join(workspaceRoot, "data", "discord", "game-state", "2026-08-20"), { recursive: true });
+  await writeFile(
     path.join(workspaceRoot, "data", "discord", "game-state", "2026-08-20", "000000-old-upload.png"),
     "old-upload-bytes",
   );
-  writeFileSync(
+  await writeFile(
     path.join(workspaceRoot, "data", "discord", "game-state", "2026-08-20", "_index.json"),
     '{"files":[{"filename":"000000-old-upload.png"}]}\n',
   );
   // This run's own monitor-owned write — proves monitor-owned files still update.
-  writeFileSync(path.join(workspaceRoot, "data", "discord", "cursors.json"), '{"cursor":"new-from-this-run"}\n');
+  await writeFile(path.join(workspaceRoot, "data", "discord", "cursors.json"), '{"cursor":"new-from-this-run"}\n');
   return workspaceRoot;
+}
+
+/** Fresh clone of the monitor's state worktree at the CURRENT (post-handler-push) tip. */
+async function cloneMonitorStateWorktree(scratch: string, origin: string): Promise<string> {
+  const stateDir = path.join(scratch, "monitor-state-worktree");
+  await git(scratch, "clone", "-q", "--branch", "automation-state", origin, stateDir);
+  await git(stateDir, "config", "user.name", "github-actions[bot]");
+  await git(
+    stateDir,
+    "config",
+    "user.email",
+    "41898282+github-actions[bot]@users.noreply.github.com",
+  );
+  return stateDir;
 }
 
 describe("automation-state writer race (Garak, PR #250 review)", () => {
   it("the production allowlist helper survives a stale monitor snapshot applied after a newer handler upload, on a clean fast-forward push", async () => {
-    const scratch = mkdtempSync(path.join(REPO_ROOT, ".automation-state-race-test-"));
+    const scratch = await makeScratch("stfc-automation-state-race-");
     try {
-      const origin = path.join(scratch, "origin.git");
-      execFileSync("git", ["init", "-q", "--bare", "-b", "automation-state", origin], { encoding: "utf8" });
+      const origin = await initBareOrigin(scratch);
 
-      seedBaseline(scratch, origin);
-      pushHandlerUpload(scratch, origin);
-      const monitorWorkspace = buildStaleMonitorWorkspace(scratch);
+      await seedBaseline(scratch, origin);
+      await pushHandlerUpload(scratch, origin);
+      const monitorWorkspace = await buildStaleMonitorWorkspace(scratch);
 
       // Monitor's persist step: fresh clone of the CURRENT tip (post-handler-push).
-      const stateDir = path.join(scratch, "monitor-state-worktree");
-      git(scratch, "clone", "-q", "--branch", "automation-state", origin, stateDir);
-      git(stateDir, "config", "user.name", "github-actions[bot]");
-      git(stateDir, "config", "user.email", "41898282+github-actions[bot]@users.noreply.github.com");
+      const stateDir = await cloneMonitorStateWorktree(scratch, origin);
 
       // Sanity: the fresh fetch already contains the handler's newer upload.
       assert.ok(
@@ -159,18 +184,18 @@ describe("automation-state writer race (Garak, PR #250 review)", () => {
       // Mirror discord-monitor.yml's exact per-file staging: an allowlist
       // of monitor-owned files, never a broad `git add -A -- data/discord`
       // that could stage a deletion of game-state.
-      git(stateDir, "add", "-A", "--", "data/discord/cursors.json");
-      git(stateDir, "commit", "--no-verify", "-m", "chore(discord-monitor): run race-test");
+      await git(stateDir, "add", "-A", "--", "data/discord/cursors.json");
+      await git(stateDir, "commit", "--no-verify", "-m", "chore(discord-monitor): run race-test");
       // No fetch/rebase before this push — reproduces the exact race: the
       // clone above is already the latest tip, so this succeeds as a plain
       // fast-forward, exactly like the buggy scenario Garak found.
-      git(stateDir, "push", "-q", "origin", "HEAD:automation-state");
+      await git(stateDir, "push", "-q", "origin", "HEAD:automation-state");
 
       const checkDir = path.join(scratch, "final-check");
-      git(scratch, "clone", "-q", "--branch", "automation-state", origin, checkDir);
+      await git(scratch, "clone", "-q", "--branch", "automation-state", origin, checkDir);
 
       assert.equal(
-        readFileSync(
+        await readFile(
           path.join(checkDir, "data", "discord", "game-state", "2026-08-23", "120000-new-upload.png"),
           "utf8",
         ),
@@ -178,7 +203,7 @@ describe("automation-state writer race (Garak, PR #250 review)", () => {
         "the handler's newer upload must survive the monitor's commit",
       );
       assert.equal(
-        readFileSync(
+        await readFile(
           path.join(checkDir, "data", "discord", "game-state", "2026-08-23", "_index.json"),
           "utf8",
         ),
@@ -186,7 +211,7 @@ describe("automation-state writer race (Garak, PR #250 review)", () => {
         "the handler's _index.json must survive untouched",
       );
       assert.equal(
-        readFileSync(
+        await readFile(
           path.join(checkDir, "data", "discord", "game-state", "2026-08-20", "000000-old-upload.png"),
           "utf8",
         ),
@@ -194,45 +219,42 @@ describe("automation-state writer race (Garak, PR #250 review)", () => {
         "the pre-existing older upload must also survive",
       );
       assert.equal(
-        readFileSync(path.join(checkDir, "data", "discord", "cursors.json"), "utf8"),
+        await readFile(path.join(checkDir, "data", "discord", "cursors.json"), "utf8"),
         '{"cursor":"new-from-this-run"}\n',
         "monitor-owned files must still be updated by this run",
       );
     } finally {
-      rmSync(scratch, { recursive: true, force: true });
+      await rm(scratch, { recursive: true, force: true });
     }
   });
 
-  it("regression guard: the previously shipped rm -rf + cp -a pattern loses the upload under the identical interleaving", () => {
-    const scratch = mkdtempSync(path.join(REPO_ROOT, ".automation-state-race-regression-"));
+  it("regression guard: the previously shipped rm -rf + cp -a pattern loses the upload under the identical interleaving", async () => {
+    const scratch = await makeScratch("stfc-automation-state-race-regression-");
     try {
-      const origin = path.join(scratch, "origin.git");
-      execFileSync("git", ["init", "-q", "--bare", "-b", "automation-state", origin], { encoding: "utf8" });
+      const origin = await initBareOrigin(scratch);
 
-      seedBaseline(scratch, origin);
-      pushHandlerUpload(scratch, origin);
-      const monitorWorkspace = buildStaleMonitorWorkspace(scratch);
+      await seedBaseline(scratch, origin);
+      await pushHandlerUpload(scratch, origin);
+      const monitorWorkspace = await buildStaleMonitorWorkspace(scratch);
 
-      const stateDir = path.join(scratch, "monitor-state-worktree");
-      git(scratch, "clone", "-q", "--branch", "automation-state", origin, stateDir);
-      git(stateDir, "config", "user.name", "github-actions[bot]");
-      git(stateDir, "config", "user.email", "41898282+github-actions[bot]@users.noreply.github.com");
+      const stateDir = await cloneMonitorStateWorktree(scratch, origin);
 
       // The pattern this PR replaces: wholesale rm -rf + cp -a of the whole
-      // directory, then `git add -A -- data/discord` with no exclusion.
-      rmSync(path.join(stateDir, "data", "discord"), { recursive: true, force: true });
-      execFileSync("node", [
-        "-e",
-        "require('node:fs').cpSync(process.argv[1], process.argv[2], { recursive: true })",
+      // directory (recursive copy, same semantics as the shell `cp -a` the
+      // old persist step ran), then `git add -A -- data/discord` with no
+      // ownership exclusion.
+      await rm(path.join(stateDir, "data", "discord"), { recursive: true, force: true });
+      await cp(
         path.join(monitorWorkspace, "data", "discord"),
         path.join(stateDir, "data", "discord"),
-      ]);
-      git(stateDir, "add", "-A", "--", "data/discord");
-      git(stateDir, "commit", "--no-verify", "-m", "chore(discord-monitor): pre-fix run");
-      git(stateDir, "push", "-q", "origin", "HEAD:automation-state");
+        { recursive: true },
+      );
+      await git(stateDir, "add", "-A", "--", "data/discord");
+      await git(stateDir, "commit", "--no-verify", "-m", "chore(discord-monitor): pre-fix run");
+      await git(stateDir, "push", "-q", "origin", "HEAD:automation-state");
 
       const checkDir = path.join(scratch, "final-check");
-      git(scratch, "clone", "-q", "--branch", "automation-state", origin, checkDir);
+      await git(scratch, "clone", "-q", "--branch", "automation-state", origin, checkDir);
 
       assert.equal(
         existsSync(
@@ -242,7 +264,21 @@ describe("automation-state writer race (Garak, PR #250 review)", () => {
         "documents the bug: the pre-fix pattern silently deletes the newer handler upload",
       );
     } finally {
-      rmSync(scratch, { recursive: true, force: true });
+      await rm(scratch, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps all scratch state outside the repository working tree", async () => {
+    const scratch = await makeScratch("stfc-automation-state-race-scope-");
+    try {
+      const repoRoot = path.resolve(import.meta.dirname, "..", "..");
+      assert.ok(
+        !path.resolve(scratch).startsWith(path.resolve(repoRoot) + path.sep),
+        `scratch root must live outside ${repoRoot}, got ${scratch}`,
+      );
+      assert.ok(path.resolve(scratch).startsWith(path.resolve(os.tmpdir())));
+    } finally {
+      await rm(scratch, { recursive: true, force: true });
     }
   });
 });

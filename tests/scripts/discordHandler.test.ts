@@ -634,6 +634,44 @@ describe("scripts/discord-handler.mjs", () => {
     assert.match(postedBody, /Unknown command: not-a-real-command/);
   });
 
+  it("case-variant game-state over-serializes on the writer lock but still cannot write", async () => {
+    // GitHub's `==` and its concurrency group names are case-insensitive, so
+    // `GAME-STATE` resolves to the shared stfc-gift-redeemer group (it
+    // over-serializes rather than escaping the lock). The handler dispatches
+    // on exact lower-case strings, so it must refuse to write for it —
+    // that is what makes the over-serialization harmless (Garak, PR #266).
+    const stdout = makeStdout();
+    const stderr = makeStdout();
+    const gitCalls: string[][] = [];
+    let postedBody = "";
+
+    const code = await mod.runCli({
+      env: baseEnv({ ...gameStatePayload(), command: "GAME-STATE" }),
+      readFileImpl: async () => "",
+      runGh: async () => {
+        throw new Error("should not call gh for an unknown command");
+      },
+      runGit: async (args) => {
+        gitCalls.push(args);
+        return "";
+      },
+      fetchImpl: async (_url, init: any) => {
+        postedBody = String(init.body ?? "");
+        return {
+          ok: true,
+          status: 200,
+          text: async () => "{}",
+        };
+      },
+      stdout: stdout.stream,
+      stderr: stderr.stream,
+    });
+
+    assert.equal(code, 0, stderr.text());
+    assert.match(postedBody, /Unknown command: GAME-STATE/);
+    assert.deepEqual(gitCalls, [], "a case-variant command must never reach git");
+  });
+
   it("Discord PATCH 5xx causes non-zero exit", async () => {
     const code = await mod.runCli({
       env: baseEnv({ command: "redeem-status", interaction_token: "tok", application_id: "app" }),
