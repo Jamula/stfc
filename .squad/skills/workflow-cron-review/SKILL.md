@@ -45,7 +45,7 @@ Anything beyond that — touching source, tests, or other workflows — needs ex
 
 ## Operational gotchas
 
-- **`gh pr review --approve` fails when authed as the PR author** ("Can not approve your own pull request"). Workaround: post the approval body as `--comment`, then `gh pr merge`. The squad's textual sign-off + the merge action are the record.
+- **`gh pr review --approve` fails when authed as the PR author** ("Can not approve your own pull request"). Workaround: post the approval body as `--comment` instead — that comment **is** the record of sign-off. Merging is a separate, later action; it is never chained onto this workaround. Per issue #220, `gh pr merge` requires an explicit user request in the current, active conversation — this review workaround does not itself authorize a merge.
 - **`gh pr merge --delete-branch` fails the local-branch step in worktree mode** when another worktree has the target branch checked out (`fatal: '<branch>' is already used by worktree at '<path>'`). The **remote** branch deletion still succeeds before this error. Verify with `git ls-remote --heads origin <branch>` and clean local branches via the owning worktree.
 
 ## Template review body

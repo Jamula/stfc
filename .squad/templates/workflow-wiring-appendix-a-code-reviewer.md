@@ -86,8 +86,11 @@ In `routing.md` → `## Rules` section, add a numbered rule:
 N. **{Name} PR Gate** — every PR created by any agent MUST be reviewed by {Name}
    before merge. The coordinator spawns {Name} (sync) with the PR diff after
    the author pushes and creates the PR. On REJECT, the original author addresses
-   feedback. On APPROVE, the coordinator merges via `gh pr merge`. No PR merges
-   without {Name}'s approval.
+   feedback. On APPROVE, the PR becomes merge-ready — no PR merges without
+   {Name}'s approval. Merge-ready is not merged: per issue #220, the coordinator
+   still never calls `gh pr merge` (or enables auto-merge / runs `gh pr ready`)
+   except when the user explicitly requests that exact action in the current,
+   active conversation.
 ```
 
 **Why this works when the routing table alone didn't:** The routing table is for matching incoming work to agents. Rules are behavioral constraints the coordinator must follow AFTER work completes. The rule says "after a PR exists, you MUST do X before proceeding." The routing table says "if someone asks for a review, route to X."

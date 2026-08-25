@@ -786,9 +786,12 @@ paths, and prove `main`'s tip SHA is unchanged while state commits land on
    `gh pr comment <N>` with an explicit `**APPROVE** ✅` /
    `**CHANGES_REQUESTED** ⚠️` / `**COMMENT** 💬` header (Rule 9b).
    `gh pr review --approve` is blocked when reviewer = author.
-8. **Auto-merge on green** (Rule 7). Reviewer-approved + CI-green PRs
-   merge without asking. Constitution PRs may require explicit human
-   ack if the user has previously set that preference.
+8. **Reviewer-approved + CI-green makes a PR merge-ready, not merged**
+   (issue #220). Merging — including `gh pr merge`, enabling auto-merge,
+   or running `gh pr ready` — requires an explicit user request in the
+   current, active conversation; it is never inferred from review/CI
+   status alone, and this holds for constitution PRs too. No numbered
+   "Rule 7" merge-authorization rule exists in this repo.
 9. **For meta squad changes** (`squad.agent.md`,
    `.github/copilot-instructions.md`), **restart the session after
    merge** so the Coordinator picks up the new rules (self-development
