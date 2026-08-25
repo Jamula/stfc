@@ -3,10 +3,10 @@
 # After rule consolidation (PR #128 — Rules 6+12, 13+20, Rule 21/22 added),
 # references to stale or non-existent rule numbers can drift silently.
 # This workflow greps ADDED lines in a PR's diff and fails if any cited
-# Rule N is not present in .github/copilot-instructions.md.
+# Rule N is not present in .github/rule-reference-numbers.txt.
 #
-# "RESERVED — see Rule X" rules (12, 20) ARE in the canonical set and are
-# therefore valid to cite — the heading still exists, it just redirects.
+# Reserved redirect slots 12 and 20 remain in the authoritative allowlist and
+# are therefore valid to cite.
 #
 # Pin test: tests/skills/ruleReferenceCheck.test.ts (Rule 3)
 
@@ -18,6 +18,7 @@ on:
       - ".squad/**"
       - ".github/copilot-instructions.md"
       - ".github/agents/squad.agent.md"
+      - ".github/rule-reference-numbers.txt"
       - "docs/**"
 
 concurrency:
@@ -38,78 +39,111 @@ jobs:
           fetch-depth: 0
 
       - name: Validate Rule N references in changed files
+        env:
+          BASE_REF: origin/${{ github.base_ref }}
         run: |
           set -euo pipefail
 
-          # ── 1. Extract canonical rule numbers ────────────────────────────
-          # Every heading of the form "## N." is a valid rule slot, including
-          # "RESERVED — see Rule X" entries (they still have a heading).
-          CANONICAL=$(grep -oE '^## [0-9]+\.' .github/copilot-instructions.md \
-            | grep -oE '[0-9]+' | sort -n || true)
-
-          echo "Canonical rule numbers: $(echo "$CANONICAL" | tr '\n' ' ')"
-          if [ -z "$CANONICAL" ]; then
-            echo "No numbered canonical rules found — every cited Rule N is dangling."
+          # ── 1. Load the authoritative rule slots ─────────────────────────
+          CANONICAL_FILE=".github/rule-reference-numbers.txt"
+          if [ ! -f "$CANONICAL_FILE" ]; then
+            echo "::error file=${CANONICAL_FILE}::Authoritative Rule N allowlist is missing."
+            exit 1
           fi
 
+          CANONICAL=$(awk '{ sub(/\r$/, ""); if ($0 ~ /^[0-9]+$/) print $0 }' \
+            "$CANONICAL_FILE" | sort -nu)
           if [ -z "$CANONICAL" ]; then
-            echo "⚠️ No numbered '## N.' headings found in .github/copilot-instructions.md — skipping Rule N citation check."
-            exit 0
+            echo "::error file=${CANONICAL_FILE}::Authoritative Rule N allowlist contains no rule numbers."
+            exit 1
           fi
+
+          echo "Authoritative rule numbers: $(echo "$CANONICAL" | tr '\n' ' ')"
 
           # ── 2. Get files changed in this PR ───────────────────────────────
-          BASE_REF="origin/${{ github.base_ref }}"
-          CHANGED=$(git diff --name-only "${BASE_REF}...HEAD")
+          # NUL-delimited filenames must never round-trip through a shell
+          # variable (Bash silently strips embedded NUL bytes), so `git diff`
+          # is written straight to a temp file. That also lets us check
+          # git's own exit status explicitly: piping into `mapfile` via a
+          # `<(...)` process substitution always reports success regardless
+          # of whether `git diff` failed, which would otherwise let a bad
+          # BASE_REF or shallow clone masquerade as "no target files changed".
+          CHANGED_FILE="$(mktemp)"
+          ADDED_FILE="$(mktemp)"
+          trap 'rm -f "$CHANGED_FILE" "$ADDED_FILE"' EXIT
 
-          TARGET=$(echo "$CHANGED" | grep -E \
-            '^(\.squad/|docs/|\.github/copilot-instructions\.md|\.github/agents/squad\.agent\.md)' \
-            || true)
+          if ! git diff --name-only -z "${BASE_REF}...HEAD" > "$CHANGED_FILE"; then
+            echo "::error::git diff failed to compare ${BASE_REF}...HEAD. Confirm BASE_REF resolves to a real ref and fetch-depth is sufficient."
+            exit 1
+          fi
 
-          if [ -z "$TARGET" ]; then
+          mapfile -d '' -t CHANGED < "$CHANGED_FILE"
+          TARGET_FILES=()
+          for file in "${CHANGED[@]}"; do
+            case "$file" in
+              .squad/*|docs/*|.github/copilot-instructions.md|.github/agents/squad.agent.md|.github/rule-reference-numbers.txt)
+                TARGET_FILES+=("$file")
+                ;;
+            esac
+          done
+
+          if [ "${#TARGET_FILES[@]}" -eq 0 ]; then
             echo "No target files changed — nothing to check."
             exit 0
           fi
 
           echo "Checking files:"
-          echo "$TARGET"
+          printf '  %s\n' "${TARGET_FILES[@]}"
 
           # ── 3. Extract Rule N citations from ADDED lines only ────────────
           # Using added-lines-only prevents false positives from historical
           # records (e.g. .squad/decisions.md referencing deferred Rule 23).
-          # shellcheck disable=SC2086
-          ADDED=$(git diff "${BASE_REF}...HEAD" -- $TARGET \
-            | grep '^+' | grep -v '^+++' || true)
-
-          if [ -z "$ADDED" ]; then
-            echo "No added lines in target files — nothing to check."
-            exit 0
-          fi
-
-          CITED=$(echo "$ADDED" | grep -oE 'Rule [0-9]+' \
-            | grep -oE '[0-9]+' | sort -un || true)
-
-          if [ -z "$CITED" ]; then
-            echo "✅ No 'Rule N' references in added content."
-            exit 0
-          fi
-
-          echo "Cited rule numbers: $(echo "$CITED" | tr '\n' ' ')"
-
-          # ── 4. Diff: cited minus canonical ────────────────────────────────
-          DANGLING=""
-          while IFS= read -r n; do
-            if ! echo "$CANONICAL" | grep -qw "$n"; then
-              DANGLING="${DANGLING}  Rule ${n}\n"
+          DANGLING=0
+          CITATIONS_FOUND=0
+          for file in "${TARGET_FILES[@]}"; do
+            # git diff's exit status is checked on its own, before grep runs,
+            # so a failed diff cannot hide behind grep's expected exit 1
+            # (grep exits 1 on "no match", which `|| true` below must only
+            # absorb for grep — never for a failed git diff).
+            if ! git diff --unified=0 --no-color "${BASE_REF}...HEAD" -- "$file" > "$ADDED_FILE"; then
+              echo "::error file=${file}::git diff failed while computing added lines for ${file}."
+              exit 1
             fi
-          done <<< "$CITED"
 
-          if [ -n "$DANGLING" ]; then
+            ADDED=$(grep '^+' "$ADDED_FILE" | grep -v '^+++' || true)
+
+            if [ -z "$ADDED" ]; then
+              continue
+            fi
+
+            CITED=$(echo "$ADDED" | grep -oE 'Rule [0-9]+' \
+              | grep -oE '[0-9]+' | sort -un || true)
+
+            if [ -z "$CITED" ]; then
+              continue
+            fi
+
+            CITATIONS_FOUND=1
+            while IFS= read -r n; do
+              if ! grep -qx "$n" <<< "$CANONICAL"; then
+                echo "::error file=${file}::Dangling Rule ${n} reference; ${n} is not listed in ${CANONICAL_FILE}."
+                printf '  Rule %s in %s\n' "$n" "$file"
+                DANGLING=1
+              fi
+            done <<< "$CITED"
+          done
+
+          if [ "$DANGLING" -ne 0 ]; then
             echo ""
             echo "❌ Dangling Rule references in this PR's added lines:"
-            echo -e "$DANGLING"
-            echo "These numbers do not exist in .github/copilot-instructions.md."
-            echo "Either add the rule to copilot-instructions.md or fix the reference."
+            echo "These numbers are not listed in ${CANONICAL_FILE}."
+            echo "Either update the authoritative allowlist or fix the reference."
             exit 1
+          fi
+
+          if [ "$CITATIONS_FOUND" -eq 0 ]; then
+            echo "✅ No 'Rule N' references in added content."
+            exit 0
           fi
 
           echo "✅ All Rule N references are valid."
