@@ -85,6 +85,68 @@ function makeFakeClient(overrides: Partial<FakeClient> = {}): FakeClient {
   };
 }
 
+function mockStoreFetch(giftStatuses: number[]): {
+  fetchImpl: typeof fetch;
+  calls: { auth: number; gifts: number };
+} {
+  const calls = { auth: 0, gifts: 0 };
+  const fetchImpl = (async (input: string | URL | Request) => {
+    const url = String(input);
+    if (url.endsWith("/auth/me")) {
+      calls.auth += 1;
+      return new Response(JSON.stringify({ id: 1, level: 50 }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    if (url.includes("/offers/gifts?available=true")) {
+      const status = giftStatuses[Math.min(calls.gifts, giftStatuses.length - 1)]!;
+      calls.gifts += 1;
+      return new Response(
+        JSON.stringify(status === 200 ? { items: [] } : { error: `HTTP ${status}` }),
+        { status, headers: { "content-type": "application/json" } },
+      );
+    }
+    throw new Error(`Unexpected store request: ${url}`);
+  }) as typeof fetch;
+  return { fetchImpl, calls };
+}
+
+/**
+ * Store mock that serves a claimable gift and rejects the claim POST, to
+ * exercise the side-effecting replay policy end to end (#243 / #204).
+ */
+function mockClaimFetch(claimStatus: number): {
+  fetchImpl: typeof fetch;
+  calls: { auth: number; gifts: number; claim: number };
+} {
+  const calls = { auth: 0, gifts: 0, claim: 0 };
+  const json = (body: unknown, status: number): Response =>
+    new Response(JSON.stringify(body), {
+      status,
+      headers: { "content-type": "application/json" },
+    });
+
+  const fetchImpl = (async (input: string | URL | Request) => {
+    const url = String(input);
+    if (url.endsWith("/auth/me")) {
+      calls.auth += 1;
+      return json({ id: 1, level: 50 }, 200);
+    }
+    if (url.includes("/offers/gifts/claim")) {
+      calls.claim += 1;
+      return json(claimStatus === 200 ? { ok: true } : { error: `HTTP ${claimStatus}` }, claimStatus);
+    }
+    if (url.includes("/offers/gifts?available=true")) {
+      calls.gifts += 1;
+      return json({ items: [{ bundleId: 4242, title: "Daily Gift" }] }, 200);
+    }
+    throw new Error(`Unexpected store request: ${url}`);
+  }) as typeof fetch;
+
+  return { fetchImpl, calls };
+}
+
 describe("runAll", () => {
   let dir: string;
   let savedSummaryEnv: string | undefined;
@@ -206,23 +268,88 @@ describe("runAll", () => {
     assert.match(summary, /secret rotation/i);
   });
 
-  it("auth/me OK but gifts/list 401 → not a green run; flags secret rotation", async () => {
-    // Regression: the store can accept the JWT on /auth/me and still reject
-    // it on /offers/gifts. That used to report a healthy ✅ run with zero
-    // claims, because every outcome counted as "expected".
-    const fake = makeFakeClient({
-      getMe: async () => ({ id: 1, level: 50 }),
-      listGifts: async () => {
-        throw new TokenExpiredError("Authentication rejected (401) on GET /offers/gifts", 401);
-      },
+  it("auth/me 200 and gifts/list 401 then 200 remains TOKEN_VALID with exitCode 0", async () => {
+    const store = mockStoreFetch([401, 200]);
+
+    const { result, exitCode } = await runAll({
+      accounts: [{ name: "main", token: makeJwt({ exp: 9999999999 }) }],
+      fetchImpl: store.fetchImpl,
+      summary: createSummaryWriter(undefined),
+      promoCodesPath: emptyPromoFile(),
+      deadCodesPath: path.join(dir, "dead-store-recovered.json"),
     });
+
+    const account = result.accounts[0]!;
+    assert.equal(account.tokenStatus, Outcomes.TOKEN_VALID);
+    assert.equal(account.ok, true);
+    assert.equal(exitCode, 0);
+    assert.equal(store.calls.auth, 1);
+    assert.equal(store.calls.gifts, 2);
+    assert.ok(account.items.every((item) => item.outcome !== Outcomes.TOKEN_EXPIRED));
+  });
+
+  it("a rejected gift claim is sent once, stays visible, and never triggers exit 2", async () => {
+    // Garak's blocker: an auth response on a mutating request is not proof the
+    // server applied nothing first (#204). The claim must therefore be sent
+    // exactly once, reported as TRANSIENT (degraded, visible), and must NOT
+    // promote the account to TOKEN_EXPIRED / secret rotation on that single
+    // uncorroborated response.
+    const store = mockClaimFetch(401);
+    const summaryFile = path.join(dir, "summary-claim-401.md");
+
+    const { result, exitCode } = await runAll({
+      accounts: [{ name: "main", token: makeJwt({ exp: 9999999999 }) }],
+      fetchImpl: store.fetchImpl,
+      summary: createSummaryWriter(summaryFile),
+      promoCodesPath: emptyPromoFile(),
+      deadCodesPath: path.join(dir, "dead-claim-401.json"),
+    });
+
+    const account = result.accounts[0]!;
+    assert.equal(store.calls.claim, 1, "a side-effecting claim must never be replayed");
+    assert.equal(account.tokenStatus, Outcomes.TOKEN_VALID);
+    assert.equal(exitCode, 0, "one uncorroborated claim rejection is not secret-rotation evidence");
+    assert.deepEqual(
+      account.items.map((item) => item.outcome),
+      [Outcomes.TRANSIENT],
+    );
+    assert.equal(account.ok, false, "the account must be reported DEGRADED, not silently green");
+
+    const summary = fs.readFileSync(summaryFile, "utf8");
+    assert.match(summary, /TRANSIENT/, "the failure must be visible in the step summary");
+    assert.doesNotMatch(summary, /secret rotation/i);
+  });
+
+  it("a successful claim still goes through in exactly one call", async () => {
+    const store = mockClaimFetch(200);
+
+    const { result, exitCode } = await runAll({
+      accounts: [{ name: "main", token: makeJwt({ exp: 9999999999 }) }],
+      fetchImpl: store.fetchImpl,
+      summary: createSummaryWriter(undefined),
+      promoCodesPath: emptyPromoFile(),
+      deadCodesPath: path.join(dir, "dead-claim-ok.json"),
+    });
+
+    const account = result.accounts[0]!;
+    assert.equal(store.calls.claim, 1);
+    assert.equal(account.ok, true);
+    assert.equal(exitCode, 0);
+    assert.deepEqual(
+      account.items.map((item) => item.outcome),
+      [Outcomes.CLAIMED],
+    );
+  });
+
+  it("auth/me 200 but gifts/list rejects twice → TOKEN_EXPIRED and exitCode 2", async () => {
+    const store = mockStoreFetch([401, 401]);
     const summaryFile = path.join(dir, "summary-store-401.md");
     const codeFile = path.join(dir, "promo-store-401.txt");
     fs.writeFileSync(codeFile, "SHOULDNOTBETRIED\n", "utf8");
 
     const { result, exitCode } = await runAll({
       accounts: [{ name: "main", token: makeJwt({ exp: 9999999999 }) }],
-      clientFactory: () => fake as unknown as ApiClient,
+      fetchImpl: store.fetchImpl,
       summary: createSummaryWriter(summaryFile),
       promoCodesPath: codeFile,
       deadCodesPath: path.join(dir, "dead-store-401.json"),
@@ -233,6 +360,8 @@ describe("runAll", () => {
     assert.equal(account.tokenStatus, Outcomes.TOKEN_EXPIRED);
     assert.equal(exitCode, 2, "a dead token must ask for secret rotation, not exit 0");
     assert.equal(account.promoCodes.length, 0, "promo codes must not be burned against a dead token");
+    assert.equal(store.calls.auth, 1);
+    assert.equal(store.calls.gifts, 2);
 
     const summary = fs.readFileSync(summaryFile, "utf8");
     assert.match(summary, /secret rotation/i);
@@ -473,6 +602,46 @@ describe("runAll", () => {
     assert.equal(attempts, 3, "transient errors should be attempted 3 total times");
     assert.equal(result.accounts[0]?.promoCodes[0]?.outcome, Outcomes.TRANSIENT);
     assert.equal(fs.existsSync(deadCodesPath), false, "transient exhaustion must not mark code dead");
+  });
+
+  it("a rejected promo-code redeem is sent once, never replayed as a transient retry", async () => {
+    // ApiClient.request() reports an uncorroborated 401/403 on this
+    // side-effecting POST as a TransientError so it stays visible (see
+    // client.ts's replay policy comment), but that must not make
+    // processOneCode's transient-retry loop resend it — the request already
+    // had its one and only send, per #204/#243.
+    const codeFile = path.join(dir, "promo.txt");
+    const deadCodesPath = path.join(dir, "promo-code-dead.json");
+    fs.writeFileSync(codeFile, "AUTHFLAKY\n", "utf8");
+    let attempts = 0;
+    const sleepCalls: number[] = [];
+
+    const fake = makeFakeClient({
+      listGifts: async () => ({ items: [] }),
+      redeemCode: async () => {
+        attempts += 1;
+        throw new TransientError(
+          "Authentication rejected (401) on POST /redeem/claim; POST is not safe to replay, " +
+            "so this rejection is reported as transient rather than corroborated token expiry",
+          401,
+        );
+      },
+    });
+
+    const { result } = await runAll({
+      accounts: [{ name: "main", token: makeJwt({ exp: 9999999999 }) }],
+      clientFactory: () => fake as unknown as ApiClient,
+      promoCodesPath: codeFile,
+      deadCodesPath,
+      sleep: async (ms) => {
+        sleepCalls.push(ms);
+      },
+    });
+
+    assert.equal(attempts, 1, "an uncorroborated auth rejection on a promo-code POST must never be replayed");
+    assert.deepEqual(sleepCalls, []);
+    assert.equal(result.accounts[0]?.promoCodes[0]?.outcome, Outcomes.TRANSIENT);
+    assert.equal(fs.existsSync(deadCodesPath), false, "an uncorroborated auth rejection must not mark the code dead");
   });
 
   it("honors Retry-After on HTTP 429 before retrying", async () => {

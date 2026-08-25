@@ -117,11 +117,11 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TITLE: "STFC token rejected — redemption is stopped until STFC_ACCOUNTS is refreshed"
+          REQUIRED_LABELS: "bug,priority:p1"
         run: |
           set -euo pipefail
           run_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
-          existing=$(gh issue list --state open --search "$TITLE in:title" \
-            --json number --jq '.[0].number // empty')
+          existing=$(node scripts/dead-token-alert.mjs find)
 
           if [ -n "$existing" ]; then
             echo "Alert already open as #$existing — not filing a duplicate."
@@ -154,6 +154,25 @@ jobs:
           gh issue create --title "$TITLE" \
             --label "squad,squad:uhura,bug,priority:p1" \
             --body-file /tmp/alert-body.md
+
+      # Self-resolving half of the alert (retro #243): a dead-token alert
+      # that's still open must not sit there once the token is accepted
+      # again — a P1 that silently stays "open" long after it self-healed
+      # trains the operator to distrust the channel. Close it automatically
+      # the first time a run is no longer in the all-tokens-rejected state.
+      #
+      # Both halves share one selection implementation
+      # (scripts/dead-token-alert.mjs), so the create-side and resolve-side
+      # notions of "which issue is the alert" cannot drift apart.
+      - name: Auto-resolve dead-token alert
+        if: always() && steps.redeem.outputs.exit_code == '0'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TITLE: "STFC token rejected — redemption is stopped until STFC_ACCOUNTS is refreshed"
+          REQUIRED_LABELS: "bug,priority:p1"
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: node scripts/dead-token-alert.mjs resolve
 
       - name: Commit redeem state to automation-state (if changed)
         if: always() && steps.restore_state.outputs.complete == 'true'

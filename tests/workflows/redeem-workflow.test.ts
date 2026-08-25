@@ -32,6 +32,17 @@ function readIfExists(p: string): string | undefined {
 
 const yaml = readIfExists(WORKFLOW);
 
+function getNamedStep(source: string, name: string): string {
+  const marker = `      - name: ${name}`;
+  const start = source.indexOf(marker);
+  assert.notEqual(start, -1, `expected workflow step "${name}"`);
+  const end = source.indexOf("\n      - ", start + marker.length);
+  return source.slice(start, end === -1 ? source.length : end);
+}
+
+const ALERT_SCRIPT = path.join(REPO_ROOT, "scripts", "dead-token-alert.mjs");
+const alertScript = readIfExists(ALERT_SCRIPT);
+
 describe(".github/workflows/redeem.yml", () => {
   it("workflow file exists", () => {
     assert.ok(yaml !== undefined, `expected ${WORKFLOW} to exist`);
@@ -205,6 +216,96 @@ describe(".github/workflows/redeem.yml", () => {
         yaml!,
         /secrets\.AUTOMATION_DEPLOY_KEY/,
         "must not use a deploy key either — the approved fix is the automation-state branch, not a bypass actor",
+      );
+    },
+  );
+
+  it(
+    "declares issues: write permission for dead-token issue management",
+    { skip: yaml === undefined },
+    () => {
+      assert.match(
+        yaml!,
+        /permissions:[\s\S]*?issues:\s*write/,
+        "dead-token alert creation and closure require issues: write",
+      );
+    },
+  );
+
+  it(
+    "uses the same exact title and stable required labels for create and resolve",
+    { skip: yaml === undefined },
+    () => {
+      const expectedTitle =
+        "STFC token rejected — redemption is stopped until STFC_ACCOUNTS is refreshed";
+      const titles = [...yaml!.matchAll(/^\s+TITLE: "([^"]+)"\r?$/gm)].map((match) => match[1]);
+      const requiredLabels = [...yaml!.matchAll(/^\s+REQUIRED_LABELS: "([^"]+)"\r?$/gm)].map(
+        (match) => match[1],
+      );
+
+      assert.deepEqual(titles, [expectedTitle, expectedTitle]);
+      assert.deepEqual(requiredLabels, ["bug,priority:p1", "bug,priority:p1"]);
+      assert.ok(requiredLabels.every((labels) => !labels.includes("squad:")));
+    },
+  );
+
+  it(
+    "routes both alert lookups through the shared selection script",
+    { skip: yaml === undefined },
+    () => {
+      // Structural symmetry: instead of two hand-written jq predicates that
+      // can drift apart, both halves invoke one implementation. The behaviour
+      // of that implementation is proven in tests/scripts/deadTokenAlert.test.ts.
+      const createStep = getNamedStep(yaml!, "Alert on dead token");
+      const resolveStep = getNamedStep(yaml!, "Auto-resolve dead-token alert");
+
+      assert.match(createStep, /existing=\$\(node scripts\/dead-token-alert\.mjs find\)/);
+      assert.match(resolveStep, /node scripts\/dead-token-alert\.mjs resolve/);
+      assert.ok(alertScript !== undefined, "scripts/dead-token-alert.mjs must exist");
+    },
+  );
+
+  it(
+    "keeps no inline issue-selection or close logic in the workflow",
+    { skip: yaml === undefined },
+    () => {
+      // A second copy of the predicate — or a `gh issue close` in a shell loop —
+      // is exactly the drift the shared script exists to prevent.
+      assert.doesNotMatch(yaml!, /gh issue list/, "issue lookup belongs to the shared script");
+      assert.doesNotMatch(yaml!, /gh issue close/, "issue closing belongs to the shared script");
+      assert.doesNotMatch(yaml!, /sort_by\(\.number\)/, "no inline jq selection predicate");
+    },
+  );
+
+  it(
+    "invokes the resolve script directly, with no extra shell logic",
+    { skip: yaml === undefined },
+    () => {
+      // The at-most-one-close and non-fatal guarantees are proven by execution
+      // in tests/scripts/deadTokenAlert.test.ts. What the workflow must
+      // guarantee is that it does not wrap the script in shell that could
+      // loop it or swallow its contract.
+      const resolveStep = getNamedStep(yaml!, "Auto-resolve dead-token alert");
+      const run = resolveStep.slice(resolveStep.indexOf("run:")).replace(/\r/g, "").trim();
+      assert.equal(run, "run: node scripts/dead-token-alert.mjs resolve");
+      assert.ok(alertScript !== undefined, "scripts/dead-token-alert.mjs must exist");
+    },
+  );
+
+  it(
+    "auto-resolve is exit-code-0 gated and non-fatal",
+    { skip: yaml === undefined },
+    () => {
+      const resolveStep = getNamedStep(yaml!, "Auto-resolve dead-token alert");
+      assert.match(
+        resolveStep,
+        /if: always\(\) && steps\.redeem\.outputs\.exit_code == '0'/,
+      );
+      assert.match(resolveStep, /continue-on-error:\s*true/);
+      assert.match(
+        resolveStep,
+        /RUN_URL: \$\{\{ github\.server_url \}\}\/\$\{\{ github\.repository \}\}\/actions\/runs\/\$\{\{ github\.run_id \}\}/,
+        "the close comment must link the run that proved the token recovered",
       );
     },
   );

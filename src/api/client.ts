@@ -46,7 +46,16 @@ export class SchemaMismatchError extends ApiError {
   override readonly name = "SchemaMismatchError";
 }
 
-export type HttpMethod = "GET" | "POST" | "PUT" | "DELETE";
+export type HttpMethod = "GET" | "OPTIONS" | "POST" | "PUT" | "DELETE";
+
+// RFC 9110 safe methods this client will re-send. HEAD is deliberately
+// omitted: this client always parses a JSON body (see parseAndValidate), and
+// a real HEAD response has none, so claiming HEAD support here would be
+// untested and unusable without separate bodyless-response handling that no
+// endpoint on this client actually needs. Everything not in this set is
+// treated as side-effecting and is sent exactly once, however the server
+// answered — see the replay policy on request().
+const SAFE_METHODS: ReadonlySet<HttpMethod> = new Set<HttpMethod>(["GET", "OPTIONS"]);
 
 export interface ApiClientOptions {
   token: string;
@@ -74,20 +83,82 @@ export class ApiClient {
     this.fetchImpl = opts.fetchImpl ?? fetch;
   }
 
+  // Replay policy (#243, constrained by #204).
+  //
+  // A request is re-sent ONLY when its method is safe (GET/OPTIONS).
+  // For those, one bounded sequence composes the pre-existing single
+  // transient retry with a single auth corroboration, in either order, under
+  // a shared three-attempt cap. `TokenExpiredError` therefore requires TWO
+  // observed rejections: the spurious 401 in #243 no longer stops redemption
+  // and no longer files a false P1.
+  //
+  // A side-effecting request (POST/PUT/DELETE) is never replayed. An auth
+  // response is not proof that an upstream or proxy applied nothing before
+  // emitting it, and this repo already refused that gamble for gift claims in
+  // #204. Its lone 401/403 is surfaced as a TransientError, which maps to the
+  // TRANSIENT outcome — visible, and degrading for the account, never silently
+  // benign. It deliberately does NOT claim TOKEN_EXPIRED, because that verdict
+  // would rest on an uncorroborated single response. Genuine token death is
+  // still caught, because every run reaches the store through safe reads
+  // first (/auth/me, then /offers/gifts): those corroborate, yield
+  // TOKEN_EXPIRED, and preserve the all-accounts-rejected exit code 2.
   async request<T>(args: RequestArgs<T>): Promise<T> {
     const method: HttpMethod = args.method ?? "GET";
-    const isSafe = method === "GET";
+    return SAFE_METHODS.has(method)
+      ? this.requestSafe(args, method)
+      : this.requestOnce(args, method);
+  }
 
+  /** Side-effecting request: exactly one call, no replay, ever. */
+  private async requestOnce<T>(args: RequestArgs<T>, method: HttpMethod): Promise<T> {
     try {
       return await this.attempt(args, method);
     } catch (err) {
-      if (!isSafe) throw err;
-      if (err instanceof TransientError || err instanceof TypeError) {
-        await sleep(jitter(500, 1000));
-        return this.attempt(args, method);
+      if (err instanceof TokenExpiredError) {
+        throw new TransientError(
+          redactString(
+            `Authentication rejected (${err.status}) on ${method} ${args.path}; ` +
+              `${method} is not safe to replay, so this rejection is reported as transient ` +
+              `rather than corroborated token expiry`,
+          ),
+          err.status,
+        );
       }
       throw err;
     }
+  }
+
+  /**
+   * Safe request: up to three attempts, sharing one transient-retry allowance
+   * and one auth-corroboration allowance. The last attempt is unconditional,
+   * so whatever it throws is the corroborated answer and no branch is dead.
+   */
+  private async requestSafe<T>(args: RequestArgs<T>, method: HttpMethod): Promise<T> {
+    const maxAttempts = 3;
+    let authRejections = 0;
+    let transientRetries = 0;
+
+    for (let attempt = 1; attempt < maxAttempts; attempt += 1) {
+      try {
+        return await this.attempt(args, method);
+      } catch (err) {
+        if (err instanceof TokenExpiredError) {
+          authRejections += 1;
+          if (authRejections >= 2) throw err;
+        } else if (
+          transientRetries === 0 &&
+          (err instanceof TransientError || err instanceof TypeError)
+        ) {
+          transientRetries += 1;
+        } else {
+          throw err;
+        }
+
+        await sleep(jitter(500, 1000));
+      }
+    }
+
+    return await this.attempt(args, method);
   }
 
   private async attempt<T>(args: RequestArgs<T>, method: HttpMethod): Promise<T> {
