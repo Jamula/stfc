@@ -48,9 +48,11 @@ const workflowSteps = workflows.flatMap(({ file, workflow }) =>
 // single token right after `--test`, so `node --test --watch <glob>` had it
 // capture `--watch` (never a glob character) instead of the actual target.
 //
-// findNodeTestInvocations tokenizes each shell command in a workflow `run`
-// step (handling `&&`/`;`/`|`/CRLF-or-LF separated commands and quoted
-// tokens), locates invocations of `node` or `npx ... tsx` that carry a bare
+// findNodeTestInvocations first joins `\`-newline shell line continuations
+// (so a `run: |` block split across lines is treated as one logical
+// command), then tokenizes each shell command in a workflow `run` step
+// (handling `&&`/`;`/`|`/CRLF-or-LF separated commands and quoted tokens),
+// locates invocations of `node` or `npx ... tsx` that carry a bare
 // `--test` flag anywhere in their arguments, and returns the positional
 // test-target tokens that follow `--test` -- skipping every other flag and,
 // for flags known to consume a following value (e.g. `--test-name-pattern
@@ -87,10 +89,19 @@ function tokenizeShellCommand(command: string): string[] {
 function findNodeTestInvocations(
   runScript: string,
 ): Array<{ command: string; targets: string[] }> {
+  // Join backslash-newline shell line continuations (e.g. `node --test \`
+  // followed by `tests/*.test.ts` on the next line) into a single logical
+  // line *before* splitting on line breaks. Without this, a continued
+  // command is torn in two: the `node --test` invocation ends up with the
+  // trailing `\` as its only "target" (not a glob, so nothing is flagged),
+  // and the glob on the following line is examined on its own -- where it
+  // no longer looks like a `node`/`npx tsx` invocation at all and is
+  // skipped entirely. Either way the guard passes vacuously.
+  const continuationJoined = runScript.replace(/\\\r?\n[ \t]*/g, " ");
   // Split on both line breaks (CRLF-safe) and common shell separators, so a
   // multi-line `run: |` block or a `cmd1 && cmd2` one-liner is examined
   // command-by-command rather than as one opaque blob.
-  const commands = runScript
+  const commands = continuationJoined
     .split(/\r?\n/)
     .flatMap((line) => line.split(/&&|\|\||[;|]/))
     .map((segment) => segment.trim())
@@ -160,6 +171,10 @@ describe("findNodeTestInvocations guard (self-tests)", () => {
       "glob buried in a multi-command step",
       "npm ci && node --test tests/*.test.cjs && echo done",
     ],
+    [
+      "backslash-newline shell line continuation",
+      "node --test \\\ntests/*.test.ts",
+    ],
   ] as const;
 
   const cleanCommandFixtures = [
@@ -171,6 +186,10 @@ describe("findNodeTestInvocations guard (self-tests)", () => {
     [
       "npx tsx form with a concrete file",
       "npx tsx --test tests/index.test.ts",
+    ],
+    [
+      "backslash-newline line continuation with a concrete file",
+      "node --import tsx --test \\\ntests/index.test.ts",
     ],
     [
       "attached pattern flag is not a target (false-positive guard)",
