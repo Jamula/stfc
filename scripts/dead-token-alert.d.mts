@@ -38,8 +38,8 @@ export const DEFAULT_REQUIRED_LABELS: readonly string[];
 
 export function parseIssues(raw: string | undefined | null): AlertIssue[];
 
-export function selectAlertIssues(issues: unknown, options?: AlertSelectOptions): AlertIssue[];
+export function selectAlertIssues(issues: unknown, options: AlertSelectOptions): AlertIssue[];
 
-export function findAlertIssue(options?: AlertLookupOptions): AlertLookupResult;
+export function findAlertIssue(options: AlertLookupOptions): AlertLookupResult;
 
-export function resolveDeadTokenAlert(options?: AlertResolveOptions): AlertResolveResult;
+export function resolveDeadTokenAlert(options: AlertResolveOptions): AlertResolveResult;

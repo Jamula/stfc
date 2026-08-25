@@ -118,7 +118,7 @@ describe("dead-token-alert — selection", () => {
     );
   });
 
-  it("parses raw gh --json output and tolerates an empty list", () => {
+  it("parses raw gh --json output and tolerates a genuine empty array", () => {
     const raw = JSON.stringify(FIXTURE);
     assert.deepEqual(
       selectAlertIssues(parseIssues(raw), { title: TITLE, requiredLabels: REQUIRED }).map(
@@ -127,12 +127,74 @@ describe("dead-token-alert — selection", () => {
       [101, 140],
     );
     assert.deepEqual(parseIssues("[]"), []);
-    assert.deepEqual(parseIssues(""), []);
+  });
+
+  it("throws on empty or non-array output instead of silently treating it as no issues", () => {
+    // Fail-open here would let a broken `gh` call (nothing on stdout, or an
+    // unexpected JSON shape) masquerade as "no alert exists yet" and file a
+    // duplicate P1 — only a genuine parsed `[]` may mean that.
+    assert.throws(() => parseIssues(""), /expected a JSON array.*empty output/);
+    assert.throws(() => parseIssues(undefined), /expected a JSON array.*empty output/);
+    assert.throws(() => parseIssues(null), /expected a JSON array.*empty output/);
+    assert.throws(() => parseIssues("{}"), /expected a JSON array.*got object/);
+    assert.throws(() => parseIssues("null"), /expected a JSON array.*got object/);
   });
 
   it("refuses to select without a title (never matches everything)", () => {
     assert.throws(() => selectAlertIssues(FIXTURE, { title: "" }), /non-empty title/);
   });
+});
+
+describe("dead-token-alert — lookup-shape failures propagate on find, are swallowed on resolve", () => {
+  // listIssues stands in for the whole "fetch + parseIssues" combo (see the
+  // real ghListIssues), so these route raw output through parseIssues itself
+  // to reproduce the actual failure the create/resolve steps would see.
+  it("find (create side) throws when gh returns empty output — it must never look like 'no alert'", () => {
+    assert.throws(
+      () =>
+        findAlertIssue({
+          title: TITLE,
+          requiredLabels: REQUIRED,
+          listIssues: () => parseIssues(""),
+          log: () => {},
+        }),
+      /expected a JSON array.*empty output/,
+    );
+  });
+
+  it("find (create side) throws when gh returns a non-array JSON shape", () => {
+    assert.throws(
+      () =>
+        findAlertIssue({
+          title: TITLE,
+          requiredLabels: REQUIRED,
+          listIssues: () => parseIssues("{}"),
+          log: () => {},
+        }),
+      /expected a JSON array.*got object/,
+    );
+  });
+
+  for (const [description, invalidOutput] of [
+    ["empty output", ""],
+    ["a non-array JSON shape", "{}"],
+  ] as const) {
+    it(`resolve (cleanup side) reports ${description} as a non-fatal lookup failure`, () => {
+      const { lines, log } = recorder();
+      const result = resolveDeadTokenAlert({
+        title: TITLE,
+        requiredLabels: REQUIRED,
+        listIssues: () => parseIssues(invalidOutput),
+        log,
+        closeIssue: () => {
+          throw new Error("must not be called");
+        },
+      });
+
+      assert.equal(result.status, "lookup-failed");
+      assert.match(lines.join("\n"), /::warning::Dead-token alert lookup failed/);
+    });
+  }
 });
 
 describe("dead-token-alert — find", () => {

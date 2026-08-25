@@ -30,13 +30,26 @@ import { pathToFileURL } from 'node:url';
 /** Labels that must be present for an issue to count as the dead-token alert. */
 export const DEFAULT_REQUIRED_LABELS = ['bug', 'priority:p1'];
 
-/** Parse `gh issue list --json …` output into an array. Never throws on shape. */
+/**
+ * Parse `gh issue list --json …` output into an array. Only a genuine
+ * parsed `[]` means "no open issues" — the create side depends on lookup
+ * failure being visible (see findAlertIssue's doc comment) so a dead token
+ * doesn't silently get treated as "no alert exists yet," filing a duplicate
+ * P1. Empty/missing output or a non-array JSON shape is therefore a thrown
+ * error, not a tolerated empty list.
+ */
 export function parseIssues(raw) {
-  if (raw === undefined || raw === null) return [];
-  const text = String(raw).trim();
-  if (text === '') return [];
+  const text = String(raw ?? '').trim();
+  if (text === '') {
+    throw new Error('dead-token-alert: expected a JSON array from gh issue list, got empty output');
+  }
   const parsed = JSON.parse(text);
-  return Array.isArray(parsed) ? parsed : [];
+  if (!Array.isArray(parsed)) {
+    throw new Error(
+      `dead-token-alert: expected a JSON array from gh issue list, got ${typeof parsed}`,
+    );
+  }
+  return parsed;
 }
 
 function labelNames(issue) {
@@ -54,15 +67,17 @@ function labelNames(issue) {
  * this exact filter is what keeps an unrelated issue that merely quotes the
  * alert title out of the result.
  */
-export function selectAlertIssues(issues, options = {}) {
+export function selectAlertIssues(issues, options) {
   const title = options.title;
   if (typeof title !== 'string' || title === '') {
     throw new Error('dead-token-alert: a non-empty title is required');
   }
   const requiredLabels = options.requiredLabels ?? DEFAULT_REQUIRED_LABELS;
-  const list = Array.isArray(issues) ? issues : [];
+  if (!Array.isArray(issues)) {
+    throw new Error('dead-token-alert: issue list must be an array');
+  }
 
-  return list
+  return issues
     .filter((issue) => issue?.title === title)
     .filter((issue) => {
       const names = labelNames(issue);
@@ -102,7 +117,7 @@ function ghCloseIssue(number, comment) {
  * Resolve the alert number, warning when duplicates exist. Throws if the
  * lookup itself fails — the create side wants that to be visible.
  */
-export function findAlertIssue(options = {}) {
+export function findAlertIssue(options) {
   const title = options.title;
   const requiredLabels = options.requiredLabels ?? DEFAULT_REQUIRED_LABELS;
   const listIssues = options.listIssues ?? ghListIssues;
@@ -112,7 +127,12 @@ export function findAlertIssue(options = {}) {
   // multi-line value the moment a duplicate warning fires.
   const log = options.log ?? ((line) => console.error(line));
 
-  const matches = selectAlertIssues(listIssues(title), { title, requiredLabels });
+  const listed = listIssues(title);
+  const issues =
+    typeof listed === 'string' || listed === undefined || listed === null
+      ? parseIssues(listed)
+      : listed;
+  const matches = selectAlertIssues(issues, { title, requiredLabels });
   if (matches.length > 1) {
     log(
       `::warning::Found ${matches.length} matching dead-token alerts; using oldest #${matches[0].number}.`,
@@ -126,7 +146,7 @@ export function findAlertIssue(options = {}) {
  * turn a run that successfully claimed gifts red, so a failed lookup or a
  * failed close is reported as a warning and swallowed.
  */
-export function resolveDeadTokenAlert(options = {}) {
+export function resolveDeadTokenAlert(options) {
   // stderr for the same reason as findAlertIssue: this function's caller does
   // not capture stdout today, but keeping both halves consistent means a
   // future refactor that starts capturing `resolve` output can't reintroduce

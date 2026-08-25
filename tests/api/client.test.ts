@@ -161,6 +161,28 @@ describe("ApiClient", () => {
     assert.equal(calls.length, 3);
   });
 
+  it("OPTIONS is treated as safe and recovers from a single 401", async () => {
+    const { calls } = mockStatusSequence(401, 200);
+    const client = new ApiClient({ baseUrl: "https://example.com", token: "tok" });
+    const result = await client.request({ path: "/x", method: "OPTIONS", schema: OkSchema });
+    assert.deepEqual(result, { ok: true });
+    assert.equal(
+      calls.length,
+      2,
+      "a single OPTIONS 401 must be corroborated before surfacing TokenExpiredError",
+    );
+  });
+
+  it("OPTIONS 401 then 401 → TokenExpiredError after corroboration", async () => {
+    const { calls } = mockStatusSequence(401, 401);
+    const client = new ApiClient({ baseUrl: "https://example.com", token: "tok" });
+    await assert.rejects(
+      () => client.request({ path: "/x", method: "OPTIONS", schema: OkSchema }),
+      (err: unknown) => err instanceof TokenExpiredError,
+    );
+    assert.equal(calls.length, 2, "two auth rejections should terminate the shared sequence");
+  });
+
   it("POST 401 is NOT replayed — surfaces TransientError after exactly one call", async () => {
     const { calls } = mockStatusSequence(401, 200);
     const client = new ApiClient({ baseUrl: "https://example.com", token: "tok" });
