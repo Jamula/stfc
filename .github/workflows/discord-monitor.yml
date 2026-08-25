@@ -143,7 +143,7 @@ jobs:
           fi
           git -C "$STATE_DIR" commit --no-verify -m "chore(discord-monitor): run ${{ github.run_id }}"
           for attempt in 1 2 3; do
-            if git -C "$STATE_DIR" push origin "HEAD:automation-state"; then
+            if git -C "$STATE_DIR" push --no-verify origin "HEAD:automation-state"; then
               git worktree remove "$STATE_DIR" --force
               exit 0
             fi

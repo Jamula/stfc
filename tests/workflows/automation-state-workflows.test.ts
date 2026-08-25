@@ -142,7 +142,8 @@ describe("automation-state scheduled workflow contract", () => {
       const finalError = persist.indexOf("::error::All 3 push attempts failed");
       assert.ok(loopStart >= 0 && finalError > loopStart);
       const loop = persist.slice(loopStart, finalError);
-      assert.match(loop, /push origin "HEAD:automation-state"/);
+      assert.match(loop, /push --no-verify origin "HEAD:automation-state"/);
+      assert.doesNotMatch(loop, /push origin "HEAD:automation-state"/);
       assert.match(loop, /if git ls-remote --exit-code --heads origin automation-state/);
       assert.match(loop, /node scripts\/automation-state-retry\.mjs/);
       assert.match(persist.slice(finalError), /exit 1/);

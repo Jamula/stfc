@@ -119,6 +119,11 @@ describe("scripts/discord-handler.mjs", () => {
     assert.ok(commitAt > scanAt);
   });
 
+  it("pins the automation-state push hook bypass in source", () => {
+    const source = readFileSync("scripts/discord-handler.mjs", "utf8");
+    assert.ok(source.includes('["push", "--no-verify", "origin", `HEAD:${ref}`]'));
+  });
+
   it("redeem-status command reads history and patches Discord", async () => {
     const stdout = makeStdout();
     const stderr = makeStdout();
@@ -284,7 +289,7 @@ describe("scripts/discord-handler.mjs", () => {
     assert.ok(commit?.stdin?.includes("Source: https://discord.com/channels/g1/c1/..."));
     assert.deepEqual(
       gitCalls.find((c) => c.args[0] === "push")?.args,
-      ["push", "origin", "HEAD:automation-state"],
+      ["push", "--no-verify", "origin", "HEAD:automation-state"],
     );
   });
 
