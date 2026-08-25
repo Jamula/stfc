@@ -47,6 +47,7 @@ import "./scripts/discordHandler.test.ts";
 import "./scripts/discordMonitorState.test.ts";
 import "./scripts/mergePromoCodes.test.ts";
 import "./scripts/deadTokenAlert.test.ts";
+import "./scripts/reviewerGate.test.ts";
 import "./scripts/discord-ops/set-discord-app-metadata.test.ts";
 import "./scripts/discord-ops/partial-success.test.ts";
 import "./scripts/discord-ops/endpoint-narrowing.test.ts";

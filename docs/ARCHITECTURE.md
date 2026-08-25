@@ -370,6 +370,16 @@ it routes work and enforces handoffs. Heavy templates live on-demand in
 **Routing.** `.squad/routing.md` maps work type → owner. Anything touching
 `.github/workflows/*.yml` routes to O'Brien (unified 2026-05-18).
 
+**Reviewer verdict gate.** `.github/workflows/squad-reviewer-gate.yml` runs
+trusted gate logic from the default branch and publishes `Squad reviewer gate`
+on the exact pull request head SHA. Required lanes are declared in the pull
+request body; each `APPROVE` or `CHANGES_REQUESTED` comment must name that full
+SHA, so a new push invalidates older verdicts. See
+`docs/REVIEWER-GATE.md` for the comment contract, trust limits, and break-glass
+runbook. Issue #220 Phase 1 does not add this context to the live ruleset:
+comment-derived status is operational governance, not a security boundary
+against a session acting with the repository owner's identity.
+
 **Decisions.** Append-only ledger at `.squad/decisions.md` (live) with
 roll-over to `.squad/decisions-archive.md`. Drop-box pattern: agents
 write to `.squad/decisions/inbox/` and Scribe merges into the ledger.
@@ -420,6 +430,7 @@ The core application and required-check workflows are grouped by purpose:
 | `swa-deploy.yml` | Azure SWA deploy | push to `main`, PR open/sync/close |
 | `storage-size-monitor.yml` | Alert when `data/discord/game-state` exceeds 100 MB | `0 6 * * *` + dispatch |
 | `squad-test-gate.yml` | Canonical typecheck + npm test required check; coverage uploads intentionally disabled | PR |
+| `squad-reviewer-gate.yml` | Default-branch, current-head reviewer-verdict status (observe-only until a later authorized ruleset change) | PR target + PR comments |
 | GitHub CodeQL default setup | Canonical `actions` + `javascript-typescript` security analysis | default branch + PRs |
 | `squad-artifact-hygiene.yml` | Secret + JWT leak scanner | PR touching `specs/`, `docs/`, `.github/**/*.md` |
 | `squad-heartbeat.yml` | Ralph heartbeat (issues/PRs closed/labeled) | event-only (no cron — see existing rules) |
