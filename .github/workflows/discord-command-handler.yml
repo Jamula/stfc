@@ -12,12 +12,22 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 concurrency:
-  # Keep Discord commands responsive: the shared stfc-gift-redeemer queue keeps
-  # only one pending run by default, so a queued handler can be displaced by
-  # later redeem/monitor/refresh runs. The original monitor overwrite race is
-  # prevented instead by discord-monitor persisting only its owned paths and
-  # never touching data/discord/game-state.
-  group: stfc-discord-handler
+  # Garak (PR #250 review, round 2): `/game-state` is the only Discord
+  # command that writes automation-state directly — scripts/discord-
+  # handler.mjs commits and pushes the upload from inside this job. That is
+  # exactly the writer the original race was about (a monitor run fetching
+  # automation-state's tip *after* a handler push landed, then wholesale-
+  # replacing data/discord — a fast-forward commit with nothing for the
+  # push-retry loop to detect, silently deleting the upload), so `/game-
+  # state` MUST join the same stfc-gift-redeemer lock as redeem.yml and
+  # discord-monitor.yml. `/redeem-status` only reads docs/redeem-history.md
+  # and `/trigger-redeem` only dispatches redeem.yml (itself already
+  # serialized under stfc-gift-redeemer) — neither writes automation-state
+  # from this job, so each gets its own per-command group instead of
+  # queuing behind scheduled runs. discord-monitor persisting only its
+  # owned paths (never data/discord/game-state) remains defense in depth
+  # on top of this, not a substitute for it.
+  group: ${{ github.event.client_payload.command == 'game-state' && 'stfc-gift-redeemer' || format('stfc-discord-handler-{0}', github.event.client_payload.command) }}
   cancel-in-progress: false
 
 jobs:

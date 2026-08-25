@@ -18,6 +18,12 @@ type Workflow = {
   jobs: Record<string, { steps: Step[] }>;
 };
 
+type Concurrency = { group?: string; "cancel-in-progress"?: boolean };
+
+function concurrencyOf(workflow: Workflow): Concurrency {
+  return (workflow as { concurrency?: Concurrency }).concurrency ?? {};
+}
+
 function loadWorkflow(path: string): Workflow {
   return parse(readFileSync(path, "utf8")) as Workflow;
 }
@@ -183,9 +189,40 @@ describe("automation-state scheduled workflow contract", () => {
 });
 
 describe("automation-state Discord handler contract", () => {
-  it("keeps the handler on a dedicated queue so Discord commands are not displaced by scheduled runs", () => {
-    assert.equal((handler as { concurrency?: { group?: string } }).concurrency?.group, "stfc-discord-handler");
-    assert.notEqual((handler as { concurrency?: { group?: string } }).concurrency?.group, (redeem as { concurrency?: { group?: string } }).concurrency?.group);
+  it("joins the shared stfc-gift-redeemer writer lock only for /game-state, the one command that writes automation-state directly, and isolates every other command onto its own per-command queue (Garak, PR #250 review round 2)", () => {
+    // /game-state commits + pushes to automation-state from inside this
+    // job (scripts/discord-handler.mjs), so it must share the exact same
+    // lock as redeem.yml/discord-monitor.yml — the interleaving that let a
+    // monitor run silently delete a handler upload applies to it too.
+    // /redeem-status and /trigger-redeem never touch git (proved in
+    // tests/scripts/discordHandler.test.ts), so isolating them keeps
+    // Discord responsive instead of queuing behind scheduled runs.
+    const group = concurrencyOf(handler).group ?? "";
+    const cancelInProgress = concurrencyOf(handler)["cancel-in-progress"];
+
+    // Pin the exact expression text, not just a loose regex match, so a
+    // silent rewrite of the branching (e.g. swapping which side is the
+    // writer group) is caught immediately.
+    assert.equal(
+      group,
+      "${{ github.event.client_payload.command == 'game-state' && 'stfc-gift-redeemer' || format('stfc-discord-handler-{0}', github.event.client_payload.command) }}",
+    );
+    assert.equal(cancelInProgress, false);
+
+    // Mirror the expression's exact branching (not just its raw text) and
+    // pin concrete resolved values per command — a real GitHub Actions
+    // expression evaluator isn't available in this unit test, so this
+    // reimplementation is kept deliberately trivial (one equality check)
+    // to stay in lockstep with the workflow expression above.
+    const resolveHandlerConcurrencyGroup = (command: string): string =>
+      command === "game-state" ? "stfc-gift-redeemer" : `stfc-discord-handler-${command}`;
+
+    assert.equal(resolveHandlerConcurrencyGroup("game-state"), concurrencyOf(redeem).group);
+    assert.equal(resolveHandlerConcurrencyGroup("game-state"), concurrencyOf(monitor).group);
+    assert.equal(resolveHandlerConcurrencyGroup("redeem-status"), "stfc-discord-handler-redeem-status");
+    assert.equal(resolveHandlerConcurrencyGroup("trigger-redeem"), "stfc-discord-handler-trigger-redeem");
+    assert.notEqual(resolveHandlerConcurrencyGroup("redeem-status"), concurrencyOf(redeem).group);
+    assert.notEqual(resolveHandlerConcurrencyGroup("trigger-redeem"), concurrencyOf(redeem).group);
   });
 
   it("executes main's handler code from the live state worktree", () => {
@@ -213,7 +250,7 @@ describe("automation-state Discord handler contract", () => {
     );
   });
 
-  it("relies on path ownership rather than the shared writer lock to avoid the monitor overwrite race", () => {
+  it("discord-monitor's persist step never touches data/discord/game-state, as defense in depth on top of the shared writer lock", () => {
     const persist = namedStep(
       monitor,
       "Commit state + digest + promo-codes to automation-state (if changed)",

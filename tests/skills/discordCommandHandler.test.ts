@@ -35,10 +35,22 @@ describe(".github/workflows/discord-command-handler.yml", () => {
     assert.doesNotMatch(onBlock, /^\s+workflow_dispatch:/m, "must not trigger on workflow_dispatch");
   });
 
-  it("pins a dedicated Discord-command concurrency group and does not cancel in-progress", { skip: yaml === undefined }, () => {
-    assert.match(yaml!, /concurrency:\s*\n(?:\s+#.*\n)*\s+group:\s*stfc-discord-handler\b/);
-    assert.match(yaml!, /cancel-in-progress:\s*false\b/);
-  });
+  it(
+    "joins the shared stfc-gift-redeemer writer lock only for /game-state, and does not cancel in-progress",
+    { skip: yaml === undefined },
+    () => {
+      // Garak (PR #250 review, round 2): /game-state is the only command
+      // that writes automation-state directly from this job, so it alone
+      // must share the writer lock with redeem.yml/discord-monitor.yml —
+      // a static per-workflow group here (whether always-shared or always-
+      // isolated) is wrong for at least one command.
+      assert.match(
+        yaml!,
+        /concurrency:\s*\n(?:\s+#.*\n)*\s+group:\s*\$\{\{\s*github\.event\.client_payload\.command\s*==\s*'game-state'\s*&&\s*'stfc-gift-redeemer'\s*\|\|\s*format\('stfc-discord-handler-\{0\}',\s*github\.event\.client_payload\.command\)\s*\}\}/,
+      );
+      assert.match(yaml!, /cancel-in-progress:\s*false\b/);
+    },
+  );
 
   it("declares minimal permissions needed for handler", { skip: yaml === undefined }, () => {
     assert.match(yaml!, /^permissions:\s*\n\s+contents:\s*write\s*\n\s+actions:\s*write\b/m);

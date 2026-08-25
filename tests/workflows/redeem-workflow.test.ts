@@ -72,8 +72,8 @@ describe(".github/workflows/redeem.yml", () => {
       );
       assert.match(
         yaml!,
-        /merge-promo-codes\.mjs[\s\S]*promo-codes\.txt/,
-        "must merge human promo seeds with operational promo codes",
+        /node scripts\/merge-promo-codes\.mjs[\s\S]*promo-codes\.txt "\$RESTORE_DIR\/promo-codes\.txt" promo-codes\.txt "\$MAIN_SHA"/,
+        "must merge with automation-state as the canonical starting point (state path second, main-seed workspace copy first per mergePromoCodeFiles(mainPath, statePath, outputPath, mainRef)) and a deterministic $MAIN_SHA seed marker (ARCH-241-R D2)",
       );
     },
   );

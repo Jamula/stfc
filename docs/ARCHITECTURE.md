@@ -630,6 +630,31 @@ a linked `automation-state` worktree as its working repository:
 `/redeem-status` reads current history and `/game-state` reads/writes current
 game-state. `storage-size-monitor.yml` checks out that live ref directly.
 
+**Writer serialization (Garak, PR #250 review, round 2).** `redeem.yml` and
+`discord-monitor.yml` share one `stfc-gift-redeemer` concurrency group
+(`cancel-in-progress: false`) so their pushes to `automation-state` never
+interleave. `discord-command-handler.yml`'s concurrency group is
+command-dependent: `/game-state` — the only Discord command that commits and
+pushes to `automation-state` directly (`scripts/discord-handler.mjs`) — joins
+that same `stfc-gift-redeemer` lock, because the exact interleaving that let a
+monitor run silently delete a handler upload (fetch the tip *after* a handler
+push landed, then fast-forward a wholesale replace of `data/discord` — a
+non-conflicting commit the push-retry loop never notices) applies to it too.
+`/redeem-status` (read-only) and `/trigger-redeem` (only dispatches
+`redeem.yml`, itself already serialized) never touch git directly, so each
+gets an isolated per-command group instead of queuing behind scheduled runs —
+proven both by a workflow-level pin of the exact concurrency expression
+(`tests/workflows/automation-state-workflows.test.ts`) and by asserting zero
+`git` calls for those two commands (`tests/scripts/discordHandler.test.ts`).
+`discord-monitor.yml` additionally never stages `data/discord/game-state`
+(`scripts/discord-monitor-state.mjs` copies only its own allowlisted files),
+which is defense in depth on top of the shared lock, not a substitute for it —
+`tests/workflows/automation-state-race.test.ts` exercises the exact git-level
+interleaving against real plumbing to prove the ownership exclusion holds even
+if serialization were somehow bypassed, and regresses the pre-fix
+wholesale-replace pattern to show it actually loses data under that same
+interleaving.
+
 On first use, a writer adds a detached **linked worktree** from the authenticated
 Actions checkout, switches it to orphan branch `automation-state`, clears the
 inherited index, and copies only allowlisted state. This preserves
