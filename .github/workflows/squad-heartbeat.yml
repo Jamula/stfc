@@ -46,8 +46,56 @@ jobs:
             --squad-dir .squad \
             --output triage-results.json
 
+      # Reads { retroGate, results, canProceed } from ralph-triage.js and
+      # sets a step output so the two steps below can gate on the EXACT
+      # same fail-closed condition the dispatcher itself used (#248 Garak
+      # finding 1 — "the later Assign @copilot step still ran under
+      # if: success() despite an overdue/unevaluated gate"). Any missing
+      # file, unparseable JSON, or older bare-array output (no `canProceed`
+      # field) is treated as NOT proceeding — fail closed, never fail open.
+      # Reads { retroGate, results, canProceed } from ralph-triage.js and
+      # sets a step output so the two steps below can gate on the EXACT
+      # same fail-closed condition the dispatcher itself used (#248 Garak
+      # finding 1 — "the later Assign @copilot step still ran under
+      # if: success() despite an overdue/unevaluated gate"). Any missing
+      # file, unparseable JSON, or older bare-array output (no `canProceed`
+      # field) is treated as NOT proceeding — fail closed, never fail open.
+      # The retro-specific warning is emitted HERE, not in the downstream
+      # steps, because those steps only run when can_proceed == 'true' —
+      # an overdue/unevaluated result never reaches them, so a warning
+      # placed there would be dead code (#248 Copilot review finding).
+      - name: Ralph — Check retro gate
+        id: retro-gate
+        if: steps.check-script.outputs.has_script == 'true'
+        run: |
+          node -e '
+            const fs = require("fs");
+            const path = "triage-results.json";
+            let canProceed = false;
+            try {
+              const raw = fs.readFileSync(path, "utf8");
+              const data = JSON.parse(raw);
+              if (Array.isArray(data)) {
+                canProceed = false;
+              } else {
+                canProceed = data.canProceed === true;
+                const retroGate = data.retroGate;
+                if (retroGate) {
+                  if (retroGate.evaluated && retroGate.overdue) {
+                    console.log(`::warning::[RETRO] Overdue (backend: ${retroGate.backend}) — Ralph skipped issue triage this round. See .squad/skills/retro-enforcement/SKILL.md.`);
+                  } else if (!retroGate.evaluated) {
+                    console.log(`::warning::[RETRO] Round-start gate not evaluated for backend "${retroGate.backend}" — blocked this round (fail closed): ${retroGate.reason}`);
+                  }
+                }
+              }
+            } catch (e) {
+              console.log(`::warning::Could not determine retro-gate status (${e.message}) — blocking this round (fail closed).`);
+            }
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `can_proceed=${canProceed}\n`);
+          '
+
       - name: Ralph — Apply triage decisions
-        if: steps.check-script.outputs.has_script == 'true' && hashFiles('triage-results.json') != ''
+        if: steps.check-script.outputs.has_script == 'true' && steps.retro-gate.outputs.can_proceed == 'true' && hashFiles('triage-results.json') != ''
         uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b #v7
         with:
           script: |
@@ -57,9 +105,19 @@ jobs:
               core.info('No triage results — board is clear');
               return;
             }
-            
-            const results = JSON.parse(fs.readFileSync(path, 'utf8'));
-            if (results.length === 0) {
+
+            // ralph-triage.js writes { retroGate, results, canProceed } —
+            // the round-start retro gate is evaluated before triage-queue
+            // construction (issue #245; #248 Garak finding 1). This step
+            // only ever runs when the "Ralph — Check retro gate" step
+            // above already confirmed can_proceed == 'true', so results
+            // here always reflects a real, non-overdue evaluation; the
+            // retro-specific warning is emitted in that earlier step, not
+            // here, since it would be unreachable dead code in this one.
+            const data = JSON.parse(fs.readFileSync(path, 'utf8'));
+            const results = Array.isArray(data) ? data : data.results;
+
+            if (!results || results.length === 0) {
               core.info('📋 Board is clear — Ralph found no untriaged issues');
               return;
             }
@@ -97,9 +155,13 @@ jobs:
             
             core.info(`🔄 Ralph triaged ${results.length} issue(s)`);
 
-      # Copilot auto-assign step (uses PAT if available)
+      # Copilot auto-assign step (uses PAT if available). Gated on the same
+      # retro-gate output as the triage-apply step above (#248 Garak
+      # finding 1 — this step previously ran unconditionally under
+      # `if: success()` even when the retro gate was overdue/unevaluated,
+      # starting other work despite the skill's Blocking Semantics).
       - name: Ralph — Assign @copilot issues
-        if: success()
+        if: success() && steps.check-script.outputs.has_script == 'true' && steps.retro-gate.outputs.can_proceed == 'true'
         uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b #v7
         with:
           github-token: ${{ secrets.COPILOT_ASSIGN_TOKEN || secrets.GITHUB_TOKEN }}

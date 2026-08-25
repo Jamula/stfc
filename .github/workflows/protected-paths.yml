@@ -26,6 +26,10 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.0
 
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4.4.0
+        with:
+          node-version-file: .nvmrc
+
       - name: Assert load-bearing paths still exist
         run: |
           set -uo pipefail
@@ -48,6 +52,7 @@ jobs:
           config/classifier-model.json
           config/discord-allowlist.json
           tests/index.test.ts
+          .squad/skills/retro-enforcement/SKILL.md
           "
 
           # Directories that must contain at least one tracked file.
@@ -90,6 +95,31 @@ jobs:
 
           echo "All protected paths present."
           echo "✅ All protected paths present." >> "$GITHUB_STEP_SUMMARY"
+
+      # A ceremony that names an "Enforcement skill" (e.g. retro-enforcement /
+      # "Retrospective with Enforcement", #245) is only enforced if that skill
+      # actually resolves. #245 shipped 82 days with the gate silently
+      # unenforceable because the named skill was never installed. This check
+      # generalizes the fix to every current and future ceremony: any
+      # "**Enforcement skill**" row in ceremonies.md must resolve against one
+      # of the 5 documented skill paths, or the build fails loudly instead of
+      # the gate silently no-oping.
+      #
+      # The prior inline-bash version of this step was itself vacuous (#248
+      # Garak finding 3): it exited 0 when ceremonies.md was missing or when
+      # grep matched zero rows, and its `[ -f ... ]` resolution followed
+      # symlinks/reparse points, contrary to the mandatory skip rule in
+      # .squad/reference/skill-routing.md. The logic now lives in
+      # scripts/check-enforcement-skills.mjs, which fails loudly on both of
+      # those cases, rejects symlinked/reparse-point skill directories via
+      # lstat, and applies NFC/case-insensitive id matching. That script is
+      # also exercised directly (not just via this YAML) in
+      # tests/skills/enforcementSkillCheck.test.ts, which is registered in
+      # tests/index.test.ts and runs under the required "npm test (required)"
+      # check — the same behavioral suite runs whether or not this workflow
+      # itself is a required status check.
+      - name: Assert ceremony enforcement skills are installed
+        run: node scripts/check-enforcement-skills.mjs
 
       # Colons (and friends) are illegal in Windows filenames. 21 tracked
       # .squad/log files created in the Linux Codespace carried them, could
