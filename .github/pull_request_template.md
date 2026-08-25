@@ -76,6 +76,14 @@ _If there is a tension with a principle, describe it here and note how the plan'
 
 ---
 
+## Reviewer lanes
+
+_Replace the placeholder with every reviewer required for this PR. The reviewer gate fails closed until all placeholders are replaced and every listed reviewer approves the current head SHA._
+
+- **<Reviewer>** (<lane>): <scope>
+
+---
+
 ## What was changed and why
 
 _One paragraph. What problem does this solve? Why this approach?_

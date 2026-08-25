@@ -118,15 +118,12 @@ describe("Merge safety — Ralph's charter (issue #220)", () => {
   it("does not overstate causality by claiming the old charter language itself produced the four merges", () => {
     // Issue #220 established that four PRs were merged before CI/review
     // gates could act. Picard's governance audit on that issue confirms a
-    // Copilot CLI session authenticated as @cyrusjamula executed the merge
-    // API calls for all four — that executor identity is known. It never
-    // established that this charter's old "Rule 7 auto-merge" language was
-    // the mechanism that performed the merges: which component or session
-    // triggered that Copilot CLI session (a Ralph loop is the leading
-    // hypothesis, not a proven fact) remains unidentified. The charter must
-    // describe its own old language as an authorization/safeguard gap, not
-    // as the proven cause, and must not conflate the known executor
-    // identity with the still-unknown initiating trigger.
+    // GitHub identifies the authenticated actor and the merge commits carry
+    // Copilot App co-authoring, but the available issue-session tool logs do
+    // not identify the host component or trigger that initiated the merge.
+    // The charter must describe its own old language as an authorization gap,
+    // not as the proven cause, and must not conflate the known actor/execution
+    // context with the still-unknown initiating trigger.
     assert.doesNotMatch(
       collapseWhitespace(ralphCharter),
       /language authorized unattended merges and,? per issue #220's audit,? produced (four|4) PRs/i,
@@ -134,13 +131,13 @@ describe("Merge safety — Ralph's charter (issue #220)", () => {
     );
     assert.match(
       collapseWhitespace(ralphCharter),
-      /does not establish that this charter's old language was the mechanism that executed those merges/,
-      "charter must state that #220 does not establish its old language as the merge-executing mechanism",
+      /GitHub records API-driven merges under the authenticated @cyrusjamula identity and the merge commits carry Copilot App co-authoring/,
+      "charter must identify the evidence-supported actor and execution context",
     );
     assert.match(
       collapseWhitespace(ralphCharter),
-      /which component or session triggered that Copilot CLI session .*? remains unidentified/,
-      "charter must acknowledge the initiating trigger remains unidentified while naming the known executor (Copilot CLI session as @cyrusjamula)",
+      /Available issue-session tool logs do not show the initiating merge call, so issue #220 does not identify which host component or trigger initiated the action/,
+      "charter must acknowledge that the initiating host component or trigger remains unidentified",
     );
   });
 });
