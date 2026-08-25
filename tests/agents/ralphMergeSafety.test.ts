@@ -117,16 +117,20 @@ describe("Merge safety — Ralph's charter (issue #220)", () => {
 
   it("does not overstate causality by claiming the old charter language itself produced the four merges", () => {
     // Issue #220 established that four PRs were merged before CI/review
-    // gates could act, and that external automation (not any squad-owned
-    // agent) executed those merges even after draft-status mitigation. It
-    // never established that this charter's old "Rule 7 auto-merge"
-    // language was the mechanism that performed the merges — the external
-    // merger remains unidentified. The charter must describe its own old
-    // language as an authorization/safeguard gap, not as the proven cause.
+    // gates could act. Picard's governance audit on that issue confirms a
+    // Copilot CLI session authenticated as @cyrusjamula executed the merge
+    // API calls for all four — that executor identity is known. It never
+    // established that this charter's old "Rule 7 auto-merge" language was
+    // the mechanism that performed the merges: which component or session
+    // triggered that Copilot CLI session (a Ralph loop is the leading
+    // hypothesis, not a proven fact) remains unidentified. The charter must
+    // describe its own old language as an authorization/safeguard gap, not
+    // as the proven cause, and must not conflate the known executor
+    // identity with the still-unknown initiating trigger.
     assert.doesNotMatch(
       collapseWhitespace(ralphCharter),
       /language authorized unattended merges and,? per issue #220's audit,? produced (four|4) PRs/i,
-      "charter must not claim its old language 'produced' the four merges — the executing mechanism is unidentified per #220",
+      "charter must not claim its old language 'produced' the four merges — the triggering component is unidentified per #220",
     );
     assert.match(
       collapseWhitespace(ralphCharter),
@@ -135,8 +139,8 @@ describe("Merge safety — Ralph's charter (issue #220)", () => {
     );
     assert.match(
       collapseWhitespace(ralphCharter),
-      /the external system or actor that performed them remains unidentified/,
-      "charter must acknowledge the external merger remains unidentified without naming it",
+      /which component or session triggered that Copilot CLI session .*? remains unidentified/,
+      "charter must acknowledge the initiating trigger remains unidentified while naming the known executor (Copilot CLI session as @cyrusjamula)",
     );
   });
 });
