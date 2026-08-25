@@ -1,6 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
+  chmodSync,
   mkdirSync,
   mkdtempSync,
   rmSync,
@@ -197,10 +198,9 @@ describe("automation-state linked-worktree bootstrap", () => {
       git(state, "add", "docs/redeem-history.md");
       git(state, "commit", "--no-verify", "-m", "state seed");
 
-      writeFileSync(
-        path.join(resolveGitCommonDir(writer), "hooks", "pre-push"),
-        "#!/bin/sh\nnode scripts/pre-push.mjs\n",
-      );
+      const hookPath = path.join(resolveGitCommonDir(writer), "hooks", "pre-push");
+      writeFileSync(hookPath, "#!/bin/sh\nnode scripts/pre-push.mjs\n");
+      chmodSync(hookPath, 0o755);
 
       const rejected = gitResult(state, "push", "origin", "HEAD:automation-state");
       assert.notEqual(rejected.status, 0, "push without --no-verify must fail");
