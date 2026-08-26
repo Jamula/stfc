@@ -128,6 +128,7 @@ describe("scripts/discord-handler.mjs", () => {
     const stdout = makeStdout();
     const stderr = makeStdout();
     let postedBody = "";
+    const gitCalls: string[][] = [];
 
     const code = await mod.runCli({
       env: baseEnv({ command: "redeem-status", interaction_token: "tok", application_id: "app" }),
@@ -140,7 +141,10 @@ describe("scripts/discord-handler.mjs", () => {
         "| oldest | chest |",
       ].join("\n"),
       runGh: async () => "",
-      runGit: async () => "",
+      runGit: async (args) => {
+        gitCalls.push(args);
+        return "";
+      },
       fetchImpl: async (_url, init: any) => {
         postedBody = String(init.body ?? "");
         return {
@@ -157,12 +161,17 @@ describe("scripts/discord-handler.mjs", () => {
     assert.match(postedBody, /Latest redeem history:/);
     assert.match(postedBody, /newest/);
     assert.ok(postedBody.indexOf("newest") < postedBody.indexOf("oldest"));
+    // Garak (PR #250 review, round 2): /redeem-status may only be exempted
+    // from the shared stfc-gift-redeemer writer lock if it never writes
+    // automation-state itself — prove it here instead of just asserting it.
+    assert.deepEqual(gitCalls, [], "redeem-status must not touch git at all");
   });
 
   it("trigger-redeem command invokes gh and posts run id/link", async () => {
     const stdout = makeStdout();
     const stderr = makeStdout();
     const ghCalls: string[][] = [];
+    const gitCalls: string[][] = [];
     let postedBody = "";
 
     const code = await mod.runCli({
@@ -173,7 +182,10 @@ describe("scripts/discord-handler.mjs", () => {
         guild_id: "g1",
       }),
       readFileImpl: async () => "",
-      runGit: async () => "",
+      runGit: async (args) => {
+        gitCalls.push(args);
+        return "";
+      },
       runGh: async (args) => {
         ghCalls.push(args);
         if (args[0] === "workflow") return "";
@@ -214,6 +226,11 @@ describe("scripts/discord-handler.mjs", () => {
     assert.equal(ghCalls[1]?.[1], "list");
     assert.match(postedBody, /Redeem triggered — run ID 123456/);
     assert.match(postedBody, /actions\/runs\/123456/);
+    // Garak (PR #250 review, round 2): /trigger-redeem may only be exempted
+    // from the shared stfc-gift-redeemer writer lock if it never writes
+    // automation-state itself — it only dispatches redeem.yml (which is
+    // already serialized under that lock) via gh, not git.
+    assert.deepEqual(gitCalls, [], "trigger-redeem must not touch git at all");
   });
 
   it("trigger-redeem rejects non-allowlisted guilds before invoking gh", async () => {
@@ -615,6 +632,44 @@ describe("scripts/discord-handler.mjs", () => {
 
     assert.equal(code, 0, stderr.text());
     assert.match(postedBody, /Unknown command: not-a-real-command/);
+  });
+
+  it("case-variant game-state over-serializes on the writer lock but still cannot write", async () => {
+    // GitHub's `==` and its concurrency group names are case-insensitive, so
+    // `GAME-STATE` resolves to the shared stfc-gift-redeemer group (it
+    // over-serializes rather than escaping the lock). The handler dispatches
+    // on exact lower-case strings, so it must refuse to write for it —
+    // that is what makes the over-serialization harmless (Garak, PR #266).
+    const stdout = makeStdout();
+    const stderr = makeStdout();
+    const gitCalls: string[][] = [];
+    let postedBody = "";
+
+    const code = await mod.runCli({
+      env: baseEnv({ ...gameStatePayload(), command: "GAME-STATE" }),
+      readFileImpl: async () => "",
+      runGh: async () => {
+        throw new Error("should not call gh for an unknown command");
+      },
+      runGit: async (args) => {
+        gitCalls.push(args);
+        return "";
+      },
+      fetchImpl: async (_url, init: any) => {
+        postedBody = String(init.body ?? "");
+        return {
+          ok: true,
+          status: 200,
+          text: async () => "{}",
+        };
+      },
+      stdout: stdout.stream,
+      stderr: stderr.stream,
+    });
+
+    assert.equal(code, 0, stderr.text());
+    assert.match(postedBody, /Unknown command: GAME-STATE/);
+    assert.deepEqual(gitCalls, [], "a case-variant command must never reach git");
   });
 
   it("Discord PATCH 5xx causes non-zero exit", async () => {

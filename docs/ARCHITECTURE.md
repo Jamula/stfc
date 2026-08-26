@@ -630,6 +630,70 @@ a linked `automation-state` worktree as its working repository:
 `/redeem-status` reads current history and `/game-state` reads/writes current
 game-state. `storage-size-monitor.yml` checks out that live ref directly.
 
+**Writer serialization (Garak, PR #250 review round 2; PR #266 review).**
+`redeem.yml`, `discord-monitor.yml` and `refresh-token.yml` share one
+`stfc-gift-redeemer` concurrency group (`cancel-in-progress: false`) so their
+pushes to `automation-state` never interleave.
+`discord-command-handler.yml`'s concurrency group is
+command-dependent: `/game-state` — the only Discord command that commits and
+pushes to `automation-state` directly (`scripts/discord-handler.mjs`) — joins
+that same `stfc-gift-redeemer` lock, because the exact interleaving that let a
+monitor run silently delete a handler upload (fetch the tip *after* a handler
+push landed, then fast-forward a wholesale replace of `data/discord` — a
+non-conflicting commit the push-retry loop never notices) applies to it too.
+`/redeem-status` (read-only) and `/trigger-redeem` (only dispatches
+`redeem.yml`, itself already serialized) never touch git directly, so each
+gets an isolated per-command group instead of queuing behind scheduled runs —
+proven both by a workflow-level pin of the exact concurrency expression
+(`tests/workflows/automation-state-workflows.test.ts`) and by asserting zero
+`git` calls for those two commands (`tests/scripts/discordHandler.test.ts`).
+
+**Queue semantics and the overflow contract.** Sharing a group is necessary
+but not sufficient. A concurrency group's default `queue: single` holds **at
+most one pending run**: whenever a newer run of *any* workflow in the group
+arrives, the pending one is cancelled and replaced. With `redeem.yml` on a
+`*/10` cron that would routinely evict a pending `/game-state` job *before it
+ever executed* — the Worker has already returned Discord's deferred response,
+so the upload is lost with no follow-up, trading a post-push deletion race for
+pre-execution upload loss. Every workflow that can join `stfc-gift-redeemer`
+therefore declares `queue: max`:
+
+- **Bound:** up to **100** runs may sit `pending` in the group, released in
+  first-in-first-out order by the time each started waiting on the group (not
+  the time it was dispatched); GitHub notes exact ordering is not guaranteed
+  when actual start times vary.
+- **No silent replacement within the bound.** Below 100 pending runs, a newer
+  run never cancels an older pending one — the loss mode above is gone.
+- **Overflow is visible, not silent.** The 101st pending run is *cancelled by
+  Actions* and shows up as a cancelled run in the Actions UI/API. It is not
+  retried automatically: an operator must re-dispatch it (re-run the workflow,
+  or re-issue the Discord command). This is a loss-bounded queue, not an
+  infinite or durable one — nothing here persists a run across that limit.
+- **`queue: max` cannot be combined with `cancel-in-progress: true`** (GitHub
+  rejects that combination as a workflow validation error), so shared writers
+  keep `cancel-in-progress: false`.
+- **Case-insensitivity.** GitHub compares both concurrency group names and the
+  `==` operator case-insensitively, so a `GAME-STATE` payload resolves to the
+  shared writer group and *over*-serializes. `scripts/discord-handler.mjs`
+  dispatches on exact lower-case strings, so such a payload answers "Unknown
+  command" without touching git — safe in the conservative direction.
+
+`tests/workflows/automation-state-workflows.test.ts` enumerates every parsed
+`concurrency:` block under `.github/workflows/` and fails if any workflow that
+can resolve to `stfc-gift-redeemer` omits `queue: max`, leaves the default
+`single`, or pairs `queue: max` with `cancel-in-progress: true`.
+
+`discord-monitor.yml` additionally never stages `data/discord/game-state`
+(`scripts/discord-monitor-state.mjs` copies only its own allowlisted files),
+which is defense in depth on top of the shared lock, not a substitute for it —
+`tests/workflows/automation-state-race.test.ts` exercises the exact git-level
+interleaving against real plumbing to prove the ownership exclusion holds even
+if serialization were somehow bypassed, and regresses the pre-fix
+wholesale-replace pattern to show it actually loses data under that same
+interleaving. That suite runs its git plumbing asynchronously and keeps every
+scratch directory under `os.tmpdir()`, so it neither blocks the shared
+`node:test` event loop nor leaves untracked directories in the working tree.
+
 On first use, a writer adds a detached **linked worktree** from the authenticated
 Actions checkout, switches it to orphan branch `automation-state`, clears the
 inherited index, and copies only allowlisted state. This preserves

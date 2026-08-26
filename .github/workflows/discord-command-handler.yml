@@ -12,12 +12,41 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 concurrency:
-  # Keep Discord commands responsive: the shared stfc-gift-redeemer queue keeps
-  # only one pending run by default, so a queued handler can be displaced by
-  # later redeem/monitor/refresh runs. The original monitor overwrite race is
-  # prevented instead by discord-monitor persisting only its owned paths and
-  # never touching data/discord/game-state.
-  group: stfc-discord-handler
+  # Garak (PR #250 review, round 2): `/game-state` is the only Discord
+  # command that writes automation-state directly — scripts/discord-
+  # handler.mjs commits and pushes the upload from inside this job. That is
+  # exactly the writer the original race was about (a monitor run fetching
+  # automation-state's tip *after* a handler push landed, then wholesale-
+  # replacing data/discord — a fast-forward commit with nothing for the
+  # push-retry loop to detect, silently deleting the upload), so `/game-
+  # state` MUST join the same stfc-gift-redeemer lock as redeem.yml and
+  # discord-monitor.yml. `/redeem-status` only reads docs/redeem-history.md
+  # and `/trigger-redeem` only dispatches redeem.yml (itself already
+  # serialized under stfc-gift-redeemer) — neither writes automation-state
+  # from this job, so each gets its own per-command group instead of
+  # queuing behind scheduled runs. discord-monitor persisting only its
+  # owned paths (never data/discord/game-state) remains defense in depth
+  # on top of this, not a substitute for it.
+  #
+  # Garak (PR #266 review): sharing the group is necessary but not
+  # sufficient. With the default `queue: single` the group holds at most one
+  # pending run, so the next redeem/monitor/refresh run would cancel a
+  # pending `/game-state` job after the Worker already sent Discord its
+  # deferred response — trading a post-push deletion race for pre-execution
+  # upload loss. `queue: max` holds up to 100 pending runs in FIFO order and
+  # applies to this workflow's isolated per-command groups too (they are
+  # single-writer, so it is a no-op there, but it keeps one contract for the
+  # whole file). See docs/ARCHITECTURE.md → "Writer serialization" for the
+  # overflow contract. Never combine `queue: max` with
+  # `cancel-in-progress: true` — GitHub rejects that as a validation error.
+  #
+  # GitHub's `==` and concurrency group names are both case-insensitive, so a
+  # case variant like `GAME-STATE` resolves to the shared writer group and
+  # over-serializes. scripts/discord-handler.mjs dispatches on exact lower-
+  # case strings, so such a payload returns "Unknown command" without ever
+  # touching git — safe in the conservative direction.
+  group: ${{ github.event.client_payload.command == 'game-state' && 'stfc-gift-redeemer' || format('stfc-discord-handler-{0}', github.event.client_payload.command) }}
+  queue: max
   cancel-in-progress: false
 
 jobs:

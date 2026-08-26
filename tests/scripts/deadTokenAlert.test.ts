@@ -213,6 +213,27 @@ describe("dead-token-alert — find", () => {
     assert.match(lines.join("\n"), /Found 2 matching dead-token alerts; using oldest #101\./);
   });
 
+  it("stays idempotent across a burst of queued runs (queue: max, PR #266)", () => {
+    // .github/workflows/redeem.yml now serializes on `stfc-gift-redeemer`
+    // with `queue: max`, so up to 100 redeem runs can queue and then execute
+    // back-to-back where the old `queue: single` silently dropped all but the
+    // newest pending one. A burst of consecutive exit-2 runs must therefore
+    // still converge on the SAME single alert issue — every run resolves the
+    // oldest exact match, so the create step's "already open, don't file a
+    // duplicate" branch is taken every time after the first.
+    const seen = new Set<number | undefined>();
+    for (let run = 0; run < 25; run += 1) {
+      const result = findAlertIssue({
+        title: TITLE,
+        requiredLabels: REQUIRED,
+        listIssues: () => FIXTURE,
+        log: () => {},
+      });
+      seen.add(result.number);
+    }
+    assert.deepEqual([...seen], [101], "a queued burst must not fan out across alert issues");
+  });
+
   it("routes its default diagnostics to stderr, never stdout", () => {
     // The workflow's create step captures this function's stdout with
     // `existing=$(node scripts/dead-token-alert.mjs find)` to get a single

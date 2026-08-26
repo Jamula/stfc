@@ -571,6 +571,22 @@ describe("discordMonitor / workflow YAML assertions (T027)", () => {
     assert.equal(monitorGroup, refreshTokenGroup, "refresh-token.yml concurrency group must match bit-for-bit");
   });
 
+  it("shares `queue: max` with every other writer on the group (Garak, PR #266 review)", () => {
+    // The default `queue: single` keeps one pending run per group and lets a
+    // newer shared-group run cancel it, so a monitor run could evict a pending
+    // /game-state upload. Every member of the group must opt into `max`.
+    for (const [label, file] of [
+      ["discord-monitor.yml", yamlPath],
+      ["redeem.yml", redeemYamlPath],
+      ["refresh-token.yml", refreshTokenYamlPath],
+    ] as const) {
+      const yaml = fs.readFileSync(file, "utf8");
+      const queue = /^\s*queue:\s*(\S+)\s*$/m.exec(yaml)?.[1];
+      assert.equal(queue, "max", `${label} must declare queue: max on the shared writer group`);
+      assert.doesNotMatch(yaml, /^\s*cancel-in-progress:\s*true\b/m, `${label} must not cancel in-progress`);
+    }
+  });
+
   it("all `uses:` actions are SHA-pinned (40-hex)", () => {
     const yaml = fs.readFileSync(yamlPath, "utf8");
     const uses = [...yaml.matchAll(/uses:\s*(\S+)/g)].map((m) => m[1]!);
