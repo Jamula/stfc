@@ -39,7 +39,7 @@
 	"dependencies": {
 		"@discordjs/rest": "^2.6.3",
 		"@huggingface/transformers": "^4.2.0",
-		"discord-api-types": "^0.38.53",
+		"discord-api-types": "^0.38.54",
 		"tsx": "^4.23.12",
 		"yaml": "^2.9.0",
 		"zod": "^4.4.3"
