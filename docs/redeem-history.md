@@ -7,6 +7,7 @@ inserted at the top**, so the most recent run is always visible first.
 
 | Date (UTC) | Time (UTC) | Account | Gifts claimed |
 | --- | --- | --- | --- |
+| 2026-09-04 | 21:44 | main | Daily Mission Key Drop, 10 Min Free Chest |
 | 2026-09-04 | 19:30 | main | 4 Hr Free Chest, 10 Min Free Chest |
 | 2026-09-04 | 17:03 | main | Labor Day Token Day 1 Drop, UC Event Ticket Gift, 10 Min Free Chest, Labor Day Beckett Mariner |
 | 2026-09-04 | 13:35 | main | 4 Hr Free Chest, 10 Min Free Chest |
