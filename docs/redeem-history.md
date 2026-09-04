@@ -7,6 +7,7 @@ inserted at the top**, so the most recent run is always visible first.
 
 | Date (UTC) | Time (UTC) | Account | Gifts claimed |
 | --- | --- | --- | --- |
+| 2026-09-04 | 09:22 | main | 24 Hr Free Chest [BAJORAN FAVOR], Nadion Supply, Replicator Rations, Archive Data Shard, 4 Hr Free Chest, Trial Bells, Holo-Field Amplifiers, Radioactive Titanite, 10 Min Free Chest, Optical Diodes, Nova Squadron Supply, Fleet Commander Materials, Independent Archives Schematics |
 | 2026-09-04 | 00:25 | main | 4 Hr Free Chest, 10 Min Free Chest |
 | 2026-09-03 | 22:36 | main | 10 Min Free Chest, Daily Mission Key Drop |
 | 2026-09-03 | 20:09 | main | 4 Hr Free Chest, 10 Min Free Chest |
