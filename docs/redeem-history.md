@@ -7,6 +7,7 @@ inserted at the top**, so the most recent run is always visible first.
 
 | Date (UTC) | Time (UTC) | Account | Gifts claimed |
 | --- | --- | --- | --- |
+| 2026-09-04 | 17:03 | main | Labor Day Token Day 1 Drop, UC Event Ticket Gift, 10 Min Free Chest, Labor Day Beckett Mariner |
 | 2026-09-04 | 13:35 | main | 4 Hr Free Chest, 10 Min Free Chest |
 | 2026-09-04 | 09:22 | main | 24 Hr Free Chest [BAJORAN FAVOR], Nadion Supply, Replicator Rations, Archive Data Shard, 4 Hr Free Chest, Trial Bells, Holo-Field Amplifiers, Radioactive Titanite, 10 Min Free Chest, Optical Diodes, Nova Squadron Supply, Fleet Commander Materials, Independent Archives Schematics |
 | 2026-09-04 | 00:25 | main | 4 Hr Free Chest, 10 Min Free Chest |
