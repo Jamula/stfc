@@ -7,6 +7,7 @@ inserted at the top**, so the most recent run is always visible first.
 
 | Date (UTC) | Time (UTC) | Account | Gifts claimed |
 | --- | --- | --- | --- |
+| 2026-09-05 | 17:53 | main | 4 Hr Free Chest, Labor Day Sam Rutherford, 10 Min Free Chest, Saturday Duty Report Gift, Labor Day Token Day 2 Drop |
 | 2026-09-05 | 15:50 | main | UC Event Ticket Gift, 10 Min Free Chest |
 | 2026-09-05 | 12:57 | main | 4 Hr Free Chest, 10 Min Free Chest |
 | 2026-09-05 | 09:29 | main | 24 Hr Free Chest [BAJORAN FAVOR], 10 Min Free Chest |
