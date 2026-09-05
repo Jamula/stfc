@@ -7,6 +7,7 @@ inserted at the top**, so the most recent run is always visible first.
 
 | Date (UTC) | Time (UTC) | Account | Gifts claimed |
 | --- | --- | --- | --- |
+| 2026-09-05 | 05:49 | main | 4 Hr Free Chest, 10 Min Free Chest |
 | 2026-09-05 | 01:13 | main | 4 Hr Free Chest, 10 Min Free Chest |
 | 2026-09-04 | 23:24 | main | 10 Min Free Chest |
 | 2026-09-04 | 21:44 | main | Daily Mission Key Drop, 10 Min Free Chest |
