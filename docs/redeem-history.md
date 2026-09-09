@@ -7,6 +7,7 @@ inserted at the top**, so the most recent run is always visible first.
 
 | Date (UTC) | Time (UTC) | Account | Gifts claimed |
 | --- | --- | --- | --- |
+| 2026-09-09 | 00:35 | main | 10 Min Free Chest |
 | 2026-09-08 | 22:37 | main | 4 Hr Free Chest, 10 Min Free Chest |
 | 2026-09-08 | 20:08 | main | 10 Min Free Chest, Archive Data Shard |
 | 2026-09-08 | 17:28 | main | 4 Hr Free Chest, 10 Min Free Chest, Matrix Diodes Gift, Radioactive Titanite, Star Trek Day Bundle, Daily Mission Key Drop |
