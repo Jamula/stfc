@@ -7,6 +7,7 @@ inserted at the top**, so the most recent run is always visible first.
 
 | Date (UTC) | Time (UTC) | Account | Gifts claimed |
 | --- | --- | --- | --- |
+| 2026-09-10 | 00:29 | main | 4 Hr Free Chest, 10 Min Free Chest |
 | 2026-09-09 | 22:30 | main | 10 Min Free Chest |
 | 2026-09-09 | 20:03 | main | 4 Hr Free Chest, 10 Min Free Chest, Archive Data Shard |
 | 2026-09-09 | 17:48 | main | 10 Min Free Chest, ST60: Nog, Officer Command Pass Points, Radioactive Titanite, Daily Mission Key Drop |
