@@ -118,6 +118,8 @@ Set this environment variable in all CI build steps to prevent the build script 
 
 The canonical repository test gate is `.github/workflows/squad-test-gate.yml`, which runs typecheck and `npm test` for pull requests. Do not restore retired CI or promotion workflows as part of release work.
 
+The retired `squad-ci.yml` template previously documented a `publish-policy` scan for unsafe `npm publish` workflow commands. That safeguard is not currently enforced by `squad-test-gate.yml`; if publishing policy enforcement becomes necessary again, add it as a dedicated main-targeting check with regression coverage rather than restoring the retired workflow.
+
 ## Related
 
 - Issues: #556–#564 (release:next)
