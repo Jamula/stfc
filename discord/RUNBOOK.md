@@ -232,7 +232,7 @@ GH_DISPATCH_TOKEN
 
 1. Open the Discord server where the bot is active
 2. Type `/` in any channel
-3. You should see autocomplete suggestions including `/redeem-status`, `/trigger-redeem`, and `/game-state` (the latter requires Administrator permission and an allowlisted server)
+3. You should see autocomplete suggestions including `/redeem-status`, `/trigger-redeem`, and `/game-state` (the latter defaults to Administrator permission and only works in an allowlisted server; server administrators can override Discord command permissions)
 
 **Test `/redeem-status`:**
 1. Type `/redeem-status` and press Enter
@@ -415,7 +415,7 @@ Use Discord's slash-command picker to attach one file and optionally add a capti
 /game-state file:<replay.mp4> note:"alliance war replay"
 ```
 
-The `file` option is required; `note` is optional and is truncated to 200 characters by the Worker. The command is registered with `default_member_permissions: "8"` (Administrator). Both the Worker and the handler fail closed unless the server's guild ID is in `ALLOWED_GUILD_IDS`. The attachment URL must use `cdn.discordapp.com` or `media.discordapp.net`; the handler downloads it without a Bot authorization header. Although the command description advertises images and videos, the current Worker and handler do not enforce a MIME-type allowlist.
+The `file` option is required; `note` is optional and is truncated to 200 characters by the Worker. The handler sanitizes and truncates the persisted note to 120 characters. The command is registered with `default_member_permissions: "8"` (Administrator) as Discord's default command permission. Server administrators can override that permission for other users or roles; the Worker checks the guild allowlist, not the invoking user's permissions. Both the Worker and the handler fail closed unless the server's guild ID is in `ALLOWED_GUILD_IDS`. The attachment URL must use `cdn.discordapp.com` or `media.discordapp.net`; the handler downloads it without a Bot authorization header. Although the command description advertises images and videos, the current Worker and handler do not enforce a MIME-type allowlist.
 
 The Worker acknowledges the interaction, then dispatches it to GitHub Actions. The handler stores the capture on the `automation-state` branch (not `main`) and replies with a link to the saved file's commit:
 
@@ -456,7 +456,7 @@ Each companion `.lineage.json` currently has this shape:
 
 **Deferred R2 plan:** The alert is the activation trigger for the deferred Slice 2 migration in #164 (or the operator may explicitly request migration). Issue creation is only an alert; it does not start a migration. The migration is not active on `main`. Although #164 lists Git LFS as a possible fallback, the current `.gitattributes` has no game-state LFS filter rules, so that fallback is not pre-staged.
 
-**Security and privilege scope:** `/game-state` is a repo-write operation. The command is Administrator-only and restricted to guilds in `ALLOWED_GUILD_IDS`; the handler rechecks that allowlist. The `discord-command-handler.yml` workflow grants `contents: write` and `actions: write`; its game-state handler commits the capture, lineage, and index to `automation-state`. Only enable the command in a trusted, allowlisted server.
+**Security and privilege scope:** `/game-state` is a repo-write operation. Discord's default permission is Administrator, but server administrators can override it; the Worker and handler enforce the guild allowlist, not the invoking user's role. Restrict any Discord permission overrides to trusted operators and only enable the command in an allowlisted server. The `discord-command-handler.yml` workflow grants `contents: write` and `actions: write`; its game-state handler commits the capture, lineage, and index to `automation-state`.
 
 ### Testing Commands Locally (without Discord)
 
