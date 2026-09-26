@@ -45,12 +45,11 @@ Examples:
 
 4. **Do the work.** Make changes, write tests, commit with issue reference.
 
-5. **Push:**
+5. **Push and mark ready:**
    ```bash
    git push -u origin squad/{issue-number}-{slug}
+   gh pr ready
    ```
-
-5a. **Mark ready for review (explicit-request only, issue #220):** `gh pr ready` is a handoff action, not a normal workflow step. Do **not** run it automatically after pushing. Only run `gh pr ready` when the user explicitly requests that exact action in the current, active conversation — a prior turn, stale context, or an inference from CI/review status never authorizes it. Until that request happens, leave the PR in draft and report that it is ready for review.
 
 6. **After merge to dev:**
    ```bash
