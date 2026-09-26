@@ -222,7 +222,8 @@ GH_DISPATCH_TOKEN
 
 **Verify:**
 - Job shows ✅ (green check)
-- Output includes command definitions with `"name": "redeem-status"` and `"name": "trigger-redeem"`
+- Output includes command definitions with `"name": "redeem-status"`, `"name": "trigger-redeem"`, and `"name": "game-state"`
+- The `game-state` definition has a required `file` option (type 11, ATTACHMENT) and an optional `note` option (type 3, STRING)
 - If you registered guild-scoped, the output will show the guild-scoped URL
 
 ---
@@ -231,7 +232,7 @@ GH_DISPATCH_TOKEN
 
 1. Open the Discord server where the bot is active
 2. Type `/` in any channel
-3. You should see autocomplete suggestions including `/redeem-status` and `/trigger-redeem`
+3. You should see autocomplete suggestions including `/redeem-status`, `/trigger-redeem`, and `/game-state` (the latter defaults to Administrator permission and only works in an allowlisted server; server administrators can override Discord command permissions)
 
 **Test `/redeem-status`:**
 1. Type `/redeem-status` and press Enter
@@ -404,14 +405,58 @@ When you save the Interactions Endpoint URL in the Developer Portal (step E), Di
 - If Worker doesn't respond or times out, Discord shows error in the portal
 
 
-### `/game-state`
+### `/game-state` — capture game state to the repo
 
-- Usage: `/game-state file:<attachment> note:<optional>`
-- Handler downloads only Discord CDN attachments (`cdn.discordapp.com` / `media.discordapp.net`) and rejects files over 50 MB.
-- Files are stored under `data/discord/game-state/YYYY-MM-DD/HHMMSS-<sanitized-filename>` with a companion `.lineage.json` and daily `_index.json`.
-- Workflow commits the files to `main` and replies with a GitHub file link.
+Use Discord's slash-command picker to attach one file and optionally add a caption:
 
-**Storage hygiene:** the daily storage monitor (issue #163) alerts at 100 MB. If alerted, archive old day folders and keep the latest active day in-repo.
+```text
+/game-state file:<screenshot.png>
+/game-state file:<screenshot.png> note:"after raid 2026-06-02"
+/game-state file:<replay.mp4> note:"alliance war replay"
+```
+
+The `file` option is required; `note` is optional and is truncated to 200 characters by the Worker. The handler sanitizes and truncates the persisted note to 120 characters. The command is registered with `default_member_permissions: "8"` (Administrator) as Discord's default command permission. Server administrators can override that permission for other users or roles; the Worker checks the guild allowlist, not the invoking user's permissions. Both the Worker and the handler fail closed unless the server's guild ID is in `ALLOWED_GUILD_IDS`. The attachment URL must use `cdn.discordapp.com` or `media.discordapp.net`; the handler downloads it without a Bot authorization header. Although the command description advertises images and videos, the current Worker and handler do not enforce a MIME-type allowlist.
+
+The Worker acknowledges the interaction, then dispatches it to GitHub Actions. The handler stores the capture on the `automation-state` branch (not `main`) and replies with a link to the saved file's commit:
+
+```text
+data/discord/game-state/YYYY-MM-DD/HHMMSSmmm-<sanitized-filename>
+data/discord/game-state/YYYY-MM-DD/HHMMSSmmm-<sanitized-filename>.lineage.json
+data/discord/game-state/YYYY-MM-DD/_index.json
+```
+
+The date and timestamp are UTC; `mmm` is the three-digit millisecond component. The stored filename is limited to 100 characters and sanitized to `[A-Za-z0-9._-]`.
+
+Each companion `.lineage.json` currently has this shape:
+
+```json
+{
+  "discord_message_id": null,
+  "channel_id": "<Discord channel ID or null>",
+  "guild_id": "<Discord guild ID or null>",
+  "uploader": "<Discord user ID or unknown>",
+  "uploader_handle": "<currently falls back to the Discord user ID>",
+  "captured_at_utc": "YYYY-MM-DDTHH:mm:ss.sssZ",
+  "note": "<sanitized note or no note>",
+  "source_url": "https://discord.com/channels/<guild>/<channel>/...",
+  "content_type": "<Discord attachment type or downloaded response type>",
+  "size_bytes": 0,
+  "filename_original": "<original Discord filename>",
+  "filename_stored": "<sanitized stored filename>"
+}
+```
+
+`_index.json` contains a `files` array with one entry per capture: `filename`, `captured_at`, `uploader`, `note`, and `size_bytes`. It is updated through a temporary file and rename. There are two lineage discrepancies versus the intended #161 shape: the Worker does not send a Discord message ID, so `discord_message_id` is `null` and `source_url` ends in `/...`; it sends `member_handle`, while the handler reads `uploader_handle`, so the stored handle currently falls back to the user ID. The handler also names the filename fields `filename_original` and `filename_stored`.
+
+**Size limits and alerts**
+
+- One attachment may be at most **50 MiB (52,428,800 bytes)**. The handler rejects larger files before download/write; there is no warning-only oversized-upload path and no oversized warning in the commit message. This differs from the behavior described in #161.
+- The handler also caps each UTC day at 20 files and 100 MiB of indexed attachment bytes. A capture that exceeds either daily cap is rejected.
+- `storage-size-monitor.yml` checks the total `data/discord/game-state` directory on `automation-state` daily at 06:00 UTC. At **100 MiB total**, it opens an issue titled `[storage] data/discord/game-state exceeds threshold`; later checks comment on that open alert. The monitor does not migrate data to R2 or close the issue automatically.
+
+**Deferred R2 plan:** The alert is the activation trigger for the deferred Slice 2 migration in #164 (or the operator may explicitly request migration). Issue creation is only an alert; it does not start a migration. The migration is not active on `main`. Although #164 lists Git LFS as a possible fallback, the current `.gitattributes` has no game-state LFS filter rules, so that fallback is not pre-staged.
+
+**Security and privilege scope:** `/game-state` is a repo-write operation. Discord's default permission is Administrator, but server administrators can override it; the Worker and handler enforce the guild allowlist, not the invoking user's role. Restrict any Discord permission overrides to trusted operators and only enable the command in an allowlisted server. The `discord-command-handler.yml` workflow grants `contents: write` and `actions: write`; its game-state handler commits the capture, lineage, and index to `automation-state`.
 
 ### Testing Commands Locally (without Discord)
 
@@ -451,4 +496,4 @@ If you encounter issues not covered in [Troubleshooting](#troubleshooting):
 
 ---
 
-*Runbook created: 2026-06-02 | Epic #143 (Discord slash commands) | Issues: #144, #145, #146, #147, #148, #149*
+*Runbook created: 2026-06-02; `/game-state` updated: 2026-09-26 | Epic #143 (Discord slash commands) | Issues: #144, #145, #146, #147, #148, #149*
