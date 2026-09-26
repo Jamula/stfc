@@ -229,6 +229,33 @@ same state-backend branch: read the log's content via
 (pass the result as `{ content }`), or `readRetroLogContent({ backend, retroLogPath })`
 directly for `local`/`worktree`.
 
+### Exit-side closure verification (issue #257)
+
+After the log is written and action items are filed, the coordinator runs
+`node scripts/check-retro-overdue.mjs action-items --backend local --retro-log-path <path>`
+for `local`/`worktree`, or reads `log/{filename}` and passes its content via
+`--content-stdin` (or `checkActionItemsViaBridge`) for
+`orphan`/`two-layer`/`git-notes`. Parse the JSON and require exit code `0`,
+`evaluated: true`, and `ok: true`. A missing or unreadable log, nonzero exit,
+unevaluated result, or `ok: false` is a closure fault: surface it and do not
+create a completion marker or report the retrospective complete. This result
+checks issue references and open checkboxes; the coordinator must still confirm
+each action item was filed as a `retro-action` Issue.
+
+Only after the action-items check passes, create a **new** Issue without the
+`retro-complete` label. Verify it is an Issue rather than a pull request and
+that its UTC `created_at` is strictly later than the timestamp encoded in the
+log filename, parsed with its stated timezone and normalized to UTC. If issue
+type or timestamp validation fails, leave the Issue unlabeled and surface a
+closure fault. Only after all checks pass, apply `retro-complete` as the final
+signaling operation. The label event can trigger CI immediately, so do no
+further ceremony work after applying it. The log remains in `.squad/log/` for
+`local`/`worktree` (gitignored and local-backend only), or `log/` in the
+governed state backend. The GitHub marker is the CI-observable signal; both
+artifacts are required. These are closure checks, not behavior provided by the
+round-start gate. Until an exit-side verifier is implemented, the coordinator
+must perform them explicitly.
+
 ### Why Not Markdown Checklists
 
 From production data in tamirdresher/tamresearch1:

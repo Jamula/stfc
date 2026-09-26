@@ -134,12 +134,40 @@
 > reusing or relabeling a prior one — there is no "update" path to follow
 > incorrectly.
 
+**Exit-side closure verification (issue #257):** after writing the log and
+filing every action item, run
+`node scripts/check-retro-overdue.mjs action-items --backend local --retro-log-path <path>`
+for `local`/`worktree` backends. For `orphan`/`two-layer`/`git-notes`, read
+the log from `log/{filename}` and pass its content through the documented
+`action-items --content-stdin` protocol (or `checkActionItemsViaBridge`).
+Parse the JSON result; closure requires exit code `0`, `evaluated: true`, and
+`ok: true`. A missing/unreadable log, nonzero exit, unevaluated result, or
+`ok: false` is a closure fault: surface it and do not create the completion
+marker or report the retrospective complete. An `ok: true` result checks for
+issue references and open markdown checkboxes; it does not replace confirming
+that each action item was actually filed as a `retro-action` Issue.
+
+Only after that check passes, create a new Issue without the
+`retro-complete` label as part of agenda item 5. Verify it is an Issue (not a
+pull request) and that its `created_at` in UTC is strictly later than the
+timestamp encoded in the log filename, parsed with its stated timezone and
+normalized to UTC. If issue-type or timestamp validation fails, leave it
+unlabeled and surface a closure fault. Only after all checks pass, apply the
+`retro-complete` label as the final signaling operation. Because the label
+event can trigger CI immediately, do no further ceremony work after applying
+it. For `local`/`worktree`, the log remains
+under gitignored `.squad/log/` and is the local-backend signal; for governed
+backends it remains in the `log/` state namespace. The GitHub marker is the
+CI-observable signal. Both the log and marker are required and neither
+substitutes for the other. These are coordinator closure checks; the
+round-start gate alone does not verify them.
+
 **Agenda:**
 1. What shipped this week? (closed issues, merged PRs)
 2. What did not ship? (open issues, blockers)
 3. Root cause on any failures
 4. Action items -- each MUST become a GitHub Issue labeled retro-action
-5. **Completion marker (required, last step)** -- once the log above is written and every action item from step 4 is confirmed filed as a GitHub Issue (not a markdown checkbox), open a **new** GitHub Issue labeled `retro-complete` (never update/relabel a prior one -- see the staleness note below). This is the CI-observable signal `ralph-triage.js`'s round-start gate reads (see the "Completion-marker note" above) -- it must be the LAST thing the ceremony does, never the first, so a heartbeat triggered by the first `retro-action` issue during an in-progress retro can never mistake that for completion.
+5. **Completion marker (required, last step)** -- after the exit-side closure verification above passes and every action item from step 4 is confirmed filed as a GitHub Issue (not a markdown checkbox), create a **new** GitHub Issue without the `retro-complete` label (never update/relabel a prior one -- see the staleness note below), verify its type and `created_at` as described above, then apply the `retro-complete` label as the final signaling operation. This is the CI-observable signal `ralph-triage.js`'s round-start gate reads (see the "Completion-marker note" above) -- the label must be the LAST thing the ceremony does, never the first, so a heartbeat triggered by the first `retro-action` issue during an in-progress retro can never mistake that for completion.
 
 **Coordinator integration:**
 At round start — unconditionally, every round, per `squad.agent.md` → Ceremonies →
