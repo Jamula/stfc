@@ -1,5 +1,6 @@
 export interface DegradedGiftFailure {
   gift: string;
+  giftId?: string;
   streak: number;
 }
 

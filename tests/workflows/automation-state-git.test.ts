@@ -148,11 +148,19 @@ describe("automation-state linked-worktree bootstrap", () => {
       git(stateA, "push", "origin", "HEAD:automation-state");
       assert.throws(() => git(stateB, "push", "origin", "HEAD:automation-state"));
 
-      const mode = await reconcileAutomationStateAfterPushFailure({
-        stateDir: stateB,
-        ref: "automation-state",
-        relativePaths: ["data/discord/game-state"],
-      });
+      const inheritedGitDir = process.env.GIT_DIR;
+      process.env.GIT_DIR = remote;
+      let mode: Awaited<ReturnType<typeof reconcileAutomationStateAfterPushFailure>>;
+      try {
+        mode = await reconcileAutomationStateAfterPushFailure({
+          stateDir: stateB,
+          ref: "automation-state",
+          relativePaths: ["data/discord/game-state"],
+        });
+      } finally {
+        if (inheritedGitDir === undefined) delete process.env.GIT_DIR;
+        else process.env.GIT_DIR = inheritedGitDir;
+      }
       assert.equal(mode, "replayed");
 
       git(stateB, "push", "origin", "HEAD:automation-state");

@@ -57,6 +57,7 @@ type SleepFn = (ms: number) => Promise<void>;
 
 export interface ItemResult {
   id: string;
+  stateKey?: string;
   outcome: Outcome;
   detail?: string;
 }
@@ -285,38 +286,40 @@ async function processOneGift(
   report: RunAllReport,
 ): Promise<ItemResult> {
   const id = describeGift(gift);
+  const bundleId = gift.bundleId ?? gift.bundle_id ?? gift.id;
+  const stateKey = bundleId === undefined ? undefined : String(bundleId);
+  const itemIdentity = stateKey === undefined ? { id } : { id, stateKey };
   const skip = classifyGiftSkip(gift);
   if (skip !== null) {
-    return { id, outcome: skip };
+    return { ...itemIdentity, outcome: skip };
   }
 
-  const bundleId = gift.bundleId ?? gift.bundle_id ?? gift.id;
   if (bundleId === undefined) {
-    return { id, outcome: Outcomes.UNKNOWN_RESULT, detail: "no bundleId/bundle_id/id field" };
+    return { ...itemIdentity, outcome: Outcomes.UNKNOWN_RESULT, detail: "no bundleId/bundle_id/id field" };
   }
 
   try {
     await claimGift(client, bundleId);
-    return { id, outcome: Outcomes.CLAIMED };
+    return { ...itemIdentity, outcome: Outcomes.CLAIMED };
   } catch (err) {
     if (err instanceof SchemaMismatchError) {
       report.errors.push({ account: accountName, message: `gifts/claim schema mismatch: ${redactForLog(err)}` });
-      return { id, outcome: Outcomes.UNKNOWN_RESULT, detail: "schema mismatch" };
+      return { ...itemIdentity, outcome: Outcomes.UNKNOWN_RESULT, detail: "schema mismatch" };
     }
     // The API returns HTTP 404 with body "Bundle not available." for gifts
     // that have already been claimed in the current cycle (or are otherwise
     // no longer redeemable for this player). That's an expected outcome,
     // not an error.
     if (err instanceof ApiError && err.status === 404 && /not available/i.test(err.message)) {
-      return { id, outcome: Outcomes.ALREADY_CLAIMED };
+      return { ...itemIdentity, outcome: Outcomes.ALREADY_CLAIMED };
     }
     if (err instanceof TransientError) {
       // We do not replay ambiguous gift-claim POSTs inside the same run
       // without stronger idempotency evidence. The scheduled workflow will
       // naturally re-attempt claimable gifts on the next cycle.
-      return { id, outcome: Outcomes.TRANSIENT, detail: redactForLog(err) };
+      return { ...itemIdentity, outcome: Outcomes.TRANSIENT, detail: redactForLog(err) };
     }
-    return { id, outcome: classifyHttpError(err), detail: redactForLog(err) };
+    return { ...itemIdentity, outcome: classifyHttpError(err), detail: redactForLog(err) };
   }
 }
 
@@ -539,8 +542,19 @@ function formatClaimRatio(account: AccountReport): string {
 }
 
 function formatRunClaimRatio(report: RunAllReport): string {
+  if (
+    report.accounts.length === 0 ||
+    report.accounts.some(
+      (account) =>
+        account.tokenStatus !== Outcomes.TOKEN_VALID ||
+        account.items.length === 0 ||
+        account.items.some((item) => item.id === "(list)"),
+    )
+  ) {
+    return "unavailable";
+  }
+
   const gifts = report.accounts.flatMap((account) => getReportedGifts(account.items));
-  if (gifts.length === 0) return "unavailable";
   return `${gifts.filter((item) => item.outcome === Outcomes.CLAIMED).length}/${gifts.length}`;
 }
 
@@ -549,8 +563,14 @@ function getReportedGifts(items: ItemResult[]): ItemResult[] {
 }
 
 interface DegradedGiftState {
-  version: 1;
-  accounts: Record<string, Record<string, number>>;
+  version: 2;
+  accounts: Record<string, Record<string, PersistedGiftStreak>>;
+}
+
+interface PersistedGiftStreak {
+  streak: number;
+  title: string;
+  legacy?: true;
 }
 
 async function updateDegradedGiftState(filePath: string, report: RunAllReport): Promise<void> {
@@ -563,25 +583,28 @@ async function updateDegradedGiftState(filePath: string, report: RunAllReport): 
     }
 
     const gifts = account.items.filter((item) => item.id !== "(none)");
-    const giftListWasObserved =
-      gifts.length > 0 || account.items.some((item) => item.outcome === Outcomes.NO_GIFTS_AVAILABLE);
+    const giftListWasObserved = account.items.length > 0;
     if (!giftListWasObserved) continue;
 
     observedAccount = true;
     // Persist an opaque account key instead of account names from the secret.
     const accountKey = createHash("sha256").update(account.name).digest("hex");
     const previous = state.accounts[accountKey] ?? {};
-    const current: Record<string, number> = {};
+    const current: Record<string, PersistedGiftStreak> = {};
     for (const gift of gifts) {
-      const previousStreak = previous[gift.id];
+      if (gift.stateKey === undefined) continue;
+      const prior =
+        previous[gift.stateKey] ??
+        Object.values(previous).find((entry) => entry.legacy && entry.title === gift.id);
+      const previousStreak = prior?.streak;
       if (gift.outcome === Outcomes.TRANSIENT) {
-        current[gift.id] = (previousStreak ?? 0) + 1;
+        current[gift.stateKey] = { streak: (previousStreak ?? 0) + 1, title: gift.id };
       } else if (
-        previousStreak !== undefined &&
-        previousStreak >= PERSISTENT_TRANSIENT_RUNS &&
+        prior !== undefined &&
+        prior.streak >= PERSISTENT_TRANSIENT_RUNS &&
         !isExpectedOutcome(gift.outcome)
       ) {
-        current[gift.id] = previousStreak;
+        current[gift.stateKey] = { streak: prior.streak, title: gift.id };
       }
     }
 
@@ -602,7 +625,7 @@ async function readDegradedGiftState(filePath: string): Promise<DegradedGiftStat
   try {
     raw = await fs.readFile(filePath, "utf8");
   } catch (err) {
-    if (isNotFoundError(err)) return { version: 1, accounts: {} };
+    if (isNotFoundError(err)) return { version: 2, accounts: {} };
     throw err;
   }
 
@@ -613,7 +636,7 @@ async function readDegradedGiftState(filePath: string): Promise<DegradedGiftStat
 
   const candidate = parsed as { version?: unknown; accounts?: unknown };
   if (
-    candidate.version !== 1 ||
+    (candidate.version !== 1 && candidate.version !== 2) ||
     !candidate.accounts ||
     typeof candidate.accounts !== "object" ||
     Array.isArray(candidate.accounts)
@@ -621,22 +644,41 @@ async function readDegradedGiftState(filePath: string): Promise<DegradedGiftStat
     throw new Error("persistent degraded-gift state has an unsupported or invalid shape");
   }
 
-  const accounts: Record<string, Record<string, number>> = {};
+  const accounts: Record<string, Record<string, PersistedGiftStreak>> = {};
   for (const [accountKey, rawGifts] of Object.entries(candidate.accounts)) {
     if (!rawGifts || typeof rawGifts !== "object" || Array.isArray(rawGifts)) {
       throw new Error("persistent degraded-gift account state must be an object");
     }
-    const gifts: Record<string, number> = {};
-    for (const [gift, streak] of Object.entries(rawGifts)) {
-      if (typeof streak !== "number" || !Number.isInteger(streak) || streak < 1) {
+    const gifts: Record<string, PersistedGiftStreak> = {};
+    for (const [giftKey, rawStreak] of Object.entries(rawGifts)) {
+      if (candidate.version === 1) {
+        if (typeof rawStreak !== "number" || !Number.isInteger(rawStreak) || rawStreak < 1) {
+          throw new Error("persistent degraded-gift streaks must be positive integers");
+        }
+        gifts[giftKey] = { streak: rawStreak, title: giftKey, legacy: true };
+        continue;
+      }
+
+      if (!rawStreak || typeof rawStreak !== "object" || Array.isArray(rawStreak)) {
+        throw new Error("persistent degraded-gift entry must be an object");
+      }
+      const entry = rawStreak as { streak?: unknown; title?: unknown; legacy?: unknown };
+      if (typeof entry.streak !== "number" || !Number.isInteger(entry.streak) || entry.streak < 1) {
         throw new Error("persistent degraded-gift streaks must be positive integers");
       }
-      gifts[gift] = streak;
+      if (typeof entry.title !== "string" || (entry.legacy !== undefined && entry.legacy !== true)) {
+        throw new Error("persistent degraded-gift entry must include a title");
+      }
+      gifts[giftKey] = {
+        streak: entry.streak,
+        title: entry.title,
+        ...(entry.legacy === true ? { legacy: true } : {}),
+      };
     }
     accounts[accountKey] = gifts;
   }
 
-  return { version: 1, accounts };
+  return { version: 2, accounts };
 }
 
 function determineExitCode(report: RunAllReport): number {

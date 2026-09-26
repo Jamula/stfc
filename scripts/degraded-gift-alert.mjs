@@ -15,7 +15,7 @@ export function parseDegradedState(raw) {
     !parsed ||
     typeof parsed !== 'object' ||
     Array.isArray(parsed) ||
-    parsed.version !== 1 ||
+    (parsed.version !== 1 && parsed.version !== 2) ||
     !parsed.accounts ||
     typeof parsed.accounts !== 'object' ||
     Array.isArray(parsed.accounts)
@@ -28,11 +28,19 @@ export function parseDegradedState(raw) {
     if (!rawGifts || typeof rawGifts !== 'object' || Array.isArray(rawGifts)) {
       throw new Error('degraded-gift-alert: account state must be an object');
     }
-    for (const [gift, streak] of Object.entries(rawGifts)) {
+    for (const [giftId, rawEntry] of Object.entries(rawGifts)) {
+      const legacy = parsed.version === 1;
+      const streak = legacy ? rawEntry : rawEntry?.streak;
+      const gift = legacy ? giftId : rawEntry?.title;
       if (typeof streak !== 'number' || !Number.isInteger(streak) || streak < 1) {
         throw new Error('degraded-gift-alert: streaks must be positive integers');
       }
-      if (streak >= PERSISTENT_TRANSIENT_RUNS) failures.push({ gift, streak });
+      if (typeof gift !== 'string') {
+        throw new Error('degraded-gift-alert: gift entries need a title and positive integer streak');
+      }
+      if (streak >= PERSISTENT_TRANSIENT_RUNS) {
+        failures.push({ gift, ...(legacy ? {} : { giftId }), streak });
+      }
     }
   }
   return failures;
@@ -59,6 +67,7 @@ export function syncDegradedGiftAlert(options = {}) {
     const result = resolveDeadTokenAlert({
       title,
       requiredLabels,
+      alertName: 'Persistent degraded-gift alert',
       listIssues: options.listIssues,
       closeIssue: options.closeIssue,
       runUrl,
@@ -74,6 +83,7 @@ export function syncDegradedGiftAlert(options = {}) {
     found = findAlertIssue({
       title,
       requiredLabels,
+      alertName: 'Persistent degraded-gift alert',
       listIssues: options.listIssues,
       log,
     });
@@ -100,7 +110,10 @@ export function syncDegradedGiftAlert(options = {}) {
 
 function formatIssueBody(failures, runUrl) {
   const rows = failures
-    .map(({ gift, streak }) => `- ${escapeMarkdown(gift)} — ${streak} consecutive runs`)
+    .map(({ gift, giftId, streak }) => {
+      const label = giftId === undefined ? gift : `${gift} (bundle ${giftId})`;
+      return `- ${escapeMarkdown(label)} — ${streak} consecutive runs`;
+    })
     .join('\n');
   return [
     'The redeem workflow has observed the following gifts returning `TRANSIENT` on at least three consecutive runs.',

@@ -10,10 +10,10 @@ import {
 } from "../../scripts/degraded-gift-alert.mjs";
 
 const repeatedGift = {
-  version: 1,
+  version: 2,
   accounts: {
     accountHash: {
-      "30 Day Loyalty Chest": PERSISTENT_TRANSIENT_RUNS,
+      "771": { streak: PERSISTENT_TRANSIENT_RUNS, title: "30 Day Loyalty Chest" },
     },
   },
 };
@@ -33,6 +33,26 @@ describe("degraded-gift-alert", () => {
       [
         { gift: "persistent", streak: 3 },
         { gift: "alsoPersistent", streak: 4 },
+      ],
+    );
+  });
+
+  it("keeps duplicate gift titles separate by bundle identifier", () => {
+    assert.deepEqual(
+      parseDegradedState(
+        JSON.stringify({
+          version: 2,
+          accounts: {
+            one: {
+              "771": { streak: PERSISTENT_TRANSIENT_RUNS, title: "Loyalty Chest" },
+              "772": { streak: PERSISTENT_TRANSIENT_RUNS, title: "Loyalty Chest" },
+            },
+          },
+        }),
+      ),
+      [
+        { gift: "Loyalty Chest", giftId: "771", streak: PERSISTENT_TRANSIENT_RUNS },
+        { gift: "Loyalty Chest", giftId: "772", streak: PERSISTENT_TRANSIENT_RUNS },
       ],
     );
   });
@@ -85,7 +105,7 @@ describe("degraded-gift-alert", () => {
     assert.equal(calls.length, 1);
     assert.equal(calls[0]!.title, DEGRADED_ALERT_TITLE);
     assert.deepEqual(calls[0]!.labels, DEGRADED_ALERT_LABELS);
-    assert.match(calls[0]!.body, /30 Day Loyalty Chest — 3 consecutive runs/);
+    assert.match(calls[0]!.body, /30 Day Loyalty Chest \(bundle 771\) — 3 consecutive runs/);
     assert.match(calls[0]!.body, /actions\/runs\/10/);
     assert.equal(alreadyOpen.status, "already-open");
     assert.equal(alreadyOpen.number, 42);
