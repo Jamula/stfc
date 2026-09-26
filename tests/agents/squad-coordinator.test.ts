@@ -22,11 +22,30 @@ function readFile(relativePath: string): string {
 
 describe("Squad coordinator — MCP bridge configuration", () => {
   const coordinator = readFile(".github/agents/squad.agent.md");
+  const cliMcpConfig = readFile(".mcp.json");
   const mcpConfig = readFile(".github/mcp.json");
   const appExtension = readFile(
     ".github/extensions/squad-state/extension.mjs",
   );
   const appMcpConfig = readFile(".copilot/mcp-config.json");
+
+  function squadStatePackageSpec(configText: string): string {
+    const config = JSON.parse(configText) as {
+      mcpServers?: Record<string, { args?: unknown }>;
+    };
+    const args = config.mcpServers?.squad_state?.args;
+    assert.ok(Array.isArray(args), "squad_state server args must be an array");
+    const packageSpec = args.find(
+      (arg: unknown): arg is string =>
+        typeof arg === "string" &&
+        arg.startsWith("@bradygaster/squad-cli@"),
+    );
+    assert.ok(
+      packageSpec,
+      "squad_state server args must pin @bradygaster/squad-cli",
+    );
+    return packageSpec;
+  }
 
   it("coordinator references .github/mcp.json (not stale .mcp.json)", () => {
     // Both references in the state-backend handshake section must point to the
@@ -88,6 +107,12 @@ describe("Squad coordinator — MCP bridge configuration", () => {
     );
   });
 
+  it("keeps all state bridge registrations on the same Squad CLI version", () => {
+    const cliPackage = squadStatePackageSpec(cliMcpConfig);
+    assert.equal(squadStatePackageSpec(mcpConfig), cliPackage);
+    assert.equal(squadStatePackageSpec(appMcpConfig), cliPackage);
+  });
+
   it("Copilot App extension registers the shared squad_state MCP definition", () => {
     assert.match(
       appExtension,
@@ -114,7 +139,7 @@ describe("Squad coordinator — MCP bridge configuration", () => {
     assert.equal(server["type"], "stdio");
     assert.deepEqual(server["args"], [
       "-y",
-      "@bradygaster/squad-cli@0.12.0",
+      squadStatePackageSpec(cliMcpConfig),
       "state-mcp",
     ]);
     assert.deepEqual(server["tools"], ["*"]);

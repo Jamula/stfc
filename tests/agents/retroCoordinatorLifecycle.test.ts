@@ -152,6 +152,24 @@ describe("round-start retro gate — the real dispatcher (squad-heartbeat.yml �
     assert.match(gateStepBlock, /::warning::\[RETRO\] Round-start gate not evaluated/);
   });
 
+  it("squad-heartbeat.yml fails closed when retro-gate output is missing or invalid", () => {
+    const workflow = read(heartbeatWorkflowPath);
+    const gateStepIndex = workflow.indexOf("Ralph — Check retro gate");
+    const applyStepIndex = workflow.indexOf("Ralph — Apply triage decisions");
+    const gateStepBlock = workflow.slice(gateStepIndex, applyStepIndex);
+
+    assert.match(gateStepBlock, /let canProceed = false/);
+    assert.match(
+      gateStepBlock,
+      /Could not determine retro-gate status[\s\S]*blocking this round \(fail closed\)/,
+    );
+    assert.match(
+      gateStepBlock,
+      /can_proceed=\$\{canProceed\}/,
+      "gate step must publish the fail-closed decision for downstream steps",
+    );
+  });
+
   it("both repo-local heartbeat workflow copies emit the retro warning from the gate-check step, not from the now-unreachable apply step", () => {
     for (const workflowPath of [heartbeatWorkflowPath, installedHeartbeatWorkflowPath]) {
       const workflow = read(workflowPath);

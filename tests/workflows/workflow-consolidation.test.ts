@@ -337,6 +337,29 @@ describe("workflow consolidation", () => {
     );
   });
 
+  it("installs locked dependencies before release validation", () => {
+    const release = workflows.find(({ file }) => file === "squad-release.yml");
+    assert.ok(release, "squad-release.yml must exist");
+    const steps = Object.values(release!.workflow.jobs ?? {}).flatMap(
+      (job) => job.steps ?? [],
+    );
+    const installIndex = steps.findIndex(
+      (step) => step.run?.trim() === "npm ci",
+    );
+    const typecheckIndex = steps.findIndex(
+      (step) => step.run?.trim() === "npm run typecheck",
+    );
+    const testIndex = steps.findIndex(
+      (step) => step.run?.trim() === "npm test",
+    );
+
+    assert.ok(installIndex >= 0, "squad-release.yml must run npm ci");
+    assert.ok(
+      installIndex < typecheckIndex && installIndex < testIndex,
+      "squad-release.yml must install dependencies before typecheck and tests",
+    );
+  });
+
   it("pins npm's \"test\" script to the concrete tests/index.test.ts entry point, not a glob (#242, #222)", () => {
     // The assertion above only proves squad-release.yml literally invokes
     // the string `npm test`; it says nothing about what that indirection

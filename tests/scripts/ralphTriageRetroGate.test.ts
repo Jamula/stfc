@@ -88,6 +88,32 @@ interface RalphTriageModule {
 
 const ralphTriage = require(path.join(repoRoot, ".squad", "templates", "ralph-triage.js")) as RalphTriageModule;
 
+describe("ralph-triage.js and squad-heartbeat.yml integration", () => {
+  const heartbeatWorkflow = fs
+    .readFileSync(path.join(repoRoot, ".github", "workflows", "squad-heartbeat.yml"), "utf8")
+    .replace(/\r\n/g, "\n");
+
+  it("uses the dispatcher's JSON artifact as a fail-closed retro-gate input", () => {
+    assert.match(
+      heartbeatWorkflow,
+      /node \.squad\/templates\/ralph-triage\.js[\s\S]*--output triage-results\.json/,
+    );
+
+    const gateStepIndex = heartbeatWorkflow.indexOf("Ralph — Check retro gate");
+    const applyStepIndex = heartbeatWorkflow.indexOf("Ralph — Apply triage decisions");
+    const gateStep = heartbeatWorkflow.slice(gateStepIndex, applyStepIndex);
+
+    assert.ok(gateStepIndex !== -1 && applyStepIndex > gateStepIndex);
+    assert.match(gateStep, /const path = "triage-results\.json"/);
+    assert.match(gateStep, /let canProceed = false/);
+    assert.match(gateStep, /canProceed = data\.canProceed === true/);
+    assert.match(
+      heartbeatWorkflow,
+      /steps\.retro-gate\.outputs\.can_proceed == 'true'/,
+    );
+  });
+});
+
 function makeSquadDir(root: string, stateBackend: string): string {
   const squadDir = path.join(root, ".squad");
   fs.mkdirSync(squadDir, { recursive: true });
