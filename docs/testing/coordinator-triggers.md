@@ -24,7 +24,7 @@ Use this runbook to manually verify that historical user-trigger phrasings still
 | 1 | `merge to main and sync` | Rule 6 ship-it ritual: prepare PR merge, sync/update `main`, and clean up branch/worktree as appropriate. |
 | 2 | `ship it` | Rule 6 ship-it ritual. |
 | 3 | `yes merge` | Rule 6 ship-it ritual. |
-| 4 | Send one combined message containing: `please continue; when finished then merge to main; sync to main; then switch to main; then ralph, go` | Rule 6 compound pipeline: continue the current task, ship when finished, sync/switch to `main`, then hand off to Ralph continuous monitoring. |
+| 4 | Send one combined message containing: `please continue; when finished then merge to main; sync to main; then switch to main; then ralph, go` | Rule 6 compound pipeline. Sub-checks: (1) continue current task, (2) when complete, run the ship-it ritual, (3) sync/switch to `main`, (4) hand off to Ralph continuous monitoring. |
 | 5 | `status check` | Ralph one-shot work-check only; it should not enter a polling loop. |
 | 6 | `how's the backlog?` | Ralph one-shot work-check only; it should not enter a polling loop. |
 | 7 | `Ralph, go` | Ralph continuous loop: poll the board, dispatch/monitor work, and repeat until no work remains or the user stops it. |
