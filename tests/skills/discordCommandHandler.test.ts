@@ -80,6 +80,13 @@ describe(".github/workflows/discord-command-handler.yml", () => {
     assert.match(yaml!, /ALLOWED_GUILD_IDS:\s*\$\{\{\s*secrets\.ALLOWED_GUILD_IDS\s*\}\}/);
   });
 
+  it("passes R2 upload secrets to the handler without echoing values", { skip: yaml === undefined }, () => {
+    assert.match(yaml!, /CLOUDFLARE_ACCOUNT_ID:\s*\$\{\{\s*secrets\.CLOUDFLARE_ACCOUNT_ID\s*\}\}/);
+    assert.match(yaml!, /CLOUDFLARE_R2_ACCESS_KEY_ID:\s*\$\{\{\s*secrets\.CLOUDFLARE_R2_ACCESS_KEY_ID\s*\}\}/);
+    assert.match(yaml!, /CLOUDFLARE_R2_SECRET_ACCESS_KEY:\s*\$\{\{\s*secrets\.CLOUDFLARE_R2_SECRET_ACCESS_KEY\s*\}\}/);
+    assert.doesNotMatch(yaml!, /echo\s+\"?\$CLOUDFLARE_R2_/);
+  });
+
   it("does not print the bot token variable in run commands", { skip: yaml === undefined }, () => {
     assert.doesNotMatch(yaml!, /echo\s+\"?\$DISCORD_BOT_TOKEN/);
     assert.doesNotMatch(yaml!, /set\s+-x/);

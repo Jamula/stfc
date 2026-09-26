@@ -126,6 +126,9 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
           ALLOWED_GUILD_IDS: ${{ secrets.ALLOWED_GUILD_IDS }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_R2_ACCESS_KEY_ID: ${{ secrets.CLOUDFLARE_R2_ACCESS_KEY_ID }}
+          CLOUDFLARE_R2_SECRET_ACCESS_KEY: ${{ secrets.CLOUDFLARE_R2_SECRET_ACCESS_KEY }}
           DISCORD_CLIENT_PAYLOAD: ${{ toJson(github.event.client_payload) }}
           STFC_STATE_BRANCH: automation-state
         run: node "$GITHUB_WORKSPACE/scripts/discord-handler.mjs"

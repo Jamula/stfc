@@ -363,6 +363,9 @@ describe("automation-state Discord handler contract", () => {
       "${{ steps.state_worktree.outputs.state_dir }}",
     );
     assert.equal(route.env?.STFC_STATE_BRANCH, "automation-state");
+    assert.equal(route.env?.CLOUDFLARE_ACCOUNT_ID, "${{ secrets.CLOUDFLARE_ACCOUNT_ID }}");
+    assert.equal(route.env?.CLOUDFLARE_R2_ACCESS_KEY_ID, "${{ secrets.CLOUDFLARE_R2_ACCESS_KEY_ID }}");
+    assert.equal(route.env?.CLOUDFLARE_R2_SECRET_ACCESS_KEY, "${{ secrets.CLOUDFLARE_R2_SECRET_ACCESS_KEY }}");
     assert.equal(route.run, 'node "$GITHUB_WORKSPACE/scripts/discord-handler.mjs"');
     assert.equal(
       cleanup.if,

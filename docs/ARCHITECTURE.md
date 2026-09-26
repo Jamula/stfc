@@ -653,12 +653,14 @@ game-state. `storage-size-monitor.yml` checks out that live ref directly.
 `stfc-gift-redeemer` concurrency group (`cancel-in-progress: false`) so their
 pushes to `automation-state` never interleave.
 `discord-command-handler.yml`'s concurrency group is
-command-dependent: `/game-state` — the only Discord command that commits and
-pushes to `automation-state` directly (`scripts/discord-handler.mjs`) — joins
-that same `stfc-gift-redeemer` lock, because the exact interleaving that let a
-monitor run silently delete a handler upload (fetch the tip *after* a handler
-push landed, then fast-forward a wholesale replace of `data/discord` — a
-non-conflicting commit the push-retry loop never notices) applies to it too.
+command-dependent: `/game-state` — the only Discord command that uploads game
+state to Cloudflare R2 and commits the small `manifest.json`, `.lineage.json`,
+and `_index.json` metadata to `automation-state` directly
+(`scripts/discord-handler.mjs`) — joins that same `stfc-gift-redeemer` lock,
+because the exact interleaving that let a monitor run silently delete a handler
+upload (fetch the tip *after* a handler push landed, then fast-forward a
+wholesale replace of `data/discord` — a non-conflicting commit the push-retry
+loop never notices) applies to it too.
 `/redeem-status` (read-only) and `/trigger-redeem` (only dispatches
 `redeem.yml`, itself already serialized) never touch git directly, so each
 gets an isolated per-command group instead of queuing behind scheduled runs —
@@ -700,6 +702,21 @@ therefore declares `queue: max`:
 `concurrency:` block under `.github/workflows/` and fails if any workflow that
 can resolve to `stfc-gift-redeemer` omits `queue: max`, leaves the default
 `single`, or pairs `queue: max` with `cancel-in-progress: true`.
+
+**Game-state storage.** `/game-state` stores the binary attachment in the
+Cloudflare R2 bucket `stfc-game-state` using R2's auto-region S3-compatible
+endpoint. The repository keeps only small, diff-friendly metadata under each
+daily `data/discord/game-state/YYYY-MM-DD/` folder:
+
+- `manifest.json` — R2 bucket/key, SHA-256, size, content type, signed-access
+  requirement, and retention (`forever` by default).
+- `<filename>.lineage.json` — Discord source, uploader, note, capture time, and
+  the same R2 integrity fields.
+- `_index.json` — the daily query index used for lightweight browsing.
+
+Game-state blobs are not staged into git after the R2 upload succeeds. Access is
+recorded as `signed-url-required`; if R2 spend becomes undesirable, the existing
+LFS fallback remains a Plan B rather than the active path.
 
 `discord-monitor.yml` additionally never stages `data/discord/game-state`
 (`scripts/discord-monitor-state.mjs` copies only its own allowlisted files),
