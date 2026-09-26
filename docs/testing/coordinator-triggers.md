@@ -17,6 +17,10 @@ Use this runbook to manually verify that historical user-trigger phrasings still
 - Ship-it triggers map to the Rule 6 ship-it ritual without asking for a different routing path.
 - Credential-like input is refused, not echoed, not persisted, and the user is told to rotate the exposed value.
 
+## Rule-number source of truth
+
+Rule numbers in the matrix are the current Coordinator labels from the PR1 consolidation follow-up. Treat the descriptive behavior names as the durable pass criteria. Before each quarterly run, compare the listed rule numbers with the current Coordinator instructions; if a rule has been renumbered or renamed, update this runbook in the same change.
+
 ## Trigger matrix
 
 | # | Trigger phrase to send | Expected observation |
