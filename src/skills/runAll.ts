@@ -172,14 +172,15 @@ async function processAccount(
   let effectiveTokenStatus = tokenStatus;
 
   if (tokenStatus === Outcomes.TOKEN_VALID) {
-    items.push(...(await processGifts(client, account.name, report)));
+    const giftsResult = await processGifts(client, account.name, report);
+    items.push(...giftsResult.items);
     // /auth/me can answer 200 with a JWT the store itself rejects. Trust the
     // endpoint that does the real work, so the run reports "rotate the
     // secret" instead of a healthy token that silently claims nothing.
     if (items.some((i) => i.outcome === Outcomes.TOKEN_EXPIRED)) {
       effectiveTokenStatus = Outcomes.TOKEN_EXPIRED;
       log.error(`[${account.name}] token passed /auth/me but was rejected by the store — re-capture STFC_ACCOUNTS`);
-    } else {
+    } else if (!giftsResult.schemaMismatch) {
       codes.push(...(await processCodes(client, promoCodes, account.name, report, deadCodesPath, deadCodeCache, sleep)));
     }
   }
@@ -230,14 +231,19 @@ async function processGifts(
   client: ApiClient,
   accountName: string,
   report: RunAllReport,
-): Promise<ItemResult[]> {
+): Promise<{ items: ItemResult[]; schemaMismatch: boolean }> {
   let gifts: Gift[];
   try {
     gifts = await listGifts(client);
   } catch (err) {
     if (err instanceof SchemaMismatchError) {
-      report.errors.push({ account: accountName, message: `gifts/list schema mismatch: ${redactForLog(err)}` });
-      return [];
+      const detail = redactForLog(err);
+      log.error(`[${accountName}] gifts/list schema mismatch: ${detail}`);
+      report.errors.push({ account: accountName, message: `gifts/list schema mismatch: ${detail}` });
+      return {
+        items: [{ id: "(list)", outcome: Outcomes.UNKNOWN_RESULT, detail: "gifts/list schema mismatch" }],
+        schemaMismatch: true,
+      };
     }
     const outcome = classifyHttpError(err);
     const detail = redactForLog(err);
@@ -250,13 +256,13 @@ async function processGifts(
     if (outcome !== Outcomes.TOKEN_EXPIRED && outcome !== Outcomes.TRANSIENT) {
       report.errors.push({ account: accountName, message: `gifts/list failed: ${detail}` });
     }
-    return [{ id: "(list)", outcome, detail }];
+    return { items: [{ id: "(list)", outcome, detail }], schemaMismatch: false };
   }
 
   log.info(`[${accountName}] gifts/list returned ${gifts.length} gift(s)`);
 
   if (gifts.length === 0) {
-    return [{ id: "(none)", outcome: Outcomes.NO_GIFTS_AVAILABLE }];
+    return { items: [{ id: "(none)", outcome: Outcomes.NO_GIFTS_AVAILABLE }], schemaMismatch: false };
   }
 
   const items: ItemResult[] = [];
@@ -265,7 +271,7 @@ async function processGifts(
     log.info(`[${accountName}] gift "${result.id}" → ${result.outcome}${result.detail ? ` (${result.detail})` : ""}`);
     items.push(result);
   }
-  return items;
+  return { items, schemaMismatch: false };
 }
 
 async function processOneGift(
