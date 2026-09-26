@@ -109,8 +109,9 @@ describe('vite build', () => {
       .catch(() => false);
 
     if (!hasVite) {
-      const installEnv = { ...process.env };
-      delete installEnv.npm_config_allow_scripts;
+      const installEnv = Object.fromEntries(
+        Object.entries(process.env).filter(([key]) => key.toLowerCase() !== 'npm_config_allow_scripts'),
+      );
       const installResult = spawnSync('npm', ['ci'], {
         cwd: WEB_DIR,
         encoding: 'utf8',
