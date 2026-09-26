@@ -373,15 +373,27 @@ describe("workflow consolidation", () => {
         /\bmain-only\b/,
         `${skillPath} must explicitly describe the main-only model`,
       );
-      assert.match(
-        skill,
-        /Picard[\s\S]*Kirk[\s\S]*O'Brien/,
-        `${skillPath} must record scope, technical, and operational implications`,
-      );
+      for (const lane of ["scope", "technical", "operations"]) {
+        assert.match(
+          skill,
+          new RegExp(`\\b${lane}\\b`, "i"),
+          `${skillPath} must record ${lane} implications`,
+        );
+      }
       assert.doesNotMatch(
         skill,
         /dev\s*→\s*preview|preview\s*→\s*main|origin\/dev|origin\/preview|--base\s+dev/,
         `${skillPath} must not describe the retired dev/preview promotion workflow`,
+      );
+    }
+  });
+
+  it("does not publish npm packages from workflows without explicit policy coverage", () => {
+    for (const { file, step } of workflowSteps) {
+      assert.doesNotMatch(
+        step.run ?? "",
+        /(^|[\s;&|])npm\s+publish\b/,
+        `${file} must not run npm publish unless a dedicated publish-policy guard is added`,
       );
     }
   });
