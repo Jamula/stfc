@@ -109,9 +109,12 @@ describe('vite build', () => {
       .catch(() => false);
 
     if (!hasVite) {
+      const installEnv = { ...process.env };
+      delete installEnv.npm_config_allow_scripts;
       const installResult = spawnSync('npm', ['ci'], {
         cwd: WEB_DIR,
         encoding: 'utf8',
+        env: installEnv,
         timeout: 180_000,
         // npm is npm.cmd on Windows, which spawnSync cannot exec directly —
         // without a shell it fails with status null before npm ever runs.
