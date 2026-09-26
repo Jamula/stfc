@@ -15,6 +15,11 @@ const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const DISCORD_API_BASE = "https://discord.com/api/v10";
 const GAME_STATE_BASE_DIR = "data/discord/game-state";
 const GAME_STATE_R2_BUCKET = "stfc-game-state";
+const R2_ENV_NAMES = {
+  accountId: "CLOUDFLARE_ACCOUNT_ID",
+  accessKeyId: "CLOUDFLARE_R2_ACCESS_KEY_ID",
+  secretAccessKey: "CLOUDFLARE_R2_SECRET_ACCESS_KEY",
+};
 const MAX_ATTACHMENT_BYTES = 50 * 1024 * 1024;
 const MAX_DAILY_BYTES = 100 * 1024 * 1024;
 const MAX_DAILY_FILES = 20;
@@ -410,11 +415,7 @@ export function r2ConfigFromEnv(env) {
   };
   const missing = Object.entries(config)
     .filter(([key, value]) => key !== "bucket" && (typeof value !== "string" || value.length === 0))
-    .map(([key]) => ({
-      accountId: "CLOUDFLARE_ACCOUNT_ID",
-      accessKeyId: "CLOUDFLARE_R2_ACCESS_KEY_ID",
-      secretAccessKey: "CLOUDFLARE_R2_SECRET_ACCESS_KEY",
-    })[key] || key);
+    .map(([key]) => R2_ENV_NAMES[key] || key);
   if (missing.length > 0) {
     throw new Error(`Missing required R2 env var(s): ${missing.join(", ")}`);
   }

@@ -75,6 +75,10 @@ function createHeaders(values: Record<string, string>) {
   };
 }
 
+function isHost(rawUrl: string, hostname: string): boolean {
+  return new URL(rawUrl).hostname === hostname;
+}
+
 function createMemFs(initial: Record<string, string> = {}) {
   const files = new Map<string, Buffer | string>();
   for (const [k, v] of Object.entries(initial)) files.set(k, v);
@@ -292,7 +296,7 @@ describe("scripts/discord-handler.mjs", () => {
         return "";
       },
       fetchImpl: async (url: string, init: any) => {
-        if (url.includes("cdn.discordapp.com")) {
+        if (isHost(url, "cdn.discordapp.com")) {
           assert.equal(init.redirect, "manual");
           return {
             ok: true,
@@ -303,7 +307,7 @@ describe("scripts/discord-handler.mjs", () => {
             text: async () => "",
           };
         }
-        if (url.includes("r2.cloudflarestorage.com")) {
+        if (isHost(url, "account123.r2.cloudflarestorage.com")) {
           r2Put = { url, init };
           return { ok: true, status: 200, text: async () => "" };
         }
@@ -380,7 +384,7 @@ describe("scripts/discord-handler.mjs", () => {
           return "";
         },
         fetchImpl: async (url: string) => {
-          if (url.includes("cdn.discordapp.com")) {
+          if (isHost(url, "cdn.discordapp.com")) {
             return {
               ok: true,
               status: 200,
@@ -390,7 +394,7 @@ describe("scripts/discord-handler.mjs", () => {
               text: async () => "",
             };
           }
-          if (url.includes("r2.cloudflarestorage.com")) {
+          if (isHost(url, "account123.r2.cloudflarestorage.com")) {
             return { ok: true, status: 200, text: async () => "" };
           }
           return { ok: true, status: 200, text: async () => "{}" };
@@ -446,7 +450,7 @@ describe("scripts/discord-handler.mjs", () => {
         return "";
       },
       fetchImpl: async (url: string) => {
-        if (url.includes("cdn.discordapp.com")) {
+        if (isHost(url, "cdn.discordapp.com")) {
           return {
             ok: true,
             status: 200,
@@ -456,7 +460,7 @@ describe("scripts/discord-handler.mjs", () => {
             text: async () => "",
           };
         }
-        if (url.includes("r2.cloudflarestorage.com")) {
+        if (isHost(url, "account123.r2.cloudflarestorage.com")) {
           return { ok: true, status: 200, text: async () => "" };
         }
         return { ok: true, status: 200, text: async () => "{}" };
@@ -500,6 +504,35 @@ describe("scripts/discord-handler.mjs", () => {
     assert.match(discordPatch, /❌ attachment exceeds 50MB limit/);
   });
 
+  it("game-state missing R2 secrets rejects before download, upload, or git", async () => {
+    const env = baseEnv(gameStatePayload());
+    delete env.CLOUDFLARE_R2_SECRET_ACCESS_KEY;
+    const gitCalls: string[] = [];
+    const fetchedHosts: string[] = [];
+    let discordPatch = "";
+
+    const code = await mod.runCli({
+      env,
+      runGh: async () => "",
+      runGit: async (args) => {
+        gitCalls.push(args[0]!);
+        return "";
+      },
+      fetchImpl: async (url: string, init: any) => {
+        fetchedHosts.push(new URL(url).hostname);
+        discordPatch = String(init.body ?? "");
+        return { ok: true, status: 200, text: async () => "{}" };
+      },
+      stdout: { write: () => {} },
+      stderr: { write: () => {} },
+    });
+
+    assert.equal(code, 1);
+    assert.deepEqual(gitCalls, []);
+    assert.deepEqual(fetchedHosts, ["discord.com"]);
+    assert.match(discordPatch, /❌ Missing required R2 env var\(s\): CLOUDFLARE_R2_SECRET_ACCESS_KEY/);
+  });
+
   it("game-state mismatched Content-Length rejects with follow-up and no commit", async () => {
     const gitCalls: string[] = [];
     let discordPatch = "";
@@ -512,7 +545,7 @@ describe("scripts/discord-handler.mjs", () => {
         return "";
       },
       fetchImpl: async (url: string, init: any) => {
-        if (url.includes("cdn.discordapp.com")) {
+        if (isHost(url, "cdn.discordapp.com")) {
           return {
             ok: true,
             status: 200,
@@ -547,7 +580,7 @@ describe("scripts/discord-handler.mjs", () => {
         return "";
       },
       fetchImpl: async (url: string, init: any) => {
-        if (url.includes("cdn.discordapp.com")) {
+        if (isHost(url, "cdn.discordapp.com")) {
           return {
             ok: true,
             status: 200,
@@ -557,7 +590,7 @@ describe("scripts/discord-handler.mjs", () => {
             text: async () => "",
           };
         }
-        if (url.includes("r2.cloudflarestorage.com")) {
+        if (isHost(url, "account123.r2.cloudflarestorage.com")) {
           return { ok: false, status: 403, text: async () => "forbidden" };
         }
         discordPatch = String(init.body ?? "");
@@ -923,7 +956,7 @@ describe("scripts/discord-handler.mjs", () => {
         return "replayed";
       },
       fetchImpl: async (url: string) => {
-        if (url.includes("cdn.discordapp.com")) {
+        if (isHost(url, "cdn.discordapp.com")) {
           return {
             ok: true,
             status: 200,
@@ -933,7 +966,7 @@ describe("scripts/discord-handler.mjs", () => {
             text: async () => "",
           };
         }
-        if (url.includes("r2.cloudflarestorage.com")) {
+        if (isHost(url, "account123.r2.cloudflarestorage.com")) {
           return { ok: true, status: 200, text: async () => "" };
         }
         return { ok: true, status: 200, text: async () => "{}" };
