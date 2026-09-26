@@ -325,14 +325,18 @@ export async function updateDailyIndexAtomic({
   writeFileImpl = writeFile,
   renameImpl = rename,
 }) {
-  let doc = { files: [] };
+  let doc;
   try {
     const raw = await readFileImpl(indexPath, "utf8");
     const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed?.files)) {
-      doc = { files: parsed.files };
+    if (!Array.isArray(parsed?.files)) {
+      throw new Error("daily index is malformed: expected a files array");
     }
-  } catch {
+    doc = { files: parsed.files };
+  } catch (error) {
+    if (error?.code !== "ENOENT") {
+      throw error;
+    }
     doc = { files: [] };
   }
 

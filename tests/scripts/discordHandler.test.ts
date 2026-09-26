@@ -53,6 +53,10 @@ function baseEnv(payload: Record<string, unknown>): Record<string, string> {
   };
 }
 
+function fsError(code: string, message = code) {
+  return Object.assign(new Error(message), { code });
+}
+
 function createHeaders(values: Record<string, string>) {
   return {
     get(name: string) {
@@ -68,7 +72,7 @@ function createMemFs(initial: Record<string, string> = {}) {
   return {
     files,
     async readFile(path: string, _enc: string) {
-      if (!files.has(path)) throw new Error("ENOENT");
+      if (!files.has(path)) throw fsError("ENOENT");
       const value = files.get(path)!;
       return Buffer.isBuffer(value) ? value.toString("utf8") : String(value);
     },
@@ -79,7 +83,7 @@ function createMemFs(initial: Record<string, string> = {}) {
       return;
     },
     async rename(from: string, to: string) {
-      if (!files.has(from)) throw new Error("ENOENT");
+      if (!files.has(from)) throw fsError("ENOENT");
       const value = files.get(from)!;
       files.delete(from);
       files.set(to, value);
@@ -548,6 +552,200 @@ describe("scripts/discord-handler.mjs", () => {
     assert.deepEqual(renames, [{ from: "data/discord/game-state/2026-06-02/_index.json.tmp", to: "data/discord/game-state/2026-06-02/_index.json" }]);
     assert.equal(out.files.length, 1);
     assert.equal(mem.files.has("data/discord/game-state/2026-06-02/_index.json.tmp"), false);
+  });
+
+  it("game-state index starts fresh when the index is missing", async () => {
+    const writes: string[] = [];
+    const renames: Array<{ from: string; to: string }> = [];
+    let tempContent = "";
+    const entry = {
+      filename: "064800-state.png",
+      captured_at: "2026-06-02T06:48:00Z",
+      uploader: "captain",
+      note: "test",
+      size_bytes: 5,
+    };
+
+    const out = await mod.updateDailyIndexAtomic({
+      indexPath: "data/discord/game-state/2026-06-02/_index.json",
+      entry,
+      readFileImpl: async () => {
+        throw fsError("ENOENT");
+      },
+      writeFileImpl: async (path, data) => {
+        writes.push(path);
+        tempContent = data;
+      },
+      renameImpl: async (from, to) => {
+        renames.push({ from, to });
+      },
+    });
+
+    assert.deepEqual(out.files, [entry]);
+    assert.deepEqual(writes, ["data/discord/game-state/2026-06-02/_index.json.tmp"]);
+    assert.deepEqual(renames, [{
+      from: "data/discord/game-state/2026-06-02/_index.json.tmp",
+      to: "data/discord/game-state/2026-06-02/_index.json",
+    }]);
+    assert.deepEqual(JSON.parse(tempContent), { files: [entry] });
+  });
+
+  it("game-state index preserves malformed JSON without writing", async () => {
+    const indexPath = "data/discord/game-state/2026-06-02/_index.json";
+    const original = "{ malformed";
+    const mem = createMemFs({ [indexPath]: original });
+    const writes: string[] = [];
+    const renames: Array<{ from: string; to: string }> = [];
+
+    await assert.rejects(mod.updateDailyIndexAtomic({
+      indexPath,
+      entry: {
+        filename: "064800-state.png",
+        captured_at: "2026-06-02T06:48:00Z",
+        uploader: "captain",
+        note: "test",
+        size_bytes: 5,
+      },
+      readFileImpl: mem.readFile,
+      writeFileImpl: async (path) => {
+        writes.push(path);
+      },
+      renameImpl: async (from, to) => {
+        renames.push({ from, to });
+      },
+    }), SyntaxError);
+
+    assert.equal(mem.files.get(indexPath), original);
+    assert.deepEqual(writes, []);
+    assert.deepEqual(renames, []);
+  });
+
+  it("game-state index preserves existing data when reading fails for a reason other than ENOENT", async () => {
+    const indexPath = "data/discord/game-state/2026-06-02/_index.json";
+    const original = JSON.stringify({ files: [{ filename: "existing.png", size_bytes: 5 }] });
+    const mem = createMemFs({ [indexPath]: original });
+    const writes: string[] = [];
+    const renames: Array<{ from: string; to: string }> = [];
+
+    await assert.rejects(mod.updateDailyIndexAtomic({
+      indexPath,
+      entry: {
+        filename: "064800-state.png",
+        captured_at: "2026-06-02T06:48:00Z",
+        uploader: "captain",
+        note: "test",
+        size_bytes: 5,
+      },
+      readFileImpl: async () => {
+        throw fsError("EIO", "disk read failed");
+      },
+      writeFileImpl: async (path) => {
+        writes.push(path);
+      },
+      renameImpl: async (from, to) => {
+        renames.push({ from, to });
+      },
+    }), /disk read failed/);
+
+    assert.equal(mem.files.get(indexPath), original);
+    assert.deepEqual(writes, []);
+    assert.deepEqual(renames, []);
+  });
+
+  it("game-state index rejects a valid JSON document without a files array", async () => {
+    const indexPath = "data/discord/game-state/2026-06-02/_index.json";
+    const original = JSON.stringify({ entries: [] });
+    const mem = createMemFs({ [indexPath]: original });
+    const writes: string[] = [];
+    const renames: Array<{ from: string; to: string }> = [];
+
+    await assert.rejects(mod.updateDailyIndexAtomic({
+      indexPath,
+      entry: {
+        filename: "064800-state.png",
+        captured_at: "2026-06-02T06:48:00Z",
+        uploader: "captain",
+        note: "test",
+        size_bytes: 5,
+      },
+      readFileImpl: mem.readFile,
+      writeFileImpl: async (path) => {
+        writes.push(path);
+      },
+      renameImpl: async (from, to) => {
+        renames.push({ from, to });
+      },
+    }), /daily index is malformed: expected a files array/);
+
+    assert.equal(mem.files.get(indexPath), original);
+    assert.deepEqual(writes, []);
+    assert.deepEqual(renames, []);
+  });
+
+  it("game-state index file cap uses the existing manifest", async () => {
+    const indexPath = "data/discord/game-state/2026-06-02/_index.json";
+    const existingFiles = Array.from({ length: 20 }, (_, index) => ({
+      filename: `existing-${index}.png`,
+      size_bytes: 1,
+    }));
+    const original = JSON.stringify({ files: existingFiles });
+    const mem = createMemFs({ [indexPath]: original });
+    const writes: string[] = [];
+    const renames: Array<{ from: string; to: string }> = [];
+
+    await assert.rejects(mod.updateDailyIndexAtomic({
+      indexPath,
+      entry: {
+        filename: "064800-state.png",
+        captured_at: "2026-06-02T06:48:00Z",
+        uploader: "captain",
+        note: "test",
+        size_bytes: 5,
+      },
+      readFileImpl: mem.readFile,
+      writeFileImpl: async (path) => {
+        writes.push(path);
+      },
+      renameImpl: async (from, to) => {
+        renames.push({ from, to });
+      },
+    }), /daily file cap exceeded \(20 files\)/);
+
+    assert.equal(mem.files.get(indexPath), original);
+    assert.deepEqual(writes, []);
+    assert.deepEqual(renames, []);
+  });
+
+  it("game-state index byte cap uses the existing manifest", async () => {
+    const indexPath = "data/discord/game-state/2026-06-02/_index.json";
+    const original = JSON.stringify({
+      files: [{ filename: "existing.png", size_bytes: 100 * 1024 * 1024 }],
+    });
+    const mem = createMemFs({ [indexPath]: original });
+    const writes: string[] = [];
+    const renames: Array<{ from: string; to: string }> = [];
+
+    await assert.rejects(mod.updateDailyIndexAtomic({
+      indexPath,
+      entry: {
+        filename: "064800-state.png",
+        captured_at: "2026-06-02T06:48:00Z",
+        uploader: "captain",
+        note: "test",
+        size_bytes: 1,
+      },
+      readFileImpl: mem.readFile,
+      writeFileImpl: async (path) => {
+        writes.push(path);
+      },
+      renameImpl: async (from, to) => {
+        renames.push({ from, to });
+      },
+    }), /daily byte cap exceeded \(104857600 bytes\)/);
+
+    assert.equal(mem.files.get(indexPath), original);
+    assert.deepEqual(writes, []);
+    assert.deepEqual(renames, []);
   });
 
   it("game-state push race retries and preserves the upload commit", async () => {
