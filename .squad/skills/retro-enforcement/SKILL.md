@@ -242,13 +242,14 @@ create a completion marker or report the retrospective complete. This result
 checks issue references and open checkboxes; the coordinator must still confirm
 each action item was filed as a `retro-action` Issue.
 
-Only after the action-items check passes, create a **new** Issue labeled
-`retro-complete`. As part of that final step, verify it is an Issue rather than
-a pull request and that its UTC `created_at` is strictly later than the
-timestamp encoded in the log filename, parsed with its stated timezone and
-normalized to UTC. Missing marker data, an invalid log timestamp, or a marker
-that is not later than the log is a closure fault; do not report the
-retrospective complete. The log remains in `.squad/log/` for
+Only after the action-items check passes, create a **new** Issue without the
+`retro-complete` label. Verify it is an Issue rather than a pull request and
+that its UTC `created_at` is strictly later than the timestamp encoded in the
+log filename, parsed with its stated timezone and normalized to UTC. If issue
+type or timestamp validation fails, leave the Issue unlabeled and surface a
+closure fault. Only after all checks pass, apply `retro-complete` as the final
+signaling operation. The label event can trigger CI immediately, so do no
+further ceremony work after applying it. The log remains in `.squad/log/` for
 `local`/`worktree` (gitignored and local-backend only), or `log/` in the
 governed state backend. The GitHub marker is the CI-observable signal; both
 artifacts are required. These are closure checks, not behavior provided by the

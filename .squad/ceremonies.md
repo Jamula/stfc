@@ -147,13 +147,15 @@ marker or report the retrospective complete. An `ok: true` result checks for
 issue references and open markdown checkboxes; it does not replace confirming
 that each action item was actually filed as a `retro-action` Issue.
 
-Only after that check passes, open the new `retro-complete` Issue as agenda
-item 5's final step. Verify it is an Issue (not a pull request), carries the
-`retro-complete` label, and its `created_at` in UTC is strictly later than
-the timestamp encoded in the log filename, parsed with its stated timezone
-and normalized to UTC. A missing marker, invalid timestamp, or marker not
-later than the log is a closure fault; surface it and do not report the
-retrospective complete. For `local`/`worktree`, the log remains
+Only after that check passes, create a new Issue without the
+`retro-complete` label as part of agenda item 5. Verify it is an Issue (not a
+pull request) and that its `created_at` in UTC is strictly later than the
+timestamp encoded in the log filename, parsed with its stated timezone and
+normalized to UTC. If issue-type or timestamp validation fails, leave it
+unlabeled and surface a closure fault. Only after all checks pass, apply the
+`retro-complete` label as the final signaling operation. Because the label
+event can trigger CI immediately, do no further ceremony work after applying
+it. For `local`/`worktree`, the log remains
 under gitignored `.squad/log/` and is the local-backend signal; for governed
 backends it remains in the `log/` state namespace. The GitHub marker is the
 CI-observable signal. Both the log and marker are required and neither
@@ -165,7 +167,7 @@ round-start gate alone does not verify them.
 2. What did not ship? (open issues, blockers)
 3. Root cause on any failures
 4. Action items -- each MUST become a GitHub Issue labeled retro-action
-5. **Completion marker (required, last step)** -- after the exit-side closure verification above passes and every action item from step 4 is confirmed filed as a GitHub Issue (not a markdown checkbox), open a **new** GitHub Issue labeled `retro-complete` (never update/relabel a prior one -- see the staleness note below). Verify its `created_at` is later than the log timestamp as part of this final step. This is the CI-observable signal `ralph-triage.js`'s round-start gate reads (see the "Completion-marker note" above) -- it must be the LAST thing the ceremony does, never the first, so a heartbeat triggered by the first `retro-action` issue during an in-progress retro can never mistake that for completion.
+5. **Completion marker (required, last step)** -- after the exit-side closure verification above passes and every action item from step 4 is confirmed filed as a GitHub Issue (not a markdown checkbox), create a **new** GitHub Issue without the `retro-complete` label (never update/relabel a prior one -- see the staleness note below), verify its type and `created_at` as described above, then apply the `retro-complete` label as the final signaling operation. This is the CI-observable signal `ralph-triage.js`'s round-start gate reads (see the "Completion-marker note" above) -- the label must be the LAST thing the ceremony does, never the first, so a heartbeat triggered by the first `retro-action` issue during an in-progress retro can never mistake that for completion.
 
 **Coordinator integration:**
 At round start — unconditionally, every round, per `squad.agent.md` → Ceremonies →
