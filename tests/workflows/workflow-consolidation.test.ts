@@ -17,6 +17,21 @@ const workflowsDirectory = ".github/workflows";
 const workflowFiles = readdirSync(workflowsDirectory)
   .filter((file) => /\.ya?ml$/.test(file))
   .sort();
+const retiredWorkflowFiles = [
+  "squad-ci.yml",
+  "squad-docs.yml",
+  "squad-insider-release.yml",
+  "squad-preview.yml",
+  "squad-promote.yml",
+  "test.yml",
+] as const;
+const squadTemplateWorkflowFiles = readdirSync(".squad/templates/workflows")
+  .filter((file) => /\.ya?ml$/.test(file))
+  .sort();
+const gitWorkflowSkillPaths = [
+  ".github/skills/git-workflow/SKILL.md",
+  ".squad/templates/skills/git-workflow/SKILL.md",
+] as const;
 const workflowSources = workflowFiles.map((file) => ({
   file,
   source: readFileSync(path.join(workflowsDirectory, file), "utf8"),
@@ -336,15 +351,38 @@ describe("workflow consolidation", () => {
   });
 
   it("does not restore superseded workflows", () => {
-    for (const file of [
-      "squad-ci.yml",
-      "squad-docs.yml",
-      "squad-insider-release.yml",
-      "squad-preview.yml",
-      "squad-promote.yml",
-      "test.yml",
-    ]) {
+    for (const file of retiredWorkflowFiles) {
       assert.ok(!workflowFiles.includes(file), `${file} must remain removed`);
+    }
+  });
+
+  it("does not keep templates for retired dev/preview release-train workflows", () => {
+    for (const file of retiredWorkflowFiles) {
+      assert.ok(
+        !squadTemplateWorkflowFiles.includes(file),
+        `.squad/templates/workflows/${file} must remain removed`,
+      );
+    }
+  });
+
+  it("documents the supported main-only branch model in git-workflow skills", () => {
+    for (const skillPath of gitWorkflowSkillPaths) {
+      const skill = readFileSync(skillPath, "utf8");
+      assert.match(
+        skill,
+        /\bmain-only\b/,
+        `${skillPath} must explicitly describe the main-only model`,
+      );
+      assert.match(
+        skill,
+        /Picard[\s\S]*Kirk[\s\S]*O'Brien/,
+        `${skillPath} must record scope, technical, and operational implications`,
+      );
+      assert.doesNotMatch(
+        skill,
+        /dev\s*→\s*preview|preview\s*→\s*main|origin\/dev|origin\/preview|--base\s+dev/,
+        `${skillPath} must not describe the retired dev/preview promotion workflow`,
+      );
     }
   });
 

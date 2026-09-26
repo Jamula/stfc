@@ -21,7 +21,7 @@ Established through the v0.9.1 incident (8-hour recovery). Every rule below is b
 
 ## Context
 
-Squad publishes two npm packages: `@bradygaster/squad-sdk` and `@bradygaster/squad-cli`. The release pipeline flows: dev → preview → main → GitHub Release → npm publish. Brady (project owner) triggers releases — the coordinator does NOT.
+Jamula/stfc uses the main-only branch model recorded in the git-workflow skill. The historical dev/preview promotion train is retired for this repository; release automation must run from refs that actually exist, primarily `main`. Brady (project owner) triggers releases — the coordinator does NOT.
 
 ## Rules (Non-Negotiable)
 
@@ -90,17 +90,14 @@ Set this environment variable in all CI build steps to prevent the build script 
 ## Release Checklist (Quick Reference)
 
 ```
-□ All tests passing on dev
+□ All tests passing on main
 □ No file:/link: references in packages/*/package.json
 □ CHANGELOG.md updated
 □ Version bumps committed (node -e script)
 □ npm auth verified (Automation token)
 □ No draft GitHub Releases pending
 □ Local build + test: npm run build && npx vitest run
-□ Push dev → CI green
-□ Promote dev → preview (squad-promote workflow)
-□ Preview CI green (squad-preview validates)
-□ Promote preview → main
+□ Push main → CI green
 □ squad-release auto-creates GitHub Release
 □ squad-npm-publish auto-triggers
 □ Monitor publish workflow
@@ -117,11 +114,9 @@ Set this environment variable in all CI build steps to prevent the build script 
 | Draft GitHub Releases | npm publish workflow doesn't trigger | Never create drafts |
 | User npm tokens with 2FA | EOTP errors in CI | Use Automation token type |
 
-## CI Gate: Workspace Publish Policy
+## CI Gate: Repository Test Gate
 
-The `publish-policy` job in `squad-ci.yml` scans all workflow files for bare `npm publish` commands that are missing `-w`/`--workspace` flags. Any workflow that attempts a non-workspace-scoped publish will fail CI. This prevents accidental root-level publishes that would push the wrong `package.json` to npm.
-
-See `.github/workflows/squad-ci.yml` → `publish-policy` job for implementation details.
+The canonical repository test gate is `.github/workflows/squad-test-gate.yml`, which runs typecheck and `npm test` for pull requests. Do not restore retired CI or promotion workflows as part of release work.
 
 ## Related
 
