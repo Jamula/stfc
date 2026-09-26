@@ -6,6 +6,7 @@ import { promisify } from "node:util";
 import process from "node:process";
 import path from "node:path";
 import net from "node:net";
+import { createHash, createHmac } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { reconcileAutomationStateAfterPushFailure } from "./automation-state-retry.mjs";
 
@@ -13,6 +14,7 @@ const execFileAsync = promisify(execFile);
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const DISCORD_API_BASE = "https://discord.com/api/v10";
 const GAME_STATE_BASE_DIR = "data/discord/game-state";
+const GAME_STATE_R2_BUCKET = "stfc-game-state";
 const MAX_ATTACHMENT_BYTES = 50 * 1024 * 1024;
 const MAX_DAILY_BYTES = 100 * 1024 * 1024;
 const MAX_DAILY_FILES = 20;
@@ -368,11 +370,140 @@ export async function updateDailyIndexAtomic({
   return doc;
 }
 
+export async function updateDailyManifestAtomic({
+  manifestPath,
+  entry,
+  readFileImpl = readFile,
+  writeFileImpl = writeFile,
+  renameImpl = rename,
+}) {
+  let doc = { version: 1, bucket: GAME_STATE_R2_BUCKET, files: [] };
+  try {
+    const raw = await readFileImpl(manifestPath, "utf8");
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed?.files)) {
+      doc = {
+        version: Number(parsed.version) || 1,
+        bucket: typeof parsed.bucket === "string" ? parsed.bucket : GAME_STATE_R2_BUCKET,
+        files: parsed.files,
+      };
+    }
+  } catch {
+    doc = { version: 1, bucket: GAME_STATE_R2_BUCKET, files: [] };
+  }
+
+  doc.files.push(entry);
+
+  const tempPath = `${manifestPath}.tmp`;
+  await writeFileImpl(tempPath, `${JSON.stringify(doc, null, 2)}\n`, "utf8");
+  await renameImpl(tempPath, manifestPath);
+
+  return doc;
+}
+
+export function r2ConfigFromEnv(env) {
+  const config = {
+    accountId: env.CLOUDFLARE_ACCOUNT_ID,
+    accessKeyId: env.CLOUDFLARE_R2_ACCESS_KEY_ID,
+    secretAccessKey: env.CLOUDFLARE_R2_SECRET_ACCESS_KEY,
+    bucket: env.STFC_GAME_STATE_R2_BUCKET || GAME_STATE_R2_BUCKET,
+  };
+  const missing = Object.entries(config)
+    .filter(([key, value]) => key !== "bucket" && (typeof value !== "string" || value.length === 0))
+    .map(([key]) => ({
+      accountId: "CLOUDFLARE_ACCOUNT_ID",
+      accessKeyId: "CLOUDFLARE_R2_ACCESS_KEY_ID",
+      secretAccessKey: "CLOUDFLARE_R2_SECRET_ACCESS_KEY",
+    })[key] || key);
+  if (missing.length > 0) {
+    throw new Error(`Missing required R2 env var(s): ${missing.join(", ")}`);
+  }
+  return config;
+}
+
+export async function uploadR2Object({
+  config,
+  key,
+  buffer,
+  contentType,
+  fetchImpl = fetch,
+  now = new Date(),
+}) {
+  const host = `${config.accountId}.r2.cloudflarestorage.com`;
+  const encodedKey = key.split("/").map(encodeURIComponent).join("/");
+  const pathname = `/${config.bucket}/${encodedKey}`;
+  const url = `https://${host}${pathname}`;
+  const amzDate = now.toISOString().replace(/[:-]|\.\d{3}/g, "");
+  const shortDate = amzDate.slice(0, 8);
+  const payloadHash = sha256Hex(buffer);
+  const credentialScope = `${shortDate}/auto/s3/aws4_request`;
+  const signedHeaders = "host;x-amz-content-sha256;x-amz-date";
+  const canonicalHeaders = [
+    `host:${host}`,
+    `x-amz-content-sha256:${payloadHash}`,
+    `x-amz-date:${amzDate}`,
+    "",
+  ].join("\n");
+  const canonicalRequest = [
+    "PUT",
+    pathname,
+    "",
+    canonicalHeaders,
+    signedHeaders,
+    payloadHash,
+  ].join("\n");
+  const stringToSign = [
+    "AWS4-HMAC-SHA256",
+    amzDate,
+    credentialScope,
+    sha256Hex(canonicalRequest),
+  ].join("\n");
+  const signingKey = getSignatureKey(config.secretAccessKey, shortDate, "auto", "s3");
+  const signature = createHmac("sha256", signingKey).update(stringToSign).digest("hex");
+  const authorization = [
+    "AWS4-HMAC-SHA256 ",
+    `Credential=${config.accessKeyId}/${credentialScope}, `,
+    `SignedHeaders=${signedHeaders}, `,
+    `Signature=${signature}`,
+  ].join("");
+
+  const response = await fetchImpl(url, {
+    method: "PUT",
+    headers: {
+      Authorization: authorization,
+      "Content-Type": contentType,
+      "User-Agent": "stfc-discord-handler/1.0",
+      "x-amz-content-sha256": payloadHash,
+      "x-amz-date": amzDate,
+    },
+    body: buffer,
+  });
+
+  if (!response.ok) {
+    const body = typeof response.text === "function" ? await response.text() : "";
+    throw new Error(`R2 upload failed: status ${response.status}${body ? ` ${body.slice(0, 200)}` : ""}`);
+  }
+
+  return { bucket: config.bucket, key, sha256: payloadHash, size: buffer.byteLength };
+}
+
+function sha256Hex(value) {
+  return createHash("sha256").update(value).digest("hex");
+}
+
+function getSignatureKey(secretAccessKey, dateStamp, regionName, serviceName) {
+  const kDate = createHmac("sha256", `AWS4${secretAccessKey}`).update(dateStamp).digest();
+  const kRegion = createHmac("sha256", kDate).update(regionName).digest();
+  const kService = createHmac("sha256", kRegion).update(serviceName).digest();
+  return createHmac("sha256", kService).update("aws4_request").digest();
+}
+
 export async function handleGameStateCommand({
   payload,
   repo,
   ref,
   serverUrl,
+  r2Config,
   fetchImpl = fetch,
   runGit = defaultRunGit,
   readFileImpl = readFile,
@@ -384,6 +515,9 @@ export async function handleGameStateCommand({
   reconcileAutomationStateImpl = reconcileAutomationStateAfterPushFailure,
 }) {
   validateGameStatePayload(payload);
+  if (!r2Config) {
+    throw new Error("R2 config is required for game-state uploads");
+  }
 
   const attachment = payload.attachment;
   const now = nowFn();
@@ -404,20 +538,23 @@ export async function handleGameStateCommand({
   }
 
   const { buffer, responseContentType } = await downloadDiscordAttachment({ attachment, fetchImpl });
-
-  await mkdirImpl(outDir, { recursive: true });
-  const partFile = `${outFile}.part`;
-  try {
-    await writeFileImpl(partFile, buffer);
-    await renameImpl(partFile, outFile);
-  } catch (error) {
-    await rmImpl(partFile, { force: true }).catch(() => {});
-    throw error;
-  }
-
   const safeNote = sanitizeLine(payload.note, "no note");
   const safeUploaderHandle = sanitizeLine(payload.uploader_handle || payload.member || "unknown", "unknown");
   const safeUploader = sanitizeLine(payload.uploader || payload.member || "unknown", "unknown");
+  const contentType = typeof attachment.content_type === "string" && attachment.content_type.length > 0
+    ? attachment.content_type
+    : responseContentType;
+  const r2Key = `${today}/${path.basename(outFile)}`;
+  const upload = await uploadR2Object({
+    config: r2Config,
+    key: r2Key,
+    buffer,
+    contentType,
+    fetchImpl,
+    now,
+  });
+
+  await mkdirImpl(outDir, { recursive: true });
 
   const sourceUrl = typeof payload.jumplink === "string" && payload.jumplink.length > 0
     ? payload.jumplink
@@ -432,10 +569,11 @@ export async function handleGameStateCommand({
     captured_at_utc: capturedAtUtc,
     note: safeNote,
     source_url: sourceUrl,
-    content_type: typeof attachment.content_type === "string" && attachment.content_type.length > 0
-      ? attachment.content_type
-      : responseContentType,
+    content_type: contentType,
     size_bytes: Number(attachment.size),
+    sha256: upload.sha256,
+    r2_bucket: upload.bucket,
+    r2_key: upload.key,
     filename_original: String(attachment.filename),
     filename_stored: cleanName,
   };
@@ -458,11 +596,32 @@ export async function handleGameStateCommand({
     renameImpl,
   });
 
+  const manifestPath = `${outDir}/manifest.json`;
+  await updateDailyManifestAtomic({
+    manifestPath,
+    entry: {
+      filename: path.basename(outFile),
+      r2_bucket: upload.bucket,
+      r2_key: upload.key,
+      sha256: upload.sha256,
+      size_bytes: upload.size,
+      content_type: contentType,
+      captured_at: capturedAtUtc,
+      uploader: safeUploaderHandle,
+      note: safeNote,
+      access: "signed-url-required",
+      retention: "forever",
+    },
+    readFileImpl,
+    writeFileImpl,
+    renameImpl,
+  });
+
   await runGit(["config", "user.email", "actions@github.com"]);
   await runGit(["config", "user.name", "github-actions[bot]"]);
-  await runGit(["add", "--", outFile]);
   await runGit(["add", "--", lineagePath]);
   await runGit(["add", "--", indexPath]);
+  await runGit(["add", "--", manifestPath]);
   await runCommand(
     process.execPath,
     [path.join(SCRIPT_DIR, "check-artifact-hygiene.mjs"), "--staged"],
@@ -471,7 +630,8 @@ export async function handleGameStateCommand({
   const commitMessage = [
     `data(game-state): ${safeNote || "no note"}`,
     "",
-    `File: ${outFile}`,
+    `Manifest: ${manifestPath}`,
+    `R2: ${upload.bucket}/${upload.key}`,
     `Uploader: ${safeUploaderHandle}`,
     `Source: ${sourceUrl}`,
   ].join("\n");
@@ -489,7 +649,7 @@ export async function handleGameStateCommand({
       await reconcileAutomationStateImpl({
         stateDir: process.cwd(),
         ref,
-        relativePaths: [outFile, lineagePath, indexPath],
+        relativePaths: [lineagePath, indexPath, manifestPath],
       });
       await doPush();
     } else {
@@ -498,16 +658,16 @@ export async function handleGameStateCommand({
   }
 
   const sha = (await runGit(["rev-parse", "HEAD"])) .trim();
-  const fileUrl = `${serverUrl}/${repo}/blob/${sha}/${outFile}`;
+  const manifestUrl = `${serverUrl}/${repo}/blob/${sha}/${manifestPath}`;
 
   return {
-    responseText: `📁 Saved ${fileUrl}`,
-    outFile,
-    fileUrl,
+    responseText: `📁 Saved ${manifestUrl} (R2 key: ${upload.key})`,
+    outFile: manifestPath,
+    fileUrl: manifestUrl,
   };
 }
 
-export async function resolveResponseText({ payload, repo, workflowRef, stateRef, serverUrl, historyPath, runGh, runGit, readFileImpl, writeFileImpl, mkdirImpl, renameImpl, rmImpl, fetchImpl, nowFn, reconcileAutomationStateImpl }) {
+export async function resolveResponseText({ payload, repo, workflowRef, stateRef, serverUrl, historyPath, r2Config, runGh, runGit, readFileImpl, writeFileImpl, mkdirImpl, renameImpl, rmImpl, fetchImpl, nowFn, reconcileAutomationStateImpl }) {
   const command = payload.command;
 
   if (command === "redeem-status") {
@@ -532,6 +692,7 @@ export async function resolveResponseText({ payload, repo, workflowRef, stateRef
       repo,
       ref: stateRef,
       serverUrl,
+      r2Config,
       fetchImpl,
       runGit,
       readFileImpl,
@@ -583,6 +744,7 @@ export async function runCli({
     const stateRef = env.STFC_STATE_BRANCH || "automation-state";
     const serverUrl = env.GITHUB_SERVER_URL || "https://github.com";
     const historyPath = env.REDEEM_HISTORY_PATH || "docs/redeem-history.md";
+    const r2Config = payload.command === "game-state" ? r2ConfigFromEnv(env) : undefined;
 
     const responseText = await resolveResponseText({
       payload,
@@ -591,6 +753,7 @@ export async function runCli({
       stateRef,
       serverUrl,
       historyPath,
+      r2Config,
       runGh,
       runGit,
       fetchImpl,

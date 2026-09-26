@@ -31,6 +31,13 @@ const mod = await import("../../scripts/discord-handler.mjs") as {
     writeFileImpl: (path: string, data: string, enc?: string) => Promise<void>;
     renameImpl: (from: string, to: string) => Promise<void>;
   }) => Promise<{ files: Array<{ filename: string }> }>;
+  updateDailyManifestAtomic: (opts: {
+    manifestPath: string;
+    entry: { filename: string; r2_key: string; sha256: string; size_bytes: number };
+    readFileImpl: (path: string, enc: string) => Promise<string>;
+    writeFileImpl: (path: string, data: string, enc?: string) => Promise<void>;
+    renameImpl: (from: string, to: string) => Promise<void>;
+  }) => Promise<{ files: Array<{ filename: string; r2_key: string }> }>;
 };
 
 function makeStdout() {
@@ -50,6 +57,9 @@ function baseEnv(payload: Record<string, unknown>): Record<string, string> {
     STFC_STATE_BRANCH: "automation-state",
     GITHUB_SERVER_URL: "https://github.com",
     ALLOWED_GUILD_IDS: "g1,g2",
+    CLOUDFLARE_ACCOUNT_ID: "account123",
+    CLOUDFLARE_R2_ACCESS_KEY_ID: "r2-access-key",
+    CLOUDFLARE_R2_SECRET_ACCESS_KEY: "r2-secret-key",
   };
 }
 
@@ -265,6 +275,7 @@ describe("scripts/discord-handler.mjs", () => {
     const mem = createMemFs();
     const gitCalls: Array<{ args: string[]; stdin?: string }> = [];
     let discordPatch = "";
+    let r2Put: { url: string; init: any } | undefined;
 
     const code = await mod.runCli({
       env: baseEnv(gameStatePayload()),
@@ -292,6 +303,10 @@ describe("scripts/discord-handler.mjs", () => {
             text: async () => "",
           };
         }
+        if (url.includes("r2.cloudflarestorage.com")) {
+          r2Put = { url, init };
+          return { ok: true, status: 200, text: async () => "" };
+        }
         discordPatch = String(init.body ?? "");
         return { ok: true, status: 200, text: async () => "{}" };
       },
@@ -300,13 +315,41 @@ describe("scripts/discord-handler.mjs", () => {
     });
 
     assert.equal(code, 0, stderr.text());
-    assert.match(discordPatch, /📁 Saved https:\/\/github.com\/Jamula\/stfc\/blob\/abc123\/data\/discord\/game-state\/2026-06-02\/064800000-state.png/);
-    assert.equal(mem.files.has("data/discord/game-state/2026-06-02/064800000-state.png"), true);
+    assert.match(discordPatch, /📁 Saved https:\/\/github.com\/Jamula\/stfc\/blob\/abc123\/data\/discord\/game-state\/2026-06-02\/manifest.json/);
+    assert.match(discordPatch, /R2 key: 2026-06-02\/064800000-state.png/);
+    assert.equal(r2Put?.url, "https://account123.r2.cloudflarestorage.com/stfc-game-state/2026-06-02/064800000-state.png");
+    assert.equal(r2Put?.init.method, "PUT");
+    assert.match(String(r2Put?.init.headers.Authorization), /^AWS4-HMAC-SHA256 Credential=r2-access-key\/20260602\/auto\/s3\/aws4_request/);
+    assert.equal(mem.files.has("data/discord/game-state/2026-06-02/064800000-state.png"), false);
     assert.equal(mem.files.has("data/discord/game-state/2026-06-02/064800000-state.png.lineage.json"), true);
     assert.equal(mem.files.has("data/discord/game-state/2026-06-02/_index.json"), true);
+    assert.equal(mem.files.has("data/discord/game-state/2026-06-02/manifest.json"), true);
+    const manifest = JSON.parse(await mem.readFile("data/discord/game-state/2026-06-02/manifest.json", "utf8"));
+    assert.equal(manifest.bucket, "stfc-game-state");
+    assert.equal(manifest.files[0].r2_key, "2026-06-02/064800000-state.png");
+    assert.equal(manifest.files[0].sha256, "36bbe50ed96841d10443bcb670d6554f0a34b761be67ec9c4a8ad2c0c44ca42c");
+    assert.equal(manifest.files[0].access, "signed-url-required");
+    const lineage = JSON.parse(await mem.readFile("data/discord/game-state/2026-06-02/064800000-state.png.lineage.json", "utf8"));
+    assert.equal(lineage.r2_key, "2026-06-02/064800000-state.png");
+    assert.equal(lineage.sha256, manifest.files[0].sha256);
+    assert.equal(
+      gitCalls.some((c) => c.args[0] === "add" && c.args[2] === "data/discord/game-state/2026-06-02/064800000-state.png"),
+      false,
+      "binary blob must not be staged",
+    );
+    assert.deepEqual(
+      gitCalls.filter((c) => c.args[0] === "add").map((c) => c.args[2]).sort(),
+      [
+        "data/discord/game-state/2026-06-02/064800000-state.png.lineage.json",
+        "data/discord/game-state/2026-06-02/_index.json",
+        "data/discord/game-state/2026-06-02/manifest.json",
+      ],
+    );
     const commit = gitCalls.find((c) => c.args[0] === "commit");
     assert.ok(commit?.args.includes("--no-verify"));
     assert.ok(commit?.stdin?.includes("data(game-state): after raid"));
+    assert.ok(commit?.stdin?.includes("Manifest: data/discord/game-state/2026-06-02/manifest.json"));
+    assert.ok(commit?.stdin?.includes("R2: stfc-game-state/2026-06-02/064800000-state.png"));
     assert.ok(commit?.stdin?.includes("Source: https://discord.com/channels/g1/c1/..."));
     assert.deepEqual(
       gitCalls.find((c) => c.args[0] === "push")?.args,
@@ -347,6 +390,9 @@ describe("scripts/discord-handler.mjs", () => {
               text: async () => "",
             };
           }
+          if (url.includes("r2.cloudflarestorage.com")) {
+            return { ok: true, status: 200, text: async () => "" };
+          }
           return { ok: true, status: 200, text: async () => "{}" };
         },
         stdout: { write: () => {} },
@@ -360,9 +406,9 @@ describe("scripts/discord-handler.mjs", () => {
     assert.equal(code1, 0);
     assert.equal(code2, 0);
 
-    // Both blob files exist — no overwrite
-    assert.equal(mem.files.has("data/discord/game-state/2026-06-02/064800000-state.png"), true);
-    assert.equal(mem.files.has("data/discord/game-state/2026-06-02/064800001-state.png"), true);
+    // Binary blobs are not committed locally — R2 keys differ, so no overwrite.
+    assert.equal(mem.files.has("data/discord/game-state/2026-06-02/064800000-state.png"), false);
+    assert.equal(mem.files.has("data/discord/game-state/2026-06-02/064800001-state.png"), false);
 
     // Both lineage files exist
     assert.equal(mem.files.has("data/discord/game-state/2026-06-02/064800000-state.png.lineage.json"), true);
@@ -374,6 +420,11 @@ describe("scripts/discord-handler.mjs", () => {
     const names = indexContent.files.map((f: { filename: string }) => f.filename);
     assert.ok(names.includes("064800000-state.png"), `expected 064800000-state.png in index, got: ${JSON.stringify(names)}`);
     assert.ok(names.includes("064800001-state.png"), `expected 064800001-state.png in index, got: ${JSON.stringify(names)}`);
+    const manifestContent = JSON.parse(await mem.readFile("data/discord/game-state/2026-06-02/manifest.json", "utf8"));
+    assert.deepEqual(
+      manifestContent.files.map((f: { r2_key: string }) => f.r2_key),
+      ["2026-06-02/064800000-state.png", "2026-06-02/064800001-state.png"],
+    );
   });
 
   it("game-state path traversal filename is sanitized and stays under target folder", async () => {
@@ -405,6 +456,9 @@ describe("scripts/discord-handler.mjs", () => {
             text: async () => "",
           };
         }
+        if (url.includes("r2.cloudflarestorage.com")) {
+          return { ok: true, status: 200, text: async () => "" };
+        }
         return { ok: true, status: 200, text: async () => "{}" };
       },
       stdout: { write: () => {} },
@@ -412,7 +466,7 @@ describe("scripts/discord-handler.mjs", () => {
     });
 
     assert.equal(code, 0);
-    const stagedFile = staged.find((p) => p.endsWith("etcpasswd"));
+    const stagedFile = staged.find((p) => p.endsWith("etcpasswd.lineage.json"));
     assert.ok(stagedFile && stagedFile.startsWith("data/discord/game-state/"));
     assert.equal(staged.some((p) => p.includes("..")), false);
   });
@@ -478,6 +532,44 @@ describe("scripts/discord-handler.mjs", () => {
     assert.equal(code, 1);
     assert.equal(gitCalls.length, 0);
     assert.match(discordPatch, /❌ download failed: Content-Length does not match attachment.size/);
+  });
+
+  it("game-state R2 upload failures reject with follow-up and no commit", async () => {
+    const gitCalls: string[] = [];
+    let discordPatch = "";
+
+    const code = await mod.runCli({
+      env: baseEnv(gameStatePayload()),
+      nowFn: () => new Date("2026-06-02T06:48:00Z"),
+      runGh: async () => "",
+      runGit: async (args) => {
+        gitCalls.push(args[0]!);
+        return "";
+      },
+      fetchImpl: async (url: string, init: any) => {
+        if (url.includes("cdn.discordapp.com")) {
+          return {
+            ok: true,
+            status: 200,
+            url,
+            headers: createHeaders({ "content-length": "5", "content-type": "image/png" }),
+            arrayBuffer: async () => Buffer.from("abcde"),
+            text: async () => "",
+          };
+        }
+        if (url.includes("r2.cloudflarestorage.com")) {
+          return { ok: false, status: 403, text: async () => "forbidden" };
+        }
+        discordPatch = String(init.body ?? "");
+        return { ok: true, status: 200, text: async () => "{}" };
+      },
+      stdout: { write: () => {} },
+      stderr: { write: () => {} },
+    });
+
+    assert.equal(code, 1);
+    assert.equal(gitCalls.length, 0);
+    assert.match(discordPatch, /❌ R2 upload failed: status 403 forbidden/);
   });
 
   it("game-state rejects non-Discord CDN URL", async () => {
@@ -841,6 +933,9 @@ describe("scripts/discord-handler.mjs", () => {
             text: async () => "",
           };
         }
+        if (url.includes("r2.cloudflarestorage.com")) {
+          return { ok: true, status: 200, text: async () => "" };
+        }
         return { ok: true, status: 200, text: async () => "{}" };
       },
       stdout: { write: () => {} },
@@ -852,9 +947,9 @@ describe("scripts/discord-handler.mjs", () => {
     assert.equal(reconcileCalls.length, 1);
     assert.equal(reconcileCalls[0]?.ref, "automation-state");
     assert.deepEqual(reconcileCalls[0]?.relativePaths.sort(), [
-      "data/discord/game-state/2026-06-02/064800000-state.png",
       "data/discord/game-state/2026-06-02/064800000-state.png.lineage.json",
       "data/discord/game-state/2026-06-02/_index.json",
+      "data/discord/game-state/2026-06-02/manifest.json",
     ]);
   });
 

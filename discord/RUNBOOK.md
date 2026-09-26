@@ -109,6 +109,12 @@ gh secret set CLOUDFLARE_API_TOKEN --repo Jamula/stfc
 gh secret set CLOUDFLARE_ACCOUNT_ID --repo Jamula/stfc
 # Paste your Cloudflare Account ID (from A2), then press Enter
 
+gh secret set CLOUDFLARE_R2_ACCESS_KEY_ID --repo Jamula/stfc
+# Paste the R2 access key for the private stfc-game-state bucket, then press Enter
+
+gh secret set CLOUDFLARE_R2_SECRET_ACCESS_KEY --repo Jamula/stfc
+# Paste the matching R2 secret access key, then press Enter
+
 gh secret set ALLOWED_GUILD_IDS --repo Jamula/stfc
 # Comma-separated Discord guild IDs allowed to run slash workflows (e.g. 123,456)
 ```
@@ -122,6 +128,8 @@ Should show:
 ```
 CLOUDFLARE_API_TOKEN
 CLOUDFLARE_ACCOUNT_ID
+CLOUDFLARE_R2_ACCESS_KEY_ID
+CLOUDFLARE_R2_SECRET_ACCESS_KEY
 DISCORD_BOT_TOKEN          # should already exist from #143
 ALLOWED_GUILD_IDS         # required for /game-state handler allowlist re-check
 ```
@@ -289,6 +297,18 @@ GH_DISPATCH_TOKEN
 ### Cloudflare Account ID (`CLOUDFLARE_ACCOUNT_ID`)
 - **Rotation schedule:** Never (unless your Cloudflare account is restructured, very rare)
 - **Procedure if needed:** Regenerate per step A2, update repo secret
+
+### Cloudflare R2 Game-State Keys (`CLOUDFLARE_R2_ACCESS_KEY_ID`, `CLOUDFLARE_R2_SECRET_ACCESS_KEY`)
+- **Bucket:** `stfc-game-state` (private, automatic region placement)
+- **Rotation schedule:** Annually, or when team membership changes
+- **Retention:** Forever by default; a 90-day archive tier can be enabled later if storage cost warrants it
+- **Procedure:**
+  1. Generate an R2 API token/key pair scoped to write the `stfc-game-state` bucket
+  2. Update GitHub repo secrets:
+     - `gh secret set CLOUDFLARE_R2_ACCESS_KEY_ID --repo Jamula/stfc`
+     - `gh secret set CLOUDFLARE_R2_SECRET_ACCESS_KEY --repo Jamula/stfc`
+  3. No downtime — the next `/game-state` handler run uses the new keys
+- **Access model:** Objects stay private; committed manifests point to R2 keys and downstream readers should use signed URLs
 
 ### Discord Public Key (`DISCORD_PUBLIC_KEY`)
 - **Rotation schedule:** Never (unless Discord force-resets it, extremely rare)

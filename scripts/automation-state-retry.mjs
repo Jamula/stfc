@@ -38,7 +38,6 @@ async function runGit(args, { cwd } = {}) {
     cwd,
     env: gitEnvironment(),
     encoding: "utf8",
-    env: gitEnvironment(),
   });
   return stdout.trim();
 }
@@ -93,7 +92,6 @@ async function hasStagedChanges(stateDir) {
     await execFileAsync("git", ["-C", stateDir, "diff", "--cached", "--quiet"], {
       env: gitEnvironment(),
       encoding: "utf8",
-      env: gitEnvironment(),
     });
     return false;
   } catch (error) {
