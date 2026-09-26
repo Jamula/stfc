@@ -85,6 +85,12 @@ jobs:
             else
               echo "data/promo-code-dead.json is not on automation-state yet; preserving the main seed."
             fi
+            if [ -f "$RESTORE_DIR/data/redeem-degraded-state.json" ]; then
+              mkdir -p data
+              cp "$RESTORE_DIR/data/redeem-degraded-state.json" data/redeem-degraded-state.json
+            else
+              echo "data/redeem-degraded-state.json is not on automation-state yet; preserving the main seed."
+            fi
             if [ -f "$RESTORE_DIR/promo-codes.txt" ]; then
               MAIN_SHA=$(git rev-parse HEAD)
               node scripts/merge-promo-codes.mjs \
@@ -184,6 +190,15 @@ jobs:
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: node scripts/dead-token-alert.mjs resolve
 
+      - name: Sync persistent degraded-gift alert
+        if: always() && steps.redeem.outputs.exit_code == '0'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          STATE_FILE: data/redeem-degraded-state.json
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: node scripts/degraded-gift-alert.mjs sync
+
       - name: Commit redeem state to automation-state (if changed)
         if: always() && steps.restore_state.outputs.complete == 'true'
         run: |
@@ -214,6 +229,10 @@ jobs:
             mkdir -p "$STATE_DIR/docs"
             cp docs/redeem-history.md "$STATE_DIR/docs/redeem-history.md"
           fi
+          if [ -f data/redeem-degraded-state.json ]; then
+            mkdir -p "$STATE_DIR/data"
+            cp data/redeem-degraded-state.json "$STATE_DIR/data/redeem-degraded-state.json"
+          fi
           if [ -f data/promo-code-dead.json ]; then
             mkdir -p "$STATE_DIR/data"
             cp data/promo-code-dead.json "$STATE_DIR/data/promo-code-dead.json"
@@ -230,11 +249,14 @@ jobs:
           if [ -f "$STATE_DIR/data/promo-code-dead.json" ]; then
             git -C "$STATE_DIR" add -A -- data/promo-code-dead.json
           fi
+          if [ -f "$STATE_DIR/data/redeem-degraded-state.json" ]; then
+            git -C "$STATE_DIR" add -A -- data/redeem-degraded-state.json
+          fi
           if [ -f "$STATE_DIR/promo-codes.txt" ]; then
             git -C "$STATE_DIR" add -A -- promo-codes.txt
           fi
           if git -C "$STATE_DIR" diff --cached --quiet; then
-            echo "Redeem history, dead-code cache, and promo codes are unchanged."
+            echo "Redeem history, dead-code cache, degraded-gift state, and promo codes are unchanged."
             git worktree remove "$STATE_DIR" --force
             exit 0
           fi
@@ -255,7 +277,8 @@ jobs:
               if git ls-remote --exit-code --heads origin automation-state >/dev/null; then
                 node scripts/automation-state-retry.mjs \
                   "$STATE_DIR" automation-state \
-                  docs/redeem-history.md data/promo-code-dead.json promo-codes.txt
+                  docs/redeem-history.md data/promo-code-dead.json \
+                  data/redeem-degraded-state.json promo-codes.txt
                 branch_exists=true
               else
                 status=$?

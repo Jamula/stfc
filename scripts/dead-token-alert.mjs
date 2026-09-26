@@ -154,6 +154,9 @@ export function resolveDeadTokenAlert(options) {
   const log = options.log ?? ((line) => console.error(line));
   const closeIssue = options.closeIssue ?? ghCloseIssue;
   const runUrl = options.runUrl ?? '(unknown run)';
+  const resolutionComment =
+    options.resolutionComment ??
+    `Token accepted again as of ${runUrl} — closing automatically.`;
 
   let found;
   try {
@@ -169,7 +172,7 @@ export function resolveDeadTokenAlert(options) {
   }
 
   try {
-    closeIssue(found.number, `Token accepted again as of ${runUrl} — closing automatically.`);
+    closeIssue(found.number, resolutionComment);
   } catch (err) {
     log(`::warning::Failed to close dead-token alert #${found.number}: ${errorText(err)}`);
     return { status: 'close-failed', number: found.number, matchCount: found.matchCount };

@@ -180,7 +180,8 @@ describe("runAll", () => {
       }),
     });
 
-    const summary = createSummaryWriter(undefined);
+    const summaryFile = path.join(dir, "summary-happy.md");
+    const summary = createSummaryWriter(summaryFile);
     const { result, exitCode } = await runAll({
       accounts: [{ name: "main", token: makeJwt({ exp: 9999999999 }) }],
       clientFactory: () => fake as unknown as ApiClient,
@@ -201,6 +202,10 @@ describe("runAll", () => {
       outcomes.includes(Outcomes.ALREADY_CLAIMED),
       `expected ALREADY_CLAIMED in ${outcomes.join(",")}`,
     );
+    const rendered = fs.readFileSync(summaryFile, "utf8");
+    assert.match(rendered, /^# ✅ STFC Gift Redeemer/m);
+    assert.match(rendered, /Gift claims: 1\/3/);
+    assert.doesNotMatch(rendered, /DEGRADED/);
   });
 
   it("multi-account: one OK, one TokenExpired → both reported, exitCode 0", async () => {
@@ -296,15 +301,26 @@ describe("runAll", () => {
     // uncorroborated response.
     const store = mockClaimFetch(401);
     const summaryFile = path.join(dir, "summary-claim-401.md");
+    const stdout: string[] = [];
+    const originalWrite = process.stdout.write.bind(process.stdout);
+    process.stdout.write = ((chunk: string | Uint8Array) => {
+      stdout.push(typeof chunk === "string" ? chunk : Buffer.from(chunk).toString("utf8"));
+      return true;
+    }) as typeof process.stdout.write;
+    let output: Awaited<ReturnType<typeof runAll>>;
+    try {
+      output = await runAll({
+        accounts: [{ name: "main", token: makeJwt({ exp: 9999999999 }) }],
+        fetchImpl: store.fetchImpl,
+        summary: createSummaryWriter(summaryFile),
+        promoCodesPath: emptyPromoFile(),
+        deadCodesPath: path.join(dir, "dead-claim-401.json"),
+      });
+    } finally {
+      process.stdout.write = originalWrite;
+    }
 
-    const { result, exitCode } = await runAll({
-      accounts: [{ name: "main", token: makeJwt({ exp: 9999999999 }) }],
-      fetchImpl: store.fetchImpl,
-      summary: createSummaryWriter(summaryFile),
-      promoCodesPath: emptyPromoFile(),
-      deadCodesPath: path.join(dir, "dead-claim-401.json"),
-    });
-
+    const { result, exitCode } = output;
     const account = result.accounts[0]!;
     assert.equal(store.calls.claim, 1, "a side-effecting claim must never be replayed");
     assert.equal(account.tokenStatus, Outcomes.TOKEN_VALID);
@@ -317,7 +333,75 @@ describe("runAll", () => {
 
     const summary = fs.readFileSync(summaryFile, "utf8");
     assert.match(summary, /TRANSIENT/, "the failure must be visible in the step summary");
+    assert.match(summary, /^# ⚠️ STFC Gift Redeemer — DEGRADED/m);
+    assert.match(summary, /Gift claims: 0\/1/);
     assert.doesNotMatch(summary, /secret rotation/i);
+    assert.match(stdout.join(""), /::warning::.*claimed=0\/1/);
+  });
+
+  it("tracks consecutive transient failures per gift without storing account names", async () => {
+    const stateFile = path.join(dir, "degraded-state.json");
+    let transient = true;
+    const fake = makeFakeClient({
+      listGifts: async () => ({
+        items: [{ bundleId: 77, title: "30 Day Loyalty Chest", isClaimable: true }],
+      }),
+      claimGift: async () => {
+        if (transient) throw new TransientError("Server error 500 on POST /offers/gifts/claim", 500);
+        return { success: true };
+      },
+    });
+    const options = {
+      accounts: [{ name: "private-account-name", token: makeJwt({ exp: 9999999999 }) }],
+      clientFactory: () => fake as unknown as ApiClient,
+      summary: createSummaryWriter(undefined),
+      degradedStatePath: stateFile,
+    };
+
+    for (let streak = 1; streak <= 3; streak += 1) {
+      const { exitCode } = await runAll(options);
+      assert.equal(exitCode, 0, "persistent partial failures remain non-fatal");
+      const state = JSON.parse(fs.readFileSync(stateFile, "utf8")) as {
+        accounts: Record<string, Record<string, number>>;
+      };
+      const giftStreaks = Object.values(state.accounts)[0]!;
+      assert.equal(giftStreaks["30 Day Loyalty Chest"], streak);
+      assert.doesNotMatch(fs.readFileSync(stateFile, "utf8"), /private-account-name/);
+    }
+
+    transient = false;
+    const recovered = await runAll(options);
+    assert.equal(recovered.exitCode, 0);
+    assert.deepEqual(JSON.parse(fs.readFileSync(stateFile, "utf8")), {
+      version: 1,
+      accounts: {},
+    });
+  });
+
+  it("does not reset a gift streak when the gift list was not observed", async () => {
+    const stateFile = path.join(dir, "degraded-state-unobserved.json");
+    fs.writeFileSync(
+      stateFile,
+      JSON.stringify({ version: 1, accounts: { existing: { "30 Day Loyalty Chest": 2 } } }),
+    );
+    const fake = makeFakeClient({
+      listGifts: async () => {
+        throw new TransientError("Server error 500 on GET /offers/gifts", 500);
+      },
+    });
+
+    const { exitCode } = await runAll({
+      accounts: [{ name: "main", token: makeJwt({ exp: 9999999999 }) }],
+      clientFactory: () => fake as unknown as ApiClient,
+      summary: createSummaryWriter(undefined),
+      degradedStatePath: stateFile,
+    });
+
+    assert.equal(exitCode, 0, "transient GET behavior remains partial success");
+    assert.deepEqual(JSON.parse(fs.readFileSync(stateFile, "utf8")), {
+      version: 1,
+      accounts: { existing: { "30 Day Loyalty Chest": 2 } },
+    });
   });
 
   it("a successful claim still goes through in exactly one call", async () => {

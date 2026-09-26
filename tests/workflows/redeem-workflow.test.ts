@@ -270,6 +270,38 @@ describe(".github/workflows/redeem.yml", () => {
   );
 
   it(
+    "syncs the persistent degraded-gift alert only after a non-fatal redeem run",
+    { skip: yaml === undefined },
+    () => {
+      const alertStep = getNamedStep(yaml!, "Sync persistent degraded-gift alert");
+      assert.match(alertStep, /if: always\(\) && steps\.redeem\.outputs\.exit_code == '0'/);
+      assert.match(alertStep, /continue-on-error:\s*true/);
+      assert.match(alertStep, /STATE_FILE: data\/redeem-degraded-state\.json/);
+      assert.match(alertStep, /node scripts\/degraded-gift-alert\.mjs sync/);
+    },
+  );
+
+  it(
+    "restores and stages persistent degraded-gift state on automation-state",
+    { skip: yaml === undefined },
+    () => {
+      assert.match(
+        yaml!,
+        /cp "\$RESTORE_DIR\/data\/redeem-degraded-state\.json" data\/redeem-degraded-state\.json/,
+      );
+      const commitStep = getNamedStep(yaml!, "Commit redeem state to automation-state (if changed)");
+      assert.match(
+        commitStep,
+        /cp data\/redeem-degraded-state\.json "\$STATE_DIR\/data\/redeem-degraded-state\.json"/,
+      );
+      assert.match(
+        commitStep,
+        /git -C "\$STATE_DIR" add -A -- data\/redeem-degraded-state\.json/,
+      );
+    },
+  );
+
+  it(
     "routes both alert lookups through the shared selection script",
     { skip: yaml === undefined },
     () => {

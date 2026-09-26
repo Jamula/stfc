@@ -18,6 +18,7 @@ export interface AlertLookupOptions extends AlertSelectOptions {
 
 export interface AlertResolveOptions extends AlertLookupOptions {
   runUrl?: string;
+  resolutionComment?: string;
   closeIssue?: (number: number, comment: string) => void;
 }
 
