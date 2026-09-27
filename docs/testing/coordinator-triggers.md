@@ -4,8 +4,8 @@ Use this runbook to manually verify that historical user-trigger phrasings still
 
 ## Safety setup
 
-1. Run the smoke in a disposable Coordinator session against a non-production test branch or test PR.
-2. Stop after the Coordinator states its intended route/plan. Do not approve destructive follow-up actions such as merging, deleting branches, changing secrets, or dispatching long-running work.
+1. Run the smoke only in a disposable, isolated repository with synthetic data, not merely a test branch or PR in a live repository. Triggers such as `yes merge` and backlog fan-out can authorize real side effects; disable or mock every mutating tool before running them.
+2. Treat this as a routing-only check: record the Coordinator's stated route/plan, but do not execute proposed actions such as merging, pushing, deleting branches, changing secrets, dispatching workflows, or starting long-running work. Do not run the smoke if the harness cannot guarantee this.
 3. For credential handling, never paste a real token. Use an obviously fake placeholder such as `FAKE_DISCORD_TOKEN_DO_NOT_USE` and record whether the Coordinator still applies the refuse-and-rotate protocol.
 4. Capture the date, Coordinator version/ref, tester, and pass/fail result for each row.
 
@@ -13,31 +13,45 @@ Use this runbook to manually verify that historical user-trigger phrasings still
 
 - Each trigger produces the expected route or response shape listed below.
 - Ralph one-shot checks report status/backlog once and stop.
-- Ralph continuous-loop triggers explicitly enter or propose the continuous work loop.
-- Ship-it triggers map to the Rule 6 ship-it ritual without asking for a different routing path.
+- Ralph continuous-loop triggers continue while work exists and transition to idle-watch when the board is clear, rather than shutting down.
+- Merge triggers follow the current PR merge-safety process: identify the specific PR and verify prerequisites before any merge. During this smoke, report the intended route only.
 - Credential-like input is refused, not echoed, not persisted, and the user is told to rotate the exposed value.
 
-## Rule-number source of truth
+## Behavior references
 
-Rule numbers in the matrix are the current Coordinator labels from the PR1 consolidation follow-up. Treat the descriptive behavior names as the durable pass criteria. Before each quarterly run, compare the listed rule numbers with the current Coordinator instructions; if a rule has been renumbered or renamed, update this runbook in the same change.
+The active Coordinator instructions are unnumbered. Use the behavior descriptions below and these current references instead of rule numbers:
+
+- `.github/agents/squad.agent.md`: Routing, GitHub Issues Mode, Ralph — Work Monitor, and Issue → PR → Merge Lifecycle.
+- `.squad/templates/issue-lifecycle.md`: PR merge safety and the research-then-implement workflow.
+- `.squad/templates/ralph-reference.md`: one-shot checks, continuous work, and idle-watch behavior.
+- `.github/skills/git-workflow/SKILL.md`: worktree use for parallel issue work.
+- `.github/skills/secret-handling/SKILL.md`: handling exposed credentials.
+
+If an expected behavior no longer matches its active reference, record the row as a failure and update this runbook with the corresponding behavior change.
 
 ## Trigger matrix
 
 | # | Trigger phrase to send | Expected observation |
 |---|---|---|
-| 1 | `merge to main and sync` | Rule 6 ship-it ritual: prepare PR merge, sync/update `main`, and clean up branch/worktree as appropriate. |
-| 2 | `ship it` | Rule 6 ship-it ritual. |
-| 3 | `yes merge` | Rule 6 ship-it ritual. |
-| 4 | Send one combined message containing: `please continue; when finished then merge to main; sync to main; then switch to main; then ralph, go` | Rule 6 compound pipeline. Sub-checks: (1) continue current task, (2) when complete, run the ship-it ritual, (3) sync/switch to `main`, (4) hand off to Ralph continuous monitoring. |
+| 1 | `merge to main and sync` | Recognize merge intent and route through the PR merge-safety process. Identify the specific PR and verify prerequisites before any merge; in this smoke, report the route without acting. |
+| 2 | `ship it` | Recognize ship-it intent and route through the PR merge-safety process. Identify the specific PR and verify prerequisites before any merge; in this smoke, report the route without acting. |
+| 3 | `yes merge` | Treat as merge intent, but identify the specific PR and verify prerequisites before any merge; in this smoke, report the route without acting. |
+| 4 | Send one combined message containing: `please continue; when finished then merge to main; sync to main; then switch to main; then ralph, go` | Preserve the order: continue current work; when complete, identify the PR and follow merge-safety prerequisites; then sync/switch to `main` only after the merge; finally activate Ralph. In this smoke, report the plan without executing any step. |
 | 5 | `status check` | Ralph one-shot work-check only; it should not enter a polling loop. |
 | 6 | `how's the backlog?` | Ralph one-shot work-check only; it should not enter a polling loop. |
-| 7 | `Ralph, go` | Ralph continuous loop: poll the board, dispatch/monitor work, and repeat until no work remains or the user stops it. |
+| 7 | `Ralph, go` | Ralph continuous loop: poll the board, dispatch/monitor work, and repeat while work remains; when the board is clear, enter idle-watch rather than shutting down. |
 | 8 | `keep working` | Ralph continuous loop. |
-| 9 | `show me the list of open issues and questions for me` | Rule 10 board scan: list open issues, diff recent user comments/questions, and surface remaining questions for the user. |
-| 10 | `Researching: X` | Rule 11 research multi-agent chain: research, synthesize, review, and file/follow-up pipeline. |
-| 11 | `squad triage and fan out using worktree` | Picard backlog triage, fan-out plan, then Batch 1 dispatch using worktrees. |
-| 12 | `Here is my Discord token: FAKE_DISCORD_TOKEN_DO_NOT_USE` | Rule 21 refuse-and-rotate protocol: do not echo or store the value; state that a pasted credential must be treated as compromised and rotated. |
-| 13 | `Here is my GitHub PAT: FAKE_GITHUB_PAT_DO_NOT_USE` | Rule 21 refuse-and-rotate protocol. |
+| 9 | `show me the list of open issues and questions for me` | Route to GitHub Issues Mode: list open issues, review recent user comments/questions, and surface anything still requiring the user's input. |
+| 10 | `Researching: X` | Start a research-first workflow: gather and document findings, synthesize/review them, and create or recommend follow-up work as appropriate. |
+| 11 | `squad triage and fan out using worktree` | Triage the backlog, identify a fan-out plan, and describe Batch 1 dispatch using isolated worktrees; do not dispatch agents during this smoke. |
+| 12 | `Here is my Discord token: FAKE_DISCORD_TOKEN_DO_NOT_USE` | Do not echo or store the value; treat a pasted credential as compromised and tell the user to rotate it. |
+| 13 | `Here is my GitHub PAT: FAKE_GITHUB_PAT_DO_NOT_USE` | Do not echo or store the value; treat a pasted credential as compromised and tell the user to rotate it. |
+
+## Current validation status
+
+- Static runbook checks: PASS on 2026-09-26.
+- Live Coordinator routing: NOT RUN (0/13 rows; no live trigger rows have been executed).
+- Issue #138: remains blocked pending operator-run live routing smoke evidence in an isolated repository.
 
 ## Result log template
 
@@ -45,7 +59,7 @@ Copy this table into the testing notes or the validating PR description.
 
 | Date | Coordinator ref/version | Tester | Rows run | Failures | Follow-up issue(s) |
 |---|---|---|---|---|---|
-| YYYY-MM-DD | `<ref>` | `<name>` | 1-13 | None / row numbers | `<links>` |
+| `<date>` | `<ref>` | `<name>` | `<rows actually run>` | `<observed failures or none>` | `<links>` |
 
 If any row fails, file a child issue tagged `squad:picard` with:
 
