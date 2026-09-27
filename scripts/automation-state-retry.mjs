@@ -9,9 +9,18 @@ import { pathToFileURL } from "node:url";
 
 const execFileAsync = promisify(execFile);
 
+function gitEnvironment() {
+  const env = { ...process.env };
+  for (const key of Object.keys(env)) {
+    if (key.startsWith("GIT_")) delete env[key];
+  }
+  return env;
+}
+
 async function runGit(args, { cwd } = {}) {
   const { stdout } = await execFileAsync("git", args, {
     cwd,
+    env: gitEnvironment(),
     encoding: "utf8",
   });
   return stdout.trim();
@@ -65,6 +74,7 @@ async function stagePresentPaths(stateDir, relativePaths) {
 async function hasStagedChanges(stateDir) {
   try {
     await execFileAsync("git", ["-C", stateDir, "diff", "--cached", "--quiet"], {
+      env: gitEnvironment(),
       encoding: "utf8",
     });
     return false;

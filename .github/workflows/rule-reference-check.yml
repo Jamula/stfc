@@ -42,19 +42,14 @@ jobs:
           set -euo pipefail
 
           # ── 1. Extract canonical rule numbers ────────────────────────────
-          # Every heading of the form "## N." is a valid rule slot, including
-          # "RESERVED — see Rule X" entries (they still have a heading).
+          # .github/copilot-instructions.md is authoritative; only headings
+          # of the form "## N." define rule numbers, including reserved slots.
           CANONICAL=$(grep -oE '^## [0-9]+\.' .github/copilot-instructions.md \
             | grep -oE '[0-9]+' | sort -n || true)
 
           echo "Canonical rule numbers: $(echo "$CANONICAL" | tr '\n' ' ')"
           if [ -z "$CANONICAL" ]; then
-            echo "No numbered canonical rules found — every cited Rule N is dangling."
-          fi
-
-          if [ -z "$CANONICAL" ]; then
-            echo "⚠️ No numbered '## N.' headings found in .github/copilot-instructions.md — skipping Rule N citation check."
-            exit 0
+            echo "No numbered canonical rules found in .github/copilot-instructions.md; any cited Rule N will be reported as dangling."
           fi
 
           # ── 2. Get files changed in this PR ───────────────────────────────

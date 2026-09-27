@@ -17,7 +17,9 @@
 
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { execFileSync, spawnSync } from "node:child_process";
 import * as fs from "node:fs";
+import * as os from "node:os";
 import * as path from "node:path";
 
 // SHA pinned in workflow — must match bit-for-bit.
@@ -31,6 +33,114 @@ const yamlPath = path.resolve(
   "workflows",
   "rule-reference-check.yml",
 );
+
+function cleanGitEnvironment(): NodeJS.ProcessEnv {
+  const env = { ...process.env };
+  for (const key of Object.keys(env)) {
+    if (key.startsWith("GIT_")) delete env[key];
+  }
+  return env;
+}
+
+function findBash(): string | undefined {
+  const candidates =
+    process.platform === "win32"
+      ? [
+          path.join(process.env.ProgramW6432 ?? process.env.ProgramFiles ?? "C:\\Program Files", "Git", "bin", "bash.exe"),
+          path.join(process.env["ProgramFiles(x86)"] ?? "C:\\Program Files (x86)", "Git", "bin", "bash.exe"),
+          "bash",
+        ]
+      : ["bash"];
+
+  return candidates.find((candidate) => {
+    const result = spawnSync(candidate, ["--version"], {
+      env: cleanGitEnvironment(),
+      stdio: "ignore",
+    });
+    return !result.error && result.status === 0;
+  });
+}
+
+function extractWorkflowScript(content: string): string {
+  const lines = content.replace(/\r\n/g, "\n").split("\n");
+  const runIndex = lines.findIndex((line) => /^\s{8}run:\s*\|$/.test(line));
+  assert.notEqual(runIndex, -1, "workflow run block must exist");
+
+  const body: string[] = [];
+  let indentation: number | undefined;
+  for (const line of lines.slice(runIndex + 1)) {
+    if (!line.trim()) {
+      body.push("");
+      continue;
+    }
+
+    const lineIndentation = line.match(/^\s*/)?.[0].length ?? 0;
+    if (lineIndentation <= 8) break;
+    indentation ??= lineIndentation;
+    if (lineIndentation < indentation) break;
+    body.push(line.slice(indentation));
+  }
+
+  return body.join("\n").replace(/\$\{\{\s*github\.base_ref\s*\}\}/g, "main");
+}
+
+function runGit(cwd: string, ...args: string[]): string {
+  return execFileSync("git", args, {
+    cwd,
+    encoding: "utf8",
+    env: cleanGitEnvironment(),
+    stdio: ["ignore", "pipe", "pipe"],
+  }).trim();
+}
+
+function runWorkflowFixture(
+  bash: string,
+  script: string,
+  canonicalInstructions: string,
+  addedContent: string,
+): { status: number | null; output: string } {
+  const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "rule-reference-check-"));
+  try {
+    const repo = path.join(scratch, "repo");
+    fs.mkdirSync(path.join(repo, ".github"), { recursive: true });
+    fs.mkdirSync(path.join(repo, "docs"), { recursive: true });
+    fs.writeFileSync(
+      path.join(repo, ".github", "copilot-instructions.md"),
+      canonicalInstructions,
+    );
+    runGit(repo, "init", "-b", "main");
+    runGit(repo, "config", "user.name", "Workflow Test");
+    runGit(repo, "config", "user.email", "workflow-test@example.invalid");
+    runGit(repo, "add", "--", ".github/copilot-instructions.md");
+    runGit(repo, "commit", "-m", "canonical baseline");
+    runGit(
+      repo,
+      "update-ref",
+      "refs/remotes/origin/main",
+      runGit(repo, "rev-parse", "HEAD"),
+    );
+
+    fs.writeFileSync(path.join(repo, "docs", "change.md"), addedContent);
+    runGit(repo, "add", "--", "docs/change.md");
+    runGit(repo, "commit", "-m", "governance change");
+
+    const result = spawnSync(bash, ["-"], {
+      cwd: repo,
+      encoding: "utf8",
+      env: cleanGitEnvironment(),
+      input: script,
+    });
+    if (result.error) throw result.error;
+    return {
+      status: result.status,
+      output: `${result.stdout}${result.stderr}`,
+    };
+  } finally {
+    fs.rmSync(scratch, { recursive: true, force: true });
+  }
+}
+
+const bash = findBash();
 
 describe("rule-reference-check.yml / contract pinning", () => {
   let yaml: string;
@@ -124,8 +234,8 @@ describe("rule-reference-check.yml / contract pinning", () => {
 
   // ── Script invariants ─────────────────────────────────────────────────────
 
-  it("canonical rule numbers are extracted from .github/copilot-instructions.md headings", () => {
-    // The grep pattern ^## [0-9]+. captures every rule slot (including RESERVED).
+  it("canonical rule numbers come only from numbered headings in copilot instructions", () => {
+    // .github/copilot-instructions.md is authoritative; only ^## [0-9]+. declares a rule.
     assert.match(
       yaml,
       /grep -oE '\^## \[0-9\]\+\\.'/,
@@ -133,30 +243,70 @@ describe("rule-reference-check.yml / contract pinning", () => {
     );
     assert.match(
       yaml,
-      /\| sort -n \|\| true/,
+      /sort -n \|\| true/,
       "canonical extraction must allow an instruction file with no numbered headings",
     );
     assert.match(
       yaml,
-      /No numbered canonical rules found — every cited Rule N is dangling\./,
-      "workflow must warn (not skip) when no numbered canonical rules exist",
+      /\.github\/copilot-instructions\.md is authoritative/,
+      "the canonical rule-number source must be explicit",
     );
-    // An empty canonical set must not short-circuit the check: citation
-    // extraction has to keep running so `Rule 999` is still reported dangling.
-    assert.doesNotMatch(
+    assert.match(
       yaml,
-      /No numbered canonical rules found[^\n]*\n\s*exit 0/,
-      "workflow must not exit early when the canonical set is empty",
+      /No numbered canonical rules found in \.github\/copilot-instructions\.md; any cited Rule N will be reported as dangling\./,
+      "workflow must diagnose an empty canonical rule set",
+    );
+    const emptyCanonicalGuard = yaml.match(
+      /if \[ -z "\$CANONICAL" \]; then([\s\S]*?)fi/,
+    );
+    assert.ok(emptyCanonicalGuard, "must diagnose when no canonical rule numbers are found");
+    assert.doesNotMatch(
+      emptyCanonicalGuard[1]!,
+      /exit\s+0/,
+      "an empty canonical set must not bypass citation diagnostics",
     );
   });
 
-  it("skips validation when copilot instructions contain no numbered rule headings", () => {
+  it("continues citation validation when copilot instructions contain no numbered rule headings", () => {
     assert.match(
       yaml,
-      /No numbered '## N\.' headings found/,
-      "must early-exit when no canonical numbered headings are present",
+      /if ! echo "\$CANONICAL" \| grep -qw "\$n"; then/,
+      "every cited number must be checked against the canonical set, including when empty",
+    );
+    assert.match(
+      yaml,
+      /These numbers do not exist in \.github\/copilot-instructions\.md\./,
+      "dangling citations must identify the authoritative source",
     );
   });
+
+  it(
+    "runs the workflow correctly when the canonical instructions have no numbered headings",
+    { skip: bash ? false : "Bash is unavailable for executing the workflow fixture" },
+    () => {
+      const script = extractWorkflowScript(yaml);
+      const noRules = "# Instructions\n\n## Overview\n\n";
+
+      const noCitation = runWorkflowFixture(bash!, script, noRules, "No rule citation.\n");
+      assert.equal(noCitation.status, 0, noCitation.output);
+      assert.match(noCitation.output, /No numbered canonical rules found/);
+      assert.match(noCitation.output, /No 'Rule N' references in added content/);
+
+      const danglingCitation = runWorkflowFixture(bash!, script, noRules, "This cites Rule 999.\n");
+      assert.equal(danglingCitation.status, 1, danglingCitation.output);
+      assert.match(danglingCitation.output, /Rule 999/);
+      assert.match(danglingCitation.output, /docs\/change\.md/);
+
+      const validCitation = runWorkflowFixture(
+        bash!,
+        script,
+        "# Instructions\n\n## 2. Rule Two\n\n",
+        "This cites Rule 2.\n",
+      );
+      assert.equal(validCitation.status, 0, validCitation.output);
+      assert.match(validCitation.output, /All Rule N references are valid/);
+    },
+  );
 
   it("diff is scoped to origin/<base_ref>...HEAD (three-dot range)", () => {
     // YAML contains: "${BASE_REF}...HEAD" — match with curly braces
