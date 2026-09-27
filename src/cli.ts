@@ -22,6 +22,7 @@ const log = createLogger("cli");
 
 const PROMO_CODES_PATH = "promo-codes.txt";
 const HISTORY_PATH = "docs/redeem-history.md";
+const DEGRADED_STATE_PATH = "data/redeem-degraded-state.json";
 
 const SKILLS = [
   "run-all",
@@ -41,13 +42,14 @@ interface SkillOptions {
   accounts: Account[];
   promoCodesPath?: string;
   historyPath?: string;
+  degradedStatePath?: string;
   summary?: SummaryWriter;
 }
 type SkillOutput = { result: unknown; exitCode: number };
 type SkillFn = (opts: SkillOptions) => Promise<SkillOutput>;
 
 const SKILL_FNS: Record<SkillName, SkillFn> = {
-  "run-all": (o) => runAll(o),
+  "run-all": (o) => runAll({ ...o, degradedStatePath: DEGRADED_STATE_PATH }),
   "check-auth": (o) => checkAuth(o),
   "list-gifts": (o) => listGifts(o),
   "claim-gifts": (o) => claimGifts(o),

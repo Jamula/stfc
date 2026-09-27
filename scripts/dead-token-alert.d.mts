@@ -12,12 +12,14 @@ export interface AlertSelectOptions {
 }
 
 export interface AlertLookupOptions extends AlertSelectOptions {
+  alertName?: string;
   listIssues?: (title: string) => unknown;
   log?: (line: string) => void;
 }
 
 export interface AlertResolveOptions extends AlertLookupOptions {
   runUrl?: string;
+  resolutionComment?: string;
   closeIssue?: (number: number, comment: string) => void;
 }
 

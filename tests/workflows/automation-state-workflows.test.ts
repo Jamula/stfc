@@ -115,7 +115,12 @@ const scheduled = [
     workflow: redeem,
     runStep: "Redeem",
     persistStep: "Commit redeem state to automation-state (if changed)",
-    paths: ["docs/redeem-history.md", "data/promo-code-dead.json", "promo-codes.txt"],
+    paths: [
+      "docs/redeem-history.md",
+      "data/promo-code-dead.json",
+      "data/redeem-degraded-state.json",
+      "promo-codes.txt",
+    ],
   },
   {
     name: "discord monitor",
@@ -220,6 +225,14 @@ describe("automation-state scheduled workflow contract", () => {
       assert.doesNotMatch(persist, /HEAD:\$GITHUB_REF_NAME/);
     });
   }
+
+  it("redeem retries preserve the degraded-gift state path", () => {
+    const persist = namedStep(redeem, "Commit redeem state to automation-state (if changed)").run ?? "";
+    assert.match(
+      persist,
+      /node scripts\/automation-state-retry\.mjs \\\n\s+"\$STATE_DIR" automation-state \\\n\s+docs\/redeem-history\.md data\/promo-code-dead\.json \\\n\s+data\/redeem-degraded-state\.json promo-codes\.txt/,
+    );
+  });
 
   it("both scheduled workflows merge main promo seeds with operational state", () => {
     for (const workflow of [redeem, monitor]) {

@@ -397,6 +397,36 @@ describe("dead-token-alert — resolve", () => {
     assert.match(lines.join("\n"), /::warning::Failed to close dead-token alert #101/);
   });
 
+  it("uses the configured alert name in lookup and close diagnostics", () => {
+    const { lines: lookupLines, log: logLookup } = recorder();
+    const lookupResult = resolveDeadTokenAlert({
+      title: TITLE,
+      alertName: "Persistent degraded-gift alert",
+      requiredLabels: REQUIRED,
+      listIssues: () => {
+        throw new Error("API unavailable");
+      },
+      closeIssue: () => assert.fail("a failed lookup must not close an issue"),
+      log: logLookup,
+    });
+    assert.equal(lookupResult.status, "lookup-failed");
+    assert.match(lookupLines.join("\n"), /Persistent degraded-gift alert lookup failed/);
+
+    const { lines: closeLines, log: logClose } = recorder();
+    const closeResult = resolveDeadTokenAlert({
+      title: TITLE,
+      alertName: "Persistent degraded-gift alert",
+      requiredLabels: REQUIRED,
+      listIssues: () => FIXTURE,
+      closeIssue: () => {
+        throw new Error("permission denied");
+      },
+      log: logClose,
+    });
+    assert.equal(closeResult.status, "close-failed");
+    assert.match(closeLines.join("\n"), /Failed to close persistent degraded-gift alert #101/);
+  });
+
   it("uses the same identity rule as the create side", () => {
     // Symmetry is structural: both workflow halves call findAlertIssue, so the
     // number the create step treats as "already open" is exactly the number

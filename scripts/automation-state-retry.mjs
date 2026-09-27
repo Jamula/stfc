@@ -9,10 +9,26 @@ import { pathToFileURL } from "node:url";
 
 const execFileAsync = promisify(execFile);
 
+const GIT_REPOSITORY_CONTEXT_VARIABLES = new Set([
+  "GIT_DIR",
+  "GIT_WORK_TREE",
+  "GIT_COMMON_DIR",
+  "GIT_INDEX_FILE",
+  "GIT_OBJECT_DIRECTORY",
+  "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+  "GIT_PREFIX",
+  "GIT_NAMESPACE",
+  "GIT_CEILING_DIRECTORIES",
+  "GIT_DISCOVERY_ACROSS_FILESYSTEM",
+  "GIT_SHALLOW_FILE",
+  "GIT_GRAFT_FILE",
+  "GIT_REPLACE_REF_BASE",
+]);
+
 function gitEnvironment() {
   const env = { ...process.env };
   for (const key of Object.keys(env)) {
-    if (key.startsWith("GIT_")) delete env[key];
+    if (GIT_REPOSITORY_CONTEXT_VARIABLES.has(key)) delete env[key];
   }
   return env;
 }
@@ -22,6 +38,7 @@ async function runGit(args, { cwd } = {}) {
     cwd,
     env: gitEnvironment(),
     encoding: "utf8",
+    env: gitEnvironment(),
   });
   return stdout.trim();
 }
@@ -76,6 +93,7 @@ async function hasStagedChanges(stateDir) {
     await execFileAsync("git", ["-C", stateDir, "diff", "--cached", "--quiet"], {
       env: gitEnvironment(),
       encoding: "utf8",
+      env: gitEnvironment(),
     });
     return false;
   } catch (error) {

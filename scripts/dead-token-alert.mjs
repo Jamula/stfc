@@ -29,6 +29,7 @@ import { pathToFileURL } from 'node:url';
 
 /** Labels that must be present for an issue to count as the dead-token alert. */
 export const DEFAULT_REQUIRED_LABELS = ['bug', 'priority:p1'];
+const DEFAULT_ALERT_NAME = 'Dead-token alert';
 
 /**
  * Parse `gh issue list --json …` output into an array. Only a genuine
@@ -120,6 +121,7 @@ function ghCloseIssue(number, comment) {
 export function findAlertIssue(options) {
   const title = options.title;
   const requiredLabels = options.requiredLabels ?? DEFAULT_REQUIRED_LABELS;
+  const alertName = options.alertName ?? DEFAULT_ALERT_NAME;
   const listIssues = options.listIssues ?? ghListIssues;
   // stderr, not stdout: the `find` command's caller in redeem.yml captures
   // this function's stdout via `existing=$(node ... find)` to get a single
@@ -135,7 +137,7 @@ export function findAlertIssue(options) {
   const matches = selectAlertIssues(issues, { title, requiredLabels });
   if (matches.length > 1) {
     log(
-      `::warning::Found ${matches.length} matching dead-token alerts; using oldest #${matches[0].number}.`,
+      `::warning::Found ${matches.length} matching ${alertName.toLowerCase()}s; using oldest #${matches[0].number}.`,
     );
   }
   return { number: matches.length > 0 ? matches[0].number : undefined, matchCount: matches.length };
@@ -154,24 +156,28 @@ export function resolveDeadTokenAlert(options) {
   const log = options.log ?? ((line) => console.error(line));
   const closeIssue = options.closeIssue ?? ghCloseIssue;
   const runUrl = options.runUrl ?? '(unknown run)';
+  const alertName = options.alertName ?? DEFAULT_ALERT_NAME;
+  const resolutionComment =
+    options.resolutionComment ??
+    `Token accepted again as of ${runUrl} — closing automatically.`;
 
   let found;
   try {
     found = findAlertIssue(options);
   } catch (err) {
-    log(`::warning::Dead-token alert lookup failed: ${errorText(err)}`);
+    log(`::warning::${alertName} lookup failed: ${errorText(err)}`);
     return { status: 'lookup-failed', matchCount: 0 };
   }
 
   if (found.number === undefined) {
-    log('No open dead-token alert — nothing to resolve.');
+    log(`No open ${alertName.toLowerCase()} — nothing to resolve.`);
     return { status: 'none', matchCount: 0 };
   }
 
   try {
-    closeIssue(found.number, `Token accepted again as of ${runUrl} — closing automatically.`);
+    closeIssue(found.number, resolutionComment);
   } catch (err) {
-    log(`::warning::Failed to close dead-token alert #${found.number}: ${errorText(err)}`);
+    log(`::warning::Failed to close ${alertName.toLowerCase()} #${found.number}: ${errorText(err)}`);
     return { status: 'close-failed', number: found.number, matchCount: found.matchCount };
   }
 
