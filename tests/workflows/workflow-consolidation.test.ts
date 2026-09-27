@@ -105,6 +105,7 @@ const NPM_SUBCOMMAND_VALUE_FLAGS = new Set([
   "--audit-level",
   "--cache",
   "--globalconfig",
+  "--include",
   "--install-strategy",
   "--loglevel",
   "--logs-dir",
@@ -194,6 +195,7 @@ function findNpmPublishInvocations(runScript: string): string[] {
     const tokens = tokenizeShellCommand(command);
     if (tokens[0] !== "npm") continue;
 
+    let hasUnknownOption = false;
     for (let i = 1; i < tokens.length; i++) {
       const token = tokens[i];
       if (token === undefined) continue;
@@ -204,11 +206,16 @@ function findNpmPublishInvocations(runScript: string): string[] {
       if (token.startsWith("-")) {
         if (!token.includes("=") && NPM_SUBCOMMAND_VALUE_FLAGS.has(token)) {
           i += 1;
+        } else if (!token.includes("=")) {
+          hasUnknownOption = true;
         }
         continue;
       }
-      if (token === "publish") invocations.push(command);
-      break;
+      if (token === "publish") {
+        invocations.push(command);
+        break;
+      }
+      if (!hasUnknownOption) break;
     }
   }
   return invocations;
@@ -220,6 +227,7 @@ describe("npm publish workflow guard (self-tests)", () => {
     ["workspace option before subcommand", "npm --workspace foo publish"],
     ["short workspace option before subcommand", "npm -w foo publish"],
     ["access option before subcommand", "npm --access public publish"],
+    ["include option before subcommand", "npm --include dev publish"],
     [
       "multiple separate-value options before subcommand",
       "npm --workspace foo --access public publish",
@@ -227,6 +235,10 @@ describe("npm publish workflow guard (self-tests)", () => {
     [
       "attached-value options before subcommand",
       "npm --workspace=foo --access=public publish",
+    ],
+    [
+      "unknown option fails closed before a publish subcommand",
+      "npm --future-option value publish",
     ],
     ["publish option after subcommand", "npm publish --tag beta"],
     [
@@ -239,6 +251,10 @@ describe("npm publish workflow guard (self-tests)", () => {
   const nonPublishCommandFixtures = [
     ["npm run script named publish", "npm run publish"],
     ["install command with a publish argument", "npm install publish"],
+    [
+      "workspace install command with a publish argument",
+      "npm --workspace foo install publish",
+    ],
     ["quoted diagnostic text", 'echo "npm publish"'],
     ["unrelated command", "git push origin main"],
   ] as const;
@@ -514,6 +530,34 @@ describe("workflow consolidation", () => {
       releaseProcess,
       /packages\/squad-(?:sdk|cli)|@bradygaster\/squad-cli|squad-npm-publish\.yml/,
       "release guidance must not retain Squad CLI package or workflow instructions",
+    );
+  });
+
+  it("keeps versioning guidance aligned with the main-only private package", () => {
+    const versioningPolicy = readFileSync(
+      ".squad/templates/skills/versioning-policy/SKILL.md",
+      "utf8",
+    );
+    const normalizedPolicy = versioningPolicy.replace(/\s+/g, " ");
+    assert.match(
+      normalizedPolicy,
+      /\bmain-only\b/,
+      "versioning guidance must state the supported branch model",
+    );
+    assert.match(
+      normalizedPolicy,
+      /private `stfc-gift-redeemer` package/,
+      "versioning guidance must identify the actual private package",
+    );
+    assert.match(
+      normalizedPolicy,
+      /\.github\/workflows\/squad-release\.yml/,
+      "versioning guidance must reference the actual release workflow",
+    );
+    assert.doesNotMatch(
+      versioningPolicy,
+      /@bradygaster\/squad-(?:sdk|cli)|packages\/squad-(?:sdk|cli)|prerelease-version-guard|skip-version-check|bump-build\.mjs|`dev`|`preview`/,
+      "versioning guidance must not retain stale Squad workspace or branch instructions",
     );
   });
 

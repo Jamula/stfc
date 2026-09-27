@@ -36,7 +36,7 @@ This handoff guard follows issue #220.
 
 ## Worktree Cleanup
 
-Before removing a worktree, preserve its uncommitted `.squad/` artifacts in the
-main checkout without overwriting existing history, decisions, or logs. Follow
-the canonical git-workflow skill's copy and verification procedure before
-removing the worktree.
+Before removing a worktree, preserve its uncommitted `.squad/` artifacts as a
+complete snapshot in a unique `.squad/worktree-inbox/` directory; do not
+overwrite the main checkout's state or reuse an existing destination. Follow
+the canonical git-workflow skill's verification procedure before removal.

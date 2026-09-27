@@ -124,30 +124,39 @@ The `.squad/` directory exists in each worktree as a copy. This is safe because:
 
 After a worktree's PR is merged to main:
 
-Before removing it, preserve any uncommitted `.squad/` state in the main
-checkout so Scribe can collect it. Copy without overwriting existing
-history, decisions, or logs.
+Before removing it, preserve any uncommitted `.squad/` state in a unique
+staging directory under `.squad/worktree-inbox/`. Stage a complete snapshot
+instead of copying over the main checkout's state, and never reuse an existing
+destination; Scribe can reconcile both versions later.
 
 On Linux or macOS:
 
 ```bash
-if [ -d "../stfc-195/.squad" ]; then
-  rsync -a --ignore-existing ../stfc-195/.squad/ .squad/
-fi
+source="../stfc-195/.squad"
+snapshot=".squad/worktree-inbox/stfc-195"
+test -d "$source"
+test ! -e "$snapshot" || { echo "Choose a new snapshot path" >&2; exit 1; }
+mkdir -p "$snapshot"
+cp -a "$source/." "$snapshot/"
+diff -qr "$source" "$snapshot"
 ```
 
 On Windows PowerShell:
 
 ```powershell
-if (Test-Path ..\stfc-195\.squad) {
-  robocopy ..\stfc-195\.squad .squad /E /XC /XN /XO
-  if ($LASTEXITCODE -ge 8) { throw "Failed to preserve .squad artifacts" }
-}
+$source = "..\stfc-195\.squad"
+$snapshot = ".squad\worktree-inbox\stfc-195"
+if (-not (Test-Path -LiteralPath $source)) { throw "Missing .squad source" }
+if (Test-Path -LiteralPath $snapshot) { throw "Choose a new snapshot path" }
+New-Item -ItemType Directory -Path $snapshot | Out-Null
+robocopy $source $snapshot /E /COPY:DAT /DCOPY:DAT
+if ($LASTEXITCODE -ge 8) { throw "Failed to preserve .squad artifacts" }
+robocopy $source $snapshot /E /COPY:DAT /DCOPY:DAT /L /NJH /NJS /NDL /NFL
+if ($LASTEXITCODE -ne 0) { throw "Snapshot verification found differences" }
 ```
 
 ```bash
-# From the main clone. Verify that only preserved .squad state remains
-# uncommitted before forcing worktree removal.
+# From the main clone. Preserve any non-.squad changes before force-removing.
 git -C ../stfc-195 status --short
 git worktree remove --force ../stfc-195
 git worktree prune          # clean stale metadata
@@ -155,9 +164,10 @@ git branch -d squad/195-fix-stamp-bug
 git push origin --delete squad/195-fix-stamp-bug
 ```
 
-Do not force-remove a worktree while any other uncommitted changes remain
-unpreserved. If a worktree was deleted manually, `git worktree prune` recovers
-the metadata but cannot recover its files.
+Do not force-remove a worktree until the snapshot is verified and any
+non-`.squad/` uncommitted changes are preserved separately. If a worktree was
+deleted manually, `git worktree prune` recovers the metadata but cannot
+recover its files.
 
 ---
 
