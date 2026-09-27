@@ -57,6 +57,22 @@ describe("degraded-gift-alert", () => {
     );
   });
 
+  it("does not treat migrated legacy display names as bundle identifiers", () => {
+    assert.deepEqual(
+      parseDegradedState(
+        JSON.stringify({
+          version: 2,
+          accounts: {
+            one: {
+              Chest: { streak: PERSISTENT_TRANSIENT_RUNS, title: "Chest", legacy: true },
+            },
+          },
+        }),
+      ),
+      [{ gift: "Chest", streak: PERSISTENT_TRANSIENT_RUNS }],
+    );
+  });
+
   it("rejects malformed persisted state instead of treating it as recovery", () => {
     assert.throws(() => parseDegradedState("{}"), /invalid state file shape/);
     assert.throws(

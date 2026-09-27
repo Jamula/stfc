@@ -29,14 +29,17 @@ export function parseDegradedState(raw) {
       throw new Error('degraded-gift-alert: account state must be an object');
     }
     for (const [giftId, rawEntry] of Object.entries(rawGifts)) {
-      const legacy = parsed.version === 1;
-      const streak = legacy ? rawEntry : rawEntry?.streak;
-      const gift = legacy ? giftId : rawEntry?.title;
+      const legacy = parsed.version === 1 || rawEntry?.legacy === true;
+      const streak = parsed.version === 1 ? rawEntry : rawEntry?.streak;
+      const gift = parsed.version === 1 ? giftId : rawEntry?.title;
       if (typeof streak !== 'number' || !Number.isInteger(streak) || streak < 1) {
         throw new Error('degraded-gift-alert: streaks must be positive integers');
       }
       if (typeof gift !== 'string') {
         throw new Error('degraded-gift-alert: gift entries need a title and positive integer streak');
+      }
+      if (parsed.version === 2 && rawEntry?.legacy !== undefined && rawEntry.legacy !== true) {
+        throw new Error('degraded-gift-alert: legacy markers must be true when present');
       }
       if (streak >= PERSISTENT_TRANSIENT_RUNS) {
         failures.push({ gift, ...(legacy ? {} : { giftId }), streak });
