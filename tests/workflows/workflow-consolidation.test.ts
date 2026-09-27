@@ -100,6 +100,25 @@ const NODE_TEST_VALUE_FLAGS = new Set([
   "--experimental-loader",
 ]);
 
+const NPM_SUBCOMMAND_VALUE_FLAGS = new Set([
+  "--access",
+  "--audit-level",
+  "--cache",
+  "--globalconfig",
+  "--install-strategy",
+  "--loglevel",
+  "--logs-dir",
+  "--omit",
+  "--otp",
+  "--prefix",
+  "--registry",
+  "--scope",
+  "--tag",
+  "--userconfig",
+  "--workspace",
+  "-w",
+]);
+
 const GLOB_METACHARACTERS = /[*?[{]/;
 
 function tokenizeShellCommand(command: string): string[] {
@@ -111,29 +130,26 @@ function tokenizeShellCommand(command: string): string[] {
   });
 }
 
-function findNodeTestInvocations(
-  runScript: string,
-): Array<{ command: string; targets: string[] }> {
+function splitShellCommands(runScript: string): string[] {
   // Join backslash-newline shell line continuations (e.g. `node --test \`
   // followed by `tests/*.test.ts` on the next line) into a single logical
-  // line *before* splitting on line breaks. Without this, a continued
-  // command is torn in two: the `node --test` invocation ends up with the
-  // trailing `\` as its only "target" (not a glob, so nothing is flagged),
-  // and the glob on the following line is examined on its own -- where it
-  // no longer looks like a `node`/`npx tsx` invocation at all and is
-  // skipped entirely. Either way the guard passes vacuously.
+  // line before splitting on line breaks.
   const continuationJoined = runScript.replace(/\\\r?\n[ \t]*/g, " ");
   // Split on both line breaks (CRLF-safe) and common shell separators, so a
   // multi-line `run: |` block or a `cmd1 && cmd2` one-liner is examined
   // command-by-command rather than as one opaque blob.
-  const commands = continuationJoined
+  return continuationJoined
     .split(/\r?\n/)
     .flatMap((line) => line.split(/&&|\|\||[;|]/))
     .map((segment) => segment.trim())
     .filter((segment) => segment.length > 0);
+}
 
+function findNodeTestInvocations(
+  runScript: string,
+): Array<{ command: string; targets: string[] }> {
   const invocations: Array<{ command: string; targets: string[] }> = [];
-  for (const command of commands) {
+  for (const command of splitShellCommands(runScript)) {
     const tokens = tokenizeShellCommand(command);
     const first = tokens[0];
     const isNodeInvocation = first === "node";
@@ -171,6 +187,82 @@ function globTestTargets(
       .map((target) => ({ command, target })),
   );
 }
+
+function findNpmPublishInvocations(runScript: string): string[] {
+  const invocations: string[] = [];
+  for (const command of splitShellCommands(runScript)) {
+    const tokens = tokenizeShellCommand(command);
+    if (tokens[0] !== "npm") continue;
+
+    for (let i = 1; i < tokens.length; i++) {
+      const token = tokens[i];
+      if (token === undefined) continue;
+      if (token === "--") {
+        if (tokens[i + 1] === "publish") invocations.push(command);
+        break;
+      }
+      if (token.startsWith("-")) {
+        if (!token.includes("=") && NPM_SUBCOMMAND_VALUE_FLAGS.has(token)) {
+          i += 1;
+        }
+        continue;
+      }
+      if (token === "publish") invocations.push(command);
+      break;
+    }
+  }
+  return invocations;
+}
+
+describe("npm publish workflow guard (self-tests)", () => {
+  const publishCommandFixtures = [
+    ["bare publish command", "npm publish"],
+    ["workspace option before subcommand", "npm --workspace foo publish"],
+    ["short workspace option before subcommand", "npm -w foo publish"],
+    ["access option before subcommand", "npm --access public publish"],
+    [
+      "multiple separate-value options before subcommand",
+      "npm --workspace foo --access public publish",
+    ],
+    [
+      "attached-value options before subcommand",
+      "npm --workspace=foo --access=public publish",
+    ],
+    ["publish option after subcommand", "npm publish --tag beta"],
+    [
+      "publish in a later shell segment",
+      "npm ci && npm --workspace foo publish",
+      ["npm --workspace foo publish"],
+    ],
+  ] as const;
+
+  const nonPublishCommandFixtures = [
+    ["npm run script named publish", "npm run publish"],
+    ["install command with a publish argument", "npm install publish"],
+    ["quoted diagnostic text", 'echo "npm publish"'],
+    ["unrelated command", "git push origin main"],
+  ] as const;
+
+  for (const [label, command, expectedCommands = [command]] of publishCommandFixtures) {
+    it(`flags: ${label}`, () => {
+      assert.deepStrictEqual(
+        findNpmPublishInvocations(command),
+        expectedCommands,
+        `expected npm publish to be detected in \`${command}\``,
+      );
+    });
+  }
+
+  for (const [label, command] of nonPublishCommandFixtures) {
+    it(`accepts: ${label}`, () => {
+      assert.deepStrictEqual(
+        findNpmPublishInvocations(command),
+        [],
+        `expected no npm publish command in \`${command}\``,
+      );
+    });
+  }
+});
 
 describe("findNodeTestInvocations guard (self-tests)", () => {
   // These fixtures are not read from any workflow file -- they prove the
@@ -373,6 +465,11 @@ describe("workflow consolidation", () => {
         /\bmain-only\b/,
         `${skillPath} must explicitly describe the main-only model`,
       );
+      assert.match(
+        skill.replace(/\s+/g, " "),
+        /Before removing (?:it|a worktree), preserve (?:any )?(?:its )?uncommitted `\.squad\/` (?:state|artifacts)/i,
+        `${skillPath} must preserve uncommitted .squad state before worktree removal`,
+      );
       for (const lane of ["scope", "technical", "operations"]) {
         assert.match(
           skill,
@@ -388,12 +485,45 @@ describe("workflow consolidation", () => {
     }
   });
 
-  it("does not publish npm packages from workflows without explicit policy coverage", () => {
+  it("documents the private GitHub-release process without stale npm guidance", () => {
+    const releaseProcess = readFileSync(
+      ".squad/templates/skills/release-process/SKILL.md",
+      "utf8",
+    );
+    assert.match(
+      releaseProcess,
+      /private\s+`stfc-gift-redeemer`\s+package/,
+      "release guidance must identify this repository's private package",
+    );
+    assert.match(
+      releaseProcess,
+      /\.github\/workflows\/squad-release\.yml/,
+      "release guidance must reference the actual release workflow",
+    );
+    assert.match(
+      releaseProcess,
+      /does not publish to a package\s+registry/i,
+      "release guidance must state that the workflow does not publish packages",
+    );
+    assert.match(
+      releaseProcess,
+      /workflow\s+consolidation regression test/i,
+      "release guidance must describe the active workflow publishing guard",
+    );
+    assert.doesNotMatch(
+      releaseProcess,
+      /packages\/squad-(?:sdk|cli)|@bradygaster\/squad-cli|squad-npm-publish\.yml/,
+      "release guidance must not retain Squad CLI package or workflow instructions",
+    );
+  });
+
+  it("does not publish npm packages from active workflows", () => {
     for (const { file, step } of workflowSteps) {
-      assert.doesNotMatch(
-        step.run ?? "",
-        /(^|[\s;&|])npm\s+publish\b/,
-        `${file} must not run npm publish unless a dedicated publish-policy guard is added`,
+      const invocations = findNpmPublishInvocations(step.run ?? "");
+      assert.deepStrictEqual(
+        invocations,
+        [],
+        `${file} must not run npm publish without a separately reviewed publishing policy`,
       );
     }
   });

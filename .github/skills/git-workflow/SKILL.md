@@ -124,15 +124,40 @@ The `.squad/` directory exists in each worktree as a copy. This is safe because:
 
 After a worktree's PR is merged to main:
 
+Before removing it, preserve any uncommitted `.squad/` state (Rule 8) in the
+main checkout so Scribe can collect it. Copy without overwriting existing
+history, decisions, or logs.
+
+On Linux or macOS:
+
 ```bash
-# From the main clone
-git worktree remove ../stfc-195
+if [ -d "../stfc-195/.squad" ]; then
+  rsync -a --ignore-existing ../stfc-195/.squad/ .squad/
+fi
+```
+
+On Windows PowerShell:
+
+```powershell
+if (Test-Path ..\stfc-195\.squad) {
+  robocopy ..\stfc-195\.squad .squad /E /XC /XN /XO
+  if ($LASTEXITCODE -ge 8) { throw "Failed to preserve .squad artifacts" }
+}
+```
+
+```bash
+# From the main clone. Verify that only preserved .squad state remains
+# uncommitted before forcing worktree removal.
+git -C ../stfc-195 status --short
+git worktree remove --force ../stfc-195
 git worktree prune          # clean stale metadata
 git branch -d squad/195-fix-stamp-bug
 git push origin --delete squad/195-fix-stamp-bug
 ```
 
-If a worktree was deleted manually (rm -rf), `git worktree prune` recovers the state.
+Do not force-remove a worktree while any other uncommitted changes remain
+unpreserved. If a worktree was deleted manually, `git worktree prune` recovers
+the metadata but cannot recover its files.
 
 ---
 
