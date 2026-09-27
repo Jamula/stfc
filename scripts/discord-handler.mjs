@@ -325,19 +325,32 @@ export async function updateDailyIndexAtomic({
   writeFileImpl = writeFile,
   renameImpl = rename,
 }) {
-  let doc = { files: [] };
+  let doc;
   try {
     const raw = await readFileImpl(indexPath, "utf8");
     const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed?.files)) {
-      doc = { files: parsed.files };
+    if (!Array.isArray(parsed?.files)) {
+      throw new Error("daily index is malformed: expected a files array");
     }
-  } catch {
+    doc = { files: parsed.files };
+  } catch (error) {
+    if (error?.code !== "ENOENT") {
+      throw error;
+    }
     doc = { files: [] };
   }
 
-  const existingFiles = doc.files.filter((f) => f && typeof f === "object");
-  const existingBytes = existingFiles.reduce((sum, f) => sum + Number(f.size_bytes || 0), 0);
+  const existingFiles = doc.files;
+  if (existingFiles.some((file) =>
+    !file
+    || typeof file !== "object"
+    || Array.isArray(file)
+    || !Number.isSafeInteger(file.size_bytes)
+    || file.size_bytes < 0
+  )) {
+    throw new Error("daily index is malformed: invalid file entry");
+  }
+  const existingBytes = existingFiles.reduce((sum, file) => sum + file.size_bytes, 0);
 
   if (existingFiles.length >= MAX_DAILY_FILES) {
     throw new Error(`daily file cap exceeded (${MAX_DAILY_FILES} files)`);
