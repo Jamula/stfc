@@ -120,6 +120,21 @@ const NPM_SUBCOMMAND_VALUE_FLAGS = new Set([
   "-w",
 ]);
 
+const SHELL_PREFIX_TOKENS = new Set([
+  "command",
+  "elif",
+  "else",
+  "env",
+  "exec",
+  "if",
+  "nohup",
+  "sudo",
+  "then",
+  "time",
+  "!",
+]);
+const SHELL_ENV_ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/;
+
 const GLOB_METACHARACTERS = /[*?[{]/;
 
 function tokenizeShellCommand(command: string): string[] {
@@ -193,10 +208,25 @@ function findNpmPublishInvocations(runScript: string): string[] {
   const invocations: string[] = [];
   for (const command of splitShellCommands(runScript)) {
     const tokens = tokenizeShellCommand(command);
-    if (tokens[0] !== "npm") continue;
+    let npmIndex = -1;
+    for (let i = 0; i < tokens.length; i++) {
+      const token = tokens[i];
+      if (token === "npm") {
+        npmIndex = i;
+        break;
+      }
+      if (
+        token !== undefined &&
+        (SHELL_PREFIX_TOKENS.has(token) || SHELL_ENV_ASSIGNMENT.test(token))
+      ) {
+        continue;
+      }
+      break;
+    }
+    if (npmIndex === -1) continue;
 
     let hasUnknownOption = false;
-    for (let i = 1; i < tokens.length; i++) {
+    for (let i = npmIndex + 1; i < tokens.length; i++) {
       const token = tokens[i];
       if (token === undefined) continue;
       if (token === "--") {
@@ -229,6 +259,19 @@ describe("npm publish workflow guard (self-tests)", () => {
     ["access option before subcommand", "npm --access public publish"],
     ["include option before subcommand", "npm --include dev publish"],
     [
+      "environment assignment before executable",
+      'NODE_AUTH_TOKEN="$TOKEN" npm publish',
+    ],
+    [
+      "env assignment before executable",
+      'env NODE_AUTH_TOKEN="$TOKEN" npm publish',
+    ],
+    [
+      "if control word before executable",
+      "if npm publish; then echo done",
+      ["if npm publish"],
+    ],
+    [
       "multiple separate-value options before subcommand",
       "npm --workspace foo --access public publish",
     ],
@@ -256,6 +299,10 @@ describe("npm publish workflow guard (self-tests)", () => {
       "npm --workspace foo install publish",
     ],
     ["quoted diagnostic text", 'echo "npm publish"'],
+    [
+      "environment-prefixed install with publish argument",
+      'env NODE_AUTH_TOKEN="$TOKEN" npm install publish',
+    ],
     ["unrelated command", "git push origin main"],
   ] as const;
 
