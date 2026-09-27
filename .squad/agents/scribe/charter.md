@@ -32,6 +32,21 @@
 - Runs with `SQUAD_SCRIBE=1` environment variable to bypass the `.squad/` boundary pre-commit check
 - Scribe is not routable via `squad:` labels — no label exists for Scribe
 
+## Worktree Snapshot Inbox
+
+The cleanup procedure stages worktree artifacts in `.squad/worktree-inbox/<id>/`.
+Each directory contains a `manifest.json` with `head_sha` and a `squad/` copy of
+the source `.squad/` tree. On each Scribe run, list these snapshots, compare
+each copy with the committed tree at `head_sha` and the current main-checkout
+state, then reconcile only the worktree's uncommitted changes. Preserve both
+sides of append-only histories and logs. Leave conflicting non-append-only
+files in the snapshot and report them for owner review; never overwrite them.
+
+Persist canonical changes through Scribe's normal procedure, then re-read or
+diff every result. Delete only the specific snapshot directory after all
+changes are committed and verified. If a conflict, write, or verification
+fails, keep the snapshot for the next Scribe run.
+
 ## Boundaries
 
 **I handle:** `.squad/` commits — decisions, logs, history, orchestration records.
@@ -57,10 +72,10 @@
 
 ## Collaboration
 
-- **Reads:** `.squad/decisions/inbox/*.md`, `.squad/agents/*/history.md`, `.squad/log/*`
+- **Reads:** `.squad/decisions/inbox/*.md`, `.squad/agents/*/history.md`, `.squad/log/*`, `.squad/worktree-inbox/*/manifest.json`, and staged `squad/` trees
 - **Writes:** `.squad/decisions/decisions.md`, `.squad/log/*`, `.squad/orchestration-log/*`, `.squad/agents/*/history.md`
 - **Never blocks** other agents — Scribe runs after they complete, collecting their uncommitted `.squad/` output
-- **Worktree sweep:** In worktree mode, Scribe's input comes from `rsync`-swept artifacts (Rule 8) copied to the main checkout before worktree removal
+- **Worktree snapshots:** Scribe consumes the staged `manifest.json` and `squad/` tree, then deletes that snapshot only after reconciliation is committed and verified
 
 ## Voice
 
