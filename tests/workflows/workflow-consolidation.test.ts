@@ -7,6 +7,11 @@ import { parse as parseYaml } from "yaml";
 const packageJson = JSON.parse(readFileSync("package.json", "utf8")) as {
   scripts?: Record<string, string>;
 };
+const workerPackageJson = JSON.parse(
+  readFileSync("worker/package.json", "utf8"),
+) as {
+  scripts?: Record<string, string>;
+};
 
 const workflowsDirectory = ".github/workflows";
 const workflowFiles = readdirSync(workflowsDirectory)
@@ -26,6 +31,7 @@ const workflows = workflowSources.map(({ file, source }) => ({
         steps?: Array<{
           run?: string;
           uses?: string;
+          "working-directory"?: string;
           with?: Record<string, unknown>;
         }>;
       }
@@ -242,6 +248,90 @@ describe("workflow consolidation", () => {
         )
         .map(({ file }) => file),
       ["squad-test-gate.yml"],
+    );
+  });
+
+  it("runs worker typecheck and Vitest in the existing required gate", () => {
+    const gate = workflows.find(({ file }) => file === "squad-test-gate.yml");
+    assert.ok(gate, "squad-test-gate.yml must exist");
+
+    const job = Object.values(gate.workflow.jobs ?? {}).find(
+      ({ name }) => name === "npm test (required)",
+    );
+    assert.ok(job, "worker checks must remain inside npm test (required)");
+    const steps = job.steps ?? [];
+
+    const rootInstallIndex = steps.findIndex(
+      (step) => step.run?.trim() === "npm ci" && !step["working-directory"],
+    );
+    const rootTypecheckIndex = steps.findIndex(
+      (step) =>
+        step.run?.trim() === "npm run typecheck" &&
+        !step["working-directory"],
+    );
+    const rootTestIndex = steps.findIndex(
+      (step) => step.run?.trim() === "npm test" && !step["working-directory"],
+    );
+    assert.ok(rootInstallIndex >= 0, "the gate must install root deps");
+    assert.ok(rootTypecheckIndex >= 0, "the gate must retain root typecheck");
+    assert.ok(rootTestIndex >= 0, "the gate must retain root tests");
+    assert.ok(
+      rootTypecheckIndex > rootInstallIndex && rootTestIndex > rootInstallIndex,
+      "root checks must run after root npm ci",
+    );
+
+    const workerInstallIndex = steps.findIndex(
+      (step) =>
+        step.run?.trim() === "npm ci" &&
+        step["working-directory"] === "worker",
+    );
+    const workerTypecheckIndex = steps.findIndex(
+      (step) =>
+        step.run?.trim() === "npm run typecheck" &&
+        step["working-directory"] === "worker",
+    );
+    const workerTestIndex = steps.findIndex(
+      (step) =>
+        step.run?.trim() === "npm test" &&
+        step["working-directory"] === "worker",
+    );
+
+    assert.ok(workerInstallIndex >= 0, "the gate must install worker deps");
+    assert.ok(
+      workerTypecheckIndex > workerInstallIndex,
+      "worker typecheck must run after worker npm ci",
+    );
+    assert.ok(
+      workerTestIndex > workerInstallIndex,
+      "worker Vitest must run after worker npm ci",
+    );
+    assert.equal(
+      workerPackageJson.scripts?.typecheck,
+      "tsc --noEmit",
+      "worker typecheck must remain an independent TypeScript check",
+    );
+    assert.equal(
+      workerPackageJson.scripts?.test,
+      "vitest run",
+      "worker test must remain the Vitest suite",
+    );
+
+    const setupNodeStep = steps.find((step) =>
+      step.uses?.startsWith("actions/setup-node@"),
+    );
+    assert.ok(setupNodeStep, "the gate must set up Node");
+    const cacheDependencyPath =
+      setupNodeStep.with?.["cache-dependency-path"];
+    const cacheDependencyFiles =
+      typeof cacheDependencyPath === "string"
+        ? cacheDependencyPath
+            .split(/\r?\n/)
+            .map((entry) => entry.trim())
+        : [];
+    assert.ok(
+      cacheDependencyFiles.includes("package-lock.json") &&
+        cacheDependencyFiles.includes("worker/package-lock.json"),
+      "npm cache must track both root and worker lockfiles",
     );
   });
 
