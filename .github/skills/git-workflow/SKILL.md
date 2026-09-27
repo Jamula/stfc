@@ -124,8 +124,8 @@ The `.squad/` directory exists in each worktree as a copy. This is safe because:
 
 After a worktree's PR is merged to main:
 
-Before removing it, preserve any uncommitted `.squad/` state (Rule 8) in the
-main checkout so Scribe can collect it. Copy without overwriting existing
+Before removing it, preserve any uncommitted `.squad/` state in the main
+checkout so Scribe can collect it. Copy without overwriting existing
 history, decisions, or logs.
 
 On Linux or macOS:

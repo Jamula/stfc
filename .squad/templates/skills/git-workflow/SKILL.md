@@ -38,5 +38,5 @@ This handoff guard follows issue #220.
 
 Before removing a worktree, preserve its uncommitted `.squad/` artifacts in the
 main checkout without overwriting existing history, decisions, or logs. Follow
-the canonical git-workflow skill's Rule 8 copy and verification procedure
-before removing the worktree.
+the canonical git-workflow skill's copy and verification procedure before
+removing the worktree.
