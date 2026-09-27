@@ -148,8 +148,24 @@ describe("automation-state linked-worktree bootstrap", () => {
       git(stateA, "push", "origin", "HEAD:automation-state");
       assert.throws(() => git(stateB, "push", "origin", "HEAD:automation-state"));
 
-      const inheritedGitDir = process.env.GIT_DIR;
+      git(stateB, "config", "--local", "--unset-all", "user.name");
+      git(stateB, "config", "--local", "--unset-all", "user.email");
+      const inheritedGitVariables = new Map(
+        [
+          "GIT_DIR",
+          "GIT_CONFIG_COUNT",
+          "GIT_CONFIG_KEY_0",
+          "GIT_CONFIG_VALUE_0",
+          "GIT_CONFIG_KEY_1",
+          "GIT_CONFIG_VALUE_1",
+        ].map((key) => [key, process.env[key]]),
+      );
       process.env.GIT_DIR = remote;
+      process.env.GIT_CONFIG_COUNT = "2";
+      process.env.GIT_CONFIG_KEY_0 = "user.name";
+      process.env.GIT_CONFIG_VALUE_0 = "Retry Bot";
+      process.env.GIT_CONFIG_KEY_1 = "user.email";
+      process.env.GIT_CONFIG_VALUE_1 = "retry@example.invalid";
       let mode: Awaited<ReturnType<typeof reconcileAutomationStateAfterPushFailure>>;
       try {
         mode = await reconcileAutomationStateAfterPushFailure({
@@ -158,11 +174,13 @@ describe("automation-state linked-worktree bootstrap", () => {
           relativePaths: ["data/discord/game-state"],
         });
       } finally {
-        if (inheritedGitDir === undefined) delete process.env.GIT_DIR;
-        else process.env.GIT_DIR = inheritedGitDir;
+        for (const [key, value] of inheritedGitVariables) {
+          if (value === undefined) delete process.env[key];
+          else process.env[key] = value;
+        }
       }
       assert.equal(mode, "replayed");
-
+      assert.equal(git(stateB, "show", "-s", "--format=%an <%ae>", "HEAD"), "Retry Bot <retry@example.invalid>");
       git(stateB, "push", "origin", "HEAD:automation-state");
       git(writerA, "fetch", "origin", "refs/heads/automation-state:refs/remotes/origin/automation-state");
 
