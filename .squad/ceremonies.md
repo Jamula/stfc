@@ -230,3 +230,20 @@ resolution rule.
 
 **Why GitHub Issues, not markdown:**
 Production data: 0% completion across 6 retros using markdown checklists, 100% after switching to GitHub Issues.
+
+### Individual `retro-action` Issue lifecycle (issue #259)
+
+This contract governs individual `retro-action` Issues, separately from the
+retrospective-completion gate above. No new label is required.
+
+1. **Complete:** close only with a linked merged PR, or a close comment naming
+   the changed artifact and how it was verified.
+2. **Defer:** close with GitHub reason `not_planned` and a comment beginning
+   `Deferred:` stating the rationale, responsible owner, and next review point,
+   which must be no later than the next retrospective.
+3. **Review:** at the top of the next retrospective, before its existing agenda,
+   inspect all open `retro-action` Issues and deferred `retro-action` Issues
+   whose review point is due. Record each Issue's disposition: closed with
+   evidence under **Complete**; deferred again under **Defer**, including the
+   reason, owner, and next review point; or carried open with a reason, owner,
+   and next step/review point.
