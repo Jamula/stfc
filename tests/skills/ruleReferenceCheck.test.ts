@@ -124,8 +124,8 @@ describe("rule-reference-check.yml / contract pinning", () => {
 
   // ── Script invariants ─────────────────────────────────────────────────────
 
-  it("canonical rule numbers are extracted from .github/copilot-instructions.md headings", () => {
-    // The grep pattern ^## [0-9]+. captures every rule slot (including RESERVED).
+  it("canonical rule numbers come only from numbered headings in copilot instructions", () => {
+    // .github/copilot-instructions.md is authoritative; only ^## [0-9]+. declares a rule.
     assert.match(
       yaml,
       /grep -oE '\^## \[0-9\]\+\\.'/,
@@ -133,28 +133,40 @@ describe("rule-reference-check.yml / contract pinning", () => {
     );
     assert.match(
       yaml,
-      /\| sort -n \|\| true/,
+      /sort -n \|\| true/,
       "canonical extraction must allow an instruction file with no numbered headings",
     );
     assert.match(
       yaml,
-      /No numbered canonical rules found — every cited Rule N is dangling\./,
-      "workflow must warn (not skip) when no numbered canonical rules exist",
+      /\.github\/copilot-instructions\.md is authoritative/,
+      "the canonical rule-number source must be explicit",
     );
-    // An empty canonical set must not short-circuit the check: citation
-    // extraction has to keep running so `Rule 999` is still reported dangling.
-    assert.doesNotMatch(
+    assert.match(
       yaml,
-      /No numbered canonical rules found[^\n]*\n\s*exit 0/,
-      "workflow must not exit early when the canonical set is empty",
+      /No numbered canonical rules found in \.github\/copilot-instructions\.md; any cited Rule N will be reported as dangling\./,
+      "workflow must diagnose an empty canonical rule set",
+    );
+    const emptyCanonicalGuard = yaml.match(
+      /if \[ -z "\$CANONICAL" \]; then([\s\S]*?)fi/,
+    );
+    assert.ok(emptyCanonicalGuard, "must diagnose when no canonical rule numbers are found");
+    assert.doesNotMatch(
+      emptyCanonicalGuard[1]!,
+      /exit\s+0/,
+      "an empty canonical set must not bypass citation diagnostics",
     );
   });
 
-  it("skips validation when copilot instructions contain no numbered rule headings", () => {
+  it("continues citation validation when copilot instructions contain no numbered rule headings", () => {
     assert.match(
       yaml,
-      /No numbered '## N\.' headings found/,
-      "must early-exit when no canonical numbered headings are present",
+      /if ! echo "\$CANONICAL" \| grep -qw "\$n"; then/,
+      "every cited number must be checked against the canonical set, including when empty",
+    );
+    assert.match(
+      yaml,
+      /These numbers do not exist in \.github\/copilot-instructions\.md\./,
+      "dangling citations must identify the authoritative source",
     );
   });
 

@@ -10,8 +10,13 @@ import { pathToFileURL } from "node:url";
 const execFileAsync = promisify(execFile);
 
 async function runGit(args, { cwd } = {}) {
+  const env = { ...process.env };
+  for (const key of Object.keys(env)) {
+    if (key.startsWith("GIT_")) delete env[key];
+  }
   const { stdout } = await execFileAsync("git", args, {
     cwd,
+    env,
     encoding: "utf8",
   });
   return stdout.trim();
