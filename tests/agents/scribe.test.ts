@@ -15,6 +15,10 @@ const teamMd = readFileSync(
   resolve(process.cwd(), ".squad/team.md"),
   "utf-8",
 );
+const scribeTemplate = readFileSync(
+  resolve(process.cwd(), ".squad/templates/scribe-charter.md"),
+  "utf-8",
+);
 const rules = readFileSync(
   resolve(process.cwd(), ".github/copilot-instructions.md"),
   "utf-8",
@@ -54,6 +58,29 @@ describe("Scribe — decision consolidation", () => {
       "copilot-instructions.md should list the decision inbox",
     );
   });
+});
+
+describe("Scribe — worktree snapshot ingestion", () => {
+  for (const [label, text] of [
+    ["live charter", charter],
+    ["template", scribeTemplate],
+  ] as const) {
+    it(`${label} consumes and verifies snapshots before cleanup`, () => {
+      assert.ok(
+        text.includes(".squad/worktree-inbox/<id>/"),
+        `${label} should identify the worktree snapshot inbox`,
+      );
+      assert.ok(
+        text.includes("manifest.json") && text.includes("head_sha"),
+        `${label} should use the snapshot manifest to identify its base`,
+      );
+      assert.match(
+        text,
+        /Delete only the specific snapshot directory after all[\s\S]*changes are committed and verified/,
+        `${label} should retain snapshots until reconciliation is persisted`,
+      );
+    });
+  }
 });
 
 describe("Scribe — routing accuracy", () => {

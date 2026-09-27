@@ -120,19 +120,79 @@ const NPM_SUBCOMMAND_VALUE_FLAGS = new Set([
   "-w",
 ]);
 
-const SHELL_PREFIX_TOKENS = new Set([
-  "command",
+const SHELL_CONTROL_WORDS = new Set([
   "elif",
   "else",
-  "env",
-  "exec",
   "if",
-  "nohup",
-  "sudo",
   "then",
-  "time",
   "!",
 ]);
+const SHELL_WRAPPERS = new Set([
+  "command",
+  "env",
+  "exec",
+  "nohup",
+  "sudo",
+  "time",
+]);
+const SHELL_WRAPPER_VALUE_FLAGS: Record<string, Set<string>> = {
+  command: new Set(),
+  env: new Set(["-C", "--chdir", "-S", "--split-string", "-u", "--unset"]),
+  exec: new Set(["-a"]),
+  nohup: new Set(),
+  sudo: new Set([
+    "-C",
+    "--close-from",
+    "-D",
+    "--chdir",
+    "-g",
+    "--group",
+    "-h",
+    "--host",
+    "-p",
+    "--prompt",
+    "-R",
+    "--chroot",
+    "-r",
+    "--role",
+    "-t",
+    "--type",
+    "-T",
+    "--command-timeout",
+    "-u",
+    "--user",
+  ]),
+  time: new Set(["-f", "--format", "-o", "--output"]),
+};
+const SHELL_WRAPPER_BOOLEAN_FLAGS: Record<string, Set<string>> = {
+  command: new Set(["-p"]),
+  env: new Set(["-0", "--null", "-i", "--ignore-environment", "-v", "--debug"]),
+  exec: new Set(["-c", "-l"]),
+  nohup: new Set(),
+  sudo: new Set([
+    "-A",
+    "--askpass",
+    "-b",
+    "--background",
+    "-E",
+    "--preserve-env",
+    "-H",
+    "--set-home",
+    "-n",
+    "--non-interactive",
+    "-P",
+    "--preserve-groups",
+    "-S",
+    "--stdin",
+    "-V",
+    "--version",
+    "-k",
+    "--reset-timestamp",
+    "-K",
+    "--remove-timestamp",
+  ]),
+  time: new Set(["-p", "--portability", "-v", "--verbose"]),
+};
 const SHELL_ENV_ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/;
 
 const GLOB_METACHARACTERS = /[*?[{]/;
@@ -209,18 +269,38 @@ function findNpmPublishInvocations(runScript: string): string[] {
   for (const command of splitShellCommands(runScript)) {
     const tokens = tokenizeShellCommand(command);
     let npmIndex = -1;
+    let wrapper: string | undefined;
+    let hasUnknownWrapperOption = false;
     for (let i = 0; i < tokens.length; i++) {
       const token = tokens[i];
+      if (token === undefined) continue;
       if (token === "npm") {
         npmIndex = i;
         break;
       }
       if (
-        token !== undefined &&
-        (SHELL_PREFIX_TOKENS.has(token) || SHELL_ENV_ASSIGNMENT.test(token))
+        SHELL_CONTROL_WORDS.has(token) ||
+        SHELL_ENV_ASSIGNMENT.test(token)
       ) {
         continue;
       }
+      if (SHELL_WRAPPERS.has(token)) {
+        wrapper = token;
+        hasUnknownWrapperOption = false;
+        continue;
+      }
+      if (wrapper && token === "--") continue;
+      if (wrapper && token.startsWith("-")) {
+        if (token.includes("=")) continue;
+        if (SHELL_WRAPPER_VALUE_FLAGS[wrapper]?.has(token)) {
+          i += 1;
+          continue;
+        }
+        if (SHELL_WRAPPER_BOOLEAN_FLAGS[wrapper]?.has(token)) continue;
+        hasUnknownWrapperOption = true;
+        continue;
+      }
+      if (wrapper && hasUnknownWrapperOption) continue;
       break;
     }
     if (npmIndex === -1) continue;
@@ -271,6 +351,9 @@ describe("npm publish workflow guard (self-tests)", () => {
       "if npm publish; then echo done",
       ["if npm publish"],
     ],
+    ["env ignore flag before executable", "env -i npm publish"],
+    ["sudo user option before executable", "sudo -u root npm publish"],
+    ["time portability flag before executable", "time -p npm publish"],
     [
       "multiple separate-value options before subcommand",
       "npm --workspace foo --access public publish",
@@ -302,6 +385,10 @@ describe("npm publish workflow guard (self-tests)", () => {
     [
       "environment-prefixed install with publish argument",
       'env NODE_AUTH_TOKEN="$TOKEN" npm install publish',
+    ],
+    [
+      "sudo-prefixed install with publish argument",
+      "sudo -u root npm install publish",
     ],
     ["unrelated command", "git push origin main"],
   ] as const;

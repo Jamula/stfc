@@ -127,18 +127,21 @@ After a worktree's PR is merged to main:
 Before removing it, preserve any uncommitted `.squad/` state in a unique
 staging directory under `.squad/worktree-inbox/`. Stage a complete snapshot
 instead of copying over the main checkout's state, and never reuse an existing
-destination; Scribe can reconcile both versions later.
+destination. Scribe consumes these snapshots before deleting them.
 
 On Linux or macOS:
 
 ```bash
 source="../stfc-195/.squad"
 snapshot=".squad/worktree-inbox/stfc-195"
+set -e
 test -d "$source"
 test ! -e "$snapshot" || { echo "Choose a new snapshot path" >&2; exit 1; }
-mkdir -p "$snapshot"
-cp -a "$source/." "$snapshot/"
-diff -qr "$source" "$snapshot"
+head_sha=$(git -C ../stfc-195 rev-parse HEAD)
+mkdir -p "$snapshot/squad"
+cp -a "$source/." "$snapshot/squad/"
+printf '{"worktree_id":"stfc-195","head_sha":"%s"}\n' "$head_sha" > "$snapshot/manifest.json"
+diff -qr "$source" "$snapshot/squad"
 ```
 
 On Windows PowerShell:
@@ -148,10 +151,15 @@ $source = "..\stfc-195\.squad"
 $snapshot = ".squad\worktree-inbox\stfc-195"
 if (-not (Test-Path -LiteralPath $source)) { throw "Missing .squad source" }
 if (Test-Path -LiteralPath $snapshot) { throw "Choose a new snapshot path" }
-New-Item -ItemType Directory -Path $snapshot | Out-Null
-robocopy $source $snapshot /E /COPY:DAT /DCOPY:DAT
+$headSha = git -C ..\stfc-195 rev-parse HEAD
+if ($LASTEXITCODE -ne 0 -or -not $headSha) { throw "Failed to read worktree HEAD" }
+$squadSnapshot = Join-Path $snapshot "squad"
+New-Item -ItemType Directory -Path $squadSnapshot -Force | Out-Null
+$manifest = @{ worktree_id = "stfc-195"; head_sha = $headSha } | ConvertTo-Json -Compress
+Set-Content -LiteralPath (Join-Path $snapshot "manifest.json") -Value $manifest -Encoding utf8
+robocopy $source $squadSnapshot /E /COPY:DAT /DCOPY:DAT
 if ($LASTEXITCODE -ge 8) { throw "Failed to preserve .squad artifacts" }
-robocopy $source $snapshot /E /COPY:DAT /DCOPY:DAT /L /NJH /NJS /NDL /NFL
+robocopy $source $squadSnapshot /E /COPY:DAT /DCOPY:DAT /L /NJH /NJS /NDL /NFL
 if ($LASTEXITCODE -ne 0) { throw "Snapshot verification found differences" }
 ```
 

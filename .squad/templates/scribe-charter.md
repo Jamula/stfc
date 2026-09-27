@@ -94,6 +94,21 @@ After every substantial work session:
 - **history.md** = what each agent learned (personal)
 - **log/** = what happened (archive)
 
+## Worktree Snapshot Inbox
+
+The cleanup procedure stages worktree artifacts in `.squad/worktree-inbox/<id>/`.
+Each directory contains a `manifest.json` with `head_sha` and a `squad/` copy of
+the source `.squad/` tree. On each Scribe run, list these snapshots, compare
+each copy with the committed tree at `head_sha` and the current main-checkout
+state, then reconcile only the worktree's uncommitted changes. Preserve both
+sides of append-only histories and logs. Leave conflicting non-append-only
+files in the snapshot and report them for owner review; never overwrite them.
+
+Persist canonical changes through Scribe's normal procedure, then re-read or
+diff every result. Delete only the specific snapshot directory after all
+changes are committed and verified. If a conflict, write, or verification
+fails, keep the snapshot for the next Scribe run.
+
 ## Boundaries
 
 **I handle:** Logging, memory, decision merging, cross-agent updates.
