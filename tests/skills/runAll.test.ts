@@ -470,9 +470,20 @@ describe("runAll", () => {
 
   it("does not reset a gift streak when the gift list was not observed", async () => {
     const stateFile = path.join(dir, "degraded-state-unobserved.json");
+    const configuredAccountKey = createHash("sha256").update("main").digest("hex");
     fs.writeFileSync(
       stateFile,
-      JSON.stringify({ version: 1, accounts: { existing: { "30 Day Loyalty Chest": 2 } } }),
+      JSON.stringify({
+        version: 2,
+        accounts: {
+          [configuredAccountKey]: {
+            "77": { streak: 2, title: "30 Day Loyalty Chest" },
+          },
+          removedAccount: {
+            "88": { streak: 3, title: "Removed Gift" },
+          },
+        },
+      }),
     );
     const fake = makeFakeClient({
       listGifts: async () => {
@@ -489,9 +500,37 @@ describe("runAll", () => {
 
     assert.equal(exitCode, 0, "transient GET behavior remains partial success");
     assert.deepEqual(JSON.parse(fs.readFileSync(stateFile, "utf8")), {
-      version: 1,
-      accounts: { existing: { "30 Day Loyalty Chest": 2 } },
+      version: 2,
+      accounts: {
+        [configuredAccountKey]: {
+          "77": { streak: 2, title: "30 Day Loyalty Chest" },
+        },
+      },
     });
+  });
+
+  it("does not prune state when account processing is skipped by a promo-code file error", async () => {
+    const stateFile = path.join(dir, "degraded-state-unprocessed.json");
+    const invalidPromoCodesPath = path.join(dir, "promo-codes-directory");
+    fs.mkdirSync(invalidPromoCodesPath);
+    const originalState = {
+      version: 2,
+      accounts: {
+        previousAccount: {
+          "88": { streak: 3, title: "Previous Gift" },
+        },
+      },
+    };
+    fs.writeFileSync(stateFile, JSON.stringify(originalState));
+
+    const { exitCode } = await runAll({
+      accounts: [{ name: "main", token: makeJwt({ exp: 9999999999 }) }],
+      promoCodesPath: invalidPromoCodesPath,
+      degradedStatePath: stateFile,
+    });
+
+    assert.equal(exitCode, 1);
+    assert.deepEqual(JSON.parse(fs.readFileSync(stateFile, "utf8")), originalState);
   });
 
   it("a successful claim still goes through in exactly one call", async () => {

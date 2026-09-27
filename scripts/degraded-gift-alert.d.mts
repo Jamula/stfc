@@ -8,6 +8,7 @@ export type DegradedAlertStatus =
   | 'state-failed'
   | 'lookup-failed'
   | 'create-failed'
+  | 'update-failed'
   | 'already-open'
   | 'created'
   | 'resolved'
@@ -23,6 +24,7 @@ export interface DegradedAlertOptions {
   runUrl?: string;
   listIssues?: (title: string) => unknown;
   createIssue?: (title: string, labels: readonly string[], body: string) => void;
+  updateIssue?: (number: number, body: string) => void;
   closeIssue?: (number: number, comment: string) => void;
   log?: (line: string) => void;
 }

@@ -126,7 +126,7 @@ export async function runAll(opts: RunAllOptions): Promise<RunAllOutput> {
     } catch (err) {
       if (err instanceof PromoCodesFileError) {
         report.errors.push({ message: redactForLog(err) });
-        return finalize(report, opts.summary, opts.historyPath, opts.now, opts.degradedStatePath);
+        return finalize(report, opts.summary, opts.historyPath, opts.now, opts.degradedStatePath, false);
       }
       throw err;
     }
@@ -154,7 +154,7 @@ export async function runAll(opts: RunAllOptions): Promise<RunAllOutput> {
     report.accounts.push(accountReport);
   }
 
-  return finalize(report, opts.summary, opts.historyPath, opts.now, opts.degradedStatePath);
+  return finalize(report, opts.summary, opts.historyPath, opts.now, opts.degradedStatePath, true);
 }
 
 async function processAccount(
@@ -395,10 +395,11 @@ async function finalize(
   historyPath: string | undefined,
   now: (() => Date) | undefined,
   degradedStatePath: string | undefined,
+  pruneMissingAccounts: boolean,
 ): Promise<RunAllOutput> {
   if (degradedStatePath) {
     try {
-      await updateDegradedGiftState(degradedStatePath, report);
+      await updateDegradedGiftState(degradedStatePath, report, pruneMissingAccounts);
     } catch (err) {
       report.errors.push({
         message: `could not update persistent degraded-gift state: ${redactForLog(err)}`,
@@ -573,9 +574,16 @@ interface PersistedGiftStreak {
   legacy?: true;
 }
 
-async function updateDegradedGiftState(filePath: string, report: RunAllReport): Promise<void> {
+async function updateDegradedGiftState(
+  filePath: string,
+  report: RunAllReport,
+  pruneMissingAccounts: boolean,
+): Promise<void> {
   const state = await readDegradedGiftState(filePath);
   let observedAccount = false;
+  const configuredAccountKeys = new Set(
+    report.accounts.map((account) => createHash("sha256").update(account.name).digest("hex")),
+  );
 
   for (const account of report.accounts) {
     if (account.tokenStatus !== Outcomes.TOKEN_VALID || account.items.some((item) => item.id === "(list)")) {
@@ -612,7 +620,16 @@ async function updateDegradedGiftState(filePath: string, report: RunAllReport): 
     else state.accounts[accountKey] = current;
   }
 
-  if (!observedAccount) return;
+  let prunedAccount = false;
+  if (pruneMissingAccounts) {
+    for (const accountKey of Object.keys(state.accounts)) {
+      if (configuredAccountKeys.has(accountKey)) continue;
+      delete state.accounts[accountKey];
+      prunedAccount = true;
+    }
+  }
+
+  if (!observedAccount && !prunedAccount) return;
 
   await fs.mkdir(path.dirname(filePath), { recursive: true });
   const temporaryPath = `${filePath}.tmp`;

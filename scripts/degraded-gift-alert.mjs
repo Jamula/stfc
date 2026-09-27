@@ -93,6 +93,19 @@ export function syncDegradedGiftAlert(options = {}) {
   }
 
   if (found.number !== undefined) {
+    try {
+      (options.updateIssue ?? ghUpdateIssue)(
+        found.number,
+        formatIssueBody(persistentFailures, runUrl),
+      );
+    } catch (err) {
+      log(`::warning::Persistent degraded-gift alert could not be updated: ${errorText(err)}`);
+      return {
+        status: 'update-failed',
+        number: found.number,
+        persistentCount: persistentFailures.length,
+      };
+    }
     return { status: 'already-open', number: found.number, persistentCount: persistentFailures.length };
   }
 
@@ -132,6 +145,12 @@ function escapeMarkdown(value) {
 
 function ghCreateIssue(title, labels, body) {
   execFileSync('gh', ['issue', 'create', '--title', title, '--label', labels.join(','), '--body', body], {
+    stdio: 'inherit',
+  });
+}
+
+function ghUpdateIssue(number, body) {
+  execFileSync('gh', ['issue', 'edit', String(number), '--body', body], {
     stdio: 'inherit',
   });
 }

@@ -82,8 +82,9 @@ describe("degraded-gift-alert", () => {
     assert.deepEqual(calls, ["lookup"]);
   });
 
-  it("creates one exact issue after the threshold and does not create duplicates", () => {
+  it("creates one exact issue after the threshold and refreshes an existing alert", () => {
     const calls: Array<{ title: string; labels: readonly string[]; body: string }> = [];
+    const updates: Array<{ number: number; body: string }> = [];
     const created = syncDegradedGiftAlert({
       state: repeatedGift,
       runUrl: "https://github.com/Jamula/stfc/actions/runs/10",
@@ -95,9 +96,18 @@ describe("degraded-gift-alert", () => {
       log: () => {},
     });
     const alreadyOpen = syncDegradedGiftAlert({
-      state: repeatedGift,
+      state: {
+        version: 2,
+        accounts: {
+          accountHash: {
+            "772": { streak: PERSISTENT_TRANSIENT_RUNS + 1, title: "Localized Loyalty Chest" },
+          },
+        },
+      },
+      runUrl: "https://github.com/Jamula/stfc/actions/runs/12",
       listIssues: () => [{ number: 42, title: DEGRADED_ALERT_TITLE, labels: DEGRADED_ALERT_LABELS }],
       createIssue: () => assert.fail("an existing alert must not be duplicated"),
+      updateIssue: (number, body) => updates.push({ number, body }),
       log: () => {},
     });
 
@@ -109,6 +119,10 @@ describe("degraded-gift-alert", () => {
     assert.match(calls[0]!.body, /actions\/runs\/10/);
     assert.equal(alreadyOpen.status, "already-open");
     assert.equal(alreadyOpen.number, 42);
+    assert.equal(updates.length, 1);
+    assert.equal(updates[0]!.number, 42);
+    assert.match(updates[0]!.body, /Localized Loyalty Chest \(bundle 772\) — 4 consecutive runs/);
+    assert.match(updates[0]!.body, /actions\/runs\/12/);
   });
 
   it("auto-resolves the alert when no gift remains persistently degraded", () => {
@@ -147,5 +161,20 @@ describe("degraded-gift-alert", () => {
     assert.equal(result.status, "lookup-failed");
     assert.equal(created, false);
     assert.match(lines.join("\n"), /::warning::Persistent degraded-gift alert lookup failed/);
+  });
+
+  it("keeps alert update failures visible but non-fatal", () => {
+    const lines: string[] = [];
+    const result = syncDegradedGiftAlert({
+      state: repeatedGift,
+      listIssues: () => [{ number: 42, title: DEGRADED_ALERT_TITLE, labels: DEGRADED_ALERT_LABELS }],
+      updateIssue: () => {
+        throw new Error("API unavailable");
+      },
+      log: (line) => lines.push(line),
+    });
+
+    assert.deepEqual(result, { status: "update-failed", number: 42, persistentCount: 1 });
+    assert.match(lines.join("\n"), /::warning::Persistent degraded-gift alert could not be updated/);
   });
 });
