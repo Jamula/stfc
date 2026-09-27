@@ -29,4 +29,8 @@ checkWorkflowPinningTests(staged);
 
 // --- Test suite ---
 
-execSync('npm test', { stdio: 'inherit' });
+const testEnv = { ...process.env };
+for (const key of Object.keys(testEnv)) {
+  if (key.startsWith('GIT_')) delete testEnv[key];
+}
+execSync('npm test', { stdio: 'inherit', env: testEnv });

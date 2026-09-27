@@ -202,6 +202,25 @@ describe("checkWorkflowPinningTests", () => {
       assert.ok(testAt > scanAt, "artifact hygiene scanner must run before tests");
     });
 
+    it("clears hook-only Git environment before running tests in nested repositories", () => {
+      const source = readFileSync("scripts/pre-commit.mjs", "utf8");
+      const envSetupAt = source.indexOf("const testEnv = { ...process.env };");
+      const envClearAt = source.indexOf(
+        "if (key.startsWith('GIT_')) delete testEnv[key];",
+      );
+      const testCallAt = source.indexOf("execSync('npm test'");
+
+      assert.ok(envSetupAt >= 0, "the test runner must copy the process env");
+      assert.ok(
+        envClearAt > envSetupAt && envClearAt < testCallAt,
+        "Git hook variables must be cleared before running the suite",
+      );
+      assert.ok(
+        source.includes("env: testEnv"),
+        "npm test must receive the sanitized environment",
+      );
+    });
+
     it("artifact hygiene scans index content rather than the working tree", () => {
       const dir = mkdtempSync(join(tmpdir(), "stfc-hygiene-index-"));
       const scanner = resolve("scripts/check-artifact-hygiene.mjs");
