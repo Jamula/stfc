@@ -749,6 +749,53 @@ describe("runAll", () => {
     );
   });
 
+  it("gifts/list schema mismatch degrades that account and skips its promo codes", async () => {
+    const codeFile = path.join(dir, "promo-schema-mismatch.txt");
+    fs.writeFileSync(codeFile, "PROMOCODE\n", "utf8");
+
+    let failedAccountRedemptions = 0;
+    let healthyAccountRedemptions = 0;
+    const badFake = makeFakeClient({
+      listGifts: async () => {
+        throw new SchemaMismatchError("unexpected gifts/list payload");
+      },
+      redeemCode: async () => {
+        failedAccountRedemptions += 1;
+        return { code: 0, message: "redeem_success" };
+      },
+    });
+    const healthyFake = makeFakeClient({
+      listGifts: async () => ({ items: [] }),
+      redeemCode: async () => {
+        healthyAccountRedemptions += 1;
+        return { code: 0, message: "redeem_success" };
+      },
+    });
+
+    const { result, exitCode } = await runAll({
+      accounts: [
+        { name: "bad", token: makeJwt({ exp: 9999999999 }) },
+        { name: "healthy", token: makeJwt({ exp: 9999999999 }) },
+      ],
+      clientFactory: (account) => (account.name === "bad" ? badFake : healthyFake) as unknown as ApiClient,
+      summary: createSummaryWriter(undefined),
+      promoCodesPath: codeFile,
+      deadCodesPath: path.join(dir, "dead-schema-mismatch.json"),
+    });
+
+    const badAccount = result.accounts.find((account) => account.name === "bad")!;
+    const healthyAccount = result.accounts.find((account) => account.name === "healthy")!;
+    assert.equal(badAccount.ok, false);
+    assert.match(badAccount.items[0]?.detail ?? "", /gifts\/list schema mismatch/);
+    assert.equal(badAccount.promoCodes.length, 0);
+    assert.equal(failedAccountRedemptions, 0);
+    assert.equal(healthyAccount.ok, true);
+    assert.equal(healthyAccount.promoCodes[0]?.outcome, Outcomes.CODE_REDEEMED);
+    assert.equal(healthyAccountRedemptions, 1);
+    assert.ok(result.errors.some((error) => /gifts\/list schema mismatch/.test(error.message)));
+    assert.equal(exitCode, 1);
+  });
+
   // SKIPPED: promo file read error case — readPromoCodes treats ENOENT as
   // empty, so a "missing path" doesn't error. Triggering a real read failure
   // would require mocking fs or pointing at a directory (platform-specific).
