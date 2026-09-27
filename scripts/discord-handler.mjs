@@ -340,8 +340,17 @@ export async function updateDailyIndexAtomic({
     doc = { files: [] };
   }
 
-  const existingFiles = doc.files.filter((f) => f && typeof f === "object");
-  const existingBytes = existingFiles.reduce((sum, f) => sum + Number(f.size_bytes || 0), 0);
+  const existingFiles = doc.files;
+  if (existingFiles.some((file) =>
+    !file
+    || typeof file !== "object"
+    || Array.isArray(file)
+    || !Number.isSafeInteger(file.size_bytes)
+    || file.size_bytes < 0
+  )) {
+    throw new Error("daily index is malformed: invalid file entry");
+  }
+  const existingBytes = existingFiles.reduce((sum, file) => sum + file.size_bytes, 0);
 
   if (existingFiles.length >= MAX_DAILY_FILES) {
     throw new Error(`daily file cap exceeded (${MAX_DAILY_FILES} files)`);

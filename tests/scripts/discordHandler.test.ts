@@ -748,6 +748,60 @@ describe("scripts/discord-handler.mjs", () => {
     assert.deepEqual(renames, []);
   });
 
+  it("game-state index rejects entries that cannot be counted safely", async () => {
+    const indexPath = "data/discord/game-state/2026-06-02/_index.json";
+    const malformedManifests = [
+      {
+        name: "null entries",
+        raw: JSON.stringify({ files: Array.from({ length: 20 }, () => null) }),
+      },
+      {
+        name: "missing size_bytes",
+        raw: JSON.stringify({ files: [{ filename: "missing-size.png" }] }),
+      },
+      {
+        name: "string size_bytes",
+        raw: JSON.stringify({ files: [{ filename: "string-size.png", size_bytes: "5" }] }),
+      },
+      {
+        name: "non-finite size_bytes",
+        raw: '{"files":[{"filename":"infinite-size.png","size_bytes":1e400}]}',
+      },
+      {
+        name: "negative size_bytes",
+        raw: JSON.stringify({ files: [{ filename: "negative-size.png", size_bytes: -1 }] }),
+      },
+    ];
+
+    for (const malformed of malformedManifests) {
+      const mem = createMemFs({ [indexPath]: malformed.raw });
+      const writes: string[] = [];
+      const renames: Array<{ from: string; to: string }> = [];
+
+      await assert.rejects(mod.updateDailyIndexAtomic({
+        indexPath,
+        entry: {
+          filename: "064800-state.png",
+          captured_at: "2026-06-02T06:48:00Z",
+          uploader: "captain",
+          note: "test",
+          size_bytes: 5,
+        },
+        readFileImpl: mem.readFile,
+        writeFileImpl: async (path) => {
+          writes.push(path);
+        },
+        renameImpl: async (from, to) => {
+          renames.push({ from, to });
+        },
+      }), /daily index is malformed: invalid file entry/);
+
+      assert.equal(mem.files.get(indexPath), malformed.raw, malformed.name);
+      assert.deepEqual(writes, [], malformed.name);
+      assert.deepEqual(renames, [], malformed.name);
+    }
+  });
+
   it("game-state push race retries and preserves the upload commit", async () => {
     const mem = createMemFs();
     const calls: string[][] = [];
