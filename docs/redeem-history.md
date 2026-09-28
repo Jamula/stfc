@@ -7,6 +7,7 @@ inserted at the top**, so the most recent run is always visible first.
 
 | Date (UTC) | Time (UTC) | Account | Gifts claimed |
 | --- | --- | --- | --- |
+| 2026-09-28 | 12:03 | main | 4 Hr Free Chest, 10 Min Free Chest |
 | 2026-09-28 | 05:50 | main | 4 Hr Free Chest, 10 Min Free Chest |
 | 2026-09-28 | 00:37 | main | Compensation Gift, 10 Min Free Chest |
 | 2026-09-27 | 22:03 | main | 10 Min Free Chest |
