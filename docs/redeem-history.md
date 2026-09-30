@@ -7,6 +7,7 @@ inserted at the top**, so the most recent run is always visible first.
 
 | Date (UTC) | Time (UTC) | Account | Gifts claimed |
 | --- | --- | --- | --- |
+| 2026-09-30 | 16:54 | main | 4 Hr Free Chest, 10 Min Free Chest |
 | 2026-09-30 | 11:24 | main | 4 Hr Free Chest, 10 Min Free Chest |
 | 2026-09-30 | 05:48 | main | 4 Hr Free Chest, Beyond the Threat Officers Gift, 10 Min Free Chest |
 | 2026-09-30 | 00:21 | main | 10 Min Free Chest |
