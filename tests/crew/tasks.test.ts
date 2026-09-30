@@ -58,7 +58,8 @@ describe("crew tasks", () => {
         (err: unknown) =>
           err instanceof TaskDefinitionError &&
           err.message.includes(badPath) &&
-          err.message.includes("tag_weights.not_a_tag"),
+          err.message.includes("at tag_weights:") &&
+          err.message.includes('"not_a_tag"'),
       );
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
