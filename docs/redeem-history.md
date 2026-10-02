@@ -7,6 +7,7 @@ inserted at the top**, so the most recent run is always visible first.
 
 | Date (UTC) | Time (UTC) | Account | Gifts claimed |
 | --- | --- | --- | --- |
+| 2026-10-02 | 02:11 | main | 10 Min Free Chest |
 | 2026-10-01 | 23:08 | main | Daily Mission Key Drop, 24 Hr Free Chest [BAJORAN FAVOR], Replicator Rations, Archive Data Shard, 4 Hr Free Chest, Trial Bells, Holo-Field Amplifiers, Fleet Commander Materials, Radioactive Titanite, 10 Min Free Chest, Optical Diodes, Nova Squadron Supply, Alliance Tournaments Sigma Refresh!, Singular Strike - ALB, Independent Archives Schematics, Scientific Exchange (Heroic) - SLB, Nadion Supply |
 | 2026-10-01 | 19:04 | main | 4 Hr Free Chest, 10 Min Free Chest, Interstellar Dominance Meta - SLB |
 | 2026-10-01 | 13:48 | main | 4 Hr Free Chest, 10 Min Free Chest |
