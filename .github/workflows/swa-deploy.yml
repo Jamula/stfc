@@ -67,7 +67,7 @@ jobs:
       needs.preflight.outputs.has-oidc == 'true' &&
       (github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.action != 'closed'))
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4.3.0
         with:
           submodules: false
 
@@ -98,7 +98,7 @@ jobs:
     # Skip teardown too when OIDC secrets are absent — no SWA environment was created.
     if: needs.preflight.outputs.has-oidc == 'true' && github.event_name == 'pull_request' && github.event.action == 'closed'
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4.3.0
 
       - name: Log in to Azure (OIDC)
         uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906  # v3.1.0
