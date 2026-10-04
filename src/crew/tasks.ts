@@ -27,7 +27,12 @@ async function parseTaskFile(filePath: string, expectedId: string): Promise<Task
   const validated = TaskDefinitionSchema.safeParse(parsed);
   if (!validated.success) {
     const issue = validated.error.issues[0];
-    const issuePath = issue?.path.length ? issue.path.join(".") : "(root)";
+    const issuePathSegments = [...(issue?.path ?? [])];
+    const unrecognizedKey = issue?.code === "unrecognized_keys" ? issue.keys[0] : undefined;
+    if (unrecognizedKey !== undefined) {
+      issuePathSegments.push(unrecognizedKey);
+    }
+    const issuePath = issuePathSegments.length ? issuePathSegments.join(".") : "(root)";
     throw new TaskDefinitionError(
       `Task schema mismatch in ${filePath} at ${issuePath}: ${issue?.message ?? validated.error.message}`,
     );
