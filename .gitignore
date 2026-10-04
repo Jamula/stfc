@@ -28,6 +28,8 @@ playwright-diagnostics/
 .squad/decisions/inbox/
 .squad/sessions/
 .squad/.scratch/
+.squad/.watch-pids
+.squad/ralph-circuit-breaker.json
 # Squad: SubSquad activation file (local to this machine)
 .squad-workstream
 
