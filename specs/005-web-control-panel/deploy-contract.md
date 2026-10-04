@@ -57,6 +57,18 @@ Azure/static-web-apps-deploy@1a947af9992250f3bc2e68ad0754c0b0c11566c9  # v1
   must be SHA-pinned; see `discordMonitor.test.ts` / `swaDeploy.test.ts`
   pinning assertions).
 
+The workflow also uses the following SHA-pinned action for OIDC authentication:
+
+```
+azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906  # v3.1.0
+```
+
+- **Tag:** `v3.1.0`
+- **Commit SHA:** `a641126d1b8aa4d1fa005f4f92df94a3a4c4c906`
+- **Verified:** the `v3.1.0` tag resolves to this commit.
+- Update this contract, the workflow, and `tests/skills/swaDeploy.test.ts`
+  together whenever this pin changes.
+
 To update the pin in future: run
 ```bash
 curl -sS https://api.github.com/repos/Azure/static-web-apps-deploy/tags \

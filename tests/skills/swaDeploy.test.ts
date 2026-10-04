@@ -14,7 +14,7 @@ import * as path from "node:path";
 
 // SHA from deploy-contract.md §2 — must match workflow bit-for-bit.
 const SWA_DEPLOY_ACTION_SHA = "1a947af9992250f3bc2e68ad0754c0b0c11566c9";
-const AZURE_LOGIN_ACTION_SHA = "532459ea530d8321f2fb9bb10d1e0bcf23869a43";
+const AZURE_LOGIN_ACTION_SHA = "a641126d1b8aa4d1fa005f4f92df94a3a4c4c906";
 
 const yamlPath = path.resolve(
   import.meta.dirname,
