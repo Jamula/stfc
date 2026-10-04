@@ -46,15 +46,27 @@ describe("retro-gate-bridge: checkOverdueViaBridge — local/worktree (no stateL
   });
 
   it("resolves a RELATIVE logDir against repoRoot, not the caller's own cwd (#248 Copilot review finding)", () => {
-    // The real .squad/log under repoRoot has no *retrospective* files
-    // newer than 2026-06-02 (tracked-only, gitignored otherwise), so a
-    // relative "./.squad/log" resolved against repoRoot must report
-    // overdue:true. If this resolved against process.cwd() instead, the
-    // behavior would depend on whatever directory happens to be current
-    // when the bridge is invoked -- exactly the bug being guarded against.
-    const result = checkOverdueViaBridge({ backend: "local", repoRoot, logDir: ".squad/log" });
-    assert.equal(result.evaluated, true);
-    assert.equal(result.overdue, true);
+    const repoRelativeLogDir = fs.mkdtempSync(path.join(repoRoot, "tests", ".retro-gate-relative-"));
+    const callerCwd = fs.mkdtempSync(path.join(os.tmpdir(), "bridge-cwd-"));
+    const previousCwd = process.cwd();
+    try {
+      const recent = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      const name = `${recent.toISOString().slice(0, 19).replace(/:/g, "-")}Z-retrospective.md`;
+      fs.writeFileSync(path.join(repoRelativeLogDir, name), "# retro\n");
+
+      process.chdir(callerCwd);
+      const result = checkOverdueViaBridge({
+        backend: "local",
+        repoRoot,
+        logDir: path.relative(repoRoot, repoRelativeLogDir),
+      });
+      assert.equal(result.evaluated, true);
+      assert.equal(result.overdue, false);
+    } finally {
+      process.chdir(previousCwd);
+      fs.rmSync(repoRelativeLogDir, { recursive: true, force: true });
+      fs.rmSync(callerCwd, { recursive: true, force: true });
+    }
   });
 });
 
