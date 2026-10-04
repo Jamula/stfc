@@ -17,6 +17,21 @@ const workflowsDirectory = ".github/workflows";
 const workflowFiles = readdirSync(workflowsDirectory)
   .filter((file) => /\.ya?ml$/.test(file))
   .sort();
+const retiredWorkflowFiles = [
+  "squad-ci.yml",
+  "squad-docs.yml",
+  "squad-insider-release.yml",
+  "squad-preview.yml",
+  "squad-promote.yml",
+  "test.yml",
+] as const;
+const squadTemplateWorkflowFiles = readdirSync(".squad/templates/workflows")
+  .filter((file) => /\.ya?ml$/.test(file))
+  .sort();
+const gitWorkflowSkillPaths = [
+  ".github/skills/git-workflow/SKILL.md",
+  ".squad/templates/skills/git-workflow/SKILL.md",
+] as const;
 const workflowSources = workflowFiles.map((file) => ({
   file,
   source: readFileSync(path.join(workflowsDirectory, file), "utf8"),
@@ -85,6 +100,101 @@ const NODE_TEST_VALUE_FLAGS = new Set([
   "--experimental-loader",
 ]);
 
+const NPM_SUBCOMMAND_VALUE_FLAGS = new Set([
+  "--access",
+  "--audit-level",
+  "--cache",
+  "--globalconfig",
+  "--include",
+  "--install-strategy",
+  "--loglevel",
+  "--logs-dir",
+  "--omit",
+  "--otp",
+  "--prefix",
+  "--registry",
+  "--scope",
+  "--tag",
+  "--userconfig",
+  "--workspace",
+  "-w",
+]);
+
+const SHELL_CONTROL_WORDS = new Set([
+  "elif",
+  "else",
+  "if",
+  "then",
+  "!",
+]);
+const SHELL_WRAPPERS = new Set([
+  "command",
+  "env",
+  "exec",
+  "nohup",
+  "sudo",
+  "time",
+]);
+const SHELL_WRAPPER_VALUE_FLAGS: Record<string, Set<string>> = {
+  command: new Set(),
+  env: new Set(["-C", "--chdir", "-S", "--split-string", "-u", "--unset"]),
+  exec: new Set(["-a"]),
+  nohup: new Set(),
+  sudo: new Set([
+    "-C",
+    "--close-from",
+    "-D",
+    "--chdir",
+    "-g",
+    "--group",
+    "-h",
+    "--host",
+    "-p",
+    "--prompt",
+    "-R",
+    "--chroot",
+    "-r",
+    "--role",
+    "-t",
+    "--type",
+    "-T",
+    "--command-timeout",
+    "-u",
+    "--user",
+  ]),
+  time: new Set(["-f", "--format", "-o", "--output"]),
+};
+const SHELL_WRAPPER_BOOLEAN_FLAGS: Record<string, Set<string>> = {
+  command: new Set(["-p"]),
+  env: new Set(["-0", "--null", "-i", "--ignore-environment", "-v", "--debug"]),
+  exec: new Set(["-c", "-l"]),
+  nohup: new Set(),
+  sudo: new Set([
+    "-A",
+    "--askpass",
+    "-b",
+    "--background",
+    "-E",
+    "--preserve-env",
+    "-H",
+    "--set-home",
+    "-n",
+    "--non-interactive",
+    "-P",
+    "--preserve-groups",
+    "-S",
+    "--stdin",
+    "-V",
+    "--version",
+    "-k",
+    "--reset-timestamp",
+    "-K",
+    "--remove-timestamp",
+  ]),
+  time: new Set(["-p", "--portability", "-v", "--verbose"]),
+};
+const SHELL_ENV_ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/;
+
 const GLOB_METACHARACTERS = /[*?[{]/;
 
 function tokenizeShellCommand(command: string): string[] {
@@ -96,29 +206,26 @@ function tokenizeShellCommand(command: string): string[] {
   });
 }
 
-function findNodeTestInvocations(
-  runScript: string,
-): Array<{ command: string; targets: string[] }> {
+function splitShellCommands(runScript: string): string[] {
   // Join backslash-newline shell line continuations (e.g. `node --test \`
   // followed by `tests/*.test.ts` on the next line) into a single logical
-  // line *before* splitting on line breaks. Without this, a continued
-  // command is torn in two: the `node --test` invocation ends up with the
-  // trailing `\` as its only "target" (not a glob, so nothing is flagged),
-  // and the glob on the following line is examined on its own -- where it
-  // no longer looks like a `node`/`npx tsx` invocation at all and is
-  // skipped entirely. Either way the guard passes vacuously.
+  // line before splitting on line breaks.
   const continuationJoined = runScript.replace(/\\\r?\n[ \t]*/g, " ");
   // Split on both line breaks (CRLF-safe) and common shell separators, so a
   // multi-line `run: |` block or a `cmd1 && cmd2` one-liner is examined
   // command-by-command rather than as one opaque blob.
-  const commands = continuationJoined
+  return continuationJoined
     .split(/\r?\n/)
     .flatMap((line) => line.split(/&&|\|\||[;|]/))
     .map((segment) => segment.trim())
     .filter((segment) => segment.length > 0);
+}
 
+function findNodeTestInvocations(
+  runScript: string,
+): Array<{ command: string; targets: string[] }> {
   const invocations: Array<{ command: string; targets: string[] }> = [];
-  for (const command of commands) {
+  for (const command of splitShellCommands(runScript)) {
     const tokens = tokenizeShellCommand(command);
     const first = tokens[0];
     const isNodeInvocation = first === "node";
@@ -156,6 +263,156 @@ function globTestTargets(
       .map((target) => ({ command, target })),
   );
 }
+
+function findNpmPublishInvocations(runScript: string): string[] {
+  const invocations: string[] = [];
+  for (const command of splitShellCommands(runScript)) {
+    const tokens = tokenizeShellCommand(command);
+    let npmIndex = -1;
+    let wrapper: string | undefined;
+    let hasUnknownWrapperOption = false;
+    for (let i = 0; i < tokens.length; i++) {
+      const token = tokens[i];
+      if (token === undefined) continue;
+      if (token === "npm") {
+        npmIndex = i;
+        break;
+      }
+      if (
+        SHELL_CONTROL_WORDS.has(token) ||
+        SHELL_ENV_ASSIGNMENT.test(token)
+      ) {
+        continue;
+      }
+      if (SHELL_WRAPPERS.has(token)) {
+        wrapper = token;
+        hasUnknownWrapperOption = false;
+        continue;
+      }
+      if (wrapper && token === "--") continue;
+      if (wrapper && token.startsWith("-")) {
+        if (token.includes("=")) continue;
+        if (SHELL_WRAPPER_VALUE_FLAGS[wrapper]?.has(token)) {
+          i += 1;
+          continue;
+        }
+        if (SHELL_WRAPPER_BOOLEAN_FLAGS[wrapper]?.has(token)) continue;
+        hasUnknownWrapperOption = true;
+        continue;
+      }
+      if (wrapper && hasUnknownWrapperOption) continue;
+      break;
+    }
+    if (npmIndex === -1) continue;
+
+    let hasUnknownOption = false;
+    for (let i = npmIndex + 1; i < tokens.length; i++) {
+      const token = tokens[i];
+      if (token === undefined) continue;
+      if (token === "--") {
+        if (tokens[i + 1] === "publish") invocations.push(command);
+        break;
+      }
+      if (token.startsWith("-")) {
+        if (!token.includes("=") && NPM_SUBCOMMAND_VALUE_FLAGS.has(token)) {
+          i += 1;
+        } else if (!token.includes("=")) {
+          hasUnknownOption = true;
+        }
+        continue;
+      }
+      if (token === "publish") {
+        invocations.push(command);
+        break;
+      }
+      if (!hasUnknownOption) break;
+    }
+  }
+  return invocations;
+}
+
+describe("npm publish workflow guard (self-tests)", () => {
+  const publishCommandFixtures = [
+    ["bare publish command", "npm publish"],
+    ["workspace option before subcommand", "npm --workspace foo publish"],
+    ["short workspace option before subcommand", "npm -w foo publish"],
+    ["access option before subcommand", "npm --access public publish"],
+    ["include option before subcommand", "npm --include dev publish"],
+    [
+      "environment assignment before executable",
+      'NODE_AUTH_TOKEN="$TOKEN" npm publish',
+    ],
+    [
+      "env assignment before executable",
+      'env NODE_AUTH_TOKEN="$TOKEN" npm publish',
+    ],
+    [
+      "if control word before executable",
+      "if npm publish; then echo done",
+      ["if npm publish"],
+    ],
+    ["env ignore flag before executable", "env -i npm publish"],
+    ["sudo user option before executable", "sudo -u root npm publish"],
+    ["time portability flag before executable", "time -p npm publish"],
+    [
+      "multiple separate-value options before subcommand",
+      "npm --workspace foo --access public publish",
+    ],
+    [
+      "attached-value options before subcommand",
+      "npm --workspace=foo --access=public publish",
+    ],
+    [
+      "unknown option fails closed before a publish subcommand",
+      "npm --future-option value publish",
+    ],
+    ["publish option after subcommand", "npm publish --tag beta"],
+    [
+      "publish in a later shell segment",
+      "npm ci && npm --workspace foo publish",
+      ["npm --workspace foo publish"],
+    ],
+  ] as const;
+
+  const nonPublishCommandFixtures = [
+    ["npm run script named publish", "npm run publish"],
+    ["install command with a publish argument", "npm install publish"],
+    [
+      "workspace install command with a publish argument",
+      "npm --workspace foo install publish",
+    ],
+    ["quoted diagnostic text", 'echo "npm publish"'],
+    [
+      "environment-prefixed install with publish argument",
+      'env NODE_AUTH_TOKEN="$TOKEN" npm install publish',
+    ],
+    [
+      "sudo-prefixed install with publish argument",
+      "sudo -u root npm install publish",
+    ],
+    ["unrelated command", "git push origin main"],
+  ] as const;
+
+  for (const [label, command, expectedCommands = [command]] of publishCommandFixtures) {
+    it(`flags: ${label}`, () => {
+      assert.deepStrictEqual(
+        findNpmPublishInvocations(command),
+        expectedCommands,
+        `expected npm publish to be detected in \`${command}\``,
+      );
+    });
+  }
+
+  for (const [label, command] of nonPublishCommandFixtures) {
+    it(`accepts: ${label}`, () => {
+      assert.deepStrictEqual(
+        findNpmPublishInvocations(command),
+        [],
+        `expected no npm publish command in \`${command}\``,
+      );
+    });
+  }
+});
 
 describe("findNodeTestInvocations guard (self-tests)", () => {
   // These fixtures are not read from any workflow file -- they prove the
@@ -336,15 +593,116 @@ describe("workflow consolidation", () => {
   });
 
   it("does not restore superseded workflows", () => {
-    for (const file of [
-      "squad-ci.yml",
-      "squad-docs.yml",
-      "squad-insider-release.yml",
-      "squad-preview.yml",
-      "squad-promote.yml",
-      "test.yml",
-    ]) {
+    for (const file of retiredWorkflowFiles) {
       assert.ok(!workflowFiles.includes(file), `${file} must remain removed`);
+    }
+  });
+
+  it("does not keep templates for retired dev/preview release-train workflows", () => {
+    for (const file of retiredWorkflowFiles) {
+      assert.ok(
+        !squadTemplateWorkflowFiles.includes(file),
+        `.squad/templates/workflows/${file} must remain removed`,
+      );
+    }
+  });
+
+  it("documents the supported main-only branch model in git-workflow skills", () => {
+    for (const skillPath of gitWorkflowSkillPaths) {
+      const skill = readFileSync(skillPath, "utf8");
+      assert.match(
+        skill,
+        /\bmain-only\b/,
+        `${skillPath} must explicitly describe the main-only model`,
+      );
+      assert.match(
+        skill.replace(/\s+/g, " "),
+        /Before removing (?:it|a worktree), preserve (?:any )?(?:its )?uncommitted `\.squad\/` (?:state|artifacts)/i,
+        `${skillPath} must preserve uncommitted .squad state before worktree removal`,
+      );
+      for (const lane of ["scope", "technical", "operations"]) {
+        assert.match(
+          skill,
+          new RegExp(`\\b${lane}\\b`, "i"),
+          `${skillPath} must record ${lane} implications`,
+        );
+      }
+      assert.doesNotMatch(
+        skill,
+        /dev\s*→\s*preview|preview\s*→\s*main|origin\/dev|origin\/preview|--base\s+dev/,
+        `${skillPath} must not describe the retired dev/preview promotion workflow`,
+      );
+    }
+  });
+
+  it("documents the private GitHub-release process without stale npm guidance", () => {
+    const releaseProcess = readFileSync(
+      ".squad/templates/skills/release-process/SKILL.md",
+      "utf8",
+    );
+    assert.match(
+      releaseProcess,
+      /private\s+`stfc-gift-redeemer`\s+package/,
+      "release guidance must identify this repository's private package",
+    );
+    assert.match(
+      releaseProcess,
+      /\.github\/workflows\/squad-release\.yml/,
+      "release guidance must reference the actual release workflow",
+    );
+    assert.match(
+      releaseProcess,
+      /does not publish to a package\s+registry/i,
+      "release guidance must state that the workflow does not publish packages",
+    );
+    assert.match(
+      releaseProcess,
+      /workflow\s+consolidation regression test/i,
+      "release guidance must describe the active workflow publishing guard",
+    );
+    assert.doesNotMatch(
+      releaseProcess,
+      /packages\/squad-(?:sdk|cli)|@bradygaster\/squad-cli|squad-npm-publish\.yml/,
+      "release guidance must not retain Squad CLI package or workflow instructions",
+    );
+  });
+
+  it("keeps versioning guidance aligned with the main-only private package", () => {
+    const versioningPolicy = readFileSync(
+      ".squad/templates/skills/versioning-policy/SKILL.md",
+      "utf8",
+    );
+    const normalizedPolicy = versioningPolicy.replace(/\s+/g, " ");
+    assert.match(
+      normalizedPolicy,
+      /\bmain-only\b/,
+      "versioning guidance must state the supported branch model",
+    );
+    assert.match(
+      normalizedPolicy,
+      /private `stfc-gift-redeemer` package/,
+      "versioning guidance must identify the actual private package",
+    );
+    assert.match(
+      normalizedPolicy,
+      /\.github\/workflows\/squad-release\.yml/,
+      "versioning guidance must reference the actual release workflow",
+    );
+    assert.doesNotMatch(
+      versioningPolicy,
+      /@bradygaster\/squad-(?:sdk|cli)|packages\/squad-(?:sdk|cli)|prerelease-version-guard|skip-version-check|bump-build\.mjs|`dev`|`preview`/,
+      "versioning guidance must not retain stale Squad workspace or branch instructions",
+    );
+  });
+
+  it("does not publish npm packages from active workflows", () => {
+    for (const { file, step } of workflowSteps) {
+      const invocations = findNpmPublishInvocations(step.run ?? "");
+      assert.deepStrictEqual(
+        invocations,
+        [],
+        `${file} must not run npm publish without a separately reviewed publishing policy`,
+      );
     }
   });
 
