@@ -144,6 +144,17 @@ describe("SWA project structure (T-SWA-002)", () => {
       assert.ok(exists("staticwebapp.config.json"), "staticwebapp.config.json missing");
     });
 
+    it("uses the latest supported Node runtime for the managed API", () => {
+      const config = JSON.parse(read("staticwebapp.config.json")) as {
+        platform?: { apiRuntime?: string };
+      };
+      assert.equal(
+        config.platform?.apiRuntime,
+        "node:22",
+        "SWA managed APIs currently support Node 22, not the repository's Node 24",
+      );
+    });
+
     it("has a deny-by-default catch-all route requiring stfc_operator", () => {
       const config = JSON.parse(read("staticwebapp.config.json")) as {
         routes?: Array<{ route: string; allowedRoles?: string[] }>;

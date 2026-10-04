@@ -7,8 +7,10 @@ of this repository.
 
 - A Scopely account that you log in to the STFC web store with.
 - A fork (or clone) of this repository on GitHub with Actions enabled.
-- **Recommended:** Node.js 22+ locally so you can use the `capture-token`
-  script. Optional: GitHub CLI (`gh`) so the script can set the secret for
+- **Recommended:** Node.js 24+ locally to match the repository toolchain and use
+  the `capture-token` script. The Azure Static Web Apps managed API remains on
+  Node.js 22, the latest runtime supported by that platform. Optional: GitHub
+  CLI (`gh`) so the script can set the secret for
   you.
 
 ## Recommended path: `npm run capture-token` (Playwright-driven)
