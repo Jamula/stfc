@@ -192,6 +192,22 @@ describe("SWA project structure (T-SWA-002)", () => {
         "'/api/*' route must include 'stfc_operator' in allowedRoles",
       );
     });
+
+    it("pins the SWA API runtime and package engine to supported Node 22", () => {
+      const config = JSON.parse(read("staticwebapp.config.json")) as {
+        platform?: { apiRuntime?: string };
+      };
+      const apiPackage = JSON.parse(read("api/package.json")) as {
+        engines?: { node?: string };
+      };
+      const apiLock = JSON.parse(read("api/package-lock.json")) as {
+        packages?: Record<string, { engines?: { node?: string } }>;
+      };
+
+      assert.equal(config.platform?.apiRuntime, "node:22");
+      assert.equal(apiPackage.engines?.node, ">=22");
+      assert.equal(apiLock.packages?.[""]?.engines?.node, apiPackage.engines?.node);
+    });
   });
 
   // ── root package.json build scripts ───────────────────────────────────────
