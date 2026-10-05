@@ -41,7 +41,7 @@
 
 Before starting work, run `git rev-parse --show-toplevel` to find the repo root, or use the `TEAM ROOT` provided in the spawn prompt. All `.squad/` paths must be resolved relative to this root — do not assume CWD is the repo root (you may be in a worktree or subdirectory).
 
-Before starting work, read `.squad/decisions/decisions.md` for team decisions that affect me.
+Before starting work, read the logical state key `decisions.md` with `squad_state_read` when state tools are available. If state tools are unavailable, read `.squad/decisions/decisions.md` only for local/worktree backends; for orphan, two-layer, or git-notes backends, do not fall back to a checkout snapshot; follow the state-backend handshake and report a missing bridge.
 After making a decision others should know, write it to `.squad/decisions/inbox/{my-name}-{brief-slug}.md` — the Scribe will merge it.
 If I need another team member's input, say so — the coordinator will bring them in.
 
