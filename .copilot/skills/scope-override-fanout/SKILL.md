@@ -16,7 +16,7 @@ User message: *"I override your (c) Decline on [scope]. Accept option (a): [deta
    - One agent per major deliverable (e.g., constitution → Tuvok, script → Scotty, tests → Bashir, workflow → O'Brien).
    - All run simultaneously; no blocking dependencies between them.
    - Each writes a decision memo drop (`.squad/decisions/inbox/{agent}-{deliverable}.md`) capturing tradeoffs.
-4. **Merge all decision drops into `.squad/decisions.md` (Scribe task)** — chronological order, with EM's original verdict preserved adjacent to the override for audit trail visibility.
+4. **Merge all decision drops into `.squad/decisions/decisions.md` (Scribe task)** — chronological order, with EM's original verdict preserved adjacent to the override for audit trail visibility.
 5. **Schedule Phase 2 (reviews)** — Hostile fact-check (Garak), architecture (Kirk), governance (Picard), in whatever order suits the scope.
 6. **Do NOT loop back to the EM** for re-approval between Phase 1 and Phase 2. The override is the operative decision; Phase 2 is a final sanity-check, not a re-arbitration.
 
@@ -54,4 +54,3 @@ All parallel, background. Decision memos merged by Scribe. Phase 2: Garak fact-c
 - User has already received the EM's verdict (not a snap decision).
 - User's override is detailed enough to create assignment tickets directly (not vague aspirations).
 - The scope is within the repo's governance framework (constitution, security, compliance).
-

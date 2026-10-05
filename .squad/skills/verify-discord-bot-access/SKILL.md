@@ -58,7 +58,7 @@ curl -sH "Authorization: Bot $DISCORD_BOT_TOKEN" \
 ## If access is blocked
 
 1. **Do NOT attempt** to use a user token, personal OAuth, or browser scraping.
-   Discord ToS §9 prohibits user-token automation. See `.squad/decisions.md`
+   Discord ToS §9 prohibits user-token automation. See `.squad/decisions/decisions.md`
    (2026-05-18 verdict) and `uhura/history.md` for the permanent record.
 
 2. **Obtain bot invite URL:**

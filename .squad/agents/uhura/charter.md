@@ -22,7 +22,7 @@
 
 ## How I Work
 
-- Read `.squad/decisions.md` first. Integrations are the most fragile surface — respect prior decisions about auth, retries, and error semantics.
+- Read `.squad/decisions/decisions.md` first. Integrations are the most fragile surface — respect prior decisions about auth, retries, and error semantics.
 - Capture real responses before writing parsers. Real shapes beat assumed shapes.
 - Treat all tokens as secrets. Never log, never commit, never echo to stdout.
 - Surface API errors with enough context to diagnose without leaking credentials.

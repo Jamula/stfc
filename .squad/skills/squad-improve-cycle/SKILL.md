@@ -12,7 +12,7 @@ approved edits surgically.
 ## Inputs (read in this order)
 
 1. `.github/copilot-instructions.md` — the current rule set
-2. `.squad/decisions.md` — recently ratified decisions (last 30 days)
+2. `.squad/decisions/decisions.md` — recently ratified decisions (last 30 days)
 3. `.squad/decisions/inbox/` — **especially active cleanup/refactor proposals
    in flight** (anti-pre-emption check, see below)
 4. `.squad/team.md`, `.squad/routing.md`, `.squad/ceremonies.md` — current org shape

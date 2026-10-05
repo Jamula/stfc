@@ -12,7 +12,7 @@
 ## What I Own
 
 - `.squad/log/` — session logs (what happened, who worked, what was decided)
-- `.squad/decisions.md` — the shared decision log all agents read (canonical, merged)
+- `.squad/decisions/decisions.md` — the shared local decision ledger all agents read (canonical, merged)
 - `.squad/decisions/inbox/` — decision drop-box (agents write here, I merge)
 - Cross-agent context propagation — when one agent's decision affects another
 - Decision archival — **HARD GATE**: enforce two-tier ceiling on decisions.md before every merge:

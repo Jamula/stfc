@@ -20,7 +20,7 @@ For every claim or assertion I review:
 1. **Source Check:** What evidence supports this? Can I verify it?
 2. **Counter-Hypothesis:** What would disprove this? Is there an alternative explanation?
 3. **Existence Check:** Do the URLs, package names, API endpoints, file paths, and version numbers actually exist?
-4. **Consistency Check:** Does this contradict anything in `.squad/decisions.md` or prior team output?
+4. **Consistency Check:** Does this contradict anything in `.squad/decisions/decisions.md` or prior team output?
 
 ## Confidence Ratings
 

@@ -133,7 +133,7 @@ prompt: |
   team.md, routing.md, skills) remains on disk and may be read with normal file tools.
 
   Read `agents/{name}/history.md` with `squad_state_read` when state tools are available; otherwise fall back to `.squad/agents/{name}/history.md`.
-  Read `decisions.md` with `squad_state_read` when state tools are available; otherwise fall back to `.squad/decisions.md`.
+  Read the logical state key `decisions.md` with `squad_state_read` when state tools are available; otherwise read the local file `.squad/decisions/decisions.md`.
   If .squad/identity/wisdom.md exists, read it before starting work.
   If .squad/identity/now.md exists, read it at spawn time.
   Check project skill directories (.squad/skills/, .github/skills/, .copilot/skills/, .claude/skills/, .agents/skills/) for any SKILL.md the coordinator attached to your prompt.

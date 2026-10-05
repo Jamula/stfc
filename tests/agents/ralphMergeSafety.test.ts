@@ -573,7 +573,7 @@ describe("Merge safety — bounded repo-wide scan for unguarded merge authorizat
    * authority.
    *
    * Deliberately excluded (bounded scope, not a full-repo grep):
-   * - `.squad/decisions.md` / `.squad/decisions-archive.md` — historical
+   * - `.squad/decisions/decisions.md` / `.squad/decisions-archive.md` — historical
    *   decision record, not a live instruction surface.
    * - `.squad/templates/orchestration-log.md`, `raw-agent-output.md`,
    *   `run-output.md` — example output/log fixtures, not executable

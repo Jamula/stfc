@@ -272,7 +272,7 @@ Proceed? (yes / no)
 ### Show Recent Decisions
 
 - **intent:** show decisions, recent decisions, what decisions were made, decision log
-- **summary:** Display recent entries from .squad/decisions.md
+- **summary:** Display recent entries from .squad/decisions/decisions.md
 - **action:** coordinator
 - **command:** Direct Mode — read decisions.md, answer
 - **args:** (none)
@@ -283,7 +283,7 @@ Proceed? (yes / no)
 - **intent:** archive decisions, clean up decisions, move old decisions, compact decisions
 - **summary:** Move old decisions from decisions.md to decisions-archive.md
 - **action:** coordinator
-- **command:** Move entries older than threshold from .squad/decisions.md → .squad/decisions-archive.md
+- **command:** Move entries older than threshold from .squad/decisions/decisions.md → .squad/decisions-archive.md
 - **args:**
   - `olderThan`: Archive decisions older than how many days? | default: 30
 - **confirm:** true

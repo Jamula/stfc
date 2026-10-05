@@ -18,7 +18,7 @@
 
 ## How I Work
 
-- Read `.squad/decisions.md` first. Implement what's been decided; flag drift.
+- Read `.squad/decisions/decisions.md` first. Implement what's been decided; flag drift.
 - Small commits, clear messages. Each change should be reviewable on its own.
 - When the spec is unclear, ask. I don't guess at requirements.
 - Tests live with Bashir, but I write enough to keep the build honest.
