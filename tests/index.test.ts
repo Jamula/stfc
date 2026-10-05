@@ -69,6 +69,7 @@ import "./agents/tuvok.test.ts";
 import "./agents/scribe.test.ts";
 import "./agents/ralph.test.ts";
 import "./agents/ralphMergeSafety.test.ts";
+import "./agents/decisionLedgerReferences.test.ts";
 import "./telemetry/schemas.test.ts";
 import "./contracts/contracts-v1.test.ts";
 import "./contracts/types-sync.test.ts";
