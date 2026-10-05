@@ -18,8 +18,7 @@ The coordinator's spawn prompt already instructs agents to read decisions.md and
 Use the `TEAM ROOT` path provided in your spawn prompt. All `.squad/` paths are relative to this root. If TEAM ROOT is not provided (rare), run `git rev-parse --show-toplevel` as fallback. Never assume CWD is the repo root.
 
 ### Decision Recording
-After making a decision that affects other team members, write it to:
-`.squad/decisions/inbox/{your-name}-{brief-slug}.md`
+After making a decision that affects other team members, write it with `squad_state_write` to logical key `decisions/inbox/{your-name}-{brief-slug}.md`. For local/worktree backends, the physical path is `.squad/decisions/inbox/{your-name}-{brief-slug}.md`. On orphan, two-layer, or git-notes backends, do not write a checkout snapshot directly — if `squad_state_write` is unavailable, stop and report the missing bridge.
 
 Format:
 ```

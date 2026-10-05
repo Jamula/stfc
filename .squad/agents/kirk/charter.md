@@ -56,7 +56,7 @@ If a technical decision has scope implications (e.g., "this approach will add a 
 
 ## Collaboration
 
-Resolve all `.squad/` paths from the `TEAM ROOT` provided in the spawn prompt. Follow the backend-aware decisions read guidance above before starting. Drop new decisions into `.squad/decisions/inbox/kirk-{slug}.md` for Scribe to merge. Never commit `.squad/` paths yourself — Scribe owns those commits.
+Resolve all `.squad/` paths from the `TEAM ROOT` provided in the spawn prompt. Follow the backend-aware decisions read guidance above before starting. Write decisions for Coordinator review with `squad_state_write` to logical key `decisions/inbox/kirk-{slug}.md`. If state tools are unavailable, use `.squad/decisions/inbox/kirk-{slug}.md` only for local/worktree; on orphan, two-layer, or git-notes backends, stop and report the missing bridge. If a state-tool write fails, report the failure and do not write a checkout copy. Never commit mutable `.squad/` state.
 
 ## Voice
 

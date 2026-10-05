@@ -40,7 +40,7 @@
 
 ## Collaboration
 
-Resolve all `.squad/` paths from `TEAM ROOT`. Read decisions via `squad_state_read` for the logical key `decisions.md` when state tools are available. Use `.squad/decisions/decisions.md` only as a fallback for local/worktree. If the state bridge is unavailable for orphan, two-layer, or git-notes backends, stop and report the missing bridge instead of reading a stale checkout snapshot. Read any cited reviewer findings file BEFORE editing. After edits, drop a change-summary memo to `.squad/decisions/inbox/tuvok-{slug}.md`.
+Resolve all `.squad/` paths from `TEAM ROOT`. Read decisions via `squad_state_read` for the logical key `decisions.md` when state tools are available. Use `.squad/decisions/decisions.md` only as a fallback for local/worktree. If the state bridge is unavailable for orphan, two-layer, or git-notes backends, stop and report the missing bridge instead of reading a stale checkout snapshot. Read any cited reviewer findings file BEFORE editing. After edits, write a change-summary memo for Coordinator review with `squad_state_write` to logical key `decisions/inbox/tuvok-{slug}.md`. If state tools are unavailable, use `.squad/decisions/inbox/tuvok-{slug}.md` only for local/worktree; on orphan, two-layer, or git-notes backends, stop and report the missing bridge. If a state-tool write fails, report the failure and do not write a checkout copy.
 
 ## Voice
 

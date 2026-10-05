@@ -1,6 +1,6 @@
 ---
 name: reflect
-description: Learning capture system that extracts HIGH/MED/LOW confidence patterns from conversations to prevent repeating mistakes. Use after user corrections ("no", "wrong"), praise ("perfect", "exactly"), or when discovering edge cases. Complements .squad/agents/{agent}/history.md and .squad/decisions/decisions.md.
+description: Learning capture system that extracts HIGH/MED/LOW confidence patterns from conversations to prevent repeating mistakes. Use after user corrections ("no", "wrong"), praise ("perfect", "exactly"), or when discovering edge cases. Complements .squad/agents/{agent}/history.md and logical key decisions.md.
 license: MIT
 version: 1.0.0-squad
 domain: team-memory, learning

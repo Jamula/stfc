@@ -18,18 +18,28 @@ approved edits surgically.
    `.squad/decisions/decisions.md` only for local/worktree backends. For
    orphan, two-layer, or git-notes backends, stop and report the missing state
    bridge; do not inspect a checkout snapshot.
-3. `.squad/decisions/inbox/` — **especially active cleanup/refactor proposals
-   in flight** (anti-pre-emption check, see below)
+3. `decisions/inbox/` via `squad_state_list`/`squad_state_read` when
+   available — **especially active cleanup/refactor proposals in flight**
+   (anti-pre-emption check, see below)
 4. `.squad/team.md`, `.squad/routing.md`, `.squad/ceremonies.md` — current org shape
-5. `.squad/log/` and `.squad/orchestration-log/` — last ~10 most-recent files
-   sorted by mtime — primary friction signal
-6. `.squad/agents/scribe/history.md` and `.squad/agents/picard/history.md` —
-   prior learnings and standing verdicts
+5. `log/` and `orchestration-log/` via `squad_state_list`/`squad_state_read`
+   when available — last ~10 most-recent files sorted by mtime — primary
+   friction signal
+6. `agents/scribe/history.md` and `agents/picard/history.md` via
+   `squad_state_read` when available — prior learnings and standing verdicts
+
+Inputs 3, 5, and 6 are mutable state. If state tools are unavailable, read
+their `.squad/`-relative physical paths only for local/worktree backends (for
+example `.squad/decisions/inbox/`, `.squad/log/`, `.squad/orchestration-log/`,
+`.squad/agents/scribe/history.md`). For orphan, two-layer, or git-notes
+backends, stop and report the missing state bridge; do not inspect a checkout
+snapshot.
 
 ## Anti-pre-emption check (CRITICAL — run BEFORE drafting)
 
-Scan `.squad/decisions/inbox/` for active cleanup, refactor, or consolidation
-proposals (filenames like `*-cleanup-*.md`, `*-refactor-*.md`, `*-consolidation-*.md`).
+Scan `decisions/inbox/` (input 3 above) for active cleanup, refactor, or
+consolidation proposals (filenames like `*-cleanup-*.md`, `*-refactor-*.md`,
+`*-consolidation-*.md`).
 If one is in flight and its scope overlaps any candidate finding, do NOT
 propose a rule in that scope this cycle. Pre-empting in-flight work creates
 conflicting guidance and forces double-work.
@@ -55,7 +65,7 @@ next cycle from re-litigating the same rejected candidates.
 
 ## Output format
 
-Deliverable: `.squad/decisions/inbox/picard-squad-improve-YYYY-MM-DD.md`
+Deliverable: write with `squad_state_write` to logical key `decisions/inbox/picard-squad-improve-YYYY-MM-DD.md`. Local/worktree physical fallback: `.squad/decisions/inbox/picard-squad-improve-YYYY-MM-DD.md`. On orphan, two-layer, or git-notes backends, stop and report a missing bridge instead of writing a checkout snapshot.
 
 Structure:
 
