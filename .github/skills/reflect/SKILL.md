@@ -1,6 +1,6 @@
 ---
 name: reflect
-description: Learning capture system that extracts HIGH/MED/LOW confidence patterns from conversations to prevent repeating mistakes. Use after user corrections ("no", "wrong"), praise ("perfect", "exactly"), or when discovering edge cases. Complements .squad/agents/{agent}/history.md and .squad/decisions/decisions.md.
+description: Learning capture system that extracts HIGH/MED/LOW confidence patterns from conversations to prevent repeating mistakes. Use after user corrections ("no", "wrong"), praise ("perfect", "exactly"), or when discovering edge cases. Complements .squad/agents/{agent}/history.md and logical key decisions.md.
 license: MIT
 version: 1.0.0-squad
 domain: team-memory, learning
@@ -20,7 +20,7 @@ Analyze conversations and propose improvements to squad knowledge based on what 
 **Reflect complements existing Squad knowledge systems:**
 
 1. **`.squad/agents/{agent}/history.md`** — Permanent learnings from completed work (append-only; each agent updates their own file; Scribe propagates cross-agent updates)
-2. **`.squad/decisions/decisions.md`** — Team-wide decisions that all agents respect
+2. Logical state key `decisions.md` — Team-wide decisions that all agents respect; local/worktree physical path: `.squad/decisions/decisions.md`
 3. **`reflect` skill** — Captures in-flight learnings from conversations that may graduate to history.md or decisions.md
 
 **Workflow:**
@@ -224,6 +224,6 @@ User: "Perfect! This is exactly the format I want for all PRs"
 
 ## See Also
 
-- `.squad/decisions/decisions.md` — Team-wide decisions
+- Logical key `decisions.md` — Team-wide decisions; local/worktree physical path: `.squad/decisions/decisions.md`
 - `.squad/agents/*/history.md` — Agent-specific learnings
 - `.squad/routing.md` — Work assignment patterns

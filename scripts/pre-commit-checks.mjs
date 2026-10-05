@@ -23,9 +23,9 @@ function defaultExists(p) {
   return fs.existsSync(p);
 }
 
-// ── Check #9 — Only Scribe stages .squad/ paths ─────────────────────
+// ── Check #9 — Mutable Squad state must use the configured backend ───
 
-const SCRIBE_OWNED_PATTERNS = [
+const MUTABLE_SQUAD_STATE_PATTERNS = [
   /^\.squad\/agents\/[^/]+\/history\.md$/,
   /^\.squad\/decisions\/decisions\.md$/,
   /^\.squad\/decisions\.md$/,
@@ -35,18 +35,18 @@ const SCRIBE_OWNED_PATTERNS = [
 ];
 
 /**
- * Non-Scribe commits must not stage Scribe-owned `.squad/` paths.
- * Bypass: set SQUAD_SCRIBE=1 env var.
+ * Mutable Squad state must be persisted through the configured backend,
+ * not staged or committed from the working tree.
  */
 export function checkSquadBoundary(staged) {
-  if (process.env.SQUAD_SCRIBE === '1') return;
-
-  const violations = staged.filter((f) => SCRIBE_OWNED_PATTERNS.some((re) => re.test(f)));
+  const violations = staged.filter((f) =>
+    MUTABLE_SQUAD_STATE_PATTERNS.some((re) => re.test(f)),
+  );
   if (violations.length === 0) return;
 
   fail(
-    'Only Scribe can commit .squad/{agents,decisions,log,orchestration-log}. ' +
-      'Use [scribe] in commit message or set SQUAD_SCRIBE=1 to bypass.\n' +
+    'Mutable Squad state must be persisted through the configured state backend, ' +
+      'not staged or committed from the working tree.\n' +
       `  Offending files:\n${violations.map((f) => `    - ${f}`).join('\n')}`,
   );
 }

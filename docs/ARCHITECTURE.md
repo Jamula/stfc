@@ -388,15 +388,17 @@ write to `.squad/decisions/inbox/` and Scribe merges into the ledger.
 learning, max ~15 KB before Scribe rotates to
 `history-archive.md`).
 
-**Squad commit boundaries** (repo Rule 2). The following paths are
-**Scribe-only** commits:
+**Squad mutable state.** Persist the following state through the configured
+state-backend tools; no agent, including Scribe, stages or commits it directly.
+These are the corresponding paths in local/worktree checkouts:
 
 - `.squad/agents/{name}/history.md`
 - `.squad/decisions/inbox/*`
 - `.squad/decisions/decisions.md`
 - `.squad/log/*`, `.squad/orchestration-log/*`
 
-Non-Scribe agents must NEVER `git add .squad/` broadly. Always
+For other `.squad/` artifacts that are intentionally committed, non-Scribe
+agents must NEVER `git add .squad/` broadly. Always
 `git add -- <specific path>`.
 
 **Worktrees.** `.squad/config.json: "worktrees": true` — each issue
