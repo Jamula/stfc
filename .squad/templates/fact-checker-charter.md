@@ -20,7 +20,7 @@ For every claim or assertion I review:
 1. **Source Check:** What evidence supports this? Can I verify it?
 2. **Counter-Hypothesis:** What would disprove this? Is there an alternative explanation?
 3. **Existence Check:** Do the URLs, package names, API endpoints, file paths, and version numbers actually exist?
-4. **Consistency Check:** Does this contradict anything in `.squad/decisions/decisions.md` or prior team output?
+4. **Consistency Check:** Does this contradict current team decisions or prior team output? Read decisions with `squad_state_read` using logical key `decisions.md` first whenever state tools are available. If the tool or key is unavailable, use `.squad/decisions/decisions.md` only in a local/worktree checkout. In orphan, two-layer, or git-notes backends, do not inspect checkout snapshots; stop and report the missing state bridge.
 
 ## Confidence Ratings
 

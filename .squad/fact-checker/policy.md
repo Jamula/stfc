@@ -21,7 +21,7 @@ Empirical check of claims against sources. Triggered by `"fact-check this"`, `"v
 | **Function / type signatures** | Do they match the actual source? |
 | **Quoted text** | Does the source actually contain the quoted text verbatim? |
 | **Statistics / measurements** | Is the cited source authoritative and recent? |
-| **Cross-references to team decisions** | Does `.squad/decisions/decisions.md` actually say what was claimed? |
+| **Cross-references to team decisions** | Check the current ledger with `squad_state_read` using logical key `decisions.md` first whenever state tools are available. If the tool or key is unavailable, use `.squad/decisions/decisions.md` only in a local/worktree checkout. In orphan, two-layer, or git-notes backends, do not inspect checkout snapshots; stop and report the missing state bridge. |
 
 ### Confidence rating (every verified item gets one)
 
@@ -88,7 +88,7 @@ All Fact Checker findings (verification verdicts + DA briefs) are logged to `.sq
 - Which verdict was issued (or which DA brief was produced)
 - Whether the team accepted the finding
 
-Decisions that affect other agents go to `.squad/decisions/inbox/fact-checker-{slug}.md` for Scribe to merge into `.squad/decisions/decisions.md`.
+Decisions that affect other agents go to `.squad/decisions/inbox/fact-checker-{slug}.md` for Scribe to merge into logical key `decisions.md` through the state bridge. Use physical `.squad/decisions/decisions.md` as the merge destination only in a local/worktree checkout; in orphan, two-layer, or git-notes backends, preserve the inbox handoff and report a missing bridge rather than writing a checkout snapshot.
 
 ---
 
