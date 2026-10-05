@@ -40,11 +40,14 @@ const MUTABLE_SQUAD_STATE_PATTERNS = [
 
 /**
  * Mutable Squad state must be persisted through the configured backend,
- * not staged or committed from the working tree.
+ * not staged or committed from the working tree. Staged deletions are allowed
+ * so local-only state can be untracked without committing its contents.
  */
-export function checkSquadBoundary(staged) {
+export function checkSquadBoundary(staged, deleted = []) {
+  const deletedPaths = new Set(deleted);
   const violations = staged.filter((f) =>
-    MUTABLE_SQUAD_STATE_PATTERNS.some((re) => re.test(f)),
+    !deletedPaths.has(f) &&
+      MUTABLE_SQUAD_STATE_PATTERNS.some((re) => re.test(f)),
   );
   if (violations.length === 0) return;
 
