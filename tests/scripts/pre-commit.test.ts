@@ -49,7 +49,17 @@ describe("checkSquadBoundary", () => {
   });
 
   it("passes for normal .squad/ static config", () => {
-    checkSquadBoundary([".squad/team.md", ".squad/routing.md"]);
+    checkSquadBoundary([
+      ".squad/team.md",
+      ".squad/routing.md",
+      ".squad/ceremonies.md",
+      ".squad/casting/policy.json",
+      ".squad/casting/registry.json",
+      ".squad/agents/bashir/charter.md",
+      ".squad/templates/history.md",
+      ".squad/rai/policy.md",
+      ".squad/plugins/marketplaces.json",
+    ]);
     assert.equal(exitState.code, null);
   });
 
@@ -108,11 +118,15 @@ describe("checkSquadBoundary", () => {
 
     const mutableStatePaths = [
       ".squad/agents/scotty/history.md",
+      ".squad/agents/scotty/history-archive.md",
+      ".squad/casting/history.json",
       ".squad/decisions/decisions.md",
       ".squad/decisions.md",
       ".squad/decisions/inbox/001.md",
       ".squad/log/2026-05-16.md",
       ".squad/orchestration-log/session.md",
+      ".squad/rai/audit-trail.md",
+      ".squad/fact-checker/audit-trail.md",
     ];
 
     assert.throws(

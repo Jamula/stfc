@@ -380,9 +380,12 @@ runbook. Issue #220 Phase 1 does not add this context to the live ruleset:
 comment-derived status is operational governance, not a security boundary
 against a session acting with the repository owner's identity.
 
-**Decisions.** Append-only ledger at `.squad/decisions/decisions.md` (live) with
-roll-over to `.squad/decisions-archive.md`. Drop-box pattern: agents
-write to `.squad/decisions/inbox/` and Scribe merges into the ledger.
+**Decisions.** The append-only ledger uses logical key `decisions.md` (live),
+with roll-over to `.squad/decisions-archive.md`. Agents submit decisions via
+`squad_state_write` to logical key `decisions/inbox/{agent}-{slug}.md`; the
+Coordinator appends accepted items to `decisions.md`. Physical paths
+`.squad/decisions/decisions.md` and `.squad/decisions/inbox/` apply only to
+local/worktree. Governed backends fail closed if the state bridge is unavailable.
 
 **Agent memory.** Per-agent `.squad/agents/{name}/history.md` (private
 learning, max ~15 KB before Scribe rotates to
@@ -475,7 +478,9 @@ Validate at `package.json:20,28`.
 `concurrency.group`, permission scopes). Any edit to the workflow
 ships in the same commit as the pinning-test update (Rule 3).
 Canonical pattern is **structural parse + assert on object graph**, not
-substring grep — see `.squad/decisions/decisions.md` (Uhura PR #102).
+substring grep. The live decision ledger uses logical key `decisions.md`; its
+physical path `.squad/decisions/decisions.md` applies only to local/worktree.
+See `.squad/decisions-archive.md` (Uhura PR #102).
 
 **Deploy auth.** OIDC federation, no long-lived secrets. Workflow skips
 deploy gracefully when `AZURE_CLIENT_ID` is unset (commits `434e996`
