@@ -21,7 +21,7 @@ Empirical check of claims against sources. Triggered by `"fact-check this"`, `"v
 | **Function / type signatures** | Do they match the actual source? |
 | **Quoted text** | Does the source actually contain the quoted text verbatim? |
 | **Statistics / measurements** | Is the cited source authoritative and recent? |
-| **Cross-references to team decisions** | Does `.squad/decisions.md` actually say what was claimed? |
+| **Cross-references to team decisions** | Does `.squad/decisions/decisions.md` actually say what was claimed? |
 
 ### Confidence rating (every verified item gets one)
 
@@ -88,7 +88,7 @@ All Fact Checker findings (verification verdicts + DA briefs) are logged to `.sq
 - Which verdict was issued (or which DA brief was produced)
 - Whether the team accepted the finding
 
-Decisions that affect other agents go to `.squad/decisions/inbox/fact-checker-{slug}.md` for Scribe to merge into `.squad/decisions.md`.
+Decisions that affect other agents go to `.squad/decisions/inbox/fact-checker-{slug}.md` for Scribe to merge into `.squad/decisions/decisions.md`.
 
 ---
 

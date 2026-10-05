@@ -116,7 +116,7 @@ table to resolve ambiguity without escalating to Picard every time.
 ## Drop-box pattern
 
 Agents write decisions and findings to `.squad/decisions/inbox/{agent}-{slug}.md`
-rather than directly editing `.squad/decisions.md`. **Scribe** reads the inbox on
+rather than directly editing `.squad/decisions/decisions.md`. **Scribe** reads the inbox on
 its next session and merges entries into `decisions.md`. Agents read the consolidated
 `decisions.md` at the start of each spawn.
 
@@ -155,7 +155,7 @@ template area of `.github/agents/squad.agent.md`.
 
 ```
 INPUT ARTIFACTS:
-- READ:   /workspaces/stfc-cleanup-docs/.squad/decisions.md
+- READ:   /workspaces/stfc-cleanup-docs/.squad/decisions/decisions.md
 - MODIFY: /workspaces/stfc-cleanup-docs/.squad/routing.md
 - CREATE: /workspaces/stfc-cleanup-docs/.squad/skills/worktree-preflight/SKILL.md
 ```
