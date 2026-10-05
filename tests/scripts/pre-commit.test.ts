@@ -61,7 +61,15 @@ describe("checkSquadBoundary", () => {
     assert.equal(exitState.code, 1);
   });
 
-  it("fails for .squad/decisions.md without bypass", () => {
+  it("fails for the canonical decisions ledger without bypass", () => {
+    assert.throws(
+      () => checkSquadBoundary([".squad/decisions/decisions.md"]),
+      /process\.exit\(1\)/,
+    );
+    assert.equal(exitState.code, 1);
+  });
+
+  it("fails for the legacy .squad/decisions.md path without bypass", () => {
     assert.throws(
       () => checkSquadBoundary([".squad/decisions.md"]),
       /process\.exit\(1\)/,
@@ -95,7 +103,11 @@ describe("checkSquadBoundary", () => {
 
   it("passes when SQUAD_SCRIBE=1 is set", () => {
     process.env.SQUAD_SCRIBE = "1";
-    checkSquadBoundary([".squad/agents/scotty/history.md", ".squad/decisions.md"]);
+    checkSquadBoundary([
+      ".squad/agents/scotty/history.md",
+      ".squad/decisions/decisions.md",
+      ".squad/decisions.md",
+    ]);
     assert.equal(exitState.code, null);
   });
 

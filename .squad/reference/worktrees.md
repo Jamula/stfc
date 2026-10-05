@@ -45,7 +45,7 @@ When triggered:
 - Agents record decisions with `squad_decide` or `squad_state_write` to `decisions/inbox/{agent-name}-{brief-slug}.md`.
 - The runtime routes that write to the configured state backend. Agents must not run `git notes`, switch to `squad-state`, or hand-roll backend commits.
 - Scribe merges into the canonical `.squad/decisions/decisions.md` and clears the inbox
-- All agents READ from `.squad/decisions/decisions.md` at spawn time (last-merged snapshot)
+- All agents READ the logical `decisions.md` state key at spawn time; local/worktree resolves to `.squad/decisions/decisions.md` (last-merged snapshot)
 
 **orchestration-log/** — Scribe writes one entry per agent after each batch:
 - `.squad/orchestration-log/{timestamp}-{agent-name}.md`
