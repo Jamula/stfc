@@ -445,8 +445,8 @@ The core application and required-check workflows are grouped by purpose:
 
 1. Runs `check-artifact-hygiene.mjs --staged` on staged content.
 2. Reads staged files (`git diff --cached --name-only`).
-3. Runs `checkSquadBoundary` — rejects mixed-author `.squad/` commits
-   (Rule 2).
+3. Runs `checkSquadBoundary` — rejects mutable `.squad/` state paths for
+   every actor; direct commits of mutable state are not supported (Rule 2).
 4. Runs `checkPortableFilenames` — blocks filenames illegal on Windows.
 5. Runs `checkWorkflowPinningTests` — if `.github/workflows/*.yml` is
    staged, asserts the matching `tests/skills/*` literal-pin test was

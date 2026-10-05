@@ -88,7 +88,15 @@ All Fact Checker findings (verification verdicts + DA briefs) are logged to `.sq
 - Which verdict was issued (or which DA brief was produced)
 - Whether the team accepted the finding
 
-Decisions that affect other agents go to `.squad/decisions/inbox/fact-checker-{slug}.md` for Scribe to merge into logical key `decisions.md` through the state bridge. Use physical `.squad/decisions/decisions.md` as the merge destination only in a local/worktree checkout; in orphan, two-layer, or git-notes backends, preserve the inbox handoff and report a missing bridge rather than writing a checkout snapshot.
+Decisions that affect other agents must be written with `squad_state_write` to
+logical key `decisions/inbox/fact-checker-{slug}.md` for the Coordinator to
+review and, if accepted, merge into logical key `decisions.md`. If state tools
+are unavailable, use `.squad/decisions/inbox/fact-checker-{slug}.md` only for
+local/worktree backends. On orphan, two-layer, or git-notes backends, stop and
+report a missing bridge if the state tool is unavailable. If
+`squad_state_write` fails, report the failure and do not write a checkout copy.
+The physical ledger path `.squad/decisions/decisions.md` is a merge destination
+only for local/worktree backends.
 
 ---
 
