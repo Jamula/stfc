@@ -65,7 +65,7 @@ Analyze conversations and propose improvements to squad knowledge based on what 
 Determine what knowledge system should be updated:
 
 1. **Agent-specific learning** → `.squad/agents/{agent}/history.md`
-2. **Team-wide decision** → `.squad/decisions/inbox/{agent}-{topic}.md`
+2. **Team-wide decision** → `squad_state_write` to logical key `decisions/inbox/{agent}-{topic}.md` (local/worktree physical fallback: `.squad/decisions/inbox/{agent}-{topic}.md`)
 3. **Skill-specific improvement** → Document in session, recommend to skill owner
 
 ### Phase 2: Analyze Conversation
@@ -163,7 +163,7 @@ After user approval:
    - Format: Date, assignment context, key learning
 
 2. **For Team Decisions:**
-   - Create `.squad/decisions/inbox/{agent}-{topic}.md`
+   - Write with `squad_state_write` to logical key `decisions/inbox/{agent}-{topic}.md`. Local/worktree physical fallback: `.squad/decisions/inbox/{agent}-{topic}.md`. On orphan, two-layer, or git-notes backends, stop and report a missing bridge instead of writing a checkout snapshot.
    - Lead agent reviews and merges to `decisions.md` if appropriate
 
 3. **For Skills:**

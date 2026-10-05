@@ -115,33 +115,20 @@ table to resolve ambiguity without escalating to Picard every time.
 
 ## Drop-box pattern
 
-Agents write decisions and findings to `.squad/decisions/inbox/{agent}-{slug}.md`
-rather than directly editing `.squad/decisions/decisions.md`. **Scribe** reads the inbox on
-its next session and merges entries into `decisions.md`. Agents read the consolidated
-`decisions.md` at the start of each spawn.
+Agents submit decisions and findings with `squad_state_write` to logical key
+`decisions/inbox/{agent}-{slug}.md`; the runtime resolves that key to the
+configured state backend. If state tools are unavailable, use the physical
+`.squad/decisions/inbox/{agent}-{slug}.md` path only for local/worktree backends.
+For orphan, two-layer, or git-notes backends, stop and report a missing bridge
+instead of writing a checkout snapshot. If a state-tool write fails, report the
+failure and do not create a checkout copy.
 
-**Why:** `decisions.md` is written by Scribe only, which prevents concurrent write
-conflicts when multiple agents are running in parallel worktrees. The inbox acts as
-a write-safe drop box with at-most-once delivery semantics.
-
-**Pattern:**
-```bash
-# Agent writes a decision (non-Scribe agents):
-cat > .squad/decisions/inbox/obrien-worktree-preflight.md << 'EOF'
-**Decision:** <one-line summary>
-**By:** O'Brien · 2026-06-01
-**Context:** <brief why>
-**Outcome:** <what was decided>
-EOF
-# Do NOT stage or commit .squad/ paths (Rule 2 — Scribe owns those commits)
-
-# Scribe merges on next session:
-# reads .squad/decisions/inbox/*.md, appends to decisions.md, deletes inbox files
-```
-
-**Key constraint (Rule 2):** agents MUST leave `.squad/` files uncommitted. Scribe
-commits them in a separate session. Never `git add .squad/` or use a broad glob that
-sweeps Scribe-owned files.
+Agents must not edit `decisions.md` directly. The Coordinator reviews inbox
+items and records accepted decisions by appending through the configured state
+tools to logical key `decisions.md`. Agents read that ledger with
+`squad_state_read`. For local/worktree, the physical file path is
+`.squad/decisions/decisions.md`; for other backends, do not assume a checkout
+file exists.
 
 ---
 

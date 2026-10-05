@@ -68,7 +68,7 @@ Every verified item gets one of:
 {proceed / revise / block with reasons}
 ```
 
-6. **Write decision** if I found issues: `.squad/decisions/inbox/fact-checker-{slug}.md`
+6. **Write decision** if I found issues: use `squad_state_write` with logical key `decisions/inbox/fact-checker-{slug}.md`. If state tools are unavailable, use `.squad/decisions/inbox/fact-checker-{slug}.md` only for local/worktree; on orphan, two-layer, or git-notes backends, stop and report the missing bridge. If a state-tool write fails, report the failure and do not write a checkout copy.
 
 ## Boundaries
 
