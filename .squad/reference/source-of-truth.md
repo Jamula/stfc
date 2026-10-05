@@ -12,7 +12,7 @@
 | File | Status | Who May Write | Who May Read |
 |------|--------|---------------|--------------|
 | `.github/agents/squad.agent.md` | **Authoritative governance.** All roles, handoffs, gates, and enforcement rules. | Repo maintainer (human) | Squad (Coordinator) |
-| `.squad/decisions/decisions.md` | **Authoritative decision ledger.** Canonical local location for scope, architecture, and process decisions. | Squad (Coordinator) — append only | All agents |
+| `.squad/decisions/decisions.md` | **Authoritative decision ledger content; derived / append-only storage.** Canonical local file for scope, architecture, and process decisions; governed backends store it under the logical `decisions.md` key. | Squad (Coordinator) — append only | All agents |
 | `.squad/team.md` | **Authoritative roster.** Current team composition. | Squad (Coordinator) | All agents |
 | `.squad/routing.md` | **Authoritative routing.** Work assignment rules. | Squad (Coordinator) | Squad (Coordinator) |
 | `.squad/ceremonies.md` | **Authoritative ceremony config.** Definitions, triggers, and participants for team ceremonies. | Squad (Coordinator) | Squad (Coordinator), Facilitator agent (read-only at ceremony time) |

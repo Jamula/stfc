@@ -27,6 +27,7 @@ function defaultExists(p) {
 
 const SCRIBE_OWNED_PATTERNS = [
   /^\.squad\/agents\/[^/]+\/history\.md$/,
+  /^\.squad\/decisions\/decisions\.md$/,
   /^\.squad\/decisions\.md$/,
   /^\.squad\/decisions\/inbox\//,
   /^\.squad\/log\//,
