@@ -6,11 +6,13 @@
 ## Source of Truth Hierarchy
 
 > **State backend note:** Files below marked as "Derived / append-only" are **mutable state** — agents access them with runtime state tools (`squad_state_read`, `squad_state_write`, `squad_state_append`, `squad_state_delete`, `squad_state_list`). The runtime decides whether the configured backend stores them on disk, git-native state, or an external provider. Files marked as "Authoritative" are **static config** and always live on disk regardless of backend.
+>
+> **Decision ledger path:** The logical state-tool key is `decisions.md`; the canonical local file in this repository is `.squad/decisions/decisions.md`. The key resolves through the configured backend and does not imply a second local copy.
 
 | File | Status | Who May Write | Who May Read |
 |------|--------|---------------|--------------|
 | `.github/agents/squad.agent.md` | **Authoritative governance.** All roles, handoffs, gates, and enforcement rules. | Repo maintainer (human) | Squad (Coordinator) |
-| `.squad/decisions.md` | **Authoritative decision ledger.** Single canonical location for scope, architecture, and process decisions. | Squad (Coordinator) — append only | All agents |
+| `.squad/decisions/decisions.md` | **Authoritative decision ledger.** Canonical local location for scope, architecture, and process decisions. | Squad (Coordinator) — append only | All agents |
 | `.squad/team.md` | **Authoritative roster.** Current team composition. | Squad (Coordinator) | All agents |
 | `.squad/routing.md` | **Authoritative routing.** Work assignment rules. | Squad (Coordinator) | Squad (Coordinator) |
 | `.squad/ceremonies.md` | **Authoritative ceremony config.** Definitions, triggers, and participants for team ceremonies. | Squad (Coordinator) | Squad (Coordinator), Facilitator agent (read-only at ceremony time) |
@@ -31,6 +33,6 @@
 1. If this file (`squad.agent.md`) and any other file conflict, this file wins.
 2. Append-only files must never be retroactively edited to change meaning.
 3. Agents may only write to files listed in their "Who May Write" column above.
-4. Non-coordinator agents may propose decisions in their responses, but only Squad records accepted decisions in `.squad/decisions.md`.
+4. Non-coordinator agents may propose decisions in their responses, but only Squad records accepted decisions under the logical state key `decisions.md` (local file: `.squad/decisions/decisions.md`).
 
 ---

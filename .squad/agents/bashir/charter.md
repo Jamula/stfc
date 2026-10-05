@@ -18,7 +18,7 @@
 
 ## How I Work
 
-- Read `.squad/decisions.md` first. Test what's been decided; flag what isn't testable.
+- Read `.squad/decisions/decisions.md` first. Test what's been decided; flag what isn't testable.
 - Write the failing test first when fixing a bug. Behaviour change must be observable in tests.
 - Prefer integration tests with realistic inputs over mocks-of-mocks.
 - When I review and reject, I name a *different* agent to do the revision (per reviewer protocol).

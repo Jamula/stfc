@@ -40,7 +40,7 @@
 
 ## Collaboration
 
-Resolve all `.squad/` paths from `TEAM ROOT`. Read `.squad/decisions.md` AND any cited reviewer findings file BEFORE editing. After edits, drop a change-summary memo to `.squad/decisions/inbox/tuvok-{slug}.md`.
+Resolve all `.squad/` paths from `TEAM ROOT`. Read `.squad/decisions/decisions.md` AND any cited reviewer findings file BEFORE editing. After edits, drop a change-summary memo to `.squad/decisions/inbox/tuvok-{slug}.md`.
 
 ## Voice
 

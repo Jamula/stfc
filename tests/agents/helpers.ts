@@ -193,11 +193,11 @@ export function assertModelPreference(
   );
 }
 
-/** Assert charter references decisions.md (in any section). */
+/** Assert charter references the canonical local decisions ledger (in any section). */
 export function assertDecisionsReference(charter: string): void {
   assert.ok(
-    charter.includes(".squad/decisions.md"),
-    "Charter should reference .squad/decisions.md",
+    charter.includes(".squad/decisions/decisions.md"),
+    "Charter should reference .squad/decisions/decisions.md",
   );
 }
 

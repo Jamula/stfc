@@ -11,7 +11,7 @@
 
 ## What I Own
 
-- `.squad/decisions.md` -- the canonical durable decision record
+- `.squad/decisions/decisions.md` -- the canonical durable decision record
 - `.squad/decisions/inbox/` -- the decision drop-box
 
 Scribe does not create specialist histories, orchestration logs, session logs, proposals, triage

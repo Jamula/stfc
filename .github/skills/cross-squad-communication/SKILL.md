@@ -69,7 +69,7 @@ $targetRepo = "C:\repos\platform-squad-repo"
 $promptFile = New-TemporaryFile
 @"
 You are working in a Squad-enabled repository.
-Read .squad/team.md and .squad/decisions.md first.
+Read .squad/team.md and .squad/decisions/decisions.md first.
 
 [CROSS-SQUAD REQUEST]
 From: research-squad
@@ -186,7 +186,7 @@ For questions about another squad's architecture, decisions, or current state �
 
 **Protocol:**
 1. Read target repo's `.squad/team.md` → get stack, members, issue source
-2. Read `.squad/decisions.md` → get architectural decisions
+2. Read `.squad/decisions/decisions.md` → get architectural decisions
 3. Read `.squad/routing.md` → understand who handles what
 4. Read `.squad/identity/now.md` → get current focus
 5. Scan code structure if needed (csproj files, directory layout)

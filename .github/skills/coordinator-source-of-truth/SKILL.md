@@ -7,11 +7,13 @@ domain: squad-internals
 source: "Extracted from squad.agent.md as part of the slimming effort (bradygaster/squad#1308)."
 ---
 
-> **Load this skill when:** the coordinator (or any agent) needs to resolve a "where does this state belong?" or "who is allowed to write this file?" question. The short summary in `squad.agent.md` is for routing; this skill is the full reference.
+> **Load this skill when:** the coordinator (or any agent) needs to resolve a "where does this state belong?" or "who is allowed to write this file?" question — e.g., when about to write the decision ledger at `.squad/decisions/decisions.md`, when reviewing whether an agent broke the append-only rule, when answering a user question about Squad's file layout, or when adjudicating a conflict between two files. The short summary in `squad.agent.md` is for routing; this skill is the full reference.
 
 ## State backend note
 
 The durable decision record is the only mutable Squad state governed by this hierarchy. Access it with the configured `squad_state_*` tools; the runtime selects the storage backend. Static configuration always lives on disk. Do not create specialist histories, session logs, orchestration logs, or audit trails as Squad state. Snapshot reconciliation may preserve existing append-only histories and logs; it must not manufacture new records.
+
+For decisions, the logical state-tool key is `decisions.md`; the canonical local file in this repository is `.squad/decisions/decisions.md`. The key resolves through the configured backend and does not imply a second local copy.
 
 ## File hierarchy
 
@@ -21,7 +23,7 @@ The durable decision record is the only mutable Squad state governed by this hie
 | `.squad/team.md` | **Authoritative roster.** Current team composition. | Squad (Coordinator) | All agents |
 | `.squad/routing.md` | **Authoritative routing.** Work assignment rules. | Squad (Coordinator) | Squad (Coordinator) |
 | `.squad/decisions/inbox/` | **Derived decision proposals.** Candidates for the durable ledger. | Authorized agents through runtime state tools | Squad (Coordinator), Scribe |
-| `.squad/decisions.md` | **Authoritative durable decision ledger.** Accepted scope, architecture, and process decisions. | Scribe through runtime state tools, after coordinator acceptance | All agents |
+| `.squad/decisions/decisions.md` | **Authoritative durable decision ledger.** Accepted scope, architecture, and process decisions. | Scribe through runtime state tools, after coordinator acceptance | All agents |
 | `.squad/agents/{name}/charter.md` | **Authoritative agent identity.** Per-agent role and boundaries. | Squad (Coordinator) at creation; agents may not self-modify | Squad (Coordinator) and owning agent |
 | `.squad/templates/` | **Reference.** Bootstrap and on-demand format guides; not authoritative for enforcement. | Squad (Coordinator) at init | Squad (Coordinator) |
 | `.squad/plugins/marketplaces.json` | **Authoritative plugin config.** Registered marketplace sources. | Squad CLI (`squad plugin marketplace`) | Squad (Coordinator) |

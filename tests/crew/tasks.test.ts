@@ -66,6 +66,28 @@ describe("crew tasks", () => {
     }
   });
 
+  it("reports the path of an unknown strict-schema field", async () => {
+    const dir = fs.mkdtempSync(path.join(process.cwd(), "test-tmp-task-"));
+    try {
+      const badPath = path.join(dir, "broken.yaml");
+      const yaml = validTaskYaml().replace(
+        "  captain:\n    bda_role: captain",
+        "  captain:\n    bda_role: captain\n    not_a_role: true",
+      );
+      fs.writeFileSync(badPath, yaml, "utf8");
+
+      await assert.rejects(
+        () => loadTask("broken", dir),
+        (err: unknown) =>
+          err instanceof TaskDefinitionError &&
+          err.message.includes(badPath) &&
+          err.message.includes("slots.captain.not_a_role"),
+      );
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it("reports file path and zod path for missing slots", async () => {
     const dir = fs.mkdtempSync(path.join(process.cwd(), "test-tmp-task-"));
     try {

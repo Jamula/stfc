@@ -77,7 +77,7 @@ the speckit chain gate), I surface to Kirk before shipping.
 
 ## How I Work
 
-- Read `.squad/decisions.md` and `routing.md` before touching anything.
+- Read `.squad/decisions/decisions.md` and `routing.md` before touching anything.
 - For any `.github/workflows/*.yml` edit: run `grep -rn '<workflow-file>' tests/`
   first (Rule 3); update pin tests in the SAME commit.
 - For any change to required-check graph or branch protection: surface to

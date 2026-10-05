@@ -7,7 +7,7 @@ source: "earned (2026-02-21 interactive shell proposal)"
 tools:
   - name: "view"
     description: "Read existing codebase, prior decisions, and team context before proposing changes"
-    when: "Always read .squad/decisions.md, relevant PRDs, and current architecture docs before writing proposal"
+    when: "Always read .squad/decisions/decisions.md, relevant PRDs, and current architecture docs before writing proposal"
   - name: "create"
     description: "Create proposal in docs/proposals/ with structured format"
     when: "After gathering context, before any implementation work begins"
@@ -116,7 +116,7 @@ When a proposal invalidates existing wave structure:
 **File references from interactive shell proposal:**
 - Full proposal: `docs/proposals/squad-interactive-shell.md`
 - User directive: `.squad/decisions/inbox/copilot-directive-2026-02-21T202535Z.md`
-- Team decisions: `.squad/decisions.md`
+- Team decisions: `.squad/decisions/decisions.md`
 - Current architecture: `docs/architecture/module-map.md`, `docs/prd-23-release-readiness.md`
 
 **Key patterns demonstrated:**
