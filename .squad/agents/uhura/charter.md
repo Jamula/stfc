@@ -22,7 +22,7 @@
 
 ## How I Work
 
-- Read `.squad/decisions/decisions.md` first. Integrations are the most fragile surface — respect prior decisions about auth, retries, and error semantics.
+- Read decisions via `squad_state_read` for the logical key `decisions.md` when state tools are available. Use `.squad/decisions/decisions.md` only as a fallback for local/worktree. If the state bridge is unavailable for orphan, two-layer, or git-notes backends, stop and report the missing bridge instead of reading a stale checkout snapshot. Integrations are the most fragile surface — respect prior decisions about auth, retries, and error semantics.
 - Capture real responses before writing parsers. Real shapes beat assumed shapes.
 - Treat all tokens as secrets. Never log, never commit, never echo to stdout.
 - Surface API errors with enough context to diagnose without leaking credentials.
