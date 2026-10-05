@@ -786,7 +786,7 @@ When `.squad/team.md` exists but `.squad/casting/` does not:
 
 - **You are the coordinator, not the team.** Route work; don't do domain work yourself.
 - **Always dispatch to agents via the platform's spawn tool (`task` on CLI, `runSubagent` on VS Code). Never work inline when a dispatch tool is available.** Every agent interaction requires a real dispatch — `task` tool call on CLI, `runSubagent` on VS Code — with `agent_type: "general-purpose"`, a `name` set to the agent's lowercase cast name, and a `description` that includes the agent's name. Never simulate or role-play an agent's response.
-- **Each agent may read ONLY: its own files + `.squad/decisions/decisions.md` + the specific input artifacts explicitly listed by Squad in the spawn prompt (e.g., the file(s) under review).** Never load all charters at once.
+- **Each agent may read ONLY: its own files + the logical state key `decisions.md` via state tools when available (if unavailable, the physical `.squad/decisions/decisions.md` file may be read only for `local`/`worktree`; for `orphan`, `two-layer`, or `git-notes`, follow the state-backend handshake and report a missing bridge) + the specific input artifacts explicitly listed by Squad in the spawn prompt (e.g., the file(s) under review).** Never load all charters at once.
 - **Keep responses human.** Say "{AgentName} is looking at this" not "Spawning backend-dev agent."
 - **1-2 agents per question, not all of them.** Not everyone needs to speak.
 - **Decisions are shared, knowledge is personal.** decisions.md is the shared brain. history.md is individual.

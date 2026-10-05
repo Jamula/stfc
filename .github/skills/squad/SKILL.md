@@ -281,9 +281,9 @@ Proceed? (yes / no)
 ### Archive Old Decisions
 
 - **intent:** archive decisions, clean up decisions, move old decisions, compact decisions
-- **summary:** Move old decisions from decisions.md to decisions-archive.md
+- **summary:** Archive older decisions first, verify the archive append, then trim the active decisions source
 - **action:** coordinator
-- **command:** Move entries older than threshold from .squad/decisions/decisions.md → .squad/decisions-archive.md
+- **command:** Treat `decisions.md` as the logical source key; `.squad/decisions/decisions.md` is only its local/worktree file path. For local/worktree, append eligible entries to `.squad/decisions-archive.md`, verify the archive append, and only then trim the source file. For orphan, two-layer, or git-notes backends, obtain the source with `squad_state_read` for key `decisions.md`, append and verify the archive using the configured backend's governing state tools, then trim and write key `decisions.md` with `squad_state_write`. Never read or edit a stale checkout copy for these backends. If archive append or verification cannot be safely completed through available tooling, fail closed and leave the source intact.
 - **args:**
   - `olderThan`: Archive decisions older than how many days? | default: 30
 - **confirm:** true

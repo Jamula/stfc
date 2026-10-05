@@ -69,7 +69,7 @@ $targetRepo = "C:\repos\platform-squad-repo"
 $promptFile = New-TemporaryFile
 @"
 You are working in a Squad-enabled repository.
-Read .squad/team.md and .squad/decisions/decisions.md first.
+Read `.squad/team.md`. For decisions, resolve the logical state key `decisions.md` through your configured state tools; do not assume a physical checkout path.
 
 [CROSS-SQUAD REQUEST]
 From: research-squad
@@ -180,13 +180,13 @@ while ($proc -and -not $proc.HasExited) {
 
 ---
 
-### Pattern 1: Read-Only Knowledge Query (No CLI Needed)
+### Pattern 1: Read-Only Static Metadata Query (No CLI Needed)
 
-For questions about another squad's architecture, decisions, or current state — read their `.squad/` metadata directly.
+For questions about another squad's static metadata — read their `.squad/` files directly. For decisions, ask the peer coordinator to resolve its logical state key `decisions.md` through its configured state tools (Pattern 0); do not read a checkout copy.
 
 **Protocol:**
 1. Read target repo's `.squad/team.md` → get stack, members, issue source
-2. Read `.squad/decisions/decisions.md` → get architectural decisions
+2. For architectural decisions, use Pattern 0 to ask the peer coordinator to resolve logical state key `decisions.md` through its configured state tools
 3. Read `.squad/routing.md` → understand who handles what
 4. Read `.squad/identity/now.md` → get current focus
 5. Scan code structure if needed (csproj files, directory layout)
@@ -200,8 +200,8 @@ For questions about another squad's architecture, decisions, or current state �
 # Query another squad's architecture
 $targetRepo = "C:\repos\platform-squad-repo"
 Get-Content "$targetRepo\.squad\team.md"
-Get-Content "$targetRepo\.squad\decisions.md"
 Get-Content "$targetRepo\.squad\identity\now.md"
+# For decisions, ask the peer coordinator to resolve logical state key `decisions.md` with its configured state tools (Pattern 0).
 ```
 
 **Response quality:** ⭐⭐⭐⭐ — excellent for structural/architectural questions.
@@ -327,14 +327,13 @@ If `.squad/team.md` doesn't exist, the repo is not squad-enabled. Fall back to s
 ### Example 1: research-squad queries platform-squad architecture
 
 ```powershell
-# Step 1: Read metadata (Pattern 1)
+# Step 1: Read static metadata (Pattern 1)
 $target = "C:\repos\platform-squad-repo"
 $team = Get-Content "$target\.squad\team.md" -Raw
-$decisions = Get-Content "$target\.squad\decisions.md" -Raw
 
 # Step 2: Extract answer from metadata
 # team.md reveals tech stack and member roles
-# decisions.md reveals architectural choices
+# Ask the peer coordinator to resolve logical state key `decisions.md` with its configured state tools (Pattern 0).
 
 # Step 3: If deeper analysis needed, create async request (Pattern 2)
 ```
