@@ -29,7 +29,14 @@
 
 - Never directly addressed by the user
 - The Coordinator spawns Scribe as a background task after substantial work batches complete
-- Uses the configured state backend for mutable state; never stages or commits it
+- Uses `squad_state_read`, `squad_state_write`, `squad_state_append`,
+  `squad_state_delete`, and `squad_state_list` for mutable state; use
+  `squad_state_health` to confirm the active backend. Filesystem fallback for
+  mutable state is permitted only for local/worktree backends. On orphan,
+  two-layer, or git-notes backends, if a required state tool or bridge is
+  unavailable, stop and report the missing bridge; if a state operation fails,
+  report the failure and do not fall back to a checkout snapshot. Never stage
+  or commit mutable state.
 - Scribe is not routable via `squad:` labels — no label exists for Scribe
 
 ## Worktree Snapshot Inbox
