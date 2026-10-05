@@ -241,7 +241,7 @@ These 2026-05-17 decisions explain the prior configuration and are retained as h
 | 4 | Garak diversity model? | **gpt-5.5** (Claude-family alternative) |
 | 5 | squad.agent.md drift? | **File issue** — tracked as #21 |
 
-All resolutions captured in `.squad/decisions.md` (via inbox → Scribe merge).
+All resolutions captured in `.squad/decisions/decisions.md` (via inbox → Scribe merge).
 
 ---
 

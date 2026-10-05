@@ -53,7 +53,7 @@ When opening a PR:
 - Reference the issue: `Closes #{issue-number}`
 - If the issue had a `squad:{member}` label, mention the member: `Working as {member} ({role})`
 - If this is a 🟡 needs-review task, add to the PR description: `⚠️ This task was flagged as "needs review" — please have a squad member review before merging.`
-- Follow any project conventions in `.squad/decisions.md`
+- Follow any project conventions in `.squad/decisions/decisions.md`
 - **Open the PR and stop.** Never call `gh pr merge`, enable auto-merge, or run `gh pr ready` — merging or marking a PR ready requires an explicit user request in this same active conversation (issue #220). Reviewer approval and green CI make a PR eligible for merge; they do not authorize the merge by themselves, and this holds even if CI is red, blocked, or has not started.
 
 ## Decisions

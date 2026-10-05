@@ -380,7 +380,7 @@ runbook. Issue #220 Phase 1 does not add this context to the live ruleset:
 comment-derived status is operational governance, not a security boundary
 against a session acting with the repository owner's identity.
 
-**Decisions.** Append-only ledger at `.squad/decisions.md` (live) with
+**Decisions.** Append-only ledger at `.squad/decisions/decisions.md` (live) with
 roll-over to `.squad/decisions-archive.md`. Drop-box pattern: agents
 write to `.squad/decisions/inbox/` and Scribe merges into the ledger.
 
@@ -393,7 +393,7 @@ learning, max ~15 KB before Scribe rotates to
 
 - `.squad/agents/{name}/history.md`
 - `.squad/decisions/inbox/*`
-- `.squad/decisions.md`
+- `.squad/decisions/decisions.md`
 - `.squad/log/*`, `.squad/orchestration-log/*`
 
 Non-Scribe agents must NEVER `git add .squad/` broadly. Always
@@ -473,7 +473,7 @@ Validate at `package.json:20,28`.
 `concurrency.group`, permission scopes). Any edit to the workflow
 ships in the same commit as the pinning-test update (Rule 3).
 Canonical pattern is **structural parse + assert on object graph**, not
-substring grep — see `.squad/decisions.md` (Uhura PR #102).
+substring grep — see `.squad/decisions/decisions.md` (Uhura PR #102).
 
 **Deploy auth.** OIDC federation, no long-lived secrets. Workflow skips
 deploy gracefully when `AZURE_CLIENT_ID` is unset (commits `434e996`
@@ -779,7 +779,7 @@ paths, and prove `main`'s tip SHA is unchanged while state commits land on
 | Scheduled gift redemption flow | §4.1 + `redeem.yml` |
 | Web panel request auth flow | §4.3 + `api/src/_lib/auth.ts` |
 | Exit-code semantics | §3.1 + `src/skills/runAll.ts:399-407` |
-| Decisions ledger | `.squad/decisions.md` (live), `.squad/decisions-archive.md` |
+| Decisions ledger | `.squad/decisions/decisions.md` (live), `.squad/decisions-archive.md` |
 | Coordinator file | `.github/agents/squad.agent.md` |
 | Global repo rules (22 of them) | `.github/copilot-instructions.md` |
 | Squad roster + role hierarchy | `.squad/team.md` + `docs/squad.md` |

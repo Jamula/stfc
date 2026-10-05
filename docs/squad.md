@@ -1,6 +1,6 @@
 # The Squad
 
-An AI team that lives in this repository under `.squad/`. Each member has a persistent name, a charter, and an append-only history. Decisions are recorded in `.squad/decisions.md`. The coordinator routes work; the members execute it.
+An AI team that lives in this repository under `.squad/`. Each member has a persistent name, a charter, and an append-only history. Decisions are recorded in `.squad/decisions/decisions.md`. The coordinator routes work; the members execute it.
 
 ---
 
@@ -32,7 +32,7 @@ An AI team that lives in this repository under `.squad/`. Each member has a pers
 | **Bashir** | `tests/` directory (unit, integration, e2e) · Test design & edge-case enumeration · Fixture authoring & mocks · Test reliability (no flakes) · CI test infrastructure | Architecture decisions → Kirk. Can veto on: untestable AC, missing coverage, test-first violations, bug-fix PRs without reproducing test. |
 | **Garak** | Challenging proposals · Surfacing unstated assumptions · Pre-mortems · Threat modelling & failure-mode analysis · Hostile fact-checks (verified against live repo, not memory) · Naming risks · Cross-provider critique | Advisory — does not block merges. Kirk calls technical veto; Picard calls scope/governance veto. **Lineage:** seat previously held by Borg Queen (gpt-5.4, through 2026-05-16); hostile-fact-check methodology preserved. |
 | **Tuvok** | Surgical text editing per explicit reviewer findings · Change-impact accounting · Documentation audits · Cross-reference discipline | Does not author new principles or processes. Escalates to the reviewer or Kirk (Lead). |
-| **Scribe** | `.squad/decisions.md` maintenance · Orchestration logs & session summaries · History archiving · Decision inbox merging | Silent background operation. `.squad/` write authority (Rule 2) — only Scribe commits `.squad/` paths. Never modifies source code. |
+| **Scribe** | `.squad/decisions/decisions.md` maintenance · Orchestration logs & session summaries · History archiving · Decision inbox merging | Silent background operation. `.squad/` write authority (Rule 2) — only Scribe commits `.squad/` paths. Never modifies source code. |
 | **Ralph** | GitHub issue/PR board polling · End-to-end work driving (untriaged → assigned → reviewed → merged) · Blocker detection | Not routable via labels. Runs as coordinator-level loop, not as a contributor. |
 
 ---
@@ -69,7 +69,7 @@ An AI team that lives in this repository under `.squad/`. Each member has a pers
 |----------|------|---------|
 | Roster | `.squad/team.md` | Authoritative team membership, roles, status |
 | Routing rules | `.squad/routing.md` | Work routing table — which agent handles what |
-| Decisions | `.squad/decisions.md` | Team-wide shared record; immutable once committed |
+| Decisions | `.squad/decisions/decisions.md` | Team-wide shared record; immutable once committed |
 | Decision inboxes | `.squad/decisions/inbox/*.md` | Per-agent inboxes (merged to `decisions.md` by Scribe) |
 | Charters | `.squad/agents/{name}/charter.md` | Role definition for each member |
 | Histories | `.squad/agents/{name}/history.md` | Append-only personal learnings |
