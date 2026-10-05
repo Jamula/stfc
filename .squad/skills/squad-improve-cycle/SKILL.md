@@ -12,7 +12,12 @@ approved edits surgically.
 ## Inputs (read in this order)
 
 1. `.github/copilot-instructions.md` — the current rule set
-2. `.squad/decisions/decisions.md` — recently ratified decisions (last 30 days)
+2. `decisions.md` via `squad_state_read` when available — recently ratified
+   decisions (last 30 days). Treat this as a logical state key, not a guaranteed
+   checkout path. If state tools are unavailable, read
+   `.squad/decisions/decisions.md` only for local/worktree backends. For
+   orphan, two-layer, or git-notes backends, stop and report the missing state
+   bridge; do not inspect a checkout snapshot.
 3. `.squad/decisions/inbox/` — **especially active cleanup/refactor proposals
    in flight** (anti-pre-emption check, see below)
 4. `.squad/team.md`, `.squad/routing.md`, `.squad/ceremonies.md` — current org shape
