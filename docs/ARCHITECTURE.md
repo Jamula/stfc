@@ -446,7 +446,7 @@ The core application and required-check workflows are grouped by purpose:
 1. Runs `check-artifact-hygiene.mjs --staged` on staged content.
 2. Reads staged files (`git diff --cached --name-only`).
 3. Runs `checkSquadBoundary` — rejects mutable `.squad/` state paths for
-   every actor; direct commits of mutable state are not supported (Rule 2).
+   every actor; direct commits of mutable state are not supported.
 4. Runs `checkPortableFilenames` — blocks filenames illegal on Windows.
 5. Runs `checkWorkflowPinningTests` — if `.github/workflows/*.yml` is
    staged, asserts the matching `tests/skills/*` literal-pin test was
@@ -454,8 +454,8 @@ The core application and required-check workflows are grouped by purpose:
 6. Runs `npm test` (~2-3 s, 900+ tests via `node:test` + `tsx`).
 
 **Bypass.** `--no-verify` is **forbidden** per repo rules. Fix the
-failure instead. `SQUAD_SCRIBE=1` allows the boundary check to pass for
-Scribe-only commits.
+failure instead. Mutable `.squad/` state paths are rejected for every
+actor; direct commits of mutable state are not supported.
 
 **Test discipline.** `npm test` + `npm run typecheck` are the gates.
 Validate at `package.json:20,28`.
