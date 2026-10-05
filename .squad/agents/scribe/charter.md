@@ -11,7 +11,7 @@
 
 ## What I Own
 
-- `.squad/decisions.md` -- the canonical durable decision record
+- `.squad/decisions/decisions.md` -- the canonical durable decision record
 - `.squad/decisions/inbox/` -- the decision drop-box
 
 Scribe does not create specialist histories, orchestration logs, session logs, proposals, triage
@@ -42,7 +42,7 @@ When accepted durable decisions exist:
 
 ## Worktree Snapshot Inbox
 
-The cleanup procedure stages worktree artifacts in `.squad/worktree-inbox/<id>/`.
+The repository-local cleanup procedure stages worktree artifacts in `.squad/worktree-inbox/<id>/` for local/worktree backends only. On orphan, two-layer, or git-notes backends, do not inspect or mutate checkout snapshots; use the configured state tools and stop if the bridge is unavailable.
 Each directory contains a `manifest.json` with `head_sha` and a `squad/` copy of
 the source `.squad/` tree. On each Scribe run, list these snapshots, compare
 each copy with the committed tree at `head_sha` and the current main-checkout
@@ -50,10 +50,11 @@ state, then reconcile only the worktree's uncommitted changes. Preserve both
 sides of append-only histories and logs. Leave conflicting non-append-only
 files in the snapshot and report them for owner review; never overwrite them.
 
-Persist canonical changes through Scribe's normal procedure, then re-read or
-diff every result. Delete only the specific snapshot directory after all
-changes are committed and verified. If a conflict, write, or verification
-fails, keep the snapshot for the next Scribe run.
+Persist canonical changes through the configured backend, then re-read or diff
+every result. Delete only the specific local/worktree snapshot directory after
+all changes are persisted and verified; do not commit mutable state. If a
+conflict, write, or verification fails, keep the snapshot for the next Scribe
+run.
 
 ## Boundaries
 

@@ -23,9 +23,7 @@ without creating new records.
 
 **Worktree awareness:** Use the `TEAM ROOT` supplied in the spawn prompt for all `.squad/` paths.
 
-**State backend awareness:** Use runtime state tools for non-local backends. Never switch state
-branches, push note refs, reset `.squad/`, or commit mutable state manually. If required state tools
-are unavailable, stop without mutating state and report the failure to the coordinator.
+**State backend awareness:** Check `STATE_BACKEND` from the spawn prompt. Prefer runtime state tools (`squad_state_read`, `squad_state_write`, `squad_state_append`, `squad_state_delete`, `squad_state_list`, `squad_state_health`) and `squad_decide` for mutable state. Local/worktree backends may use filesystem operations when state tools are unavailable. For orphan, two-layer, or git-notes backends, if the state bridge is unavailable, stop without reading or mutating checkout snapshots and report the missing bridge. Never run backend git commands, switch to state branches, push note refs, reset `.squad/`, or commit mutable state by hand.
 
 When accepted durable decisions exist:
 
@@ -42,7 +40,7 @@ When accepted durable decisions exist:
 
 ## Worktree Snapshot Inbox
 
-The cleanup procedure stages worktree artifacts in `.squad/worktree-inbox/<id>/`.
+The repository-local cleanup procedure stages worktree artifacts in `.squad/worktree-inbox/<id>/` for local/worktree backends only. On orphan, two-layer, or git-notes backends, do not inspect or mutate checkout snapshots; use the configured state tools and stop if the bridge is unavailable.
 Each directory contains a `manifest.json` with `head_sha` and a `squad/` copy of
 the source `.squad/` tree. On each Scribe run, list these snapshots, compare
 each copy with the committed tree at `head_sha` and the current main-checkout
@@ -50,10 +48,11 @@ state, then reconcile only the worktree's uncommitted changes. Preserve both
 sides of append-only histories and logs. Leave conflicting non-append-only
 files in the snapshot and report them for owner review; never overwrite them.
 
-Persist canonical changes through Scribe's normal procedure, then re-read or
-diff every result. Delete only the specific snapshot directory after all
-changes are committed and verified. If a conflict, write, or verification
-fails, keep the snapshot for the next Scribe run.
+Persist canonical changes through the configured backend, then re-read or diff
+every result. Delete only the specific local/worktree snapshot directory after
+all changes are persisted and verified; do not commit mutable state. If a
+conflict, write, or verification fails, keep the snapshot for the next Scribe
+run.
 
 ## Boundaries
 

@@ -276,9 +276,9 @@ Proceed? (yes / no)
 ### Show Recent Decisions
 
 - **intent:** show decisions, recent decisions, what decisions were made, decision log
-- **summary:** Display recent entries from .squad/decisions/decisions.md
+- **summary:** Display recent entries from the logical `decisions.md` state key
 - **action:** coordinator
-- **command:** Direct Mode — read decisions.md, answer
+- **command:** Treat `decisions.md` as the logical source key; `.squad/decisions/decisions.md` is only its local/worktree file path. Read it with `squad_state_read` for key `decisions.md` when state tools are available, and answer from that result. Fall back to reading `.squad/decisions/decisions.md` directly only for local/worktree. For orphan, two-layer, or git-notes backends, never read the checkout file — if the state bridge is unavailable, fail closed and report the missing bridge instead of showing stale or empty results.
 - **args:** (none)
 - **confirm:** false
 

@@ -105,19 +105,34 @@ describe("Scribe — worktree snapshot ingestion", () => {
     ["live charter", charter],
     ["template", scribeTemplate],
   ] as const) {
-    it(`${label} consumes and verifies snapshots before cleanup`, () => {
+    it(`${label} scopes snapshot cleanup to verified local/worktree persistence`, () => {
+      const normalized = text.replace(/\s+/g, " ");
       assert.ok(
-        text.includes(".squad/worktree-inbox/<id>/"),
+        normalized.includes(".squad/worktree-inbox/<id>/"),
         `${label} should identify the worktree snapshot inbox`,
       );
       assert.ok(
-        text.includes("manifest.json") && text.includes("head_sha"),
+        normalized.includes("manifest.json") && normalized.includes("head_sha"),
         `${label} should use the snapshot manifest to identify its base`,
       );
-      assert.match(
-        text,
-        /Delete only the specific snapshot directory after all[\s\S]*changes are committed and verified/,
-        `${label} should retain snapshots until reconciliation is persisted`,
+      assert.ok(
+        normalized.includes("for local/worktree backends only"),
+        `${label} should limit checkout snapshot handling to local/worktree backends`,
+      );
+      assert.ok(
+        normalized.includes(
+          "On orphan, two-layer, or git-notes backends, do not inspect or mutate checkout snapshots",
+        ),
+        `${label} should keep governed backends away from checkout snapshots`,
+      );
+      assert.ok(
+        normalized.includes(
+          "Persist canonical changes through the configured backend, then re-read or diff every result.",
+        ) &&
+          normalized.includes(
+            "Delete only the specific local/worktree snapshot directory after all changes are persisted and verified; do not commit mutable state.",
+          ),
+        `${label} should delete only after backend persistence and verification, without committing mutable state`,
       );
     });
   }

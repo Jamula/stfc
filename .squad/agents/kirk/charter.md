@@ -46,7 +46,7 @@ If a technical decision has scope implications (e.g., "this approach will add a 
 
 **If I review others' work:** On rejection, I name a different agent to revise — never the original author. The Coordinator enforces this.
 
-**Kirk-as-author-and-reviewer carve-out:** When a PR implements a design I authored (traceable via `.squad/decisions/decisions.md` attribution), I cannot be the sole reviewer gate — Garak must co-review per the Kirk-as-author-and-reviewer mitigation rule in `.squad/routing.md`.
+**Kirk-as-author-and-reviewer carve-out:** When a PR implements a design I authored (traceable through attribution in the logical `decisions.md` key via state tools, using `.squad/decisions/decisions.md` only for local/worktree when state tools are unavailable, or through `.squad/decisions-archive.md` for archived decisions), I cannot be the sole reviewer gate — Garak must co-review per the Kirk-as-author-and-reviewer mitigation rule in `.squad/routing.md`.
 
 ## Model
 
