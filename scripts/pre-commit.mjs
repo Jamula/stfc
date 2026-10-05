@@ -20,10 +20,15 @@ execSync('node scripts/check-artifact-hygiene.mjs --staged', { stdio: 'inherit' 
 // --- Enforcement checks (fail fast before running the full test suite) ---
 
 const staged = execSync('git diff --cached --name-only', { encoding: 'utf8' })
-  .split('\n')
+  .split(/\r?\n/)
+  .filter(Boolean);
+const deleted = execSync('git diff --cached --name-only --diff-filter=D', {
+  encoding: 'utf8',
+})
+  .split(/\r?\n/)
   .filter(Boolean);
 
-checkSquadBoundary(staged);
+checkSquadBoundary(staged, deleted);
 checkPortableFilenames(staged);
 checkWorkflowPinningTests(staged);
 

@@ -27,7 +27,7 @@ function captureExit(): { code: number | null } {
 // ── #9 — Squad boundary ─────────────────────────────────────────────
 
 describe("checkSquadBoundary", () => {
-  let checkSquadBoundary: (staged: string[]) => void;
+  let checkSquadBoundary: (staged: string[], deleted?: string[]) => void;
   let exitState: { code: number | null };
 
   beforeEach(async () => {
@@ -77,6 +77,30 @@ describe("checkSquadBoundary", () => {
       /process\.exit\(1\)/,
     );
     assert.equal(exitState.code, 1);
+  });
+
+  it("allows staged deletions of mutable state paths", () => {
+    const deleted = [".squad/decisions/decisions.md"];
+    checkSquadBoundary(deleted, deleted);
+    assert.equal(exitState.code, null);
+  });
+
+  it("still rejects staged mutable-state content alongside a deletion", () => {
+    const errors: string[] = [];
+    mock.method(console, "error", (msg: string) => errors.push(msg));
+    const deleted = [".squad/decisions/decisions.md"];
+
+    assert.throws(
+      () =>
+        checkSquadBoundary(
+          [...deleted, ".squad/log/2026-05-16.md"],
+          deleted,
+        ),
+      /process\.exit\(1\)/,
+    );
+    assert.equal(exitState.code, 1);
+    assert.match(errors.join("\n"), /\.squad\/log\/2026-05-16\.md/);
+    assert.doesNotMatch(errors.join("\n"), /\.squad\/decisions\/decisions\.md/);
   });
 
   it("rejects the legacy .squad/decisions.md path", () => {
@@ -287,6 +311,81 @@ describe("checkWorkflowPinningTests", () => {
         assert.equal(result.status, 1);
         assert.match(result.stderr, /\[JWT\]/);
         assert.doesNotMatch(result.stderr, new RegExp(stagedSecret.replaceAll(".", "\\.")));
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it("allows an intentional staged untracking of the canonical decisions ledger", () => {
+      const dir = mkdtempSync(join(tmpdir(), "stfc-pre-commit-untrack-"));
+      const scriptsDir = join(dir, "scripts");
+      const binDir = join(dir, "bin");
+      const isolatedGitEnv = { ...process.env };
+      for (const key of Object.keys(isolatedGitEnv)) {
+        if (key.startsWith("GIT_")) delete isolatedGitEnv[key];
+      }
+
+      try {
+        mkdirSync(scriptsDir, { recursive: true });
+        mkdirSync(binDir);
+        writeFileSync(
+          join(scriptsDir, "pre-commit.mjs"),
+          readFileSync(resolve("scripts/pre-commit.mjs"), "utf8"),
+        );
+        writeFileSync(
+          join(scriptsDir, "pre-commit-checks.mjs"),
+          readFileSync(resolve("scripts/pre-commit-checks.mjs"), "utf8"),
+        );
+        writeFileSync(join(scriptsDir, "check-artifact-hygiene.mjs"), "process.exit(0);\n");
+
+        const pathKey = Object.keys(isolatedGitEnv).find((key) => key.toLowerCase() === "path") ?? "PATH";
+        const pathSeparator = process.platform === "win32" ? ";" : ":";
+        isolatedGitEnv[pathKey] = `${binDir}${pathSeparator}${isolatedGitEnv[pathKey] ?? ""}`;
+        if (process.platform === "win32") {
+          writeFileSync(join(binDir, "npm.cmd"), "@echo off\r\nexit /b 0\r\n");
+        } else {
+          writeFileSync(join(binDir, "npm"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+        }
+
+        const decisionsLedger = ".squad/decisions/decisions.md";
+        mkdirSync(join(dir, ".squad", "decisions"), { recursive: true });
+        writeFileSync(join(dir, decisionsLedger), "tracked ledger\n");
+        execFileSync("git", ["init", "--quiet"], { cwd: dir, env: isolatedGitEnv });
+        execFileSync("git", ["config", "user.name", "Pre-commit test"], {
+          cwd: dir,
+          env: isolatedGitEnv,
+        });
+        execFileSync("git", ["config", "user.email", "pre-commit-test@example.invalid"], {
+          cwd: dir,
+          env: isolatedGitEnv,
+        });
+        execFileSync("git", ["add", decisionsLedger], { cwd: dir, env: isolatedGitEnv });
+        execFileSync("git", ["commit", "--quiet", "-m", "Add decisions ledger"], {
+          cwd: dir,
+          env: isolatedGitEnv,
+        });
+        execFileSync("git", ["rm", "--cached", decisionsLedger], {
+          cwd: dir,
+          env: isolatedGitEnv,
+        });
+
+        const stagedStatus = execFileSync("git", ["diff", "--cached", "--name-status"], {
+          cwd: dir,
+          encoding: "utf8",
+          env: isolatedGitEnv,
+        });
+        assert.equal(stagedStatus.trim(), `D\t${decisionsLedger}`);
+
+        const result = spawnSync(process.execPath, [join(scriptsDir, "pre-commit.mjs")], {
+          cwd: dir,
+          encoding: "utf8",
+          env: isolatedGitEnv,
+        });
+        assert.equal(
+          result.status,
+          0,
+          `expected staged untracking to pass the pre-commit boundary check:\n${result.stderr}`,
+        );
       } finally {
         rmSync(dir, { recursive: true, force: true });
       }

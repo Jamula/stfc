@@ -44,6 +44,8 @@ summary.md
 .squad/.cache/
 # Squad: state owned by squad-state branch (two-layer/orphan backend)
 .squad/decisions.md
+# Squad: local-only mutable decisions ledger; the archive remains tracked
+.squad/decisions/decisions.md
 .squad/memory/
 .squad/agents/*/history.md
 .squad/fact-checker/audit-trail.md

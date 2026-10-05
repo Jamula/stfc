@@ -1,6 +1,6 @@
 /** Type declarations for scripts/pre-commit-checks.mjs */
 
-export function checkSquadBoundary(staged: string[]): void;
+export function checkSquadBoundary(staged: string[], deleted?: string[]): void;
 
 export function checkPortableFilenames(staged: string[]): void;
 
