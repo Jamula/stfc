@@ -564,7 +564,7 @@ To enable full parallelism, shared writes use a drop-box pattern that eliminates
 - Agents record decisions with `memory.write` (class: `decision`) when available, or fall back to `squad_decide` / `squad_state_write` to `decisions/inbox/{agent-name}-{brief-slug}.md`.
 - The runtime routes that write to the configured state backend. Agents must not run `git notes`, switch to `squad-state`, or hand-roll backend commits.
 - Scribe merges into the canonical `.squad/decisions/decisions.md` and clears the inbox
-- All agents READ from `.squad/decisions/decisions.md` at spawn time (last-merged snapshot)
+- All agents READ the logical state key `decisions.md` with `squad_state_read` at spawn time (last-merged snapshot) when state tools are available. If state tools are unavailable, read `.squad/decisions/decisions.md` only for local/worktree backends; for orphan, two-layer, or git-notes backends, do not fall back to a checkout snapshot; follow the state-backend handshake and report a missing bridge.
 
 ### Worktree Awareness
 
