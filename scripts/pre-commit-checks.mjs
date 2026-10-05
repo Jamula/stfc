@@ -27,11 +27,15 @@ function defaultExists(p) {
 
 const MUTABLE_SQUAD_STATE_PATTERNS = [
   /^\.squad\/agents\/[^/]+\/history\.md$/,
+  /^\.squad\/agents\/[^/]+\/history-archive\.md$/,
+  /^\.squad\/casting\/history\.json$/,
   /^\.squad\/decisions\/decisions\.md$/,
   /^\.squad\/decisions\.md$/,
   /^\.squad\/decisions\/inbox\//,
   /^\.squad\/log\//,
   /^\.squad\/orchestration-log\//,
+  /^\.squad\/fact-checker\/audit-trail\.md$/,
+  /^\.squad\/rai\/audit-trail\.md$/,
 ];
 
 /**
