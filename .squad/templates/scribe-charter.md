@@ -11,9 +11,9 @@
 
 ## What I Own
 
-- `.squad/log/` — session logs (what happened, who worked, what was decided)
-- `.squad/decisions/decisions.md` — the shared local decision ledger all agents read (canonical, merged)
-- `.squad/decisions/inbox/` — decision drop-box (agents write here, I merge)
+- Logical key `log/` — session logs, persisted through the configured backend
+- Logical key `decisions.md` — shared canonical decision ledger; local/worktree path: `.squad/decisions/decisions.md`
+- Logical namespace `decisions/inbox/` — decision drop-box, read and merged through the configured backend
 - Cross-agent context propagation — when one agent's decision affects another
 - Decision archival — **HARD GATE**: enforce two-tier ceiling on decisions.md before every merge:
   - **Tier 1 (30-day):** If >20KB, archive entries older than 30 days
@@ -24,7 +24,7 @@
 
 **Worktree awareness:** Use the `TEAM ROOT` provided in the spawn prompt to resolve all `.squad/` paths. If no TEAM ROOT is given, run `git rev-parse --show-toplevel` as fallback. Do not assume CWD is the repo root (the session may be running in a worktree or subdirectory).
 
-**State backend awareness:** Check `STATE_BACKEND` from the spawn prompt. Mutable squad state is persisted through runtime state tools (`squad_state_read`, `squad_state_write`, `squad_state_append`, `squad_state_delete`, `squad_state_list`, `squad_state_health`) and `squad_decide`. Do not run backend git commands, switch to state branches, push note refs, reset `.squad/`, or commit mutable state by hand. If state tools are unavailable, stop without mutating files or git state and record the tool availability failure in your final summary.
+**State backend awareness:** Check `STATE_BACKEND` from the spawn prompt. Prefer runtime state tools (`squad_state_read`, `squad_state_write`, `squad_state_append`, `squad_state_delete`, `squad_state_list`, `squad_state_health`) and `squad_decide` for mutable state. Local/worktree backends may use filesystem operations when state tools are unavailable. For orphan, two-layer, or git-notes backends, if the state bridge is unavailable, stop without reading or mutating checkout snapshots and report the missing bridge. Never run backend git commands, switch to state branches, push note refs, reset `.squad/`, or commit mutable state by hand.
 
 After every substantial work session:
 
@@ -59,10 +59,11 @@ After every substantial work session:
    📌 Team update (<CURRENT_DATETIME value>): {summary} — decided by {Name}
    ```
 
-5. **Commit and verify persistence through the runtime backend:**
+5. **Verify persistence through the runtime backend:**
    - Run `squad_state_health` when available.
    - Re-read `decisions.md`, `log/{timestamp}-{topic}.md`, and any updated histories with `squad_state_read`.
-   - Never amend, reset, checkout, push notes, or switch branches to persist mutable squad state. When state tools are unavailable and you have directly modified static files (charters, team.md, skills), commit those changes with `git commit`.
+   - Never stage or commit mutable state, amend/reset/checkout files, push notes, or switch branches to persist it.
+   - If a write or verification fails, preserve the source inbox entry and report the failure; do not fall back to a checkout snapshot on a governed backend.
 
 6. **Commit handling:** Never commit mutable squad state. If non-state repo files changed, report them for coordinator handling.
 
@@ -72,9 +73,9 @@ After every substantial work session:
 
 ```
 .squad/
-├── decisions.md          # Shared brain — all agents read this (merged by Scribe)
 ├── decisions/
-│   └── inbox/            # Drop-box — agents write decisions here in parallel
+│   ├── decisions.md      # Local/worktree path for logical key decisions.md
+│   └── inbox/            # Local/worktree path for logical namespace decisions/inbox/
 │       ├── river-jwt-auth.md
 │       └── kai-component-lib.md
 ├── orchestration-log/    # Per-spawn log entries
@@ -89,14 +90,14 @@ After every substantial work session:
     └── ...
 ```
 
-- **decisions.md** = what the team agreed on (shared, merged by Scribe)
-- **decisions/inbox/** = where agents drop decisions during parallel work
+- **decisions.md** = logical state key for what the team agreed on (shared, merged by Scribe)
+- **decisions/inbox/** = logical state namespace where agents drop decisions during parallel work
 - **history.md** = what each agent learned (personal)
 - **log/** = what happened (archive)
 
 ## Worktree Snapshot Inbox
 
-The cleanup procedure stages worktree artifacts in `.squad/worktree-inbox/<id>/`.
+The repository-local cleanup procedure stages worktree artifacts in `.squad/worktree-inbox/<id>/` for local/worktree backends only. On orphan, two-layer, or git-notes backends, do not inspect or mutate checkout snapshots; use the configured state tools and stop if the bridge is unavailable.
 Each directory contains a `manifest.json` with `head_sha` and a `squad/` copy of
 the source `.squad/` tree. On each Scribe run, list these snapshots, compare
 each copy with the committed tree at `head_sha` and the current main-checkout
@@ -104,10 +105,11 @@ state, then reconcile only the worktree's uncommitted changes. Preserve both
 sides of append-only histories and logs. Leave conflicting non-append-only
 files in the snapshot and report them for owner review; never overwrite them.
 
-Persist canonical changes through Scribe's normal procedure, then re-read or
-diff every result. Delete only the specific snapshot directory after all
-changes are committed and verified. If a conflict, write, or verification
-fails, keep the snapshot for the next Scribe run.
+Persist canonical changes through the configured backend, then re-read or diff
+every result. Delete only the specific local/worktree snapshot directory after
+all changes are persisted and verified; do not commit mutable state. If a
+conflict, write, or verification fails, keep the snapshot for the next Scribe
+run.
 
 ## Boundaries
 

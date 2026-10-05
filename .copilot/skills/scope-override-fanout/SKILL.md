@@ -10,13 +10,13 @@ User message: *"I override your (c) Decline on [scope]. Accept option (a): [deta
 
 ## Invocation
 
-1. **Capture the override directive** — drop it to `.squad/decisions/inbox/copilot-directive-override-{em-name}-{scope}-(a).md` for audit trail.
+1. **Capture the override directive** — write it with `squad_state_write` to the logical key `decisions/inbox/copilot-directive-override-{em-name}-{scope}-(a).md` for audit trail. For local/worktree backends this resolves to `.squad/decisions/inbox/copilot-directive-override-{em-name}-{scope}-(a).md`. For orphan, two-layer, or git-notes backends, write only through the configured backend's governing state tools — never write the physical checkout file directly. If the state bridge is unavailable for a governed backend, fail closed and report the missing bridge instead of writing to the checkout file.
 2. **Validate the override scope is pre-scoped** — the override message MUST enumerate the exact agents, deliverables, and success criteria (e.g., "Constitution amendment + script + tests + workflow" is pre-scoped; "automate this somehow" is not).
 3. **Dispatch Phase 1 fan-out (background, parallel):**
    - One agent per major deliverable (e.g., constitution → Tuvok, script → Scotty, tests → Bashir, workflow → O'Brien).
    - All run simultaneously; no blocking dependencies between them.
-   - Each writes a decision memo drop (`.squad/decisions/inbox/{agent}-{deliverable}.md`) capturing tradeoffs.
-4. **Merge all decision drops into `.squad/decisions/decisions.md` (Scribe task)** — chronological order, with EM's original verdict preserved adjacent to the override for audit trail visibility.
+   - Each writes a decision memo drop with `squad_state_write` to the logical key `decisions/inbox/{agent}-{deliverable}.md` capturing tradeoffs. For local/worktree backends this resolves to `.squad/decisions/inbox/{agent}-{deliverable}.md`. For orphan, two-layer, or git-notes backends, write only through the configured backend's governing state tools; if the state bridge is unavailable, fail closed and report the missing bridge instead of writing to the checkout file.
+4. **Merge all decision drops into the logical `decisions.md` state key (Scribe task)** — chronological order, with EM's original verdict preserved adjacent to the override for audit trail visibility. Scribe reads/writes this key via `squad_state_read`/`squad_state_append` when state tools are available. For local/worktree backends this resolves to `.squad/decisions/decisions.md`. For orphan, two-layer, or git-notes backends, resolve only through the configured backend's governing state tools — never write the physical checkout file directly, since the runtime can overwrite it and create phantom state. If the state bridge is unavailable for a governed backend, fail closed and report the missing bridge instead of merging into the checkout file.
 5. **Schedule Phase 2 (reviews)** — Hostile fact-check (Garak), architecture (Kirk), governance (Picard), in whatever order suits the scope.
 6. **Do NOT loop back to the EM** for re-approval between Phase 1 and Phase 2. The override is the operative decision; Phase 2 is a final sanity-check, not a re-arbitration.
 
