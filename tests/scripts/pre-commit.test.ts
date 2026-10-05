@@ -48,12 +48,12 @@ describe("checkSquadBoundary", () => {
     assert.equal(exitState.code, null);
   });
 
-  it("passes for .squad/ files that are NOT Scribe-owned", () => {
+  it("passes for normal .squad/ static config", () => {
     checkSquadBoundary([".squad/team.md", ".squad/routing.md"]);
     assert.equal(exitState.code, null);
   });
 
-  it("fails for .squad/agents/*/history.md without bypass", () => {
+  it("rejects .squad/agents/*/history.md", () => {
     assert.throws(
       () => checkSquadBoundary([".squad/agents/scotty/history.md"]),
       /process\.exit\(1\)/,
@@ -61,7 +61,7 @@ describe("checkSquadBoundary", () => {
     assert.equal(exitState.code, 1);
   });
 
-  it("fails for the canonical decisions ledger without bypass", () => {
+  it("rejects the canonical decisions ledger", () => {
     assert.throws(
       () => checkSquadBoundary([".squad/decisions/decisions.md"]),
       /process\.exit\(1\)/,
@@ -69,7 +69,7 @@ describe("checkSquadBoundary", () => {
     assert.equal(exitState.code, 1);
   });
 
-  it("fails for the legacy .squad/decisions.md path without bypass", () => {
+  it("rejects the legacy .squad/decisions.md path", () => {
     assert.throws(
       () => checkSquadBoundary([".squad/decisions.md"]),
       /process\.exit\(1\)/,
@@ -77,7 +77,7 @@ describe("checkSquadBoundary", () => {
     assert.equal(exitState.code, 1);
   });
 
-  it("fails for .squad/decisions/inbox/* without bypass", () => {
+  it("rejects .squad/decisions/inbox/*", () => {
     assert.throws(
       () => checkSquadBoundary([".squad/decisions/inbox/001.md"]),
       /process\.exit\(1\)/,
@@ -85,7 +85,7 @@ describe("checkSquadBoundary", () => {
     assert.equal(exitState.code, 1);
   });
 
-  it("fails for .squad/log/* without bypass", () => {
+  it("rejects .squad/log/*", () => {
     assert.throws(
       () => checkSquadBoundary([".squad/log/2026-05-16.md"]),
       /process\.exit\(1\)/,
@@ -93,7 +93,7 @@ describe("checkSquadBoundary", () => {
     assert.equal(exitState.code, 1);
   });
 
-  it("fails for .squad/orchestration-log/* without bypass", () => {
+  it("rejects .squad/orchestration-log/*", () => {
     assert.throws(
       () => checkSquadBoundary([".squad/orchestration-log/session.md"]),
       /process\.exit\(1\)/,
@@ -101,27 +101,33 @@ describe("checkSquadBoundary", () => {
     assert.equal(exitState.code, 1);
   });
 
-  it("passes when SQUAD_SCRIBE=1 is set", () => {
+  it("rejects mutable state paths even when SQUAD_SCRIBE=1 is set", () => {
+    const errors: string[] = [];
+    mock.method(console, "error", (msg: string) => errors.push(msg));
     process.env.SQUAD_SCRIBE = "1";
-    checkSquadBoundary([
+
+    const mutableStatePaths = [
       ".squad/agents/scotty/history.md",
       ".squad/decisions/decisions.md",
       ".squad/decisions.md",
-    ]);
-    assert.equal(exitState.code, null);
-  });
-
-  it("error message mentions bypass instructions", () => {
-    const errors: string[] = [];
-    mock.method(console, "error", (msg: string) => errors.push(msg));
+      ".squad/decisions/inbox/001.md",
+      ".squad/log/2026-05-16.md",
+      ".squad/orchestration-log/session.md",
+    ];
 
     assert.throws(
-      () => checkSquadBoundary([".squad/log/session.md"]),
+      () => checkSquadBoundary(mutableStatePaths),
       /process\.exit\(1\)/,
     );
+    assert.equal(exitState.code, 1);
+
     const output = errors.join("\n");
-    assert.match(output, /SQUAD_SCRIBE=1/);
-    assert.match(output, /\[scribe\]/);
+    for (const file of mutableStatePaths) {
+      assert.ok(output.includes(`- ${file}`), `expected ${file} to be rejected`);
+    }
+    assert.match(output, /configured state backend/i);
+    assert.match(output, /not staged or committed/i);
+    assert.doesNotMatch(output, /SQUAD_SCRIBE=1|\[scribe\]|only scribe can commit/i);
   });
 });
 
