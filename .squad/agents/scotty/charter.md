@@ -18,7 +18,7 @@
 
 ## How I Work
 
-- Read `.squad/decisions/decisions.md` first. Implement what's been decided; flag drift.
+- Read decisions via `squad_state_read` for the logical key `decisions.md` when state tools are available. Use `.squad/decisions/decisions.md` only as a fallback for local/worktree. If the state bridge is unavailable for orphan, two-layer, or git-notes backends, stop and report the missing bridge instead of reading a stale checkout snapshot. Implement what's been decided; flag drift.
 - Small commits, clear messages. Each change should be reviewable on its own.
 - When the spec is unclear, ask. I don't guess at requirements.
 - Tests live with Bashir, but I write enough to keep the build honest.

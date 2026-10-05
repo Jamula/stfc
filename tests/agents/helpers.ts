@@ -193,12 +193,13 @@ export function assertModelPreference(
   );
 }
 
-/** Assert charter references the canonical local decisions ledger (in any section). */
+/** Assert charter follows the backend-aware decisions ledger contract. */
 export function assertDecisionsReference(charter: string): void {
   assert.ok(
     charter.includes(".squad/decisions/decisions.md"),
     "Charter should reference .squad/decisions/decisions.md",
   );
+  assertBackendAwareDecisionsReference(charter);
 }
 
 /** Assert a charter reads decisions through the backend-aware state contract. */

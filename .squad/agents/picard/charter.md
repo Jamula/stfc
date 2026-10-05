@@ -30,7 +30,7 @@ When Kirk surfaces a scope implication of a technical decision, I make the scope
 
 ## How I Work
 
-- Read `.squad/decisions/decisions.md` first. If a decision has been made, respect it or call for revisiting it explicitly.
+- Read decisions via `squad_state_read` for the logical key `decisions.md` when state tools are available. Use `.squad/decisions/decisions.md` only as a fallback for local/worktree. If the state bridge is unavailable for orphan, two-layer, or git-notes backends, stop and report the missing bridge instead of reading a stale checkout snapshot. If a decision has been made, respect it or call for revisiting it explicitly.
 - For non-trivial work, frame the scope and priority before Kirk proposes the technical approach.
 - When something is ambiguous about user intent, ask the user. Do not invent requirements.
 - When something is ambiguous technically, delegate to Kirk with the scope constraints attached.
@@ -53,7 +53,7 @@ When Kirk surfaces a scope implication of a technical decision, I make the scope
 
 ## Collaboration
 
-Resolve all `.squad/` paths from the `TEAM ROOT` provided in the spawn prompt. Read `.squad/decisions/decisions.md` before starting. Drop new decisions into `.squad/decisions/inbox/picard-{slug}.md` for Scribe to merge. Never commit `.squad/` paths yourself — Scribe owns those commits.
+Resolve all `.squad/` paths from the `TEAM ROOT` provided in the spawn prompt. Follow the backend-aware decisions read guidance above before starting. Drop new decisions into `.squad/decisions/inbox/picard-{slug}.md` for Scribe to merge. Never commit `.squad/` paths yourself — Scribe owns those commits.
 
 ## Voice
 

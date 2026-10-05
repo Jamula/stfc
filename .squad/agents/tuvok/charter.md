@@ -40,7 +40,7 @@
 
 ## Collaboration
 
-Resolve all `.squad/` paths from `TEAM ROOT`. Read `.squad/decisions/decisions.md` AND any cited reviewer findings file BEFORE editing. After edits, drop a change-summary memo to `.squad/decisions/inbox/tuvok-{slug}.md`.
+Resolve all `.squad/` paths from `TEAM ROOT`. Read decisions via `squad_state_read` for the logical key `decisions.md` when state tools are available. Use `.squad/decisions/decisions.md` only as a fallback for local/worktree. If the state bridge is unavailable for orphan, two-layer, or git-notes backends, stop and report the missing bridge instead of reading a stale checkout snapshot. Read any cited reviewer findings file BEFORE editing. After edits, drop a change-summary memo to `.squad/decisions/inbox/tuvok-{slug}.md`.
 
 ## Voice
 
