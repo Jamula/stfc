@@ -45,6 +45,7 @@ const workflows = workflowSources.map(({ file, source }) => ({
         name?: string;
         needs?: string | string[];
         if?: string;
+        permissions?: Record<string, string>;
         steps?: Array<{
           run?: string;
           uses?: string;
@@ -784,6 +785,11 @@ describe("workflow consolidation", () => {
       validation.if,
       "github.event_name != 'pull_request' || github.event.action != 'closed'",
       "API validation should be skipped only when a pull request is closed",
+    );
+    assert.deepEqual(
+      validation.permissions,
+      { contents: "read" },
+      "API validation must use only job-level contents: read permissions",
     );
     const steps = validation.steps ?? [];
     assert.ok(

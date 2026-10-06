@@ -11,6 +11,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { parse as parseYaml } from "yaml";
 
 // SHA from deploy-contract.md §2 — must match workflow bit-for-bit.
 const SWA_DEPLOY_ACTION_SHA = "1a947af9992250f3bc2e68ad0754c0b0c11566c9";
@@ -132,6 +133,18 @@ describe("swa-deploy.yml / contract pinning (T-SWA-001)", () => {
       normalizedYaml,
       /^  deploy:\n    needs:\n      - preflight\n      - validate-api-node-22$/m,
       "deploy must wait for OIDC preflight and API validation",
+    );
+  });
+
+  it("limits validate-api-node-22 to contents: read", () => {
+    const workflow = parseYaml(yaml) as {
+      jobs?: Record<string, { permissions?: Record<string, string> }>;
+    };
+
+    assert.deepEqual(
+      workflow.jobs?.["validate-api-node-22"]?.permissions,
+      { contents: "read" },
+      "API validation must not inherit workflow-level write permissions",
     );
   });
 
