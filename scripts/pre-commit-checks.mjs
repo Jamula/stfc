@@ -474,7 +474,8 @@ export function checkAttrSignatures(paths, exec = defaultExecFileSync) {
  * by making its own enumeration/hashing step fail is not a guard.
  *
  * `destHashes` is the result of `parseRawDiffDestHashes`. The listing,
- * hashing, and attribute functions are injectable for testing.
+ * hashing, attribute, staged-attribute, and source-stat functions are injectable
+ * for testing.
  */
 const APPROVED_CASTING_HISTORY_MIGRATION_COPY = {
   source: ".squad/casting/history.json",
@@ -499,6 +500,7 @@ export function checkNoUntrackedMutableStateCopies(
       (stagedPath) => stagedPath === '.gitattributes' || stagedPath.endsWith('/.gitattributes'),
     );
   },
+  statFn = (sourcePath) => fs.statSync(sourcePath),
 ) {
   let ignoredMutableFiles;
   try {
@@ -512,17 +514,11 @@ export function checkNoUntrackedMutableStateCopies(
     return;
   }
 
-  // This exact immutable seed is the reviewed one-time migration artifact.
-  // Match both its tracked destination and Git blob ID before excluding only
-  // the legacy history path, so unrelated or edited state copies stay blocked.
-  const approvedSeedHash =
+  // Only the exact reviewed migration seed may skip comparison with its
+  // legacy history source; keep that source available for every other path.
+  const hasApprovedSeed =
     destHashes.get(APPROVED_CASTING_HISTORY_MIGRATION_COPY.destination) ===
     APPROVED_CASTING_HISTORY_MIGRATION_COPY.blob;
-  if (approvedSeedHash) {
-    ignoredMutableFiles = ignoredMutableFiles.filter(
-      (sourcePath) => sourcePath !== APPROVED_CASTING_HISTORY_MIGRATION_COPY.source,
-    );
-  }
 
   if (ignoredMutableFiles.length === 0) return;
   const destPaths = [...destHashes.keys()];
@@ -531,7 +527,7 @@ export function checkNoUntrackedMutableStateCopies(
   const nonEmptyMutableFiles = [];
   for (const sourcePath of ignoredMutableFiles) {
     try {
-      if (fs.statSync(sourcePath).size > 0) nonEmptyMutableFiles.push(sourcePath);
+      if (statFn(sourcePath).size > 0) nonEmptyMutableFiles.push(sourcePath);
     } catch (err) {
       fail(
         `Could not inspect untracked/ignored Squad state file "${sourcePath}" while checking ` +
@@ -673,10 +669,17 @@ export function checkNoUntrackedMutableStateCopies(
   const violations = [];
   for (const sourcePath of nonEmptyMutableFiles) {
     for (const group of groups.values()) {
-      // Exclude a destination that IS this exact source path up front, so
-      // a degenerate self-match group never triggers a hashFn call —
-      // there is nothing meaningful to compare it against.
-      const comparableDestPaths = group.paths.filter((destPath) => destPath !== sourcePath);
+      // Exclude self-matches and only the fixed migration pair; other paths
+      // in the same attribute group remain comparable.
+      const comparableDestPaths = group.paths.filter(
+        (destPath) =>
+          destPath !== sourcePath &&
+          !(
+            hasApprovedSeed &&
+            sourcePath === APPROVED_CASTING_HISTORY_MIGRATION_COPY.source &&
+            destPath === APPROVED_CASTING_HISTORY_MIGRATION_COPY.destination
+          ),
+      );
       if (comparableDestPaths.length === 0) continue;
 
       let sourceHashForGroup;
