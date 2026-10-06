@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
+import { tmpdir } from "node:os";
 import { describe, it } from "node:test";
 
 const initSurfaces = [
@@ -38,6 +39,31 @@ function readInitSurface(path: string): string {
   return normalizeInitText(readFileSync(resolve(process.cwd(), path), "utf-8"));
 }
 
+function modelInitConfigRerun(
+  configPath: string,
+  explicitlySelectedBackend?: string,
+): { config: Record<string, unknown>; created: boolean } {
+  if (existsSync(configPath)) {
+    const originalText = readFileSync(configPath, "utf-8");
+    const existingConfig: Record<string, unknown> = JSON.parse(originalText);
+    if (
+      explicitlySelectedBackend !== undefined &&
+      explicitlySelectedBackend !== existingConfig.stateBackend
+    ) {
+      throw new Error("Existing stateBackend conflicts; explicit state migration is required");
+    }
+    return { config: existingConfig, created: false };
+  }
+
+  const config = {
+    version: 1,
+    stateBackend: explicitlySelectedBackend ?? "local",
+  };
+  mkdirSync(dirname(configPath), { recursive: true });
+  writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`, "utf-8");
+  return { config, created: true };
+}
+
 describe("Init Mode state ownership guidance", () => {
   for (const path of initSurfaces) {
     it(`${path} initializes backend config and ignores mutable state`, () => {
@@ -46,7 +72,23 @@ describe("Init Mode state ownership guidance", () => {
       assert.match(text, /\.squad\/config\.json/);
       assert.match(text, /statebackend/);
       assert.match(text, /explicitly selected backend/);
-      assert.match(text, /default statebackend to local/);
+      assert.match(text, /if no backend was explicitly selected, default to local/);
+      assert.match(
+        text,
+        /if \.squad\/config\.json already exists, preserve its exact contents byte-for-byte, including statebackend, worktrees, model\/context\/reasoning overrides, and unknown or future settings/,
+      );
+      assert.match(
+        text,
+        /if an explicitly selected backend conflicts with the existing statebackend, fail closed and require the user to authorize an explicit state migration/,
+      );
+      assert.match(
+        text,
+        /only when \.squad\/config\.json is absent, create it with version: 1/,
+      );
+      assert.match(
+        text,
+        /if the existing file cannot be read or parsed, stop and report the error rather than replacing it/,
+      );
       assert.match(text, /\.gitignore/);
       assert.match(text, /\.squad\/decisions\/decisions\.md/);
       assert.match(text, /\.squad\/decisions\/inbox\//);
@@ -170,6 +212,75 @@ describe("Init Mode state ownership guidance", () => {
   }
 });
 
+describe("Init Mode config reruns", () => {
+  it("preserves existing backend, worktree, model, and future settings without changing file contents", () => {
+    const dir = mkdtempSync(join(tmpdir(), "stfc-init-config-rerun-"));
+    const configPath = join(dir, ".squad", "config.json");
+    const existingConfig = {
+      version: 1,
+      stateBackend: "two-layer",
+      worktrees: true,
+      defaultModel: "claude-sonnet-5",
+      agentModelOverrides: {
+        scribe: "claude-haiku-4.5",
+      },
+      defaultReasoningEffort: "high",
+      agentReasoningEffortOverrides: {
+        kirk: "xhigh",
+      },
+      futureSetting: {
+        preserve: true,
+      },
+    };
+    const originalText = `${JSON.stringify(existingConfig, null, 2)}\n`;
+
+    try {
+      mkdirSync(dirname(configPath), { recursive: true });
+      writeFileSync(configPath, originalText, "utf-8");
+
+      const rerunWithoutSelection = modelInitConfigRerun(configPath);
+      assert.equal(rerunWithoutSelection.created, false);
+      assert.deepEqual(rerunWithoutSelection.config, existingConfig);
+      assert.equal(readFileSync(configPath, "utf-8"), originalText);
+
+      const rerunWithSameSelection = modelInitConfigRerun(configPath, "two-layer");
+      assert.equal(rerunWithSameSelection.created, false);
+      assert.deepEqual(rerunWithSameSelection.config, existingConfig);
+      assert.equal(readFileSync(configPath, "utf-8"), originalText);
+
+      assert.throws(
+        () => modelInitConfigRerun(configPath, "local"),
+        /Existing stateBackend conflicts; explicit state migration is required/,
+      );
+      assert.equal(
+        readFileSync(configPath, "utf-8"),
+        originalText,
+        "a conflicting selection must not rewrite the existing config",
+      );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("creates a local-default config only when the config path is absent", () => {
+    const dir = mkdtempSync(join(tmpdir(), "stfc-init-config-absent-"));
+    const configPath = join(dir, ".squad", "config.json");
+
+    try {
+      assert.equal(existsSync(configPath), false);
+      const result = modelInitConfigRerun(configPath);
+      assert.equal(result.created, true);
+      assert.deepEqual(result.config, { version: 1, stateBackend: "local" });
+      assert.deepEqual(JSON.parse(readFileSync(configPath, "utf-8")), {
+        version: 1,
+        stateBackend: "local",
+      });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
 describe("Init Mode — memory ignore uses wildcard-plus-negation, backend init precedes mutable writes", () => {
   for (const path of initSurfaces) {
     it(`${path} fails closed when the non-local state bridge cannot verify seeding`, () => {
@@ -177,7 +288,7 @@ describe("Init Mode — memory ignore uses wildcard-plus-negation, backend init 
 
       assert.match(
         text,
-        /for orphan, two-layer, or git-notes, call squad_state_health after writing the config and require a successful response before any mutable-state write; if the tool is unavailable or errors, fail closed before proceeding/,
+        /for orphan, two-layer, or git-notes, call squad_state_health after reading an existing config or creating an absent config and require a successful response before any mutable-state write; if the tool is unavailable or errors, fail closed before proceeding/,
       );
       assert.match(
         text,
