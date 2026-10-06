@@ -1260,11 +1260,11 @@ describe("worktree-reference.md — no merge=union reliance for backend-owned st
 });
 
 describe("git-workflow — backend-aware worktree cleanup", () => {
-  it("keeps the canonical skill and template aligned and limits checkout copies to the local/worktree fallback", () => {
+  it("requires a verified worktree-local snapshot regardless of state-tool availability and keeps the canonical skill and template aligned", () => {
     const cleanupPolicy =
-      "Before removing a worktree, resolve its configured state backend. For `local`/`worktree` backends, use the configured state tools with canonical logical paths when available; the checkout-snapshot fallback below is permitted only when those tools are unavailable. For `orphan`, `two-layer`, or `git-notes` backends, reconcile and clean mutable state only through the configured state tools using canonical logical paths (for example, `agents/{agent}/history.md`, `decisions/decisions.md`, `identity/now.md`, and `log/{timestamp}-{topic}.md`). Never read or copy a worktree `.squad/` checkout snapshot for these backends. If any required state tool is unavailable, fail closed, leave the worktree in place, and report the missing bridge.";
+      "Before removing a worktree, resolve its configured state backend and team-root strategy. For `local`/`worktree` backends using the **worktree-local** strategy, branch-local `.squad/` state exists only inside that worktree and is lost when the worktree is removed; snapshot and verify it into the main checkout using the procedure below regardless of state-tool availability. Skip the snapshot only when the worktree uses the **main-checkout** strategy, where `.squad/` state already lives in the main checkout and nothing is isolated. For `orphan`, `two-layer`, or `git-notes` backends, reconcile and clean mutable state only through the configured state tools using canonical logical paths (for example, `agents/{agent}/history.md`, `decisions/decisions.md`, `identity/now.md`, and `log/{timestamp}-{topic}.md`). Never read or copy a worktree `.squad/` checkout snapshot for these backends. If any required state tool is unavailable for these backends, fail closed, leave the worktree in place, and report the missing bridge.";
     const cleanupFallbackHeading =
-      "#### Local/worktree checkout-snapshot fallback (only when state tools unavailable)";
+      "#### Local/worktree checkout-snapshot transfer (required for the worktree-local strategy)";
 
     for (const [label, text] of [
       ["canonical git-workflow skill", gitWorkflowSkill],
@@ -1282,12 +1282,27 @@ describe("git-workflow — backend-aware worktree cleanup", () => {
       assert.ok(cleanup.includes(cleanupPolicy), `${label} should match the shared backend policy`);
       assert.ok(
         cleanup.includes(cleanupFallbackHeading),
-        `${label} should explicitly scope snapshot fallback to local/worktree`,
+        `${label} should explicitly scope the required snapshot transfer to the worktree-local strategy`,
+      );
+      assert.ok(
+        cleanup.includes("regardless of state-tool availability"),
+        `${label} must require the worktree-local snapshot even when state tools are available`,
+      );
+      assert.ok(
+        cleanup.includes(
+          "Skip the snapshot only when the worktree uses the **main-checkout** strategy",
+        ),
+        `${label} must only skip the snapshot for the shared main-checkout strategy`,
+      );
+      assert.doesNotMatch(
+        cleanup,
+        /the checkout-snapshot fallback below is permitted only when those tools are unavailable/i,
+        `${label} must not condition the worktree-local snapshot on state-tool unavailability`,
       );
       assert.doesNotMatch(
         cleanup,
         /Before removing a worktree, preserve (?:any|its) uncommitted `\.squad\/` (?:state|artifacts) as a complete snapshot/i,
-        `${label} must not direct unconditional checkout copying`,
+        `${label} must not direct unconditional checkout copying across all backends`,
       );
 
       const fallbackStart = cleanup.indexOf(cleanupFallbackHeading);
@@ -1295,7 +1310,7 @@ describe("git-workflow — backend-aware worktree cleanup", () => {
       for (const copyCommand of copyCommands) {
         assert.ok(
           copyCommand.index > fallbackStart,
-          `${label} must keep checkout-copy commands inside the local/worktree fallback`,
+          `${label} must keep checkout-copy commands inside the worktree-local snapshot section`,
         );
       }
     }

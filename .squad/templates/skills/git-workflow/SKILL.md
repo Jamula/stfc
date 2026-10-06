@@ -36,20 +36,25 @@ This handoff guard follows issue #220.
 
 ## Worktree Cleanup
 
-Before removing a worktree, resolve its configured state backend. For
-`local`/`worktree` backends, use the configured state tools with canonical
-logical paths when available; the checkout-snapshot fallback below is
-permitted only when those tools are unavailable. For `orphan`, `two-layer`, or
-`git-notes` backends, reconcile and clean mutable state only through the
-configured state tools using canonical logical paths (for example,
-`agents/{agent}/history.md`, `decisions/decisions.md`, `identity/now.md`, and
-`log/{timestamp}-{topic}.md`). Never read or copy a worktree `.squad/`
-checkout snapshot for these backends. If any required state tool is
-unavailable, fail closed, leave the worktree in place, and report the missing
-bridge.
+Before removing a worktree, resolve its configured state backend and
+team-root strategy. For `local`/`worktree` backends using the
+**worktree-local** strategy,
+branch-local `.squad/` state exists only inside that worktree and is lost
+when the worktree is removed; snapshot and verify it into the main checkout
+using the procedure below regardless of state-tool availability. Skip the
+snapshot only when the worktree uses the **main-checkout** strategy, where
+`.squad/` state already lives in the main checkout and nothing is isolated.
+For `orphan`, `two-layer`, or `git-notes` backends, reconcile and clean
+mutable state only through the configured state tools using canonical
+logical paths (for example, `agents/{agent}/history.md`,
+`decisions/decisions.md`, `identity/now.md`, and `log/{timestamp}-{topic}.md`).
+Never read or copy a worktree `.squad/` checkout snapshot for these backends.
+If any required state tool is unavailable for these backends, fail closed,
+leave the worktree in place, and report the missing bridge.
 
-#### Local/worktree checkout-snapshot fallback (only when state tools unavailable)
+#### Local/worktree checkout-snapshot transfer (required for the worktree-local strategy)
 
 Follow the canonical git-workflow skill's snapshot and verification procedure.
 Do not use that checkout-snapshot procedure for `orphan`, `two-layer`, or
-`git-notes` backends.
+`git-notes` backends, or when the worktree used the main-checkout strategy
+(state already lives in the main checkout).
