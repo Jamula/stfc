@@ -27,7 +27,7 @@ function captureExit(): { code: number | null } {
 // ── #9 — Squad boundary ─────────────────────────────────────────────
 
 describe("checkSquadBoundary", () => {
-  let checkSquadBoundary: (staged: string[], deleted?: string[]) => void;
+  let checkSquadBoundary: (staged: string[], deleted?: string[], renamedFrom?: string[]) => void;
   let exitState: { code: number | null };
 
   beforeEach(async () => {
@@ -196,6 +196,126 @@ describe("checkSquadBoundary", () => {
     assert.match(output, /configured state backend/i);
     assert.match(output, /not staged or committed/i);
     assert.doesNotMatch(output, /SQUAD_SCRIBE=1|\[scribe\]|only scribe can commit/i);
+  });
+
+  // ── Rename/copy bypass (PR #314 review) ─────────────────────────────
+  //
+  // `git diff --name-status` rename detection reports only the destination
+  // path for a rename; `--diff-filter=D` excludes renames entirely. Without
+  // checking the rename's *source* path too, mutable Squad state could be
+  // renamed onto an ordinary tracked path and slip past the guard — the
+  // destination doesn't match a mutable pattern, and the source never
+  // appears in a plain `--name-only`/`--diff-filter=D` staged list.
+
+  it("rejects a rename whose source is mutable state, even onto an ordinary path", () => {
+    const errors: string[] = [];
+    mock.method(console, "error", (msg: string) => errors.push(msg));
+
+    assert.throws(
+      () =>
+        checkSquadBoundary(
+          ["docs/ordinary.md"],
+          [],
+          [".squad/agents/scotty/history.md"],
+        ),
+      /process\.exit\(1\)/,
+    );
+    assert.equal(exitState.code, 1);
+    assert.match(errors.join("\n"), /\.squad\/agents\/scotty\/history\.md/);
+  });
+
+  it("rejects a renamed-away mutable source even when it is in the deletion allowlist", () => {
+    // The deletion allowlist is reserved for genuine `git rm --cached`
+    // untracking (no replacement content). A rename still commits new
+    // content under the destination name, so the allowlist must not apply.
+    assert.throws(
+      () =>
+        checkSquadBoundary(
+          ["docs/renamed-ledger.md"],
+          [".squad/decisions/decisions.md"],
+          [".squad/decisions/decisions.md"],
+        ),
+      /process\.exit\(1\)/,
+    );
+    assert.equal(exitState.code, 1);
+  });
+
+  it("passes for an ordinary rename whose source was never mutable state", () => {
+    checkSquadBoundary(["docs/renamed.md"], [], ["docs/original.md"]);
+    assert.equal(exitState.code, null);
+  });
+
+  it("passes for a rename-within-ordinary-paths alongside an unrelated staged file", () => {
+    checkSquadBoundary(
+      ["src/index.ts", "docs/renamed.md"],
+      [],
+      ["docs/original.md"],
+    );
+    assert.equal(exitState.code, null);
+  });
+});
+
+// ── parseNameStatus ────────────────────────────────────────────────────
+
+describe("parseNameStatus", () => {
+  let parseNameStatus: (raw: string) => {
+    staged: string[];
+    deleted: string[];
+    renamedFrom: string[];
+  };
+
+  beforeEach(async () => {
+    const mod = await import("../../scripts/pre-commit-checks.mjs");
+    parseNameStatus = mod.parseNameStatus;
+  });
+
+  it("parses added/modified/deleted entries", () => {
+    const raw = ["A", "src/new.ts", "M", "src/existing.ts", "D", "src/old.ts", ""].join("\0");
+    assert.deepEqual(parseNameStatus(raw), {
+      staged: ["src/new.ts", "src/existing.ts"],
+      deleted: ["src/old.ts"],
+      renamedFrom: [],
+    });
+  });
+
+  it("parses a rename into both staged (destination) and renamedFrom (source)", () => {
+    const raw = ["R100", ".squad/agents/scotty/history.md", "docs/ordinary.md", ""].join("\0");
+    assert.deepEqual(parseNameStatus(raw), {
+      staged: ["docs/ordinary.md"],
+      deleted: [],
+      renamedFrom: [".squad/agents/scotty/history.md"],
+    });
+  });
+
+  it("parses a copy the same way as a rename (destination staged, source tracked)", () => {
+    const raw = ["C100", "docs/template.md", "docs/copy.md", ""].join("\0");
+    assert.deepEqual(parseNameStatus(raw), {
+      staged: ["docs/copy.md"],
+      deleted: [],
+      renamedFrom: ["docs/template.md"],
+    });
+  });
+
+  it("handles a mix of statuses in one diff", () => {
+    const raw = [
+      "A",
+      "src/new.ts",
+      "R087",
+      ".squad/identity/now.md",
+      "docs/moved.md",
+      "D",
+      "src/old.ts",
+      "",
+    ].join("\0");
+    assert.deepEqual(parseNameStatus(raw), {
+      staged: ["src/new.ts", "docs/moved.md"],
+      deleted: ["src/old.ts"],
+      renamedFrom: [".squad/identity/now.md"],
+    });
+  });
+
+  it("returns empty lists for empty input", () => {
+    assert.deepEqual(parseNameStatus(""), { staged: [], deleted: [], renamedFrom: [] });
   });
 });
 
@@ -420,6 +540,99 @@ describe("checkWorkflowPinningTests", () => {
         rmSync(dir, { recursive: true, force: true });
       }
     });
+
+    it("blocks a real staged rename of mutable state onto an ordinary tracked path", () => {
+      // Regression test for the rename bypass (PR #314 review): git's rename
+      // detection reports only the destination for `--name-status`, and
+      // `--diff-filter=D` excludes renames entirely, so a naive implementation
+      // never sees the mutable-state source path at all.
+      const dir = mkdtempSync(join(tmpdir(), "stfc-pre-commit-rename-"));
+      const scriptsDir = join(dir, "scripts");
+      const binDir = join(dir, "bin");
+      const isolatedGitEnv = { ...process.env };
+      for (const key of Object.keys(isolatedGitEnv)) {
+        if (key.startsWith("GIT_")) delete isolatedGitEnv[key];
+      }
+
+      try {
+        mkdirSync(scriptsDir, { recursive: true });
+        mkdirSync(binDir);
+        writeFileSync(
+          join(scriptsDir, "pre-commit.mjs"),
+          readFileSync(resolve("scripts/pre-commit.mjs"), "utf8"),
+        );
+        writeFileSync(
+          join(scriptsDir, "pre-commit-checks.mjs"),
+          readFileSync(resolve("scripts/pre-commit-checks.mjs"), "utf8"),
+        );
+        writeFileSync(join(scriptsDir, "check-artifact-hygiene.mjs"), "process.exit(0);\n");
+
+        const pathKey = Object.keys(isolatedGitEnv).find((key) => key.toLowerCase() === "path") ?? "PATH";
+        const pathSeparator = process.platform === "win32" ? ";" : ":";
+        isolatedGitEnv[pathKey] = `${binDir}${pathSeparator}${isolatedGitEnv[pathKey] ?? ""}`;
+        if (process.platform === "win32") {
+          writeFileSync(join(binDir, "npm.cmd"), "@echo off\r\nexit /b 0\r\n");
+        } else {
+          writeFileSync(join(binDir, "npm"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+        }
+
+        const mutableSource = ".squad/agents/scotty/history.md";
+        // Large-ish, mostly-identical-after-rename content so Git's default
+        // 50% similarity threshold still detects this as a rename.
+        const body = "line\n".repeat(200);
+        mkdirSync(join(dir, ".squad", "agents", "scotty"), { recursive: true });
+        writeFileSync(join(dir, mutableSource), body);
+        execFileSync("git", ["init", "--quiet"], { cwd: dir, env: isolatedGitEnv });
+        execFileSync("git", ["config", "user.name", "Pre-commit test"], {
+          cwd: dir,
+          env: isolatedGitEnv,
+        });
+        execFileSync("git", ["config", "user.email", "pre-commit-test@example.invalid"], {
+          cwd: dir,
+          env: isolatedGitEnv,
+        });
+        execFileSync("git", ["add", mutableSource], { cwd: dir, env: isolatedGitEnv });
+        execFileSync("git", ["commit", "--quiet", "-m", "Add mutable history file"], {
+          cwd: dir,
+          env: isolatedGitEnv,
+        });
+
+        const ordinaryDestination = "docs/laundered-history.md";
+        mkdirSync(join(dir, "docs"), { recursive: true });
+        execFileSync("git", ["mv", mutableSource, ordinaryDestination], {
+          cwd: dir,
+          env: isolatedGitEnv,
+        });
+
+        const stagedStatus = execFileSync(
+          "git",
+          ["diff", "--cached", "--name-status", "-M"],
+          { cwd: dir, encoding: "utf8", env: isolatedGitEnv },
+        );
+        assert.match(
+          stagedStatus,
+          /^R\d+\t/,
+          `expected git to detect this as a rename, got:\n${stagedStatus}`,
+        );
+
+        const result = spawnSync(process.execPath, [join(scriptsDir, "pre-commit.mjs")], {
+          cwd: dir,
+          encoding: "utf8",
+          env: isolatedGitEnv,
+        });
+        assert.equal(
+          result.status,
+          1,
+          `expected renaming mutable state onto an ordinary path to be rejected:\n${result.stdout}`,
+        );
+        assert.match(
+          result.stderr + result.stdout,
+          new RegExp(mutableSource.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")),
+        );
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
   });
 
   afterEach(() => {
@@ -430,12 +643,11 @@ describe("checkWorkflowPinningTests", () => {
   //
   // Regression test for the migration deadlock fixed alongside PR #314's
   // revision: the guard patterns must not match any path that is both
-  // tracked in HEAD *and* absent from the deletion allowlist, except for
-  // the explicitly documented, pending exception below. Unlike the other
-  // tests in this file, this one runs against the real working-tree repo
-  // (via `git ls-files`) rather than a synthetic temp repo, because the
-  // bug it guards against is specifically a mismatch between the guard's
-  // patterns/allowlist and the *actual* tracked file set.
+  // tracked in HEAD *and* absent from the deletion allowlist. Unlike the
+  // other tests in this file, this one runs against the real working-tree
+  // repo (via `git ls-files`) rather than a synthetic temp repo, because
+  // the bug it guards against is specifically a mismatch between the
+  // guard's patterns/allowlist and the *actual* tracked file set.
   describe("mutable-state guard invariants (real repository)", () => {
     let MUTABLE_SQUAD_STATE_PATTERNS: RegExp[];
     let MUTABLE_SQUAD_STATE_DELETION_ALLOWLIST: Set<string>;
@@ -446,7 +658,7 @@ describe("checkWorkflowPinningTests", () => {
       MUTABLE_SQUAD_STATE_DELETION_ALLOWLIST = mod.MUTABLE_SQUAD_STATE_DELETION_ALLOWLIST;
     });
 
-    it("has no tracked path matching the guard patterns outside the deletion allowlist, except the documented pending log/orchestration-log exception", () => {
+    it("has no tracked path matching the guard patterns outside the deletion allowlist", () => {
       const tracked = execFileSync("git", ["ls-files", ".squad"], { encoding: "utf8" })
         .split("\n")
         .map((line) => line.trim())
@@ -455,22 +667,51 @@ describe("checkWorkflowPinningTests", () => {
       const unexpected = tracked.filter((path) => {
         const matchesGuard = MUTABLE_SQUAD_STATE_PATTERNS.some((pattern) => pattern.test(path));
         if (!matchesGuard) return false;
-        if (MUTABLE_SQUAD_STATE_DELETION_ALLOWLIST.has(path)) return false;
-        // One-time, narrowly-scoped pending exception: Scribe is independently
-        // auditing these two namespaces for durable records. They remain
-        // tracked and matched by the guard until that audit completes and an
-        // explicit go-ahead is given; this is not a general bypass — any
-        // tracked path outside these two prefixes must be allowlisted or
-        // untracked, never silently excluded here.
-        return !(path.startsWith(".squad/log/") || path.startsWith(".squad/orchestration-log/"));
+        return !MUTABLE_SQUAD_STATE_DELETION_ALLOWLIST.has(path);
       });
 
       assert.deepEqual(
         unexpected,
         [],
         "found tracked .squad paths matched by the mutable-state guard but missing from the " +
-          "deletion allowlist (outside the documented log/orchestration-log exception); add them " +
-          "to MUTABLE_SQUAD_STATE_DELETION_ALLOWLIST or untrack them",
+          "deletion allowlist; add them to MUTABLE_SQUAD_STATE_DELETION_ALLOWLIST or untrack them",
+      );
+    });
+
+    it("has no tracked file left under .squad/log/ or .squad/orchestration-log/ (PR #314 migration)", () => {
+      // The Scribe audit completed and the coordinator authorized migrating
+      // all 109 previously-tracked log/orchestration-log paths out of the
+      // index. Only static config and durable artifacts (e.g.
+      // .squad/decisions-archive.md) should remain tracked under .squad/.
+      const tracked = execFileSync("git", ["ls-files", ".squad/log", ".squad/orchestration-log"], {
+        encoding: "utf8",
+      })
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean);
+
+      assert.deepEqual(
+        tracked,
+        [],
+        "expected no tracked files under .squad/log/ or .squad/orchestration-log/ after the " +
+          "PR #314 migration",
+      );
+    });
+
+    it("preserves the Scribe-classified durable entries in the tracked decisions archive", () => {
+      // Before untracking .squad/log/** and .squad/orchestration-log/**,
+      // Scribe classified three durable items whose substantive content
+      // must already exist in the tracked .squad/decisions-archive.md:
+      // Rules 6/7 + Rule 5 extension, Chronicle tips, and per-agent model
+      // overrides. This asserts they are present so the migration cannot
+      // silently drop durable history.
+      const archive = readFileSync(resolve(".squad/decisions-archive.md"), "utf8");
+      assert.match(archive, /Rules 6 & 7 \+ Rule 5/i, "expected the Rule 5/6/7 entry to be archived");
+      assert.match(archive, /Chronicle tips/i, "expected the Chronicle tips entry to be archived");
+      assert.match(
+        archive,
+        /model overrides/i,
+        "expected the per-agent model overrides entry to be archived",
       );
     });
 
@@ -485,6 +726,64 @@ describe("checkWorkflowPinningTests", () => {
       assert.equal(
         MUTABLE_SQUAD_STATE_PATTERNS.some((pattern) => pattern.test(".squad/memory/index.json")),
         true,
+      );
+    });
+
+    it("matches both bare and timestamped history-archive filenames (PR #314 review)", () => {
+      for (const path of [
+        ".squad/agents/scotty/history-archive.md",
+        ".squad/agents/uhura/history-archive-2026-06-02.md",
+        ".squad/agents/uhura/history-archive-20260602T044144Z.md",
+      ]) {
+        assert.ok(
+          MUTABLE_SQUAD_STATE_PATTERNS.some((pattern) => pattern.test(path)),
+          `expected ${path} to match a mutable-state guard pattern`,
+        );
+        assert.ok(
+          MUTABLE_SQUAD_STATE_DELETION_ALLOWLIST.has(path),
+          `expected ${path} to be in the migration deletion allowlist`,
+        );
+      }
+    });
+
+    it("gitignores both bare and timestamped history-archive filenames", () => {
+      for (const path of [
+        ".squad/agents/scotty/history-archive.md",
+        ".squad/agents/uhura/history-archive-2026-06-02.md",
+        ".squad/agents/uhura/history-archive-20260602T044144Z.md",
+      ]) {
+        const result = spawnSync("git", ["check-ignore", "--quiet", path], { encoding: "utf8" });
+        assert.equal(result.status, 0, `expected \`git check-ignore\` to report ${path} as ignored`);
+      }
+    });
+
+    it("has no .gitattributes merge=union rule for a backend-owned mutable Squad state path", () => {
+      // Backend-owned mutable state (agent histories/archives, logs,
+      // orchestration logs, RAI/Fact Checker audit trails) is no longer
+      // tracked, so a `merge=union` driver for it would be a dead rule that
+      // misleadingly implies Git still reconciles it across branches. This
+      // guards against reintroducing such a rule. A `merge=union` rule for a
+      // *verified tracked durable archive* (e.g. a future append-only file
+      // that is NOT matched by MUTABLE_SQUAD_STATE_PATTERNS) remains allowed.
+      const attributes = readFileSync(resolve(".gitattributes"), "utf8");
+      const unionLines = attributes
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0 && !line.startsWith("#") && /merge=union/.test(line));
+
+      const offending = unionLines.filter((line) => {
+        const pattern = line.split(/\s+/)[0] ?? "";
+        // Turn a `.gitattributes` glob (e.g. `.squad/log/**`) into a
+        // representative path to test against the guard patterns.
+        const representative = pattern.replace(/\*\*/g, "x").replace(/\*/g, "x");
+        return MUTABLE_SQUAD_STATE_PATTERNS.some((re) => re.test(representative));
+      });
+
+      assert.deepEqual(
+        offending,
+        [],
+        "found a merge=union .gitattributes rule for a backend-owned mutable Squad state path " +
+          `(agent histories, logs, orchestration logs, RAI/Fact Checker audit trails): ${offending.join(", ")}`,
       );
     });
 
