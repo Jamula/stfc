@@ -78,7 +78,7 @@ the speckit chain gate), I surface to Kirk before shipping.
 ## How I Work
 
 - Read `routing.md` before touching anything. For decisions, use
-  `squad_state_read` with logical key `decisions.md` when state tools are
+  `squad_state_read` with logical key `decisions/decisions.md` when state tools are
   available; use `.squad/decisions/decisions.md` only as the local/worktree
   fallback. If the orphan/two-layer/git-notes bridge is unavailable, stop and
   report the missing bridge rather than reading a stale checkout snapshot.

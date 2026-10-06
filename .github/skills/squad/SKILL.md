@@ -272,9 +272,9 @@ Proceed? (yes / no)
 ### Show Recent Decisions
 
 - **intent:** show decisions, recent decisions, what decisions were made, decision log
-- **summary:** Display recent entries from the logical `decisions.md` state key
+- **summary:** Display recent entries from the logical `decisions/decisions.md` state key
 - **action:** coordinator
-- **command:** Treat `decisions.md` as the logical source key; `.squad/decisions/decisions.md` is only its local/worktree file path. Read it with `squad_state_read` for key `decisions.md` when state tools are available, and answer from that result. Fall back to reading `.squad/decisions/decisions.md` directly only for local/worktree. For orphan, two-layer, or git-notes backends, never read the checkout file — if the state bridge is unavailable, fail closed and report the missing bridge instead of showing stale or empty results.
+- **command:** Treat `decisions/decisions.md` as the logical source key; `.squad/decisions/decisions.md` is only its local/worktree file path. Read it with `squad_state_read` for key `decisions/decisions.md` when state tools are available, and answer from that result. Fall back to reading `.squad/decisions/decisions.md` directly only for local/worktree. For orphan, two-layer, or git-notes backends, never read the checkout file — if the state bridge is unavailable, fail closed and report the missing bridge instead of showing stale or empty results.
 - **args:** (none)
 - **confirm:** false
 
@@ -283,7 +283,7 @@ Proceed? (yes / no)
 - **intent:** archive decisions, clean up decisions, move old decisions, compact decisions
 - **summary:** Archive older decisions first, verify the archive append, then trim the active decisions source
 - **action:** coordinator
-- **command:** Treat `decisions.md` as the logical source key; `.squad/decisions/decisions.md` is only its local/worktree file path. For local/worktree, append eligible entries to `.squad/decisions-archive.md`, verify the archive append, and only then trim the source file. For orphan, two-layer, or git-notes backends, obtain the source with `squad_state_read` for key `decisions.md`, append and verify the archive using the configured backend's governing state tools, then trim and write key `decisions.md` with `squad_state_write`. Never read or edit a stale checkout copy for these backends. If archive append or verification cannot be safely completed through available tooling, fail closed and leave the source intact.
+- **command:** Treat `decisions/decisions.md` as the logical source key; `.squad/decisions/decisions.md` is only its local/worktree file path. For local/worktree, append eligible entries to `.squad/decisions-archive.md`, verify the archive append, and only then trim the source file. For orphan, two-layer, or git-notes backends, obtain the source with `squad_state_read` for key `decisions/decisions.md`, append and verify the archive using the configured backend's governing state tools, then trim and write key `decisions/decisions.md` with `squad_state_write`. Never read or edit a stale checkout copy for these backends. If archive append or verification cannot be safely completed through available tooling, fail closed and leave the source intact.
 - **args:**
   - `olderThan`: Archive decisions older than how many days? | default: 30
 - **confirm:** true

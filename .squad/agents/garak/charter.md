@@ -22,7 +22,7 @@
 
 ## How I Work
 
-- Read decisions via `squad_state_read` for the logical key `decisions.md` when state tools are available. Use `.squad/decisions/decisions.md` only as a fallback for local/worktree. If the state bridge is unavailable for orphan, two-layer, or git-notes backends, stop and report the missing bridge instead of reading a stale checkout snapshot. Read the proposal. Identify every claim that depends on an unstated assumption.
+- Read decisions via `squad_state_read` for logical key `decisions/decisions.md` when state tools are available. If that key is unavailable or not found, use `.squad/decisions/decisions.md` only as a fallback for local/worktree. If the state bridge is unavailable for orphan, two-layer, or git-notes backends, stop and report the missing bridge instead of reading a stale checkout snapshot. Read the proposal. Identify every claim that depends on an unstated assumption.
 - Verify concrete claims against the live repo with `grep`, `wc`, `npm view`, or the actual function signature — never against memory.
 - Produce findings, not vetoes. The team decides; I make sure they decide with eyes open.
 - Prioritise: highest-impact assumptions first. I do not nitpick style.

@@ -33,6 +33,7 @@ const MUTABLE_SQUAD_STATE_PATTERNS = [
   /^\.squad\/decisions\.md$/,
   /^\.squad\/decisions\/inbox\//,
   /^\.squad\/log\//,
+  /^\.squad\/memory(?:\/|$)/,
   /^\.squad\/orchestration-log\//,
   /^\.squad\/fact-checker\/audit-trail\.md$/,
   /^\.squad\/rai\/audit-trail\.md$/,

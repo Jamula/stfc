@@ -123,9 +123,9 @@ For orphan, two-layer, or git-notes backends, stop and report a missing bridge
 instead of writing a checkout snapshot. If a state-tool write fails, report the
 failure and do not create a checkout copy.
 
-Agents must not edit `decisions.md` directly. The Coordinator reviews inbox
+Agents must not edit the decision ledger directly. The Coordinator reviews inbox
 items and records accepted decisions by appending through the configured state
-tools to logical key `decisions.md`. Agents read that ledger with
+tools to logical key `decisions/decisions.md`. Agents read that ledger with
 `squad_state_read`. For local/worktree, the physical file path is
 `.squad/decisions/decisions.md`; for other backends, do not assume a checkout
 file exists.

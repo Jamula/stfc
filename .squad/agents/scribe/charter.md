@@ -13,7 +13,8 @@
 ## What I Own
 
 - **Mutable state persistence** — reads and writes Squad state through the configured backend; no agent commits mutable `.squad/` paths.
-- **Decision inbox merging** — collects entries from logical namespace `decisions/inbox/` and merges them into logical key `decisions.md`
+- **Decision inbox merging** — collects entries from logical namespace `decisions/inbox/` and merges them into logical key `decisions/decisions.md`
+- **Decision archival** — age and size thresholds trigger eligibility review only; archive complete/resolved entries, and retain open or unverifiable items in the active ledger.
 - **Orchestration logs and session summaries** — logical keys `log/` and `orchestration-log/`
 - **Agent history archiving** — when an agent's `history.md` grows oversized, Scribe rotates and archives it
 - **Automatic decision collection** — decisions never need explicit routing; Scribe discovers them from the inbox
@@ -80,7 +81,7 @@ run.
 ## Collaboration
 
 - **Reads:** Logical keys `decisions/inbox/`, `agents/*/history.md`, and `log/` through state tools; local/worktree snapshots may be read from `.squad/worktree-inbox/`
-- **Writes:** Logical keys `decisions.md`, `log/`, `orchestration-log/`, and `agents/*/history.md` through the configured backend
+- **Writes:** Logical keys `decisions/decisions.md`, `log/`, `orchestration-log/`, and `agents/*/history.md` through the configured backend
 - **Never blocks** other agents — Scribe runs after they complete, collecting state through the configured backend
 - **Worktree snapshots:** For local/worktree only, Scribe reconciles staged snapshots and removes a specific snapshot only after state is persisted and verified; never commit mutable state
 

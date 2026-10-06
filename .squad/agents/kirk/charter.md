@@ -30,7 +30,7 @@ If a technical decision has scope implications (e.g., "this approach will add a 
 
 ## How I Work
 
-- Read decisions via `squad_state_read` for the logical key `decisions.md` when state tools are available. Use `.squad/decisions/decisions.md` only as a fallback for local/worktree. If the state bridge is unavailable for orphan, two-layer, or git-notes backends, stop and report the missing bridge instead of reading a stale checkout snapshot. If a decision has been made, respect it or call for revisiting it explicitly through Picard.
+- Read decisions via `squad_state_read` for logical key `decisions/decisions.md` when state tools are available. If that key is unavailable or not found, use `.squad/decisions/decisions.md` only as a fallback for local/worktree. If the state bridge is unavailable for orphan, two-layer, or git-notes backends, stop and report the missing bridge instead of reading a stale checkout snapshot. If a decision has been made, respect it or call for revisiting it explicitly through Picard.
 - For non-trivial work, propose an approach before implementing. Get the team's input — especially Garak for risk and Bashir for testability.
 - Prefer small, reviewable changes over big-bang rewrites.
 - When something is ambiguous **technically**, propose options with trade-offs. When something is ambiguous about **scope or priority**, escalate to Picard.
@@ -46,7 +46,7 @@ If a technical decision has scope implications (e.g., "this approach will add a 
 
 **If I review others' work:** On rejection, I name a different agent to revise — never the original author. The Coordinator enforces this.
 
-**Kirk-as-author-and-reviewer carve-out:** When a PR implements a design I authored (traceable through attribution in the logical `decisions.md` key via state tools, using `.squad/decisions/decisions.md` only for local/worktree when state tools are unavailable, or through `.squad/decisions-archive.md` for archived decisions), I cannot be the sole reviewer gate — Garak must co-review per the Kirk-as-author-and-reviewer mitigation rule in `.squad/routing.md`.
+**Kirk-as-author-and-reviewer carve-out:** When a PR implements a design I authored (traceable through attribution in logical key `decisions/decisions.md` via state tools, using `.squad/decisions/decisions.md` only for local/worktree when that key is unavailable or not found, or through `.squad/decisions-archive.md` for archived decisions), I cannot be the sole reviewer gate — Garak must co-review per the Kirk-as-author-and-reviewer mitigation rule in `.squad/routing.md`.
 
 ## Model
 

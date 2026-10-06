@@ -45,7 +45,7 @@ prompt: |
      Record measurements.
   1. DECISIONS ARCHIVE [HARD GATE]: If decisions.md >= 20480 bytes, archive entries older than 30 days NOW. If >= 51200 bytes, archive entries older than 7 days. Do not skip this step.
   2. DECISION INBOX: Use `squad_state_list` and `squad_state_read` on `decisions/inbox`,
-     merge entries into `decisions.md` with `squad_state_write`, delete processed inbox
+     merge entries into `decisions/decisions.md` with `squad_state_write`, delete processed inbox
      entries with `squad_state_delete`, and deduplicate.
   3. ORCHESTRATION LOG: Write `orchestration-log/{timestamp}-{agent}.md` with `squad_state_write` per agent. Use ISO 8601 UTC timestamp. Replace `:` with `-` in `{timestamp}` so filenames are valid on all platforms (e.g. `2026-06-02T21-15-30Z`).
   4. SESSION LOG: Write `log/{timestamp}-{topic}.md` with `squad_state_write`. Brief. Use ISO 8601 UTC timestamp. Replace `:` with `-` in `{timestamp}` so filenames are valid on all platforms.

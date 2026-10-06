@@ -26,7 +26,7 @@ Proposals create alignment before code is written. Cheaper to change a doc than 
 
 ### Decision State Source
 
-Read the logical key `decisions.md` through `squad_state_read` when available.
+Read logical key `decisions/decisions.md` through `squad_state_read` when available.
 If state tools are unavailable, read `.squad/decisions/decisions.md` only for
 local/worktree backends. For orphan, two-layer, or git-notes backends, stop and
 report the missing state bridge; do not inspect a checkout snapshot.
@@ -126,7 +126,7 @@ When a proposal invalidates existing wave structure:
 **File references from interactive shell proposal:**
 - Full proposal: `docs/proposals/squad-interactive-shell.md`
 - User directive: `.squad/decisions/inbox/copilot-directive-2026-02-21T202535Z.md`
-- Team decisions: logical key `decisions.md` via `squad_state_read`
+- Team decisions: logical key `decisions/decisions.md` via `squad_state_read`
 - Current architecture: `docs/architecture/module-map.md`, `docs/prd-23-release-readiness.md`
 
 **Key patterns demonstrated:**

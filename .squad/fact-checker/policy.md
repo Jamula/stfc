@@ -21,7 +21,7 @@ Empirical check of claims against sources. Triggered by `"fact-check this"`, `"v
 | **Function / type signatures** | Do they match the actual source? |
 | **Quoted text** | Does the source actually contain the quoted text verbatim? |
 | **Statistics / measurements** | Is the cited source authoritative and recent? |
-| **Cross-references to team decisions** | Check the current ledger with `squad_state_read` using logical key `decisions.md` first whenever state tools are available. If the tool or key is unavailable, use `.squad/decisions/decisions.md` only in a local/worktree checkout. In orphan, two-layer, or git-notes backends, do not inspect checkout snapshots; stop and report the missing state bridge. |
+| **Cross-references to team decisions** | Check the current ledger with `squad_state_read` using logical key `decisions/decisions.md` first whenever state tools are available. If the key is unavailable or not found, use `.squad/decisions/decisions.md` only in a local/worktree checkout. In orphan, two-layer, or git-notes backends, do not inspect checkout snapshots; stop and report the missing state bridge. |
 
 ### Confidence rating (every verified item gets one)
 
@@ -90,7 +90,7 @@ All Fact Checker findings (verification verdicts + DA briefs) are logged to `.sq
 
 Decisions that affect other agents must be written with `squad_state_write` to
 logical key `decisions/inbox/fact-checker-{slug}.md` for the Coordinator to
-review and, if accepted, merge into logical key `decisions.md`. If state tools
+review and, if accepted, merge into logical key `decisions/decisions.md`. If state tools
 are unavailable, use `.squad/decisions/inbox/fact-checker-{slug}.md` only for
 local/worktree backends. On orphan, two-layer, or git-notes backends, stop and
 report a missing bridge if the state tool is unavailable. If

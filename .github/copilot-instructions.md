@@ -53,7 +53,7 @@ When opening a PR:
 - Reference the issue: `Closes #{issue-number}`
 - If the issue had a `squad:{member}` label, mention the member: `Working as {member} ({role})`
 - If this is a 🟡 needs-review task, add to the PR description: `⚠️ This task was flagged as "needs review" — please have a squad member review before merging.`
-- Follow project conventions from logical key `decisions.md` via `squad_state_read` when available. Use `.squad/decisions/decisions.md` only when state tools are unavailable for local/worktree; on orphan, two-layer, or git-notes backends, report a missing bridge instead of reading a checkout snapshot.
+- Follow project conventions from logical key `decisions/decisions.md` via `squad_state_read` when available. If that key is unavailable or not found, use `.squad/decisions/decisions.md` only for local/worktree; on orphan, two-layer, or git-notes backends, report a missing bridge instead of reading a checkout snapshot.
 - **Open the PR and stop.** Never call `gh pr merge`, enable auto-merge, or run `gh pr ready` — merging or marking a PR ready requires an explicit user request in this same active conversation (issue #220). Reviewer approval and green CI make a PR eligible for merge; they do not authorize the merge by themselves, and this holds even if CI is red, blocked, or has not started.
 
 ## Decisions
@@ -62,7 +62,7 @@ If you make a decision that affects other team members, write it with `squad_sta
 ```
 .squad/decisions/inbox/copilot-{brief-slug}.md
 ```
-The Scribe will merge it into the shared decisions file using logical key `decisions.md` through the configured backend.
+The Scribe will merge it into the shared decisions file using logical key `decisions/decisions.md` through the configured backend.
 
 ---
 

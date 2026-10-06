@@ -13,14 +13,14 @@ source: "Extracted from squad.agent.md as part of the slimming effort (bradygast
 
 Entries marked **"Derived / append-only"** are **mutable state** — agents access them with runtime state tools (`squad_state_read`, `squad_state_write`, `squad_state_append`, `squad_state_delete`, `squad_state_list`). The runtime decides whether the configured backend stores them on disk, git-native state, or an external provider. Entries marked **"Authoritative"** are **static configuration** and always live on disk regardless of backend. The decisions recorded in the decision ledger are canonical and authoritative; the ledger file itself is derived, mutable, append-only state accessed through the configured backend.
 
-For decisions, the logical state-tool key is `decisions.md`. The canonical local path in this repository is `.squad/decisions/decisions.md`; other backends need not store it at that path.
+For decisions, the logical state-tool key is `decisions/decisions.md`. The canonical local path in this repository is `.squad/decisions/decisions.md`; other backends need not store it at that path.
 
 ## File hierarchy
 
 | File | Status | Who May Write | Who May Read |
 |------|--------|---------------|--------------|
 | `.github/agents/squad.agent.md` | **Authoritative governance.** All roles, handoffs, gates, and enforcement rules. | Repo maintainer (human) | Squad (Coordinator) |
-| `.squad/decisions/decisions.md` | **Authoritative decisions; derived / append-only state file.** The decisions it records are canonical for scope, architecture, and process; the ledger file is mutable append-only state accessed through the logical `decisions.md` key. | Squad (Coordinator) — append only | All agents |
+| `.squad/decisions/decisions.md` | **Authoritative decisions; derived / append-only state file.** The decisions it records are canonical for scope, architecture, and process; the ledger file is mutable append-only state accessed through the logical `decisions/decisions.md` key. | Squad (Coordinator) — append only | All agents |
 | `.squad/team.md` | **Authoritative roster.** Current team composition. | Squad (Coordinator) | All agents |
 | `.squad/routing.md` | **Authoritative routing.** Work assignment rules. | Squad (Coordinator) | Squad (Coordinator) |
 | `.squad/ceremonies.md` | **Authoritative ceremony config.** Definitions, triggers, and participants for team ceremonies. | Squad (Coordinator) | Squad (Coordinator), Facilitator agent (read-only at ceremony time) |
@@ -44,4 +44,4 @@ For decisions, the logical state-tool key is `decisions.md`. The canonical local
 1. **If `squad.agent.md` and any other file conflict, `squad.agent.md` wins.** It is the only file with hard governance authority.
 2. **Append-only files must never be retroactively edited** to change meaning. They are diagnostic and audit-trail material. Corrections go in a new entry that references the prior one.
 3. **Agents may only write to files listed in their "Who May Write" column above.** Violations are a contract bug; runtime state-backends will refuse the write on non-local backends.
-4. **Non-coordinator agents may propose decisions** in their responses, but only Squad (Coordinator) records accepted decisions under the logical state key `decisions.md` (local file: `.squad/decisions/decisions.md`).
+4. **Non-coordinator agents may propose decisions** in their responses, but only Squad (Coordinator) records accepted decisions under the logical state key `decisions/decisions.md` (local file: `.squad/decisions/decisions.md`).

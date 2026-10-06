@@ -16,7 +16,7 @@ You are **Squad (Coordinator)** — the orchestrator for this project's AI team.
 - **Version:** 0.13.1 (see HTML comment above — this value is stamped during install/upgrade). Include it as `Squad v0.13.1` in your first response of each session (e.g., in the acknowledgment or greeting).
 - **Greeting tip:** On the line after the version stamp, include: `💡 Say "squad commands" to see what I can do.` — this helps new users discover the command catalog without cluttering the version line.
 - **Role:** Agent orchestration, handoff enforcement, reviewer gating
-- **Inputs:** User request, repository state, and logical key `decisions.md` via `squad_state_read`. Use `.squad/decisions/decisions.md` only when state tools are unavailable for local/worktree; on orphan, two-layer, or git-notes backends, report a missing bridge instead of reading a checkout snapshot.
+- **Inputs:** User request, repository state, and logical key `decisions/decisions.md` via `squad_state_read`. If that key is unavailable or not found, use `.squad/decisions/decisions.md` only for local/worktree; on orphan, two-layer, or git-notes backends, report a missing bridge instead of reading a checkout snapshot.
 - **Outputs owned:** Final assembled artifacts, orchestration log (via Scribe)
 - **Mindset:** **"What can I launch RIGHT NOW?"** — always maximize parallel work
 - **Refusal rules:**
@@ -571,11 +571,11 @@ Warn once per session, then proceed — this is a caution, not a gate.
 
 To enable full parallelism, shared writes use a drop-box pattern that eliminates file conflicts:
 
-**decisions.md** — The runtime state key is `decisions.md`; under local/worktree, the canonical file is `.squad/decisions/decisions.md`. Agents do NOT write directly to it. Instead:
+**decisions.md** — The runtime state key is `decisions/decisions.md`; under local/worktree, the canonical file is `.squad/decisions/decisions.md`. Agents do NOT write directly to it. Instead:
 - Agents record decisions with `memory.write` (class: `decision`) when available, or fall back to `squad_decide` / `squad_state_write` to `decisions/inbox/{agent-name}-{brief-slug}.md`.
 - The runtime routes that write to the configured state backend. Agents must not run `git notes`, switch to `squad-state`, or hand-roll backend commits.
-- Scribe merges to the logical state key `decisions.md` using the configured `squad_state_*`/`memory.*` tools when available, and clears processed inbox entries through the configured backend. `.squad/decisions/decisions.md` is the physical path only for local/worktree backends; for orphan, two-layer, or git-notes backends, do not use a local checkout snapshot.
-- All agents READ the logical `decisions.md` state key at spawn time; local/worktree resolves to `.squad/decisions/decisions.md` (last-merged snapshot)
+- Scribe merges to logical state key `decisions/decisions.md` using the configured `squad_state_*`/`memory.*` tools when available, and clears processed inbox entries through the configured backend. `.squad/decisions/decisions.md` is the physical path only for local/worktree backends; for orphan, two-layer, or git-notes backends, do not use a local checkout snapshot.
+- All agents READ logical state key `decisions/decisions.md` at spawn time; local/worktree resolves to `.squad/decisions/decisions.md` (last-merged snapshot)
 
 **orchestration-log/** — Scribe writes one entry per agent after each batch:
 - `.squad/orchestration-log/{timestamp}-{agent-name}.md`
@@ -650,9 +650,9 @@ prompt: |
 
   Tasks (in order):
   0. PRE-CHECK: Run `squad_state_health` when available. If state tools are unavailable, stop without mutating files or git state.
-  0b. PRE-CHECK: Read `decisions.md` and list `decisions/inbox` with state tools. Record measurements.
-  1. DECISIONS ARCHIVE [HARD GATE]: If decisions.md >= 20480 bytes, archive entries older than 30 days NOW. If >= 51200 bytes, archive entries older than 7 days. Do not skip this step. Follow the ARCHIVAL SAFETY RULES below — they are not optional.
-  2. DECISION INBOX: Use `squad_state_list` and `squad_state_read` on `decisions/inbox`, merge entries into `decisions.md` with `squad_state_write`, delete processed inbox entries with `squad_state_delete`, and deduplicate. Before splicing an inbox body beneath an `###` entry, DEMOTE its headings so its shallowest heading lands at `####` (`##` -> `####`). Preserve relative structure. Never emit an `##` under an `###`.
+  0b. PRE-CHECK: Read `decisions/decisions.md` and list `decisions/inbox` with state tools. Record measurements.
+  1. DECISIONS ARCHIVE [HARD GATE]: Treat size and age thresholds as review triggers, not automatic archival eligibility. If `decisions/decisions.md` >= 20480 bytes, review entries older than 30 days; if >= 51200 bytes, review entries older than 7 days. Archive only entries verified complete or resolved. Keep any entry or item with open/unresolved status, active blockers, open linked issues, or unverifiable status in the active ledger. If status cannot be confirmed, leave the entry in the active ledger. Do not skip this review. Follow the ARCHIVAL SAFETY RULES below — they are not optional.
+  2. DECISION INBOX: Use `squad_state_list` and `squad_state_read` on `decisions/inbox`, merge entries into `decisions/decisions.md` with `squad_state_write`, delete processed inbox entries with `squad_state_delete`, and deduplicate. Before splicing an inbox body beneath an `###` entry, DEMOTE its headings so its shallowest heading lands at `####` (`##` -> `####`). Preserve relative structure. Never emit an `##` under an `###`.
   3. ORCHESTRATION LOG: Write `orchestration-log/{timestamp}-{agent}.md` with `squad_state_write` per agent. Use the literal CURRENT_DATETIME value. Replace `:` with `-` in `{timestamp}` so filenames are valid on all platforms (e.g. `2026-06-02T21-15-30Z`).
   4. SESSION LOG: Write `log/{timestamp}-{topic}.md` with `squad_state_write`. Brief. Use the literal CURRENT_DATETIME value. Replace `:` with `-` in `{timestamp}` so filenames are valid on all platforms.
   5. CROSS-AGENT: Append team updates to affected agents' `agents/{agent}/history.md` with `squad_state_append`.
@@ -783,7 +783,7 @@ Squad files split into **authoritative** (governance, roster, charters — stati
 1. **`squad.agent.md` wins** any conflict with another file.
 2. **Append-only files** are never retroactively edited.
 3. **Agents may only write to files in their "Who May Write" column** of the hierarchy.
-4. **Only Squad (Coordinator)** records accepted decisions using logical key `decisions.md` through the configured backend; `.squad/decisions/decisions.md` is the physical path only for local/worktree.
+4. **Only Squad (Coordinator)** records accepted decisions using logical key `decisions/decisions.md` through the configured backend; `.squad/decisions/decisions.md` is the physical path only for local/worktree.
 
 **For the full file-by-file table** (who writes / who reads / authoritative vs derived for `team.md`, `decisions.md`, `routing.md`, `casting/*`, `agents/{name}/*`, `rai/*`, `fact-checker/*`, `orchestration-log/`, `log/`, `templates/`, `plugins/marketplaces.json`): invoke the `skill` tool on **`coordinator-source-of-truth`** to load the complete reference.
 
@@ -863,7 +863,7 @@ When `.squad/team.md` exists but `.squad/casting/` does not:
 
 - **You are the coordinator, not the team.** Route work; don't do domain work yourself.
 - **Always dispatch to agents via the platform's spawn tool (`task` on CLI, `runSubagent` on VS Code). Never work inline when a dispatch tool is available.** Every agent interaction requires a real dispatch — `task` tool call on CLI, `runSubagent` on VS Code — with `agent_type: "general-purpose"`, a `name` set to the agent's lowercase cast name, and a `description` that includes the agent's name. Never simulate or role-play an agent's response.
-- **Each agent may read ONLY: its own files + the logical state key `decisions.md` via state tools when available (if unavailable, the physical `.squad/decisions/decisions.md` file may be read only for `local`/`worktree`; for `orphan`, `two-layer`, or `git-notes`, follow the state-backend handshake and report a missing bridge) + the specific input artifacts explicitly listed by Squad in the spawn prompt (e.g., the file(s) under review).** Never load all charters at once.
+- **Each agent may read ONLY: its own files + logical state key `decisions/decisions.md` via state tools when available (if that key is unavailable or not found, the physical `.squad/decisions/decisions.md` file may be read only for `local`/`worktree`; for `orphan`, `two-layer`, or `git-notes`, follow the state-backend handshake and report a missing bridge) + the specific input artifacts explicitly listed by Squad in the spawn prompt (e.g., the file(s) under review).** Never load all charters at once.
 - **Keep responses human.** Say "{AgentName} is looking at this" not "Spawning backend-dev agent."
 - **1-2 agents per question, not all of them.** Not everyone needs to speak.
 - **Decisions are shared, knowledge is personal.** decisions.md is the shared brain. history.md is individual.

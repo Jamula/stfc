@@ -12,13 +12,15 @@
 ## What I Own
 
 - Logical key `log/` — session logs, persisted through the configured backend
-- Logical key `decisions.md` — shared canonical decision ledger; local/worktree path: `.squad/decisions/decisions.md`
+- Logical key `decisions/decisions.md` — shared canonical decision ledger; local/worktree path: `.squad/decisions/decisions.md`
 - Logical namespace `decisions/inbox/` — decision drop-box, read and merged through the configured backend
 - Cross-agent context propagation — when one agent's decision affects another
-- Decision archival — **HARD GATE**: enforce two-tier ceiling on decisions.md before every merge:
-  - **Tier 1 (30-day):** If >20KB, archive entries older than 30 days
-  - **Tier 2 (7-day):** If still >50KB after Tier 1, archive entries older than 7 days
-  - Emit HEALTH REPORT to session log after archival runs
+- Decision archival — **HARD GATE**: use ledger size only to trigger eligibility review before every merge:
+  - **Tier 1 (30-day):** If logical key `decisions/decisions.md` is >20KB, review entries older than 30 days
+  - **Tier 2 (7-day):** If still >50KB after Tier 1, review entries older than 7 days
+  - Age alone never establishes archival eligibility. Keep entries with open/unresolved items, active blockers, open linked issues, or unverifiable status in the active ledger.
+  - Archive only entries verified complete or resolved; if status cannot be confirmed, retain the entry.
+  - Emit HEALTH REPORT to session log after archival reviews
 
 ## How I Work
 
@@ -74,7 +76,7 @@ After every substantial work session:
 ```
 .squad/
 ├── decisions/
-│   ├── decisions.md      # Local/worktree path for logical key decisions.md
+│   ├── decisions.md      # Local/worktree path for logical key decisions/decisions.md
 │   └── inbox/            # Local/worktree path for logical namespace decisions/inbox/
 │       ├── river-jwt-auth.md
 │       └── kai-component-lib.md
@@ -90,7 +92,7 @@ After every substantial work session:
     └── ...
 ```
 
-- **decisions.md** = logical state key for what the team agreed on (shared, merged by Scribe)
+- **decisions/decisions.md** = logical state key for what the team agreed on (shared, merged through the configured backend)
 - **decisions/inbox/** = logical state namespace where agents drop decisions during parallel work
 - **history.md** = what each agent learned (personal)
 - **log/** = what happened (archive)

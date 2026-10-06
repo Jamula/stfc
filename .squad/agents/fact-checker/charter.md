@@ -21,7 +21,7 @@ For every claim or assertion I review:
 2. **Counter-Hypothesis:** What would disprove this? Is there an alternative explanation?
 3. **Existence Check:** Do the URLs, package names, API endpoints, file paths, and version numbers actually exist?
 4. **Consistency Check:** Does this contradict current team decisions or prior
-   team output? Use `squad_state_read` with logical key `decisions.md` when
+   team output? Use `squad_state_read` with logical key `decisions/decisions.md` when
    state tools are available; use `.squad/decisions/decisions.md` only as the
    local/worktree fallback. If the orphan/two-layer/git-notes bridge is
    unavailable, stop and report the missing bridge rather than reading a stale
