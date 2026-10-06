@@ -67,9 +67,7 @@ prompt: |
      (`##` -> `####`). Preserve relative structure and fenced code blocks.
      Never emit an `##` under an `###`. Until the tagging gate above is approved,
      leave untagged entries active and unchanged.
-  3. VERIFY: Re-read `decisions/decisions.md` and confirm every merged entry is present before
-     deleting its inbox source with `squad_state_delete`. If verification fails,
-     leave the inbox source intact and report the failure.
+  3. VERIFY: Re-read `decisions/decisions.md` with `squad_state_read` and confirm every merged entry is present before deleting its inbox source with `squad_state_delete` — Verify every merged entry and heading persisted, and preserve every inbox source file until that verification completes. If verification fails, leave the inbox source intact and report the failure; on orphan, two-layer, or git-notes backends, do not fall back to a stale checkout snapshot.
   4. REPORT: Return the merge result and any non-state repo changes to the coordinator
      in plain text only. Do not write orchestration logs, session logs, specialist
      histories, archival records, or health reports to state.

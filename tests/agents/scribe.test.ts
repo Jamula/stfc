@@ -70,6 +70,10 @@ const squadCommands = readFileSync(
   resolve(process.cwd(), ".copilot/skills/squad-commands/SKILL.md"),
   "utf-8",
 );
+const githubSquadSkill = readFileSync(
+  resolve(process.cwd(), ".github/skills/squad/SKILL.md"),
+  "utf-8",
+);
 const scopeOverrideFanout = readFileSync(
   resolve(process.cwd(), ".copilot/skills/scope-override-fanout/SKILL.md"),
   "utf-8",
@@ -265,6 +269,84 @@ describe("Scribe — decision state keys", () => {
 });
 
 describe("Scribe — decision inbox persistence", () => {
+  for (const [label, text, startMarker, endMarker] of [
+    [
+      "Scribe spawn prompt",
+      spawnTemplates,
+      "2. DECISION INBOX:",
+      "3. ORCHESTRATION LOG:",
+    ],
+    [
+      // Current main narrowed the after-agent prompt: the write (step 2) and the
+      // read-back/verify/delete (step 3) are separate numbered steps, with step 4
+      // being REPORT (the orchestration-log step was removed). Bound the task
+      // through the end of VERIFY so both halves are captured.
+      "after-agent Scribe prompt",
+      afterAgentReference,
+      "2. DECISION INBOX:",
+      "4. REPORT:",
+    ],
+    [
+      // Current main's charter dropped the bold "Merge the decision inbox:" /
+      // "Deduplicate and consolidate" substep headings in favor of a plain
+      // numbered list (no orchestration-log/history-ownership step). Bound the
+      // task from the inbox read through the end of the verify-then-delete step,
+      // stopping before the REPORT-equivalent health-check step.
+      "Scribe charter",
+      scribeTemplate,
+      "1. List and read `decisions/inbox/`",
+      "6. Run the state health check",
+    ],
+  ] as const) {
+    it(`${label} verifies the ledger read-back before deleting inbox sources`, () => {
+      const normalized = text.replace(/\r\n/g, "\n").replace(/\s+/g, " ");
+      const inboxStart = normalized.indexOf(startMarker);
+      const nextTask = normalized.indexOf(endMarker, inboxStart);
+      assert.ok(
+        inboxStart >= 0 && nextTask > inboxStart,
+        `${label} should define a bounded decision inbox task`,
+      );
+
+      const inboxTask = normalized.slice(inboxStart, nextTask);
+      const writeCall = inboxTask.indexOf("squad_state_write");
+      const readBackCall = inboxTask.indexOf("squad_state_read", writeCall + 1);
+      const deleteCall = inboxTask.indexOf("squad_state_delete", readBackCall + 1);
+
+      assert.ok(
+        writeCall >= 0 && readBackCall > writeCall && deleteCall > readBackCall,
+        `${label} should write, read back the merged ledger, then delete inbox sources`,
+      );
+
+      // Phrasing differs across surfaces narrowed on current main: the spawn
+      // template states "Verify ... before deleting" as a single clause ahead of
+      // the delete call, while the after-agent prompt and charter instead gate
+      // the delete on "confirm every merged entry is present before deleting"
+      // and restate the entry+heading verification afterward. Both phrasings
+      // enforce the same fail-closed, verify-before-delete policy.
+      const beforeDeleteGate = /(?:Verify every merged entry and heading persisted before deleting|confirm every merged entry is present before\s+deleting)/i
+        .exec(inboxTask);
+      assert.ok(
+        beforeDeleteGate && beforeDeleteGate.index < deleteCall,
+        `${label} should gate deletion on a stated verify/confirm-before-delete step`,
+      );
+      assert.match(
+        inboxTask,
+        /verify every merged entry and heading persisted/i,
+        `${label} should verify every merged entry and heading, not entries alone`,
+      );
+      assert.match(
+        inboxTask,
+        /(?:If the write or read-back fails, or verification is incomplete, preserve every inbox source file and report failure|If verification fails, leave the inbox source intact and report the failure)/i,
+        `${label} should preserve sources and report failure when persistence is unverified`,
+      );
+      assert.match(
+        inboxTask,
+        /On orphan, two-layer, or git-notes backends, do not fall back to a stale checkout snapshot\./i,
+        `${label} should not read stale checkout state on governed backends`,
+      );
+    });
+  }
+
   it("generated coordinator template verifies the ledger read-back before deleting inbox sources", () => {
     const normalized = coordinatorTemplate.replace(/\r\n/g, "\n");
     const inboxStart = normalized.indexOf("2. DECISION INBOX:");
@@ -318,6 +400,76 @@ describe("Scribe — decision inbox persistence", () => {
       inboxTask,
       /Preserve relative structure\. Never emit an `##` under an `###`/,
       "the task should preserve heading structure without creating invalid heading levels",
+    );
+  });
+});
+
+describe("GitHub-facing Squad — decision archive eligibility", () => {
+  it("includes the semantic taxonomy and dry-run/user-review safeguards", () => {
+    const normalized = githubSquadSkill.replace(/\s+/g, " ");
+    const archiveStart = normalized.indexOf("### Archive Old Decisions");
+    const nextCommand = normalized.indexOf("### Summarize Agent History", archiveStart);
+    assert.ok(
+      archiveStart >= 0 && nextCommand > archiveStart,
+      "GitHub-facing Squad skill should define a bounded archive command",
+    );
+    const archiveCommand = normalized.slice(archiveStart, nextCommand);
+
+    assert.match(
+      archiveCommand,
+      /Size and age thresholds trigger eligibility review only, never archival by themselves/i,
+      "size and age should trigger review, not automatic archival",
+    );
+    for (const [semanticClass, retention] of [
+      ["constitutional", "hot forever"],
+      ["standing-rule", "hot forever"],
+      ["active-blocker", "hot until closed"],
+      ["unresolved-followup", "hot until closed"],
+      ["canonical-pattern", "hot forever"],
+      ["current-epic", "hot until the epic closes"],
+      [
+        "operational-learning",
+        "hot until a similar pattern recurs at least 3 times or 90 days pass without recurrence",
+      ],
+      [
+        "archive-eligible",
+        "verified completion or resolution only, with 7 days hot before archive",
+      ],
+    ] as const) {
+      assert.ok(
+        archiveCommand.includes(`\`${semanticClass}\` = ${retention}`),
+        `archive command should preserve ${semanticClass} retention`,
+      );
+    }
+    assert.match(
+      archiveCommand,
+      /dry-run classification against the live ledger.{0,300}durable tagging convention.{0,150}10.?15 entries.{0,150}future-inbox behavior/i,
+      "bulk tagging should require a documented dry-run against the live ledger",
+    );
+    assert.match(
+      archiveCommand,
+      /Require user review of the artifact before bulk-tagging/i,
+      "bulk tagging should wait for user review",
+    );
+    assert.match(
+      archiveCommand,
+      /until then, leave untagged entries unchanged and active/i,
+      "untagged entries should remain active pending review",
+    );
+    assert.match(
+      archiveCommand,
+      /If archive append or verification cannot be safely completed.{0,100}fail closed and leave the source intact/i,
+      "failed verification should preserve the source",
+    );
+    assert.match(
+      archiveCommand,
+      /For local\/worktree, append verified eligible entries.{0,150}only then trim/i,
+      "local/worktree archives should be verified before trimming",
+    );
+    assert.match(
+      archiveCommand,
+      /For orphan, two-layer, or git-notes backends.{0,300}Never read or edit a stale checkout copy/i,
+      "governed backends should use state tools rather than checkout snapshots",
     );
   });
 });

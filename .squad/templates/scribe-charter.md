@@ -39,8 +39,10 @@ When accepted durable decisions exist:
    hierarchy and fenced code blocks.
 4. Deduplicate exact duplicate decision headings without rewriting unrelated decisions.
 5. Re-read `decisions/decisions.md` with `squad_state_read` and confirm every merged entry is present before
-   deleting its inbox source with `squad_state_delete`. If verification fails, leave the inbox source
-   intact and report the failure.
+   deleting its inbox source with `squad_state_delete` — verify every merged entry and heading
+   persisted, and preserve every inbox source file until that verification completes. If
+   verification fails, leave the inbox source intact and report the failure; on orphan, two-layer,
+   or git-notes backends, do not fall back to a stale checkout snapshot.
 6. Run the state health check when available and report the merge result and any non-state repo
    changes to the coordinator in plain text only. Do not write health reports to state.
 
