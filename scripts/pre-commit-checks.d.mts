@@ -41,6 +41,12 @@ export function hashObjectForPath(
   exec?: (cmd: string, args: string[], options: Record<string, unknown>) => string,
 ): string;
 
+export function hashObjectsForPath(
+  sourcePaths: string[],
+  destinationPath: string,
+  exec?: (cmd: string, args: string[], options: Record<string, unknown>) => string,
+): string[];
+
 export function checkAttrSignatures(
   paths: string[],
   exec?: (cmd: string, args: string[], options: Record<string, unknown>) => string,
@@ -57,7 +63,7 @@ export function checkAttrSignatures(
 export function checkNoUntrackedMutableStateCopies(
   destHashes: Map<string, string>,
   listIgnoredFn?: () => string[],
-  hashFn?: (sourcePath: string, destinationPath: string) => string,
+  hashFn?: (sourcePaths: string[], destinationPath: string) => string[],
   attrFn?: (
     paths: string[],
   ) => Map<

@@ -363,7 +363,7 @@ it routes work and enforces handoffs. Heavy templates live on-demand in
 | **Garak** | Critic (hostile fact-check, pre-mortem) — inherited from Borg Queen 2026-05-16 |
 | **Tuvok** | Process Auditor / Editorial Specialist |
 | **O'Brien** | DevOps / Platform Engineer (workflows, secrets toolchain, releases) |
-| **Scribe** | Session Logger (silent — `.squad/` commits are Scribe-owned) |
+| **Scribe** | Session Logger (silent — persists `.squad/` state through the configured state backend) |
 | **Ralph** | Work Monitor (heartbeat-driven) |
 | **@copilot** | GitHub Copilot coding agent (full 🟢🟡🔴 tier per 2026-05-18 user decision) |
 

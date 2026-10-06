@@ -82,7 +82,7 @@ Fast:     claude-haiku-4.5 → gpt-5.4-mini → gpt-5-mini → (omit model)
 
 **Call-outs:**
 
-- **`claude-haiku-4.5`** — Scribe's permanent model. Mechanical file ops, append-only writes, JSON manipulation, git commits. **Never bump.** Cost constraint is non-negotiable: Scribe runs on every session boundary; accumulating sonnet-class cost here compounds rapidly.
+- **`claude-haiku-4.5`** — Scribe's permanent model. Mechanical file ops, append-only writes, JSON manipulation, state-backend persistence. **Never bump.** Cost constraint is non-negotiable: Scribe runs on every session boundary; accumulating sonnet-class cost here compounds rapidly.
 
 ---
 
