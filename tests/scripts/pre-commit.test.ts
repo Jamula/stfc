@@ -88,6 +88,7 @@ describe("checkSquadBoundary", () => {
   it("rejects staged deletions of other mutable state paths", () => {
     const deleted = [
       ".squad/agents/scotty/history.md",
+      ".squad/identity/now.md",
       ".squad/log/2026-05-16.md",
       ".squad/rai/audit-trail.md",
     ];
@@ -166,6 +167,7 @@ describe("checkSquadBoundary", () => {
       ".squad/decisions/decisions.md",
       ".squad/decisions.md",
       ".squad/decisions/inbox/001.md",
+      ".squad/identity/now.md",
       ".squad/log/2026-05-16.md",
       ".squad/memory/index.json",
       ".squad/orchestration-log/session.md",
