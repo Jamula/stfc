@@ -241,6 +241,13 @@ describe("Coordinator casting policy and registry are static across state backen
         `${path} should define a state-backend handshake`,
       );
       const handshake = text.slice(handshakeStart, handshakeEnd);
+      const hardRuleStart = text.indexOf("hard rule — backend contract enforcement");
+      const hardRuleEnd = text.indexOf("for state_backend ∈", hardRuleStart);
+      assert.ok(
+        hardRuleStart >= 0 && hardRuleEnd > hardRuleStart,
+        `${path} should define the non-local backend contract`,
+      );
+      const hardRule = text.slice(hardRuleStart, hardRuleEnd);
 
       assert.match(
         handshake,
@@ -263,6 +270,31 @@ describe("Coordinator casting policy and registry are static across state backen
         `${path} should keep static casting files out of state tools`,
       );
       assert.match(
+        hardRule,
+        /- \.squad\/casting\/history\.json/,
+        `${path} should prohibit direct writes to mutable casting history`,
+      );
+      assert.deepEqual(
+        hardRule.match(/- \.squad\/casting\/[^\s]+/g),
+        ["- .squad/casting/history.json"],
+        `${path} should prohibit only direct writes to mutable casting history`,
+      );
+      assert.doesNotMatch(
+        hardRule,
+        /- \.squad\/casting\/(?:\*\.json|policy\.json|registry\.json)/,
+        `${path} must not prohibit static casting files`,
+      );
+      assert.match(
+        hardRule,
+        /\.squad\/casting\/policy\.json and \.squad\/casting\/registry\.json are static tracked files, not runtime state; they remain writable with file tools even when the state bridge is unavailable/,
+        `${path} should keep static casting files writable without the state bridge`,
+      );
+      assert.match(
+        hardRule,
+        /\.squad\/casting\/history\.json remains runtime-managed and prohibited from direct file writes on non-local backends/,
+        `${path} should keep mutable casting history runtime-managed`,
+      );
+      assert.match(
         text,
         /for every backend, create or update the authoritative static \.squad\/casting\/registry\.json in the checkout/,
         `${path} should maintain the static registry in the checkout`,
@@ -274,6 +306,27 @@ describe("Coordinator casting policy and registry are static across state backen
       );
     });
   }
+
+  it("keeps the coordinator and template backend contracts in sync", () => {
+    const contracts = coordinatorSurfaces.map((path) => {
+      const text = readInitSurface(path);
+      const handshakeStart = text.indexOf("for all backends except");
+      const handshakeEnd = text.indexOf("the squad_state_* and memory.* tools", handshakeStart);
+      const hardRuleStart = text.indexOf("hard rule — backend contract enforcement");
+      const hardRuleEnd = text.indexOf("for state_backend ∈", hardRuleStart);
+      assert.ok(handshakeStart >= 0 && handshakeEnd > handshakeStart);
+      assert.ok(hardRuleStart >= 0 && hardRuleEnd > hardRuleStart);
+      return `${text.slice(handshakeStart, handshakeEnd)}\n${text.slice(
+        hardRuleStart,
+        hardRuleEnd,
+      )}`;
+    });
+    assert.equal(
+      contracts[0],
+      contracts[1],
+      "the coordinator and template should have matching casting backend guidance",
+    );
+  });
 });
 
 describe("Init Mode config reruns", () => {
