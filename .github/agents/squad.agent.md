@@ -152,7 +152,7 @@ When triggered:
 2. Present a brief summary: who worked, what they did, key decisions made.
 3. Keep it to 2-3 sentences. The user can dig into logs and decisions if they want the full picture.
 
-**Casting migration check:** If `.squad/team.md` exists but `.squad/casting/` does not, perform the migration described in "Casting & Persistent Naming → Migration — Already-Squadified Repos" before proceeding.
+**Casting migration check:** If `.squad/team.md` exists, check that the static `.squad/casting/policy.json` and `.squad/casting/registry.json` exist in the checkout and that `history.json` exists in the configured backend. If a static file or backend history is absent, perform the idempotent migration described in "Casting & Persistent Naming → Migration — Already-Squadified Repos" before proceeding. For non-local backends, check history only with `squad_state_read` on `casting/history.json`; never inspect a checkout history file.
 
 ### Personal Squad (Ambient Discovery)
 
@@ -855,16 +855,17 @@ Existing agents are NEVER renamed during overflow (only during explicit re-cast)
 
 **On-demand reference:** Read `.squad/templates/casting-reference.md` for the full JSON schemas of policy.json, registry.json, and history.json.
 
-The casting system maintains state in `.squad/casting/` with three files: `policy.json` (config), `registry.json` (persistent name registry), and `history.json` (universe usage history + snapshots).
+The casting system uses three files: `.squad/casting/policy.json` and `.squad/casting/registry.json` are authoritative static checkout files for every backend; `history.json` is mutable state stored at the physical path only for `local`/`worktree` and at logical key `casting/history.json` for other backends.
 
 ### Migration — Already-Squadified Repos
 
-When `.squad/team.md` exists but `.squad/casting/` does not:
+When `.squad/team.md` exists and either static casting file is missing from the checkout or history is absent from the configured backend:
 
-1. **Do NOT rename existing agents.** Mark every existing agent as `legacy_named: true` in the registry.
-2. Initialize `.squad/casting/` with default policy.json, a registry.json populated from existing agents, and empty history.json.
-3. For any NEW agents added after migration, apply the full casting algorithm.
-4. Optionally note in the orchestration log that casting was initialized (without explaining the rationale).
+1. **Do NOT rename existing agents.** Preserve existing registry mappings. If the registry is absent, create it from existing agents and mark their entries `legacy_named: true`; if it exists, preserve its mappings and add only missing existing agents as legacy entries.
+2. For every backend, keep `.squad/casting/policy.json` and `.squad/casting/registry.json` as authoritative static checkout files. If policy is absent, copy `.squad/templates/casting-policy.json` (or use defaults). If the registry is absent, initialize it from the existing team. Preserve existing static files and mappings; never send either file through state tools.
+3. Initialize mutable history only when absent in the configured backend. For `local`/`worktree`, preserve an existing `.squad/casting/history.json`; if it is absent, create the physical file from `.squad/templates/casting-history.json`. For `orphan`, `two-layer`, or `git-notes`, read logical key `casting/history.json` with `squad_state_read` and preserve it when present. Treat only the explicit response `State key not found: casting/history.json` as absence; then initialize the logical key with `squad_state_write` and immediately verify the seed with `squad_state_read`. If the bridge is unavailable, any other read fails, the write fails, or readback does not match, fail closed. Never create, read, or write a checkout history copy for a non-local backend.
+4. For any NEW agents added after migration, apply the full casting algorithm.
+5. Optionally note in the orchestration log that casting was initialized (without explaining the rationale).
 
 ---
 
