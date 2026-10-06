@@ -24,9 +24,17 @@ execSync('node scripts/check-artifact-hygiene.mjs --staged', { stdio: 'inherit' 
 // detection explicit instead of depending on the repo's `diff.renames`
 // config. See parseNameStatus for why both the destination AND the source
 // of a rename/copy matter to the Squad boundary check.
-const statusOutput = execSync('git diff --cached --name-status -z -M -C', {
-  encoding: 'utf8',
-});
+//
+// `--find-copies-harder` is required alongside `-C`: by default Git only
+// considers copy *sources* among files that were themselves modified in
+// the same diff. A laundering commit that copies an untouched mutable-state
+// file (e.g. `.squad/agents/*/history.md`) to an ordinary path leaves the
+// source file unmodified, so without this flag Git reports a plain `A`dd
+// for the destination and the boundary check never sees the real source.
+const statusOutput = execSync(
+  'git diff --cached --name-status -z -M -C --find-copies-harder',
+  { encoding: 'utf8' },
+);
 const { staged, deleted, renamedFrom } = parseNameStatus(statusOutput);
 
 checkSquadBoundary(staged, deleted, renamedFrom);
