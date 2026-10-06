@@ -395,26 +395,29 @@ export function checkAttrSignatures(paths, exec = defaultExecFileSync) {
 
   // `check-attr --all` omits attributes whose value is the reserved
   // "unspecified" state, which is indistinguishable there from an absent
-  // filter attribute. If a clean/process driver with either sentinel name
-  // is configured, conservatively disable grouping for such paths.
-  let hasReservedFilterDriver = false;
-  if (
-    paths.some(
-      (path) => !Object.prototype.hasOwnProperty.call(valuesByPath.get(path) ?? {}, 'filter'),
-    )
-  ) {
+  // filter attribute. Probe configured drivers only for the reserved values
+  // that could be ambiguous in this result.
+  const sentinelFilterValues = new Set(['set', 'unset', 'unspecified']);
+  const configuredSentinelDrivers = new Set();
+  const sentinelValuesToCheck = new Set();
+  for (const path of paths) {
+    const values = valuesByPath.get(path) ?? {};
+    if (!Object.prototype.hasOwnProperty.call(values, 'filter')) {
+      sentinelValuesToCheck.add('unspecified');
+    } else if (sentinelFilterValues.has(values.filter)) {
+      sentinelValuesToCheck.add(values.filter);
+    }
+  }
+
+  for (const value of sentinelValuesToCheck) {
     try {
-      hasReservedFilterDriver =
+      const configured =
         exec(
           'git',
-          [
-            'config',
-            '--null',
-            '--get-regexp',
-            '^filter\\.(unspecified|unset)\\.(clean|process)$',
-          ],
+          ['config', '--null', '--get-regexp', `^filter\\.${value}\\.(clean|process)$`],
           { encoding: 'utf8' },
         ).length > 0;
+      if (configured) configuredSentinelDrivers.add(value);
     } catch (err) {
       if (err?.status !== 1) throw err;
     }
@@ -423,10 +426,17 @@ export function checkAttrSignatures(paths, exec = defaultExecFileSync) {
   const signatures = new Map();
   for (const path of paths) {
     const values = valuesByPath.get(path) ?? {};
-    const filter = Object.prototype.hasOwnProperty.call(values, 'filter');
+    const hasFilterAttribute = Object.prototype.hasOwnProperty.call(values, 'filter');
+    const filterValue = values.filter;
+    const hasCustomFilter = hasFilterAttribute
+      ? sentinelFilterValues.has(filterValue)
+        ? configuredSentinelDrivers.has(filterValue)
+        : true
+      : configuredSentinelDrivers.has('unspecified');
     signatures.set(path, {
       signature: JSON.stringify(HASH_FILTER_ATTRS.map((attr) => values[attr] ?? 'unspecified')),
-      pathIndependent: !filter && !hasReservedFilterDriver,
+      pathIndependent: !hasCustomFilter,
+      hasCustomFilter,
     });
   }
   return signatures;
@@ -435,10 +445,12 @@ export function checkAttrSignatures(paths, exec = defaultExecFileSync) {
 /**
  * Reject a staged file whose content is byte-identical (by Git blob hash,
  * computed under the destination's own working-tree clean-filter rules —
- * see `hashObjectForPath`) to an untracked/ignored mutable-state source.
- * Only an exact full-content match is treated as a violation — deliberately
- * conservative, with no fuzzy/partial matching, to avoid false positives
- * on merely similar files.
+ * see `hashObjectForPath`) to a non-empty untracked/ignored mutable-state
+ * source. Empty sources contain no bytes to leak, and their common empty
+ * blob must not make unrelated empty files look like copies. Only an exact
+ * full-content match is treated as a violation — deliberately conservative,
+ * with no fuzzy/partial matching, to avoid false positives on merely similar
+ * files.
  *
  * Fails closed: if enumerating untracked/ignored mutable-state files, or
  * hashing any candidate against a staged destination, itself errors, this
@@ -468,8 +480,23 @@ export function checkNoUntrackedMutableStateCopies(
   }
 
   if (ignoredMutableFiles.length === 0) return;
-
   const destPaths = [...destHashes.keys()];
+  if (destPaths.length === 0) return;
+
+  const nonEmptyMutableFiles = [];
+  for (const sourcePath of ignoredMutableFiles) {
+    try {
+      if (fs.statSync(sourcePath).size > 0) nonEmptyMutableFiles.push(sourcePath);
+    } catch (err) {
+      fail(
+        `Could not inspect untracked/ignored Squad state file "${sourcePath}" while checking ` +
+          'for disguised copies of mutable state (failing closed rather than silently skipping ' +
+          `this check).\n  ${err && err.message ? err.message : err}`,
+      );
+      return;
+    }
+  }
+  if (nonEmptyMutableFiles.length === 0) return;
 
   // Hashing uses worktree attributes. If those differ from the index,
   // cached signatures would not describe the actual hash operation. Also,
@@ -488,6 +515,18 @@ export function checkNoUntrackedMutableStateCopies(
     return;
   }
 
+  const destinationsWithCustomFilters = destPaths.filter(
+    (destPath) => signatures.get(destPath)?.hasCustomFilter !== false,
+  );
+  if (destinationsWithCustomFilters.length > 0) {
+    fail(
+      'Cannot check staged destination(s) for copied mutable state because a custom clean/process ' +
+        'filter would run against local mutable-state contents. Refusing to execute custom filters.\n' +
+        `  Destinations:\n${destinationsWithCustomFilters.map((path) => `    - ${path}`).join('\n')}`,
+    );
+    return;
+  }
+
   const groups = new Map(); // signature or unique symbol -> { representative, paths: string[] }
   for (const destPath of destPaths) {
     const attributes = signatures.get(destPath);
@@ -501,7 +540,7 @@ export function checkNoUntrackedMutableStateCopies(
   }
 
   const violations = [];
-  for (const sourcePath of ignoredMutableFiles) {
+  for (const sourcePath of nonEmptyMutableFiles) {
     for (const group of groups.values()) {
       // Exclude a destination that IS this exact source path up front, so
       // a degenerate self-match group never triggers a hashFn call —
