@@ -79,51 +79,152 @@ describe("checkSquadBoundary", () => {
     assert.equal(exitState.code, 1);
   });
 
-  it("allows staged deletion of the canonical decisions ledger", () => {
-    const deleted = [".squad/decisions/decisions.md"];
-    checkSquadBoundary(deleted, deleted);
-    assert.equal(exitState.code, null);
-  });
+  // ── Deletion handling via parseNameStatus (PR #314 reviewer finding) ─
+  //
+  // The reviewer flagged that `checkSquadBoundary(deleted, deleted)` — i.e.
+  // passing the SAME array for both the `staged` and `deleted` parameters —
+  // is a shape `parseNameStatus` never actually produces: a `D` entry is
+  // recorded in `deleted`, and the deletion allowlist only has any effect
+  // when that same path is also present in `staged` (see `checkSquadBoundary`
+  // doc comment). Driving these tests through the real `parseNameStatus`
+  // output exercises the actual wiring instead of an impossible hand-built
+  // shape, so a parser regression that stops forwarding deleted paths into
+  // `staged` fails here instead of being masked.
+  describe("deletion handling (driven by the real parseNameStatus output)", () => {
+    let parseNameStatus: (raw: string) => {
+      staged: string[];
+      deleted: string[];
+      renamedFrom: string[];
+    };
+    let MUTABLE_SQUAD_STATE_DELETION_ALLOWLIST: Set<string>;
 
-  it("rejects staged deletions of other mutable state paths", () => {
-    // NOTE: paths here must stay OUTSIDE MUTABLE_SQUAD_STATE_DELETION_ALLOWLIST
-    // (the one-time migration allowlist) so this test keeps validating that
-    // non-allowlisted mutable-state deletions are still rejected.
-    const deleted = [
-      ".squad/agents/scotty/history.md",
-      ".squad/sessions/2026-05-16.json",
-      ".squad/log/2026-05-16.md",
-      ".squad/fact-checker/audit-trail.md",
-    ];
-    const errors: string[] = [];
-    mock.method(console, "error", (msg: string) => errors.push(msg));
+    beforeEach(async () => {
+      const mod = await import("../../scripts/pre-commit-checks.mjs");
+      parseNameStatus = mod.parseNameStatus;
+      MUTABLE_SQUAD_STATE_DELETION_ALLOWLIST = mod.MUTABLE_SQUAD_STATE_DELETION_ALLOWLIST;
+    });
 
-    assert.throws(
-      () => checkSquadBoundary(deleted, deleted),
-      /process\.exit\(1\)/,
-    );
-    assert.equal(exitState.code, 1);
-    for (const file of deleted) {
-      assert.ok(errors.join("\n").includes(`- ${file}`), `expected ${file} to be rejected`);
+    /** Build `git diff --name-status -z` raw output for a list of `D` paths. */
+    function deletionDiff(paths: string[]): string {
+      return paths.flatMap((p) => ["D", p]).concat("").join("\0");
     }
-  });
 
-  it("still rejects staged mutable-state content alongside a deletion", () => {
-    const errors: string[] = [];
-    mock.method(console, "error", (msg: string) => errors.push(msg));
-    const deleted = [".squad/decisions/decisions.md"];
+    it("parses a deleted mutable path into both staged (changed paths) and deleted", () => {
+      // A `D` status means the path leaves the tree, but it must still be
+      // considered among the "changed paths" the boundary check inspects —
+      // otherwise the allowlist membership test in checkSquadBoundary
+      // (`deletedPaths.has(f) && ALLOWLIST.has(f)`) can never be reached for
+      // a real diff, because `f` is drawn from `staged`.
+      const mutablePath = ".squad/agents/scotty/history.md";
+      const { staged, deleted } = parseNameStatus(deletionDiff([mutablePath]));
+      assert.ok(staged.includes(mutablePath), "expected the deleted path to appear in staged");
+      assert.ok(deleted.includes(mutablePath), "expected the deleted path to appear in deleted");
+    });
 
-    assert.throws(
-      () =>
-        checkSquadBoundary(
-          [...deleted, ".squad/log/2026-05-16.md"],
-          deleted,
-        ),
-      /process\.exit\(1\)/,
-    );
-    assert.equal(exitState.code, 1);
-    assert.match(errors.join("\n"), /\.squad\/log\/2026-05-16\.md/);
-    assert.doesNotMatch(errors.join("\n"), /\.squad\/decisions\/decisions\.md/);
+    it("allows a real staged deletion of the canonical decisions ledger", () => {
+      const { staged, deleted, renamedFrom } = parseNameStatus(
+        deletionDiff([".squad/decisions/decisions.md"]),
+      );
+      checkSquadBoundary(staged, deleted, renamedFrom);
+      assert.equal(exitState.code, null);
+    });
+
+    it("allows real staged deletions of every enumerated migration allowlist entry", () => {
+      // Exercise the full allowlist at once (rather than a single sample
+      // entry) so an entry added to the Set without end-to-end coverage
+      // still gets exercised here.
+      const allowlisted = [...MUTABLE_SQUAD_STATE_DELETION_ALLOWLIST];
+      const { staged, deleted, renamedFrom } = parseNameStatus(deletionDiff(allowlisted));
+      checkSquadBoundary(staged, deleted, renamedFrom);
+      assert.equal(exitState.code, null);
+    });
+
+    it("rejects real staged deletions of non-allowlisted mutable state paths", () => {
+      // NOTE: paths here must stay OUTSIDE MUTABLE_SQUAD_STATE_DELETION_ALLOWLIST
+      // (the one-time migration allowlist) so this test keeps validating that
+      // non-allowlisted mutable-state deletions are still rejected.
+      const deletedPaths = [
+        ".squad/agents/scotty/history.md",
+        ".squad/sessions/2026-05-16.json",
+        ".squad/log/2026-05-16.md",
+        ".squad/fact-checker/audit-trail.md",
+      ];
+      for (const path of deletedPaths) {
+        assert.ok(
+          !MUTABLE_SQUAD_STATE_DELETION_ALLOWLIST.has(path),
+          `fixture bug: ${path} must not be in the deletion allowlist`,
+        );
+      }
+      const errors: string[] = [];
+      mock.method(console, "error", (msg: string) => errors.push(msg));
+      const { staged, deleted, renamedFrom } = parseNameStatus(deletionDiff(deletedPaths));
+
+      assert.throws(
+        () => checkSquadBoundary(staged, deleted, renamedFrom),
+        /process\.exit\(1\)/,
+      );
+      assert.equal(exitState.code, 1);
+      for (const file of deletedPaths) {
+        assert.ok(errors.join("\n").includes(`- ${file}`), `expected ${file} to be rejected`);
+      }
+    });
+
+    it("still rejects staged mutable-state content alongside an allowlisted deletion", () => {
+      const errors: string[] = [];
+      mock.method(console, "error", (msg: string) => errors.push(msg));
+      const raw = [
+        "D",
+        ".squad/decisions/decisions.md",
+        "A",
+        ".squad/log/2026-05-16.md",
+        "",
+      ].join("\0");
+      const { staged, deleted, renamedFrom } = parseNameStatus(raw);
+
+      assert.throws(
+        () => checkSquadBoundary(staged, deleted, renamedFrom),
+        /process\.exit\(1\)/,
+      );
+      assert.equal(exitState.code, 1);
+      assert.match(errors.join("\n"), /\.squad\/log\/2026-05-16\.md/);
+      assert.doesNotMatch(errors.join("\n"), /\.squad\/decisions\/decisions\.md/);
+    });
+
+    // ── .squad/memory/ migration entries (PR #314 reviewer finding) ───
+    //
+    // `.squad/memory/config.json` is the static policy file and must never
+    // be treated as mutable state (see MUTABLE_SQUAD_STATE_PATTERNS' negative
+    // lookahead); every other `.squad/memory/` path, including the two
+    // index/audit files migrated off direct tracking here, remains guarded
+    // and must be explicitly allowlisted to be deleted.
+    it("allows real staged deletions of .squad/memory/index.json and .squad/memory/audit.jsonl", () => {
+      for (const path of [".squad/memory/index.json", ".squad/memory/audit.jsonl"]) {
+        assert.ok(
+          MUTABLE_SQUAD_STATE_DELETION_ALLOWLIST.has(path),
+          `expected ${path} to be in the migration deletion allowlist`,
+        );
+      }
+      const { staged, deleted, renamedFrom } = parseNameStatus(
+        deletionDiff([".squad/memory/index.json", ".squad/memory/audit.jsonl"]),
+      );
+      checkSquadBoundary(staged, deleted, renamedFrom);
+      assert.equal(exitState.code, null);
+    });
+
+    it("never guards .squad/memory/config.json, so its real staged deletion is always allowed", () => {
+      // config.json is excluded from MUTABLE_SQUAD_STATE_PATTERNS entirely,
+      // so it is not guarded at all (deleting it is an ordinary, allowed
+      // change) — confirm that remains true and it needs no allowlist entry.
+      const { staged, deleted, renamedFrom } = parseNameStatus(
+        deletionDiff([".squad/memory/config.json"]),
+      );
+      checkSquadBoundary(staged, deleted, renamedFrom);
+      assert.equal(exitState.code, null);
+      assert.ok(
+        !MUTABLE_SQUAD_STATE_DELETION_ALLOWLIST.has(".squad/memory/config.json"),
+        "config.json should not need a deletion allowlist entry — it is never guarded",
+      );
+    });
   });
 
   it("rejects the legacy .squad/decisions.md path", () => {
@@ -269,10 +370,15 @@ describe("parseNameStatus", () => {
     parseNameStatus = mod.parseNameStatus;
   });
 
-  it("parses added/modified/deleted entries", () => {
+  it("parses added/modified/deleted entries, including the deleted path in staged", () => {
+    // A `D` entry must land in BOTH `staged` and `deleted`: `staged` is every
+    // path the boundary check inspects, and the deletion allowlist is keyed
+    // on a path being present in both (see checkSquadBoundary's doc comment
+    // and PR #314 review — without this, the allowlist membership check
+    // is unreachable for any real `git diff` output).
     const raw = ["A", "src/new.ts", "M", "src/existing.ts", "D", "src/old.ts", ""].join("\0");
     assert.deepEqual(parseNameStatus(raw), {
-      staged: ["src/new.ts", "src/existing.ts"],
+      staged: ["src/new.ts", "src/existing.ts", "src/old.ts"],
       deleted: ["src/old.ts"],
       renamedFrom: [],
     });
@@ -296,7 +402,7 @@ describe("parseNameStatus", () => {
     });
   });
 
-  it("handles a mix of statuses in one diff", () => {
+  it("handles a mix of statuses in one diff, including the deleted path in staged", () => {
     const raw = [
       "A",
       "src/new.ts",
@@ -308,7 +414,7 @@ describe("parseNameStatus", () => {
       "",
     ].join("\0");
     assert.deepEqual(parseNameStatus(raw), {
-      staged: ["src/new.ts", "docs/moved.md"],
+      staged: ["src/new.ts", "docs/moved.md", "src/old.ts"],
       deleted: ["src/old.ts"],
       renamedFrom: [".squad/identity/now.md"],
     });
@@ -536,6 +642,93 @@ describe("checkWorkflowPinningTests", () => {
           0,
           `expected staged untracking to pass the pre-commit boundary check:\n${result.stderr}`,
         );
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it("blocks a real staged deletion (git rm --cached) of a non-allowlisted mutable-state path", () => {
+      // Regression test for the reviewer finding on PR #314: the previous
+      // tests only called checkSquadBoundary(deleted, deleted) directly,
+      // which is a shape the real hook can never produce — parseNameStatus
+      // only ever recorded a `D` entry in `deleted`, never in `staged`, so
+      // the allowlist membership check in checkSquadBoundary was dead code
+      // and EVERY `git rm --cached` deletion silently passed, allowlisted
+      // or not. This drives `git diff --cached --name-status -z -M -C`
+      // through the real `pre-commit.mjs` entry point for a path that is
+      // deliberately NOT in MUTABLE_SQUAD_STATE_DELETION_ALLOWLIST, and must
+      // fail the boundary check.
+      const dir = mkdtempSync(join(tmpdir(), "stfc-pre-commit-reject-untrack-"));
+      const scriptsDir = join(dir, "scripts");
+      const binDir = join(dir, "bin");
+      const isolatedGitEnv = { ...process.env };
+      for (const key of Object.keys(isolatedGitEnv)) {
+        if (key.startsWith("GIT_")) delete isolatedGitEnv[key];
+      }
+
+      try {
+        mkdirSync(scriptsDir, { recursive: true });
+        mkdirSync(binDir);
+        writeFileSync(
+          join(scriptsDir, "pre-commit.mjs"),
+          readFileSync(resolve("scripts/pre-commit.mjs"), "utf8"),
+        );
+        writeFileSync(
+          join(scriptsDir, "pre-commit-checks.mjs"),
+          readFileSync(resolve("scripts/pre-commit-checks.mjs"), "utf8"),
+        );
+        writeFileSync(join(scriptsDir, "check-artifact-hygiene.mjs"), "process.exit(0);\n");
+
+        const pathKey = Object.keys(isolatedGitEnv).find((key) => key.toLowerCase() === "path") ?? "PATH";
+        const pathSeparator = process.platform === "win32" ? ";" : ":";
+        isolatedGitEnv[pathKey] = `${binDir}${pathSeparator}${isolatedGitEnv[pathKey] ?? ""}`;
+        if (process.platform === "win32") {
+          writeFileSync(join(binDir, "npm.cmd"), "@echo off\r\nexit /b 0\r\n");
+        } else {
+          writeFileSync(join(binDir, "npm"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+        }
+
+        // NOTE: must stay OUTSIDE MUTABLE_SQUAD_STATE_DELETION_ALLOWLIST.
+        const nonAllowlisted = ".squad/log/2026-05-16-real-repo-untrack.md";
+        mkdirSync(join(dir, ".squad", "log"), { recursive: true });
+        writeFileSync(join(dir, nonAllowlisted), "tracked log entry\n");
+        execFileSync("git", ["init", "--quiet"], { cwd: dir, env: isolatedGitEnv });
+        execFileSync("git", ["config", "user.name", "Pre-commit test"], {
+          cwd: dir,
+          env: isolatedGitEnv,
+        });
+        execFileSync("git", ["config", "user.email", "pre-commit-test@example.invalid"], {
+          cwd: dir,
+          env: isolatedGitEnv,
+        });
+        execFileSync("git", ["add", nonAllowlisted], { cwd: dir, env: isolatedGitEnv });
+        execFileSync("git", ["commit", "--quiet", "-m", "Add non-allowlisted log entry"], {
+          cwd: dir,
+          env: isolatedGitEnv,
+        });
+        execFileSync("git", ["rm", "--cached", nonAllowlisted], {
+          cwd: dir,
+          env: isolatedGitEnv,
+        });
+
+        const stagedStatus = execFileSync("git", ["diff", "--cached", "--name-status"], {
+          cwd: dir,
+          encoding: "utf8",
+          env: isolatedGitEnv,
+        });
+        assert.equal(stagedStatus.trim(), `D\t${nonAllowlisted}`);
+
+        const result = spawnSync(process.execPath, [join(scriptsDir, "pre-commit.mjs")], {
+          cwd: dir,
+          encoding: "utf8",
+          env: isolatedGitEnv,
+        });
+        assert.equal(
+          result.status,
+          1,
+          `expected a non-allowlisted mutable-state deletion to be rejected:\n${result.stdout}${result.stderr}`,
+        );
+        assert.match(result.stderr + result.stdout, /\.squad\/log\/2026-05-16-real-repo-untrack\.md/);
       } finally {
         rmSync(dir, { recursive: true, force: true });
       }
