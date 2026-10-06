@@ -1014,6 +1014,28 @@ describe("Scribe — secret-handling active/template parity", () => {
   });
 });
 
+describe("worktree-reference.md — no merge=union reliance for backend-owned state", () => {
+  it("does not claim a .gitattributes merge=union driver auto-resolves .squad/ state, consistent with git-workflow/SKILL.md", () => {
+    const normalized = worktreeReference.replace(/\s+/g, " ");
+
+    assert.doesNotMatch(
+      normalized,
+      /merge=union.{0,120}auto-resolves/i,
+      "worktree-reference.md should not claim merge=union auto-resolves append-only .squad/ files",
+    );
+    assert.match(
+      normalized,
+      /Do not rely on `\.gitattributes` `merge=union` to reconcile `\.squad\/` runtime state across worktrees or branches/i,
+      "worktree-reference.md should match git-workflow/SKILL.md's merge=union guidance",
+    );
+    assert.match(
+      normalized,
+      /union merge is not a persistence mechanism for backend-owned state/i,
+      "worktree-reference.md should state union merge is not a persistence mechanism for backend-owned state",
+    );
+  });
+});
+
 describe("Scribe — worktree snapshot ingestion", () => {
   for (const [label, text] of [
     ["live charter", charter],
