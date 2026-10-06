@@ -25,7 +25,7 @@ prompt: |
   5. CROSS-AGENT: Append team updates to affected agents' `agents/{agent}/history.md` with `squad_state_append`.
   6. HISTORY SUMMARIZATION [HARD GATE]: If any history.md >= 15360 bytes (15KB), summarize now.
   7. GIT COMMIT: Do not commit mutable squad state. If non-state repo files changed, report them for coordinator handling.
-  8. HEALTH REPORT: Log `decisions/decisions.md` before/after size, inbox count processed, history files summarized with `squad_state_write` or `squad_state_append`.
+  8. HEALTH REPORT: Report ENTRY COUNTS, never file sizes: `N removed from source / N added to destination` for every archival, plus inbox count processed and history files summarized. Write with `squad_state_write` or `squad_state_append`.
 
   Runtime state tools own persistence. Never switch branches, push note refs, reset `.squad/`, or commit mutable squad state from this prompt.
 

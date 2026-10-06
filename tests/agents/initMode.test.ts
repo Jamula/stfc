@@ -89,3 +89,60 @@ describe("Init Mode state ownership guidance", () => {
     });
   }
 });
+
+describe("Init Mode — memory ignore uses wildcard-plus-negation, backend init precedes mutable writes", () => {
+  const scopedSurfaces = [
+    ".squad/templates/init-mode.md",
+    ".squad/reference/init-detail.md",
+  ];
+
+  for (const path of scopedSurfaces) {
+    it(`${path} ignores runtime memory with wildcard-plus-negation while keeping config.json tracked`, () => {
+      const text = readInitSurface(path);
+
+      assert.match(text, /\.squad\/memory\/\*/);
+      assert.match(text, /!\.squad\/memory\/config\.json/);
+      assert.match(
+        text,
+        /config\.json is a static, constitution-tracked policy file and must stay tracked/,
+      );
+    });
+
+    it(`${path} initializes the state backend before the first mutable write`, () => {
+      const rawText = readFileSync(resolve(process.cwd(), path), "utf-8").replace(
+        /\r\n/g,
+        "\n",
+      );
+      const backendIndex = rawText.search(/Initialize state ownership/i);
+      const castingIndex = rawText.search(/Casting state initialization/i);
+      const seedingIndex = rawText.search(/\*\*Seeding:\*\*/);
+
+      assert.ok(backendIndex >= 0, `${path} should document state-backend initialization`);
+      assert.ok(castingIndex >= 0, `${path} should document casting state initialization`);
+      assert.ok(seedingIndex >= 0, `${path} should document agent seeding`);
+      assert.ok(
+        backendIndex < castingIndex,
+        `${path} should initialize the state backend before casting state`,
+      );
+      assert.ok(
+        backendIndex < seedingIndex,
+        `${path} should initialize the state backend before seeding agents`,
+      );
+    });
+
+    it(`${path} seeds casting and history through state tools for non-local backends`, () => {
+      const text = readInitSurface(path);
+
+      assert.match(
+        text,
+        /for every other backend, seed this same data through squad_state_write to the equivalent logical keys/,
+      );
+      assert.match(
+        text,
+        /for every other backend, seed it through squad_state_write to the logical agents\/\{name\}\/history\.md key/,
+      );
+      assert.match(text, /verify the write before proceeding/);
+      assert.match(text, /do not create a checkout copy/);
+    });
+  }
+});
