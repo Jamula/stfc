@@ -73,8 +73,9 @@ function getGitAttributeValues(
   env: NodeJS.ProcessEnv,
   paths: string[],
   cached: boolean,
+  attributes = ["text", "eol", "filter"],
 ): Map<string, Record<string, string>> {
-  const args = ["check-attr", ...(cached ? ["--cached"] : []), "-z", "text", "eol", "filter", "--", ...paths];
+  const args = ["check-attr", ...(cached ? ["--cached"] : []), "-z", ...attributes, "--", ...paths];
   const raw = execFileSync("git", args, { cwd: dir, encoding: "utf8", env });
   const tokens = raw.split("\0");
   const valuesByPath = new Map<string, Record<string, string>>();
@@ -88,6 +89,52 @@ function getGitAttributeValues(
     valuesByPath.set(path, values);
   }
   return valuesByPath;
+}
+
+function assertPathAwareMutableCopyRejected(
+  dir: string,
+  env: NodeJS.ProcessEnv,
+  source: string,
+  representative: string,
+  copiedDestination: string,
+): void {
+  const stagedHash = execFileSync("git", ["rev-parse", `:${copiedDestination}`], {
+    cwd: dir,
+    encoding: "utf8",
+    env,
+  }).trim();
+  const hashUnderCopiedPath = execFileSync(
+    "git",
+    ["hash-object", "--filters", `--path=${copiedDestination}`, "--", source],
+    { cwd: dir, encoding: "utf8", env },
+  ).trim();
+  const hashUnderRepresentativePath = execFileSync(
+    "git",
+    ["hash-object", "--filters", `--path=${representative}`, "--", source],
+    { cwd: dir, encoding: "utf8", env },
+  ).trim();
+
+  assert.equal(hashUnderCopiedPath, stagedHash, "fixture bug: destination path must reproduce git add");
+  assert.notEqual(
+    hashUnderRepresentativePath,
+    stagedHash,
+    "fixture bug: the representative path must produce a different blob hash",
+  );
+
+  const result = spawnSync(process.execPath, [join(dir, "scripts", "pre-commit.mjs")], {
+    cwd: dir,
+    encoding: "utf8",
+    env,
+  });
+  assert.equal(
+    result.status,
+    1,
+    `expected the real pre-commit entry point to reject the mutable-state copy:\n` +
+      `${result.stderr}${result.stdout}`,
+  );
+  const output = result.stderr + result.stdout;
+  assert.ok(output.includes(copiedDestination), `expected copied destination in output:\n${output}`);
+  assert.ok(output.includes(source), `expected mutable source in output:\n${output}`);
 }
 
 // ── #9 — Squad boundary ─────────────────────────────────────────────
@@ -2113,6 +2160,124 @@ describe("checkWorkflowPinningTests", () => {
         const output = result.stderr + result.stdout;
         assert.ok(output.includes(copiedDestination), `expected copied destination in output:\n${output}`);
         assert.ok(output.includes(mutableSource), `expected mutable source in output:\n${output}`);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it("keeps ident differences in grouping signatures and blocks the normalized copy", () => {
+      const dir = mkdtempSync(join(tmpdir(), "stfc-pre-commit-untracked-copy-ident-"));
+      const isolatedGitEnv = setupPreCommitTestRepo(dir);
+      const mutableSource = ".squad/agents/scotty/history.md";
+      const firstDestination = "docs/one.md";
+      const copiedDestination = "docs/two.md";
+      const body = Buffer.from(`$Id: ${"a".repeat(40)} $\n`);
+
+      try {
+        writeFileSync(join(dir, ".gitignore"), ".squad/agents/*/history.md\n");
+        writeFileSync(
+          join(dir, ".gitattributes"),
+          ["docs/*.md -ident", "docs/two.md ident", ""].join("\n"),
+        );
+        execFileSync("git", ["add", ".gitignore", ".gitattributes"], {
+          cwd: dir,
+          env: isolatedGitEnv,
+        });
+        execFileSync("git", ["commit", "--quiet", "-m", "Add ignore and ident rules"], {
+          cwd: dir,
+          env: isolatedGitEnv,
+        });
+
+        mkdirSync(join(dir, ".squad", "agents", "scotty"), { recursive: true });
+        writeFileSync(join(dir, mutableSource), body);
+        mkdirSync(join(dir, "docs"), { recursive: true });
+        writeFileSync(join(dir, firstDestination), "unrelated staged document\n");
+        writeFileSync(join(dir, copiedDestination), body);
+
+        const attributes = getGitAttributeValues(
+          dir,
+          isolatedGitEnv,
+          [firstDestination, copiedDestination],
+          true,
+          ["ident"],
+        );
+        assert.notEqual(
+          attributes.get(firstDestination)?.ident,
+          attributes.get(copiedDestination)?.ident,
+          "fixture bug: destinations must differ on ident",
+        );
+
+        execFileSync("git", ["add", firstDestination, copiedDestination], {
+          cwd: dir,
+          env: isolatedGitEnv,
+        });
+        assertPathAwareMutableCopyRejected(
+          dir,
+          isolatedGitEnv,
+          mutableSource,
+          firstDestination,
+          copiedDestination,
+        );
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it("keeps working-tree-encoding differences in grouping signatures and blocks the converted copy", () => {
+      const dir = mkdtempSync(join(tmpdir(), "stfc-pre-commit-untracked-copy-encoding-"));
+      const isolatedGitEnv = setupPreCommitTestRepo(dir);
+      const mutableSource = ".squad/agents/scotty/history.md";
+      const firstDestination = "docs/one.md";
+      const copiedDestination = "docs/two.md";
+      const body = Buffer.from("mutable state encoded as UTF-16LE\n", "utf16le");
+
+      try {
+        writeFileSync(join(dir, ".gitignore"), ".squad/agents/*/history.md\n");
+        writeFileSync(
+          join(dir, ".gitattributes"),
+          ["docs/*.md -working-tree-encoding", "docs/two.md working-tree-encoding=UTF-16LE", ""].join(
+            "\n",
+          ),
+        );
+        execFileSync("git", ["add", ".gitignore", ".gitattributes"], {
+          cwd: dir,
+          env: isolatedGitEnv,
+        });
+        execFileSync("git", ["commit", "--quiet", "-m", "Add ignore and encoding rules"], {
+          cwd: dir,
+          env: isolatedGitEnv,
+        });
+
+        mkdirSync(join(dir, ".squad", "agents", "scotty"), { recursive: true });
+        writeFileSync(join(dir, mutableSource), body);
+        mkdirSync(join(dir, "docs"), { recursive: true });
+        writeFileSync(join(dir, firstDestination), "unrelated staged document\n");
+        writeFileSync(join(dir, copiedDestination), body);
+
+        const attributes = getGitAttributeValues(
+          dir,
+          isolatedGitEnv,
+          [firstDestination, copiedDestination],
+          true,
+          ["working-tree-encoding"],
+        );
+        assert.notEqual(
+          attributes.get(firstDestination)?.["working-tree-encoding"],
+          attributes.get(copiedDestination)?.["working-tree-encoding"],
+          "fixture bug: destinations must differ on working-tree-encoding",
+        );
+
+        execFileSync("git", ["add", firstDestination, copiedDestination], {
+          cwd: dir,
+          env: isolatedGitEnv,
+        });
+        assertPathAwareMutableCopyRejected(
+          dir,
+          isolatedGitEnv,
+          mutableSource,
+          firstDestination,
+          copiedDestination,
+        );
       } finally {
         rmSync(dir, { recursive: true, force: true });
       }
