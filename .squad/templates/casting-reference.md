@@ -78,9 +78,13 @@ score = size_fit + shape_fit + resonance_fit + LRU
 | `size_fit` | How well the universe capacity matches the team size. Prefer universes where capacity ≥ agent_count with minimal waste. |
 | `shape_fit` | Match universe shape tags against the assignment shape derived from the project description. |
 | `resonance_fit` | Match universe resonance signals against session and repo context signals. |
-| `LRU` | Least-recently-used bonus — prefer universes not used in recent assignments (from `history.json`). |
+| `LRU` | Least-recently-used bonus — prefer universes not used in recent assignments (from `history.json`, read from the configured state backend). |
 
 Same inputs → same choice (unless LRU changes between assignments).
+
+### Casting History Backend Ownership
+
+Before LRU scoring or recording an assignment snapshot, read and update history through the configured backend: for `"local"`/`"worktree"`, read and update the physical `.squad/casting/history.json` file on the local state filesystem; for `"orphan"`, `"two-layer"`, or `"git-notes"`, read logical key `casting/history.json` with `squad_state_read`, write updates with `squad_state_write`, then verify with `squad_state_read`. If the bridge is unavailable or any state call fails, report the error and fail closed. Never read or write a checkout copy for a non-local backend; it may be stale.
 
 ## Spoiler Awareness
 
@@ -139,7 +143,7 @@ Runtime location: `.squad/casting/registry.json`
 ### history.json
 
 Source template: `.squad/templates/casting-history.json`
-Runtime location: `.squad/casting/history.json`
+Backend location: physical `.squad/casting/history.json` for `local`/`worktree`; logical key `casting/history.json` for `orphan`, `two-layer`, or `git-notes`.
 
 ```json
 {
