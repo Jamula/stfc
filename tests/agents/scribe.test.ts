@@ -257,6 +257,7 @@ describe("Scribe — decision state keys", () => {
     ["Scribe spawn template", spawnTemplates],
     ["after-agent reference", afterAgentReference],
     ["squad commands", squadCommands],
+    ["GitHub-facing Squad skill", githubSquadSkill],
     ["scope override fanout", scopeOverrideFanout],
     ["architectural proposals", architecturalProposals],
     ["Reflect skill", reflectSkill],
@@ -442,6 +443,31 @@ describe("GitHub-facing Squad — decision archive eligibility", () => {
     );
     const archiveCommand = normalized.slice(archiveStart, nextCommand);
 
+    assert.match(
+      archiveCommand,
+      /Treat `decisions\/decisions\.md` as the logical source key/,
+      "archive command should identify the logical decision-ledger key",
+    );
+    assert.match(
+      archiveCommand,
+      /`squad_state_read` for key `decisions\/decisions\.md`/,
+      "archive command should read the logical decision-ledger key",
+    );
+    assert.match(
+      archiveCommand,
+      /write key `decisions\/decisions\.md` with `squad_state_write`/,
+      "archive command should write the logical decision-ledger key",
+    );
+    assert.match(
+      archiveCommand,
+      /At archive-decision time, verify linked GitHub issue\/PR status for `current-epic` and `archive-eligible` entries/i,
+      "archive command should verify live GitHub status for current epics and archive-eligible entries",
+    );
+    assert.match(
+      archiveCommand,
+      /if status cannot be confirmed, retain the entry/i,
+      "archive command should retain entries whose status cannot be confirmed",
+    );
     assert.match(
       archiveCommand,
       /Size and age thresholds trigger eligibility review only, never archival by themselves/i,
