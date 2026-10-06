@@ -16,6 +16,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { parse as parseYaml } from "yaml";
 
 const ROOT = path.resolve(import.meta.dirname, "..", "..");
 
@@ -41,6 +42,18 @@ describe("SWA project structure (T-SWA-002)", () => {
     assert.match(
       read(".github/workflows/swa-deploy.yml"),
       /config_file_location:\s*\./,
+    );
+  });
+
+  it("limits the Node 22 API validation job to contents: read", () => {
+    const workflow = parseYaml(read(".github/workflows/swa-deploy.yml")) as {
+      jobs?: Record<string, { permissions?: Record<string, string> }>;
+    };
+
+    assert.deepEqual(
+      workflow.jobs?.["validate-api-node-22"]?.permissions,
+      { contents: "read" },
+      "API validation must not inherit workflow-level write permissions",
     );
   });
 
