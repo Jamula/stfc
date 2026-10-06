@@ -623,12 +623,17 @@ describe("workflow consolidation", () => {
       const normalizedSkill = skill.replace(/\s+/g, " ");
       assert.match(
         normalizedSkill,
-        /For `local`\/`worktree` backends, use the configured state tools with canonical logical paths when available; the checkout-snapshot fallback below is permitted only when those tools are unavailable\./i,
-        `${skillPath} must limit checkout snapshots to local/worktree fallback`,
+        /For `local`\/`worktree` backends using the \*\*worktree-local\*\* strategy, branch-local `\.squad\/` state exists only inside that worktree and is lost when the worktree is removed; snapshot and verify it into the main checkout using the procedure below regardless of state-tool availability\./i,
+        `${skillPath} must require the worktree-local snapshot regardless of state-tool availability`,
       );
       assert.match(
         normalizedSkill,
-        /For `orphan`, `two-layer`, or `git-notes` backends, reconcile and clean mutable state only through the configured state tools using canonical logical paths.{0,300}Never read or copy a worktree `\.squad\/` checkout snapshot for these backends\. If any required state tool is unavailable, fail closed/i,
+        /Skip the snapshot only when the worktree uses the \*\*main-checkout\*\* strategy, where `\.squad\/` state already lives in the main checkout and nothing is isolated\./i,
+        `${skillPath} must only skip the snapshot for the shared main-checkout strategy`,
+      );
+      assert.match(
+        normalizedSkill,
+        /For `orphan`, `two-layer`, or `git-notes` backends, reconcile and clean mutable state only through the configured state tools using canonical logical paths.{0,300}Never read or copy a worktree `\.squad\/` checkout snapshot for these backends\. If any required state tool is unavailable for these backends, fail closed/i,
         `${skillPath} must fail closed and avoid checkout snapshots for non-local backends`,
       );
       for (const lane of ["scope", "technical", "operations"]) {
