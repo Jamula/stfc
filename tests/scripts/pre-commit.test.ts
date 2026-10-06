@@ -2326,6 +2326,210 @@ describe("checkWorkflowPinningTests", () => {
       }
     });
 
+    it("blocks a staged copy when matching index/worktree attributes were changed after the copy was staged", () => {
+      const dir = mkdtempSync(join(tmpdir(), "stfc-pre-commit-untracked-copy-staged-attrs-"));
+      const isolatedGitEnv = setupPreCommitTestRepo(dir);
+      const mutableSource = ".squad/agents/scotty/history.md";
+      const copiedDestination = "docs/copied.md";
+
+      try {
+        writeFileSync(join(dir, ".gitignore"), ".squad/agents/*/history.md\n");
+        writeFileSync(join(dir, ".gitattributes"), "docs/*.md -ident\n");
+        execFileSync("git", ["add", ".gitignore", ".gitattributes"], {
+          cwd: dir,
+          env: isolatedGitEnv,
+        });
+        execFileSync("git", ["commit", "--quiet", "-m", "Add ignore and baseline attributes"], {
+          cwd: dir,
+          env: isolatedGitEnv,
+        });
+
+        mkdirSync(join(dir, ".squad", "agents", "scotty"), { recursive: true });
+        const identBody = Buffer.from(`$Id: ${"c".repeat(40)} $\n`);
+        writeFileSync(join(dir, mutableSource), identBody);
+        mkdirSync(join(dir, "docs"), { recursive: true });
+        writeFileSync(join(dir, copiedDestination), identBody);
+        execFileSync("git", ["add", copiedDestination], { cwd: dir, env: isolatedGitEnv });
+
+        const stagedCopyHash = execFileSync("git", ["rev-parse", `:${copiedDestination}`], {
+          cwd: dir,
+          encoding: "utf8",
+          env: isolatedGitEnv,
+        }).trim();
+        const hashUnderOriginalAttributes = execFileSync(
+          "git",
+          ["hash-object", "--filters", `--path=${copiedDestination}`, "--", mutableSource],
+          { cwd: dir, encoding: "utf8", env: isolatedGitEnv },
+        ).trim();
+        assert.equal(
+          stagedCopyHash,
+          hashUnderOriginalAttributes,
+          "fixture bug: the copy must first be staged with the original -ident rule",
+        );
+
+        writeFileSync(join(dir, ".gitattributes"), "docs/*.md ident\n");
+        execFileSync("git", ["add", ".gitattributes"], { cwd: dir, env: isolatedGitEnv });
+
+        const indexedAttributes = getGitAttributeValues(
+          dir,
+          isolatedGitEnv,
+          [copiedDestination],
+          true,
+          ["ident"],
+        );
+        const worktreeAttributes = getGitAttributeValues(
+          dir,
+          isolatedGitEnv,
+          [copiedDestination],
+          false,
+          ["ident"],
+        );
+        assert.equal(
+          indexedAttributes.get(copiedDestination)?.ident,
+          "set",
+          "fixture bug: index attributes should contain the newly staged ident rule",
+        );
+        assert.equal(
+          worktreeAttributes.get(copiedDestination)?.ident,
+          "set",
+          "fixture bug: worktree attributes should match the index",
+        );
+
+        const hashUnderCurrentAttributes = execFileSync(
+          "git",
+          ["hash-object", "--filters", `--path=${copiedDestination}`, "--", mutableSource],
+          { cwd: dir, encoding: "utf8", env: isolatedGitEnv },
+        ).trim();
+        assert.notEqual(
+          hashUnderCurrentAttributes,
+          stagedCopyHash,
+          "fixture bug: current ident conversion must differ from the previously staged blob",
+        );
+        const hashUnderHeadAttributes = execFileSync(
+          "git",
+          ["hash-object", "--filters", `--path=${copiedDestination}`, "--", mutableSource],
+          {
+            cwd: dir,
+            encoding: "utf8",
+            env: { ...isolatedGitEnv, GIT_ATTR_SOURCE: "HEAD" },
+          },
+        ).trim();
+        assert.equal(
+          hashUnderHeadAttributes,
+          stagedCopyHash,
+          "fixture bug: GIT_ATTR_SOURCE=HEAD must reproduce the filter rules used by the first git add",
+        );
+
+        const result = spawnSync(process.execPath, [join(dir, "scripts", "pre-commit.mjs")], {
+          cwd: dir,
+          encoding: "utf8",
+          env: isolatedGitEnv,
+        });
+        assert.equal(
+          result.status,
+          1,
+          `expected the guard to reject the copy staged under superseded attributes:\n` +
+            `${result.stderr}${result.stdout}`,
+        );
+        const output = result.stderr + result.stdout;
+        assert.ok(output.includes(copiedDestination), `expected destination in output:\n${output}`);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it("allows partial staging when a staged attribute change does not affect the destination", () => {
+      const dir = mkdtempSync(join(tmpdir(), "stfc-pre-commit-unrelated-staged-attrs-"));
+      const isolatedGitEnv = setupPreCommitTestRepo(dir);
+      const mutableSource = ".squad/agents/scotty/history.md";
+      const partiallyStagedDestination = "docs/partial.md";
+
+      try {
+        writeFileSync(join(dir, ".gitignore"), ".squad/agents/*/history.md\n");
+        writeFileSync(
+          join(dir, ".gitattributes"),
+          ["docs/*.md -ident", "assets/*.md -ident", ""].join("\n"),
+        );
+        execFileSync("git", ["add", ".gitignore", ".gitattributes"], {
+          cwd: dir,
+          env: isolatedGitEnv,
+        });
+        execFileSync("git", ["commit", "--quiet", "-m", "Add ignore and baseline attributes"], {
+          cwd: dir,
+          env: isolatedGitEnv,
+        });
+
+        mkdirSync(join(dir, ".squad", "agents", "scotty"), { recursive: true });
+        writeFileSync(join(dir, mutableSource), "private mutable state\n");
+        mkdirSync(join(dir, "docs"), { recursive: true });
+        writeFileSync(join(dir, partiallyStagedDestination), "staged version\n");
+        execFileSync("git", ["add", partiallyStagedDestination], {
+          cwd: dir,
+          env: isolatedGitEnv,
+        });
+        writeFileSync(join(dir, partiallyStagedDestination), "unstaged follow-up edit\n");
+
+        writeFileSync(
+          join(dir, ".gitattributes"),
+          ["docs/*.md -ident", "assets/*.md ident", ""].join("\n"),
+        );
+        execFileSync("git", ["add", ".gitattributes"], { cwd: dir, env: isolatedGitEnv });
+
+        const indexedAttributes = getGitAttributeValues(
+          dir,
+          isolatedGitEnv,
+          [partiallyStagedDestination],
+          true,
+          ["ident"],
+        );
+        const worktreeAttributes = getGitAttributeValues(
+          dir,
+          isolatedGitEnv,
+          [partiallyStagedDestination],
+          false,
+          ["ident"],
+        );
+        assert.equal(
+          indexedAttributes.get(partiallyStagedDestination)?.ident,
+          worktreeAttributes.get(partiallyStagedDestination)?.ident,
+          "fixture bug: the unrelated attribute change must leave the destination's rules unchanged",
+        );
+        assert.notEqual(
+          execFileSync("git", ["rev-parse", `:${partiallyStagedDestination}`], {
+            cwd: dir,
+            encoding: "utf8",
+            env: isolatedGitEnv,
+          }).trim(),
+          execFileSync(
+            "git",
+            [
+              "hash-object",
+              "--filters",
+              `--path=${partiallyStagedDestination}`,
+              "--",
+              partiallyStagedDestination,
+            ],
+            { cwd: dir, encoding: "utf8", env: isolatedGitEnv },
+          ).trim(),
+          "fixture bug: the destination must retain a valid staged/working-tree content difference",
+        );
+
+        const result = spawnSync(process.execPath, [join(dir, "scripts", "pre-commit.mjs")], {
+          cwd: dir,
+          encoding: "utf8",
+          env: isolatedGitEnv,
+        });
+        assert.equal(
+          result.status,
+          0,
+          `expected unrelated attribute changes not to block partial staging:\n` +
+            `${result.stderr}${result.stdout}`,
+        );
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
     it("keeps ident differences in grouping signatures and blocks the normalized copy", () => {
       const dir = mkdtempSync(join(tmpdir(), "stfc-pre-commit-untracked-copy-ident-"));
       const isolatedGitEnv = setupPreCommitTestRepo(dir);

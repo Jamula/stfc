@@ -360,6 +360,23 @@ const HASH_FILTER_ATTRS = [
   'crlf',
 ];
 
+function parseCheckAttrOutput(raw) {
+  const tokens = raw.split('\0');
+  if (tokens.length > 0 && tokens[tokens.length - 1] === '') tokens.pop();
+
+  const valuesByPath = new Map();
+  for (let i = 0; i + 2 < tokens.length; i += 3) {
+    const [filePath, attr, value] = [tokens[i], tokens[i + 1], tokens[i + 2]];
+    if (!valuesByPath.has(filePath)) valuesByPath.set(filePath, {});
+    valuesByPath.get(filePath)[attr] = value;
+  }
+  return valuesByPath;
+}
+
+function hashFilterSignature(values) {
+  return JSON.stringify(HASH_FILTER_ATTRS.map((attr) => values[attr] ?? 'unspecified'));
+}
+
 /**
  * Batch-resolve the attributes that affect `git hash-object --filters
  * --path=<p>` using both the index and working-tree `.gitattributes`.
@@ -378,19 +395,8 @@ const HASH_FILTER_ATTRS = [
 export function checkAttrSignatures(paths, exec = defaultExecFileSync) {
   if (paths.length === 0) return new Map();
 
-  const parseAttributes = (args) => {
-    const raw = exec('git', args, { encoding: 'utf8' });
-    const tokens = raw.split('\0');
-    if (tokens.length > 0 && tokens[tokens.length - 1] === '') tokens.pop();
-
-    const valuesByPath = new Map();
-    for (let i = 0; i + 2 < tokens.length; i += 3) {
-      const [path, attr, value] = [tokens[i], tokens[i + 1], tokens[i + 2]];
-      if (!valuesByPath.has(path)) valuesByPath.set(path, {});
-      valuesByPath.get(path)[attr] = value;
-    }
-    return valuesByPath;
-  };
+  const parseAttributes = (args) =>
+    parseCheckAttrOutput(exec('git', args, { encoding: 'utf8' }));
   const worktreeValues = parseAttributes(['check-attr', '--all', '-z', '--', ...paths]);
   const indexValues = parseAttributes(['check-attr', '--cached', '--all', '-z', '--', ...paths]);
 
@@ -439,10 +445,8 @@ export function checkAttrSignatures(paths, exec = defaultExecFileSync) {
           : true
         : configuredSentinelDrivers.has('unspecified');
     });
-    const signatureFor = (values) =>
-      JSON.stringify(HASH_FILTER_ATTRS.map((attr) => values[attr] ?? 'unspecified'));
-    const worktreeSignature = signatureFor(worktreeAttrs);
-    const indexSignature = signatureFor(indexAttrs);
+    const worktreeSignature = hashFilterSignature(worktreeAttrs);
+    const indexSignature = hashFilterSignature(indexAttrs);
     signatures.set(path, {
       signature: worktreeSignature,
       pathIndependent: !hasCustomFilter && worktreeSignature === indexSignature,
@@ -549,6 +553,88 @@ export function checkNoUntrackedMutableStateCopies(
         `  Destinations:\n${destinationsWithCustomFilters.map((path) => `    - ${path}`).join('\n')}`,
     );
     return;
+  }
+
+  // A staged destination can have been clean-filtered before a later-staged
+  // .gitattributes change. In that case the index and worktree now agree,
+  // while the destination blob still reflects the previous committed rules.
+  // Check HEAD attributes only when an attribute file is staged, then verify
+  // the staged blob against the current conversion for destinations whose
+  // effective rules changed. Unaffected paths retain normal partial-staging
+  // behavior.
+  let hasStagedAttributeFile;
+  try {
+    const stagedPaths = defaultExecFileSync(
+      'git',
+      ['diff', '--cached', '--name-only', '--no-renames', '-z'],
+      { encoding: 'utf8' },
+    )
+      .split('\0')
+      .filter(Boolean);
+    hasStagedAttributeFile = stagedPaths.some(
+      (stagedPath) => stagedPath === '.gitattributes' || stagedPath.endsWith('/.gitattributes'),
+    );
+  } catch (err) {
+    fail(
+      'Could not determine whether .gitattributes files are staged while checking for ' +
+        'disguised copies of mutable state (failing closed rather than silently skipping this ' +
+        `check).\n  ${err && err.message ? err.message : err}`,
+    );
+    return;
+  }
+
+  if (hasStagedAttributeFile) {
+    let headSignatures;
+    try {
+      const headValues = parseCheckAttrOutput(
+        defaultExecFileSync(
+          'git',
+          ['check-attr', '--source', 'HEAD', '--all', '-z', '--', ...destPaths],
+          { encoding: 'utf8' },
+        ),
+      );
+      headSignatures = new Map(
+        destPaths.map((destPath) => [
+          destPath,
+          hashFilterSignature(headValues.get(destPath) ?? {}),
+        ]),
+      );
+    } catch (err) {
+      fail(
+        'Could not resolve committed clean-conversion attributes while checking staged ' +
+          'destinations for copied mutable state (failing closed rather than silently skipping ' +
+          `this check).\n  ${err && err.message ? err.message : err}`,
+      );
+      return;
+    }
+
+    const destinationsWithChangedAttributes = destPaths.filter(
+      (destPath) => headSignatures.get(destPath) !== signatures.get(destPath)?.signature,
+    );
+    for (const destPath of destinationsWithChangedAttributes) {
+      let currentDestinationHash;
+      try {
+        currentDestinationHash = hashObjectForPath(destPath, destPath);
+      } catch (err) {
+        fail(
+          `Could not verify staged destination "${destPath}" under its current clean-conversion ` +
+            'attributes after a staged .gitattributes change (failing closed rather than silently ' +
+            `skipping this check).\n  ${err && err.message ? err.message : err}`,
+        );
+        return;
+      }
+
+      if (currentDestinationHash !== destHashes.get(destPath)) {
+        fail(
+          'Cannot safely check staged destination(s) for copied mutable state because the ' +
+            'effective .gitattributes rules changed for the path, but the staged blob does not ' +
+            'match the destination content under the current rules. Restage the destination after ' +
+            'staging the attribute change, or resolve the partial staging before committing.\n' +
+            `  Destinations:\n    - ${destPath}`,
+        );
+        return;
+      }
+    }
   }
 
   const groups = new Map(); // signature or unique symbol -> { representative, paths: string[] }
