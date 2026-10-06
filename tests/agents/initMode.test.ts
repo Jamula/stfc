@@ -36,7 +36,12 @@ describe("Init Mode state ownership guidance", () => {
       assert.match(text, /\.squad\/identity\//);
       assert.match(text, /\.squad\/log\//);
       assert.match(text, /\.squad\/orchestration-log\//);
-      assert.match(text, /\.squad\/memory\//);
+      assert.match(text, /\.squad\/memory\/\*/);
+      assert.match(text, /!\.squad\/memory\/config\.json/);
+      assert.match(
+        text,
+        /config\.json is a static, constitution-tracked policy file and must stay tracked/,
+      );
       assert.match(text, /\.squad\/sessions\//);
       assert.match(text, /\.squad\/\.scratch\//);
       assert.match(text, /\.squad\/\.cache\//);
@@ -116,18 +121,6 @@ describe("Init Mode state ownership guidance", () => {
 });
 
 describe("Init Mode — memory ignore uses wildcard-plus-negation, backend init precedes mutable writes", () => {
-  it("the active coordinator skill keeps static memory config tracked", () => {
-    const text = readInitSurface(".github/skills/coordinator-init-mode/SKILL.md");
-
-    assert.match(text, /\.squad\/memory\/\*/);
-    assert.match(text, /!\.squad\/memory\/config\.json/);
-    assert.match(
-      text,
-      /config\.json is a static, constitution-tracked policy file and must stay tracked/,
-    );
-    assert.match(text, /rest of \.squad\/memory\/ is backend-owned runtime state/);
-  });
-
   for (const path of [
     ".github/skills/coordinator-init-mode/SKILL.md",
     ".squad/templates/skills/init-mode/SKILL.md",
@@ -149,17 +142,6 @@ describe("Init Mode — memory ignore uses wildcard-plus-negation, backend init 
   ];
 
   for (const path of scopedSurfaces) {
-    it(`${path} ignores runtime memory with wildcard-plus-negation while keeping config.json tracked`, () => {
-      const text = readInitSurface(path);
-
-      assert.match(text, /\.squad\/memory\/\*/);
-      assert.match(text, /!\.squad\/memory\/config\.json/);
-      assert.match(
-        text,
-        /config\.json is a static, constitution-tracked policy file and must stay tracked/,
-      );
-    });
-
     it(`${path} initializes the state backend before the first mutable write`, () => {
       const rawText = readFileSync(resolve(process.cwd(), path), "utf-8").replace(
         /\r\n/g,

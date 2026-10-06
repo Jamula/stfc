@@ -512,7 +512,7 @@ describe("Scribe — decision inbox persistence", () => {
 });
 
 describe("Scribe — backend-aware identity/history reads share the fallback rule", () => {
-  it("spawn-reference.md gates history.md, decisions.md, identity/wisdom.md, and identity/now.md behind the same local/worktree-only fallback and nonlocal fail-closed rule", () => {
+  it("spawn-reference.md gates history.md and decisions.md behind the local/worktree-only fallback and nonlocal fail-closed rule", () => {
     const normalized = spawnReference.replace(/\s+/g, " ");
     const fallbackClause =
       /only for `local`\/`worktree` backends; for `orphan`, `two-layer`, or `git-notes`, follow the state-backend handshake and report a missing bridge/i;
@@ -520,8 +520,6 @@ describe("Scribe — backend-aware identity/history reads share the fallback rul
     for (const [label, anchor] of [
       ["agents/{name}/history.md", "Read logical key `agents/{name}/history.md` with `squad_state_read`"],
       ["decisions/decisions.md", "Read logical state key `decisions/decisions.md` with `squad_state_read`"],
-      ["identity/wisdom.md", "Read logical key `identity/wisdom.md` with `squad_state_read`"],
-      ["identity/now.md", "Read logical key `identity/now.md` with `squad_state_read`"],
     ] as const) {
       const start = normalized.indexOf(anchor);
       assert.ok(start >= 0, `spawn-reference.md should resolve ${label} through state tools`);
@@ -530,6 +528,71 @@ describe("Scribe — backend-aware identity/history reads share the fallback rul
         window,
         fallbackClause,
         `spawn-reference.md's ${label} read should share the local/worktree-only fallback and nonlocal fail-closed rule`,
+      );
+    }
+  });
+
+  it("treats absent optional identity keys differently from state-tool failures", () => {
+    const normalized = spawnReference.replace(/\s+/g, " ");
+
+    assert.match(
+      normalized,
+      /optional identity context `identity\/wisdom\.md` and `identity\/now\.md` is not required/i,
+    );
+    assert.match(
+      normalized,
+      /runtime's specific response `State key not found: <logical-key>` for either key is ordinary absence; continue without that context/i,
+    );
+    assert.match(
+      normalized,
+      /for `local`\/`worktree`, when state tools are unavailable or return that key-not-found response, read the physical file only if it exists; if it does not, continue without context/i,
+    );
+    assert.match(
+      normalized,
+      /any other state-tool read error must be surfaced, not treated as absence/i,
+    );
+    assert.match(
+      normalized,
+      /for `orphan`, `two-layer`, or `git-notes`, a missing state tool\/bridge or any other read error is a failure; fail closed and never read a checkout copy/i,
+    );
+  });
+
+  it("active and generated coordinator prompts resolve optional current focus through the configured backend", () => {
+    for (const [label, text] of [
+      ["active coordinator", squadAgent],
+      ["generated coordinator template", coordinatorTemplate],
+    ] as const) {
+      const normalized = text.replace(/\s+/g, " ");
+
+      assert.match(
+        normalized,
+        /resolve optional current-focus context only after resolving the configured `STATE_BACKEND` and completing any required state-backend handshake/i,
+        `${label} should not read identity state before backend resolution`,
+      );
+      assert.match(
+        normalized,
+        /runtime's specific response `State key not found: identity\/now\.md` is normal optional-key absence; continue without current-focus context/i,
+        `${label} should treat an absent optional key as normal`,
+      );
+      assert.match(
+        normalized,
+        /for `local`\/`worktree`, use state tools when available; if they are unavailable or return that key-not-found response, read `.squad\/identity\/now\.md` only if the file exists/i,
+        `${label} should limit physical identity reads to the local/worktree fallback`,
+      );
+      assert.match(
+        normalized,
+        /for `orphan`, `two-layer`, or `git-notes`, a missing state tool\/bridge or any other read error is a failure; fail closed and never read or write a checkout copy/i,
+        `${label} should fail closed for nonlocal bridge/read failures`,
+      );
+      assert.match(
+        normalized,
+        /update logical key `identity\/now\.md` with `squad_state_write`/,
+        `${label} should write focus through the logical state key`,
+      );
+      assert.doesNotMatch(
+        normalized,
+        /Check `.squad\/identity\/now\.md` if it exists/,
+        `${label} should not instruct unconditional checkout reads`,
       );
     }
   });
@@ -594,6 +657,84 @@ describe("Squad command skill — parity with GitHub-facing Squad skill", () => 
       "archive command should gate untagged entries on user review before any age-based inference",
     );
   });
+
+  it("uses the same tracked archive append-and-verify contract on both command surfaces", () => {
+    const archiveDestinationContract =
+      "For every backend, append eligible entries to the already tracked `.squad/decisions-archive.md` with normal repository file operations, not mutable-state tools. Before appending, verify the destination with `git ls-files --error-unmatch .squad/decisions-archive.md`. Re-read the archive and confirm every moved heading is literally present and its entry count grew by exactly the number moved. Only after those checks pass may the active source be trimmed.";
+    for (const [label, text] of [
+      ["legacy Squad command skill", squadCommands],
+      ["GitHub-facing Squad skill", githubSquadSkill],
+    ] as const) {
+      const normalized = text.replace(/\s+/g, " ");
+      const archiveStart = normalized.indexOf("### Archive Old Decisions");
+      const nextCommand = normalized.indexOf("### Summarize Agent History", archiveStart);
+      assert.ok(
+        archiveStart >= 0 && nextCommand > archiveStart,
+        `${label} should define a bounded archive command`,
+      );
+      const archiveCommand = normalized.slice(archiveStart, nextCommand);
+
+      assert.ok(
+        archiveCommand.includes(archiveDestinationContract),
+        `${label} should append to the tracked archive and verify its readback and entry count before trimming`,
+      );
+      assert.match(
+        archiveCommand,
+        /For local\/worktree, use state tools for active-ledger reads and writes when available; if unavailable, the physical active ledger is a permitted fallback/i,
+        `${label} should preserve the local/worktree file fallback`,
+      );
+      assert.match(
+        archiveCommand,
+        /For orphan, two-layer, or git-notes, read the active ledger with `squad_state_read` for `decisions\/decisions\.md`/,
+        `${label} should read the nonlocal source through state tools`,
+      );
+      assert.match(
+        archiveCommand,
+        /write the trimmed ledger to logical key `decisions\/decisions\.md` with `squad_state_write`, then read it back with `squad_state_read` to verify the trim/i,
+        `${label} should write and verify the trimmed nonlocal ledger through state tools`,
+      );
+      assert.match(
+        archiveCommand,
+        /Keep open, unresolved, or unverifiable entries active/i,
+        `${label} should retain unresolved or unverifiable entries`,
+      );
+      assert.match(
+        archiveCommand,
+        /if status cannot be confirmed, retain the entry/i,
+        `${label} should retain entries with unverified linked status`,
+      );
+      assert.match(
+        archiveCommand,
+        /If archive tracking, append\/readback, or entry-count verification fails, leave the active source intact and report the failure/i,
+        `${label} should preserve the source when the archive cannot be verified`,
+      );
+      assert.doesNotMatch(
+        archiveCommand,
+        /append and verify the archive using the configured backend's governing state tools/i,
+        `${label} should not route durable archive appends through mutable state tools`,
+      );
+
+      const sourceReadIndex = archiveCommand.indexOf(
+        "For orphan, two-layer, or git-notes, read the active ledger",
+      );
+      const appendIndex = archiveCommand.indexOf(
+        "For every backend, append eligible entries",
+      );
+      const trimGateIndex = archiveCommand.indexOf(
+        "Only after those checks pass may the active source be trimmed",
+      );
+      const stateWriteIndex = archiveCommand.indexOf(
+        "For orphan, two-layer, or git-notes, write the trimmed ledger",
+      );
+      assert.ok(
+        sourceReadIndex >= 0 &&
+          sourceReadIndex < appendIndex &&
+          appendIndex < trimGateIndex &&
+          trimGateIndex < stateWriteIndex,
+        `${label} should read the nonlocal ledger, verify the tracked archive, then write the trimmed logical source`,
+      );
+    }
+  });
 });
 
 describe("GitHub-facing Squad — decision archive eligibility", () => {
@@ -614,12 +755,12 @@ describe("GitHub-facing Squad — decision archive eligibility", () => {
     );
     assert.match(
       archiveCommand,
-      /`squad_state_read` for key `decisions\/decisions\.md`/,
+      /read the active ledger with `squad_state_read` for `decisions\/decisions\.md`/i,
       "archive command should read the logical decision-ledger key",
     );
     assert.match(
       archiveCommand,
-      /write key `decisions\/decisions\.md` with `squad_state_write`/,
+      /write the trimmed ledger to logical key `decisions\/decisions\.md` with `squad_state_write`/i,
       "archive command should write the logical decision-ledger key",
     );
     assert.match(
@@ -675,18 +816,33 @@ describe("GitHub-facing Squad — decision archive eligibility", () => {
     );
     assert.match(
       archiveCommand,
-      /If archive append or verification cannot be safely completed.{0,100}fail closed and leave the source intact/i,
+      /If archive tracking, append\/readback, or entry-count verification fails, leave the active source intact and report the failure/i,
       "failed verification should preserve the source",
     );
     assert.match(
       archiveCommand,
-      /For local\/worktree, append verified eligible entries.{0,150}only then trim/i,
-      "local/worktree archives should be verified before trimming",
+      /For orphan, two-layer, or git-notes, read the active ledger with `squad_state_read` for `decisions\/decisions\.md`; if the bridge is unavailable or the read fails, fail closed, and never consult a stale checkout copy/i,
+      "governed backends should read the active ledger through state tools rather than checkout snapshots",
     );
     assert.match(
       archiveCommand,
-      /For orphan, two-layer, or git-notes backends.{0,300}Never read or edit a stale checkout copy/i,
-      "governed backends should use state tools rather than checkout snapshots",
+      /For every backend, append eligible entries to the already tracked `\.squad\/decisions-archive\.md` with normal repository file operations, not mutable-state tools/,
+      "the tracked archive should be updated with repository file operations, not runtime state tools",
+    );
+    assert.match(
+      archiveCommand,
+      /Before appending, verify the destination with `git ls-files --error-unmatch \.squad\/decisions-archive\.md`/,
+      "the archive destination should be confirmed tracked before appending",
+    );
+    assert.match(
+      archiveCommand,
+      /Re-read the archive and confirm every moved heading is literally present and its entry count grew by exactly the number moved/,
+      "the appended archive should be read back and checked by entry count before trimming",
+    );
+    assert.match(
+      archiveCommand,
+      /For orphan, two-layer, or git-notes, write the trimmed ledger to logical key `decisions\/decisions\.md` with `squad_state_write`, then read it back with `squad_state_read` to verify the trim/i,
+      "the trimmed nonlocal ledger should be written and verified through state tools",
     );
   });
 });
