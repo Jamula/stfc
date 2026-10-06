@@ -440,6 +440,6 @@ Same as above but combined; ALL items in `chore/squad-system-cleanup`. Reviewer-
 ## Notes / considerations
 
 - **Pre-commit hook will run on every commit.** All work must keep `npm test` green. Plan changes do not run tests; charter/template/rule edits should not break tests either (they're not in test paths).
-- **`.gitattributes`** already has merge=union for `.squad/decisions.md`, `.squad/agents/*/history.md`, `.squad/log/**`, `.squad/orchestration-log/**` — safe for cross-branch merge during the PR cycle.
+- **`.gitattributes`** no longer declares `merge=union` for `.squad/decisions.md`, `.squad/agents/*/history.md`, `.squad/log/**`, or `.squad/orchestration-log/**` — those paths are backend-owned mutable state migrated out of the tracked tree (PR #314), so a merge driver for them is a no-op. Cross-branch merging for that state goes through the configured state backend's own tools, not Git merge. The only `merge=union` rules worth preserving are on an artifact verified to be both tracked and a non-runtime append-only archive (e.g. `.squad/decisions-archive.md`); merge-driver rules are not a persistence mechanism for backend-owned state.
 - **Rebase strategy:** per Rule 4, rebase onto origin/main before every push. Local main may diverge every 15 min from `redeem.yml` chore commits.
 - **Restart self-rule:** the Squad self-development rule already says any change to squad.agent.md needs a session restart. PR 1's body will repeat this explicitly.

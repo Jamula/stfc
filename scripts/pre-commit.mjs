@@ -13,7 +13,9 @@ import {
   checkSquadBoundary,
   checkPortableFilenames,
   checkWorkflowPinningTests,
+  checkNoUntrackedMutableStateCopies,
   parseNameStatus,
+  parseRawDiffDestHashes,
 } from './pre-commit-checks.mjs';
 
 execSync('node scripts/check-artifact-hygiene.mjs --staged', { stdio: 'inherit' });
@@ -24,14 +26,37 @@ execSync('node scripts/check-artifact-hygiene.mjs --staged', { stdio: 'inherit' 
 // detection explicit instead of depending on the repo's `diff.renames`
 // config. See parseNameStatus for why both the destination AND the source
 // of a rename/copy matter to the Squad boundary check.
-const statusOutput = execSync('git diff --cached --name-status -z -M -C', {
-  encoding: 'utf8',
-});
+//
+// `--find-copies-harder` is required alongside `-C`: by default Git only
+// considers copy *sources* among files that were themselves modified in
+// the same diff. A laundering commit that copies an untouched mutable-state
+// file (e.g. `.squad/agents/*/history.md`) to an ordinary path leaves the
+// source file unmodified, so without this flag Git reports a plain `A`dd
+// for the destination and the boundary check never sees the real source.
+const statusOutput = execSync(
+  'git diff --cached --name-status -z -M -C --find-copies-harder',
+  { encoding: 'utf8' },
+);
 const { staged, deleted, renamedFrom } = parseNameStatus(statusOutput);
 
 checkSquadBoundary(staged, deleted, renamedFrom);
 checkPortableFilenames(staged);
 checkWorkflowPinningTests(staged);
+
+// Even `--find-copies-harder` only searches for copy sources among blobs
+// that are part of the diff (i.e. tracked). An ignored/untracked
+// mutable-state file (e.g. `.squad/agents/*/history.md`, excluded from
+// tracking by `.gitignore`) was never part of any diff, so Git can never
+// report it as a copy source — copying its bytes into an ordinary tracked
+// path is reported as a plain `A`dd. Close that gap by comparing content
+// hashes directly between staged destinations and untracked/ignored
+// mutable-state sources.
+const rawDiffOutput = execSync(
+  'git diff --cached --raw -z -M -C --find-copies-harder --abbrev=40',
+  { encoding: 'utf8' },
+);
+const destHashes = parseRawDiffDestHashes(rawDiffOutput);
+checkNoUntrackedMutableStateCopies(destHashes);
 
 // --- Test suite ---
 

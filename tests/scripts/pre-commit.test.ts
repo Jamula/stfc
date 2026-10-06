@@ -79,51 +79,152 @@ describe("checkSquadBoundary", () => {
     assert.equal(exitState.code, 1);
   });
 
-  it("allows staged deletion of the canonical decisions ledger", () => {
-    const deleted = [".squad/decisions/decisions.md"];
-    checkSquadBoundary(deleted, deleted);
-    assert.equal(exitState.code, null);
-  });
+  // ── Deletion handling via parseNameStatus (PR #314 reviewer finding) ─
+  //
+  // The reviewer flagged that `checkSquadBoundary(deleted, deleted)` — i.e.
+  // passing the SAME array for both the `staged` and `deleted` parameters —
+  // is a shape `parseNameStatus` never actually produces: a `D` entry is
+  // recorded in `deleted`, and the deletion allowlist only has any effect
+  // when that same path is also present in `staged` (see `checkSquadBoundary`
+  // doc comment). Driving these tests through the real `parseNameStatus`
+  // output exercises the actual wiring instead of an impossible hand-built
+  // shape, so a parser regression that stops forwarding deleted paths into
+  // `staged` fails here instead of being masked.
+  describe("deletion handling (driven by the real parseNameStatus output)", () => {
+    let parseNameStatus: (raw: string) => {
+      staged: string[];
+      deleted: string[];
+      renamedFrom: string[];
+    };
+    let MUTABLE_SQUAD_STATE_DELETION_ALLOWLIST: Set<string>;
 
-  it("rejects staged deletions of other mutable state paths", () => {
-    // NOTE: paths here must stay OUTSIDE MUTABLE_SQUAD_STATE_DELETION_ALLOWLIST
-    // (the one-time migration allowlist) so this test keeps validating that
-    // non-allowlisted mutable-state deletions are still rejected.
-    const deleted = [
-      ".squad/agents/scotty/history.md",
-      ".squad/sessions/2026-05-16.json",
-      ".squad/log/2026-05-16.md",
-      ".squad/fact-checker/audit-trail.md",
-    ];
-    const errors: string[] = [];
-    mock.method(console, "error", (msg: string) => errors.push(msg));
+    beforeEach(async () => {
+      const mod = await import("../../scripts/pre-commit-checks.mjs");
+      parseNameStatus = mod.parseNameStatus;
+      MUTABLE_SQUAD_STATE_DELETION_ALLOWLIST = mod.MUTABLE_SQUAD_STATE_DELETION_ALLOWLIST;
+    });
 
-    assert.throws(
-      () => checkSquadBoundary(deleted, deleted),
-      /process\.exit\(1\)/,
-    );
-    assert.equal(exitState.code, 1);
-    for (const file of deleted) {
-      assert.ok(errors.join("\n").includes(`- ${file}`), `expected ${file} to be rejected`);
+    /** Build `git diff --name-status -z` raw output for a list of `D` paths. */
+    function deletionDiff(paths: string[]): string {
+      return paths.flatMap((p) => ["D", p]).concat("").join("\0");
     }
-  });
 
-  it("still rejects staged mutable-state content alongside a deletion", () => {
-    const errors: string[] = [];
-    mock.method(console, "error", (msg: string) => errors.push(msg));
-    const deleted = [".squad/decisions/decisions.md"];
+    it("parses a deleted mutable path into both staged (changed paths) and deleted", () => {
+      // A `D` status means the path leaves the tree, but it must still be
+      // considered among the "changed paths" the boundary check inspects —
+      // otherwise the allowlist membership test in checkSquadBoundary
+      // (`deletedPaths.has(f) && ALLOWLIST.has(f)`) can never be reached for
+      // a real diff, because `f` is drawn from `staged`.
+      const mutablePath = ".squad/agents/scotty/history.md";
+      const { staged, deleted } = parseNameStatus(deletionDiff([mutablePath]));
+      assert.ok(staged.includes(mutablePath), "expected the deleted path to appear in staged");
+      assert.ok(deleted.includes(mutablePath), "expected the deleted path to appear in deleted");
+    });
 
-    assert.throws(
-      () =>
-        checkSquadBoundary(
-          [...deleted, ".squad/log/2026-05-16.md"],
-          deleted,
-        ),
-      /process\.exit\(1\)/,
-    );
-    assert.equal(exitState.code, 1);
-    assert.match(errors.join("\n"), /\.squad\/log\/2026-05-16\.md/);
-    assert.doesNotMatch(errors.join("\n"), /\.squad\/decisions\/decisions\.md/);
+    it("allows a real staged deletion of the canonical decisions ledger", () => {
+      const { staged, deleted, renamedFrom } = parseNameStatus(
+        deletionDiff([".squad/decisions/decisions.md"]),
+      );
+      checkSquadBoundary(staged, deleted, renamedFrom);
+      assert.equal(exitState.code, null);
+    });
+
+    it("allows real staged deletions of every enumerated migration allowlist entry", () => {
+      // Exercise the full allowlist at once (rather than a single sample
+      // entry) so an entry added to the Set without end-to-end coverage
+      // still gets exercised here.
+      const allowlisted = [...MUTABLE_SQUAD_STATE_DELETION_ALLOWLIST];
+      const { staged, deleted, renamedFrom } = parseNameStatus(deletionDiff(allowlisted));
+      checkSquadBoundary(staged, deleted, renamedFrom);
+      assert.equal(exitState.code, null);
+    });
+
+    it("rejects real staged deletions of non-allowlisted mutable state paths", () => {
+      // NOTE: paths here must stay OUTSIDE MUTABLE_SQUAD_STATE_DELETION_ALLOWLIST
+      // (the one-time migration allowlist) so this test keeps validating that
+      // non-allowlisted mutable-state deletions are still rejected.
+      const deletedPaths = [
+        ".squad/agents/scotty/history.md",
+        ".squad/sessions/2026-05-16.json",
+        ".squad/log/2026-05-16.md",
+        ".squad/fact-checker/audit-trail.md",
+      ];
+      for (const path of deletedPaths) {
+        assert.ok(
+          !MUTABLE_SQUAD_STATE_DELETION_ALLOWLIST.has(path),
+          `fixture bug: ${path} must not be in the deletion allowlist`,
+        );
+      }
+      const errors: string[] = [];
+      mock.method(console, "error", (msg: string) => errors.push(msg));
+      const { staged, deleted, renamedFrom } = parseNameStatus(deletionDiff(deletedPaths));
+
+      assert.throws(
+        () => checkSquadBoundary(staged, deleted, renamedFrom),
+        /process\.exit\(1\)/,
+      );
+      assert.equal(exitState.code, 1);
+      for (const file of deletedPaths) {
+        assert.ok(errors.join("\n").includes(`- ${file}`), `expected ${file} to be rejected`);
+      }
+    });
+
+    it("still rejects staged mutable-state content alongside an allowlisted deletion", () => {
+      const errors: string[] = [];
+      mock.method(console, "error", (msg: string) => errors.push(msg));
+      const raw = [
+        "D",
+        ".squad/decisions/decisions.md",
+        "A",
+        ".squad/log/2026-05-16.md",
+        "",
+      ].join("\0");
+      const { staged, deleted, renamedFrom } = parseNameStatus(raw);
+
+      assert.throws(
+        () => checkSquadBoundary(staged, deleted, renamedFrom),
+        /process\.exit\(1\)/,
+      );
+      assert.equal(exitState.code, 1);
+      assert.match(errors.join("\n"), /\.squad\/log\/2026-05-16\.md/);
+      assert.doesNotMatch(errors.join("\n"), /\.squad\/decisions\/decisions\.md/);
+    });
+
+    // ── .squad/memory/ migration entries (PR #314 reviewer finding) ───
+    //
+    // `.squad/memory/config.json` is the static policy file and must never
+    // be treated as mutable state (see MUTABLE_SQUAD_STATE_PATTERNS' negative
+    // lookahead); every other `.squad/memory/` path, including the two
+    // index/audit files migrated off direct tracking here, remains guarded
+    // and must be explicitly allowlisted to be deleted.
+    it("allows real staged deletions of .squad/memory/index.json and .squad/memory/audit.jsonl", () => {
+      for (const path of [".squad/memory/index.json", ".squad/memory/audit.jsonl"]) {
+        assert.ok(
+          MUTABLE_SQUAD_STATE_DELETION_ALLOWLIST.has(path),
+          `expected ${path} to be in the migration deletion allowlist`,
+        );
+      }
+      const { staged, deleted, renamedFrom } = parseNameStatus(
+        deletionDiff([".squad/memory/index.json", ".squad/memory/audit.jsonl"]),
+      );
+      checkSquadBoundary(staged, deleted, renamedFrom);
+      assert.equal(exitState.code, null);
+    });
+
+    it("never guards .squad/memory/config.json, so its real staged deletion is always allowed", () => {
+      // config.json is excluded from MUTABLE_SQUAD_STATE_PATTERNS entirely,
+      // so it is not guarded at all (deleting it is an ordinary, allowed
+      // change) — confirm that remains true and it needs no allowlist entry.
+      const { staged, deleted, renamedFrom } = parseNameStatus(
+        deletionDiff([".squad/memory/config.json"]),
+      );
+      checkSquadBoundary(staged, deleted, renamedFrom);
+      assert.equal(exitState.code, null);
+      assert.ok(
+        !MUTABLE_SQUAD_STATE_DELETION_ALLOWLIST.has(".squad/memory/config.json"),
+        "config.json should not need a deletion allowlist entry — it is never guarded",
+      );
+    });
   });
 
   it("rejects the legacy .squad/decisions.md path", () => {
@@ -158,6 +259,17 @@ describe("checkSquadBoundary", () => {
     assert.equal(exitState.code, 1);
   });
 
+  it("rejects .squad/worktree-inbox/*", () => {
+    // The two-layer/orphan backend's worktree-inbox shuttles worktree-local
+    // writes back to the owning branch; it is backend-owned runtime state
+    // and must never be committed from a worktree checkout directly.
+    assert.throws(
+      () => checkSquadBoundary([".squad/worktree-inbox/2026-06-02T000000Z-obrien.md"]),
+      /process\.exit\(1\)/,
+    );
+    assert.equal(exitState.code, 1);
+  });
+
   it("rejects mutable state paths even when SQUAD_SCRIBE=1 is set", () => {
     const errors: string[] = [];
     mock.method(console, "error", (msg: string) => errors.push(msg));
@@ -174,6 +286,7 @@ describe("checkSquadBoundary", () => {
       ".squad/log/2026-05-16.md",
       ".squad/memory/index.json",
       ".squad/orchestration-log/session.md",
+      ".squad/worktree-inbox/2026-06-02T000000Z-obrien.md",
       ".squad/sessions/session-001.md",
       ".squad/.scratch/output.json",
       ".squad/.cache/index.json",
@@ -269,10 +382,15 @@ describe("parseNameStatus", () => {
     parseNameStatus = mod.parseNameStatus;
   });
 
-  it("parses added/modified/deleted entries", () => {
+  it("parses added/modified/deleted entries, including the deleted path in staged", () => {
+    // A `D` entry must land in BOTH `staged` and `deleted`: `staged` is every
+    // path the boundary check inspects, and the deletion allowlist is keyed
+    // on a path being present in both (see checkSquadBoundary's doc comment
+    // and PR #314 review — without this, the allowlist membership check
+    // is unreachable for any real `git diff` output).
     const raw = ["A", "src/new.ts", "M", "src/existing.ts", "D", "src/old.ts", ""].join("\0");
     assert.deepEqual(parseNameStatus(raw), {
-      staged: ["src/new.ts", "src/existing.ts"],
+      staged: ["src/new.ts", "src/existing.ts", "src/old.ts"],
       deleted: ["src/old.ts"],
       renamedFrom: [],
     });
@@ -296,7 +414,7 @@ describe("parseNameStatus", () => {
     });
   });
 
-  it("handles a mix of statuses in one diff", () => {
+  it("handles a mix of statuses in one diff, including the deleted path in staged", () => {
     const raw = [
       "A",
       "src/new.ts",
@@ -308,7 +426,7 @@ describe("parseNameStatus", () => {
       "",
     ].join("\0");
     assert.deepEqual(parseNameStatus(raw), {
-      staged: ["src/new.ts", "docs/moved.md"],
+      staged: ["src/new.ts", "docs/moved.md", "src/old.ts"],
       deleted: ["src/old.ts"],
       renamedFrom: [".squad/identity/now.md"],
     });
@@ -316,6 +434,577 @@ describe("parseNameStatus", () => {
 
   it("returns empty lists for empty input", () => {
     assert.deepEqual(parseNameStatus(""), { staged: [], deleted: [], renamedFrom: [] });
+  });
+});
+
+// ── #13 — Untracked/ignored mutable-state copy detection ────────────
+//
+// `-C --find-copies-harder` only searches for copy sources among blobs
+// that are part of the diff (tracked content). An ignored/untracked
+// mutable-state file was never part of any diff, so Git's own copy
+// detection can never report it as a source. These tests exercise the
+// content-hash-based check that closes that gap.
+
+describe("parseRawDiffDestHashes", () => {
+  let parseRawDiffDestHashes: (raw: string) => Map<string, string>;
+
+  beforeEach(async () => {
+    const mod = await import("../../scripts/pre-commit-checks.mjs");
+    parseRawDiffDestHashes = mod.parseRawDiffDestHashes;
+  });
+
+  it("maps an added file to its post-image blob hash", () => {
+    const sha = "b".repeat(40);
+    const raw = [`:000000 100644 ${"0".repeat(40)} ${sha} A`, "docs/new.md", ""].join("\0");
+    assert.deepEqual(parseRawDiffDestHashes(raw), new Map([["docs/new.md", sha]]));
+  });
+
+  it("maps a modified file to its post-image blob hash", () => {
+    const sha = "c".repeat(40);
+    const raw = [`:100644 100644 ${"a".repeat(40)} ${sha} M`, "docs/existing.md", ""].join("\0");
+    assert.deepEqual(parseRawDiffDestHashes(raw), new Map([["docs/existing.md", sha]]));
+  });
+
+  it("maps a rename/copy to the destination path and post-image hash, ignoring the source", () => {
+    const sha = "d".repeat(40);
+    const raw = [
+      `:100644 100644 ${"a".repeat(40)} ${sha} R100`,
+      "docs/old.md",
+      "docs/new.md",
+      "",
+    ].join("\0");
+    assert.deepEqual(parseRawDiffDestHashes(raw), new Map([["docs/new.md", sha]]));
+  });
+
+  it("excludes deletions (no post-image to compare)", () => {
+    const raw = [
+      `:100644 000000 ${"a".repeat(40)} ${"0".repeat(40)} D`,
+      "docs/removed.md",
+      "",
+    ].join("\0");
+    assert.deepEqual(parseRawDiffDestHashes(raw), new Map());
+  });
+
+  it("returns an empty map for empty input", () => {
+    assert.deepEqual(parseRawDiffDestHashes(""), new Map());
+  });
+});
+
+describe("hashObjectForPath", () => {
+  let hashObjectForPath: (
+    sourcePath: string,
+    destinationPath: string,
+    exec?: (cmd: string, args: string[], options: Record<string, unknown>) => string,
+  ) => string;
+
+  beforeEach(async () => {
+    const mod = await import("../../scripts/pre-commit-checks.mjs");
+    hashObjectForPath = mod.hashObjectForPath;
+  });
+
+  it("invokes `git hash-object` with --filters and --path=<destination>, not the source's own path", () => {
+    // This is the load-bearing fix (follow-up review on commit 441ecac):
+    // without `--path=<destination>`, git derives clean-filter rules from
+    // the hashed file's OWN path, which can disagree with the destination's
+    // .gitattributes and silently miss an exact copy. See the real-Git
+    // regression test below for an end-to-end reproduction.
+    const calls: { cmd: string; args: string[] }[] = [];
+    const exec = (cmd: string, args: string[]) => {
+      calls.push({ cmd, args });
+      return "abc123\n";
+    };
+    const result = hashObjectForPath(".squad/agents/scotty/history.md", "docs/copy.md", exec);
+    assert.equal(result, "abc123");
+    assert.deepEqual(calls, [
+      {
+        cmd: "git",
+        args: [
+          "hash-object",
+          "--filters",
+          "--path=docs/copy.md",
+          "--",
+          ".squad/agents/scotty/history.md",
+        ],
+      },
+    ]);
+  });
+
+  it("propagates (does not swallow) an exec failure", () => {
+    const exec = () => {
+      throw new Error("boom");
+    };
+    assert.throws(
+      () => hashObjectForPath(".squad/agents/scotty/history.md", "docs/copy.md", exec),
+      /boom/,
+    );
+  });
+
+  it("real git: hashing under the destination's clean-filter rules matches what git actually stages there", () => {
+    // Regression test for the follow-up review on commit 441ecac: a source
+    // marked `-text` (preserve bytes exactly) and a destination marked
+    // `text eol=lf` (normalize CRLF -> LF on add) produce DIFFERENT blob
+    // hashes for byte-identical CRLF content, depending on which path's
+    // attributes govern the hash. Using the source's own path (the old,
+    // buggy default) must NOT match what git actually staged; using
+    // `--path=<destination>` (the fix) must match exactly.
+    const dir = mkdtempSync(join(tmpdir(), "stfc-hashobject-filters-"));
+    const isolatedGitEnv = { ...process.env };
+    for (const key of Object.keys(isolatedGitEnv)) {
+      if (key.startsWith("GIT_")) delete isolatedGitEnv[key];
+    }
+
+    try {
+      execFileSync("git", ["init", "--quiet"], { cwd: dir, env: isolatedGitEnv });
+      execFileSync("git", ["config", "user.name", "Pre-commit test"], {
+        cwd: dir,
+        env: isolatedGitEnv,
+      });
+      execFileSync("git", ["config", "user.email", "pre-commit-test@example.invalid"], {
+        cwd: dir,
+        env: isolatedGitEnv,
+      });
+      execFileSync("git", ["config", "core.autocrlf", "false"], { cwd: dir, env: isolatedGitEnv });
+
+      writeFileSync(
+        join(dir, ".gitattributes"),
+        [".squad/agents/*/history.md -text", "docs/*.md text eol=lf", ""].join("\n"),
+      );
+      execFileSync("git", ["add", ".gitattributes"], { cwd: dir, env: isolatedGitEnv });
+      execFileSync("git", ["commit", "--quiet", "-m", "Add .gitattributes"], {
+        cwd: dir,
+        env: isolatedGitEnv,
+      });
+
+      const mutableSource = ".squad/agents/scotty/history.md";
+      mkdirSync(join(dir, ".squad", "agents", "scotty"), { recursive: true });
+      const crlfBody = Buffer.from("line\r\n".repeat(50), "ascii");
+      writeFileSync(join(dir, mutableSource), crlfBody);
+
+      const destination = "docs/copy.md";
+      mkdirSync(join(dir, "docs"), { recursive: true });
+      writeFileSync(join(dir, destination), crlfBody);
+      execFileSync("git", ["add", destination], { cwd: dir, env: isolatedGitEnv });
+
+      const actualStagedHash = execFileSync(
+        "git",
+        ["diff", "--cached", "--raw", "--abbrev=40"],
+        { cwd: dir, encoding: "utf8", env: isolatedGitEnv },
+      )
+        .trim()
+        .split(/\s+/)[3] as string;
+      assert.match(actualStagedHash, /^[0-9a-f]{40}$/, "expected to parse a full staged blob hash");
+
+      const exec = (cmd: string, args: string[], options: Record<string, unknown>) =>
+        execFileSync(cmd, args, { cwd: dir, env: isolatedGitEnv, ...options }) as unknown as string;
+
+      const hashUnderOwnPath = hashObjectForPath(mutableSource, mutableSource, exec);
+      const hashUnderDestinationPath = hashObjectForPath(mutableSource, destination, exec);
+
+      assert.notEqual(
+        hashUnderOwnPath,
+        actualStagedHash,
+        "expected hashing under the SOURCE's own path to diverge from the real staged hash " +
+          "(demonstrating the bug the --path=<destination> fix addresses)",
+      );
+      assert.equal(
+        hashUnderDestinationPath,
+        actualStagedHash,
+        "expected hashing under the DESTINATION's path to match the real staged hash exactly",
+      );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("checkAttrSignatures", () => {
+  let checkAttrSignatures: (
+    paths: string[],
+    exec?: (cmd: string, args: string[], options: Record<string, unknown>) => string,
+  ) => Map<string, string>;
+
+  beforeEach(async () => {
+    const mod = await import("../../scripts/pre-commit-checks.mjs");
+    checkAttrSignatures = mod.checkAttrSignatures;
+  });
+
+  it("returns an empty map for empty input without invoking git", () => {
+    const exec = () => {
+      throw new Error("should never be called for empty input");
+    };
+    assert.deepEqual(checkAttrSignatures([], exec), new Map());
+  });
+
+  it("parses batched git check-attr -z output into one signature per path", () => {
+    const raw = [
+      "docs/a.md",
+      "text",
+      "set",
+      "docs/a.md",
+      "eol",
+      "lf",
+      "docs/a.md",
+      "filter",
+      "unspecified",
+      "docs/b.md",
+      "text",
+      "unspecified",
+      "docs/b.md",
+      "eol",
+      "unspecified",
+      "docs/b.md",
+      "filter",
+      "unspecified",
+      "",
+    ].join("\0");
+    const exec = () => raw;
+
+    const signatures = checkAttrSignatures(["docs/a.md", "docs/b.md"], exec);
+    assert.equal(signatures.get("docs/a.md"), "text=set|eol=lf|filter=unspecified");
+    assert.equal(signatures.get("docs/b.md"), "text=unspecified|eol=unspecified|filter=unspecified");
+    assert.notEqual(signatures.get("docs/a.md"), signatures.get("docs/b.md"));
+  });
+
+  it("gives identical signatures to paths with identical attribute values", () => {
+    const raw = [
+      "docs/a.md",
+      "text",
+      "set",
+      "docs/a.md",
+      "eol",
+      "lf",
+      "docs/a.md",
+      "filter",
+      "unspecified",
+      "docs/c.md",
+      "text",
+      "set",
+      "docs/c.md",
+      "eol",
+      "lf",
+      "docs/c.md",
+      "filter",
+      "unspecified",
+      "",
+    ].join("\0");
+    const exec = () => raw;
+
+    const signatures = checkAttrSignatures(["docs/a.md", "docs/c.md"], exec);
+    assert.equal(signatures.get("docs/a.md"), signatures.get("docs/c.md"));
+  });
+
+  it("invokes a single batched `git check-attr --cached -z` call for all paths", () => {
+    const calls: { cmd: string; args: string[] }[] = [];
+    const exec = (cmd: string, args: string[]) => {
+      calls.push({ cmd, args });
+      return "";
+    };
+    checkAttrSignatures(["docs/a.md", "docs/b.md", "src/c.txt"], exec);
+    assert.equal(calls.length, 1, "expected exactly one batched git invocation");
+    assert.deepEqual(calls[0], {
+      cmd: "git",
+      args: [
+        "check-attr",
+        "--cached",
+        "-z",
+        "text",
+        "eol",
+        "filter",
+        "--",
+        "docs/a.md",
+        "docs/b.md",
+        "src/c.txt",
+      ],
+    });
+  });
+
+  it("propagates (does not swallow) an exec failure", () => {
+    const exec = () => {
+      throw new Error("boom");
+    };
+    assert.throws(() => checkAttrSignatures(["docs/a.md"], exec), /boom/);
+  });
+
+  it("real git: assigns different signatures to paths governed by different .gitattributes rules", () => {
+    const dir = mkdtempSync(join(tmpdir(), "stfc-checkattr-real-"));
+    const isolatedGitEnv = { ...process.env };
+    for (const key of Object.keys(isolatedGitEnv)) {
+      if (key.startsWith("GIT_")) delete isolatedGitEnv[key];
+    }
+
+    try {
+      execFileSync("git", ["init", "--quiet"], { cwd: dir, env: isolatedGitEnv });
+      writeFileSync(
+        join(dir, ".gitattributes"),
+        [".squad/agents/*/history.md -text", "docs/*.md text eol=lf", ""].join("\n"),
+      );
+      execFileSync("git", ["add", ".gitattributes"], { cwd: dir, env: isolatedGitEnv });
+
+      const exec = (cmd: string, args: string[], options: Record<string, unknown>) =>
+        execFileSync(cmd, args, { cwd: dir, env: isolatedGitEnv, ...options }) as unknown as string;
+
+      const signatures = checkAttrSignatures(
+        ["docs/a.md", "docs/b.md", ".squad/agents/scotty/history.md"],
+        exec,
+      );
+      assert.equal(signatures.get("docs/a.md"), signatures.get("docs/b.md"));
+      assert.notEqual(
+        signatures.get("docs/a.md"),
+        signatures.get(".squad/agents/scotty/history.md"),
+      );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("checkNoUntrackedMutableStateCopies", () => {
+  let checkNoUntrackedMutableStateCopies: (
+    destHashes: Map<string, string>,
+    listIgnoredFn?: () => string[],
+    hashFn?: (sourcePath: string, destinationPath: string) => string,
+    attrFn?: (paths: string[]) => Map<string, string>,
+  ) => void;
+  let listUntrackedMutableStateFiles: (
+    exec?: (cmd: string, args: string[], options: Record<string, unknown>) => string,
+  ) => string[];
+  let exitState: { code: number | null };
+
+  /** Stub attrFn for tests that aren't exercising the grouping behavior. */
+  const noAttrs = () => new Map<string, string>();
+
+  beforeEach(async () => {
+    exitState = captureExit();
+    mock.method(console, "error", () => {});
+    const mod = await import("../../scripts/pre-commit-checks.mjs");
+    checkNoUntrackedMutableStateCopies = mod.checkNoUntrackedMutableStateCopies;
+    listUntrackedMutableStateFiles = mod.listUntrackedMutableStateFiles;
+  });
+
+  afterEach(() => {
+    mock.restoreAll();
+  });
+
+  it("passes when no staged destination matches an ignored source's hash", () => {
+    const destHashes = new Map([["docs/new.md", "a".repeat(40)]]);
+    const listIgnoredFn = () => [".squad/agents/scotty/history.md"];
+    const hashFn = () => "b".repeat(40);
+    checkNoUntrackedMutableStateCopies(destHashes, listIgnoredFn, hashFn, noAttrs);
+    assert.equal(exitState.code, null);
+  });
+
+  it("passes when there are no untracked mutable-state files to compare against", () => {
+    const destHashes = new Map([["docs/new.md", "a".repeat(40)]]);
+    checkNoUntrackedMutableStateCopies(
+      destHashes,
+      () => [],
+      () => {
+        throw new Error("should never be called when there is nothing to check");
+      },
+      () => {
+        throw new Error("attrFn should never be called when there is nothing to check");
+      },
+    );
+    assert.equal(exitState.code, null);
+  });
+
+  it("rejects a staged file whose hash matches an ignored mutable-state source", () => {
+    const sha = "e".repeat(40);
+    const destHashes = new Map([["docs/laundered.md", sha]]);
+    const listIgnoredFn = () => [".squad/agents/scotty/history.md"];
+    const hashFn = () => sha;
+    const errors: string[] = [];
+    mock.method(console, "error", (msg: string) => errors.push(msg));
+
+    assert.throws(
+      () => checkNoUntrackedMutableStateCopies(destHashes, listIgnoredFn, hashFn, noAttrs),
+      /process\.exit\(1\)/,
+    );
+    assert.equal(exitState.code, 1);
+    const output = errors.join("\n");
+    assert.match(output, /docs\/laundered\.md/);
+    assert.match(output, /\.squad\/agents\/scotty\/history\.md/);
+  });
+
+  it("passes the staged destination path to hashFn so filters are resolved from it, not the source", () => {
+    const sha = "e".repeat(40);
+    const destHashes = new Map([["docs/laundered.md", sha]]);
+    const listIgnoredFn = () => [".squad/agents/scotty/history.md"];
+    const calls: Array<[string, string]> = [];
+    const hashFn = (sourcePath: string, destinationPath: string) => {
+      calls.push([sourcePath, destinationPath]);
+      return sha;
+    };
+
+    assert.throws(
+      () => checkNoUntrackedMutableStateCopies(destHashes, listIgnoredFn, hashFn, noAttrs),
+      /process\.exit\(1\)/,
+    );
+    assert.deepEqual(calls, [[".squad/agents/scotty/history.md", "docs/laundered.md"]]);
+  });
+
+  it("calls hashFn at most once per distinct clean-filter signature, not once per destination", () => {
+    // Performance regression test (follow-up review on commit 441ecac):
+    // with D staged destinations that all share the same clean-filter
+    // attributes, hashFn must be called once per ignored source TOTAL —
+    // not once per (source, destination) pair — since every destination
+    // in the group would hash identically anyway.
+    const sha = "a".repeat(40);
+    const otherSha = "b".repeat(40);
+    const destHashes = new Map([
+      ["docs/one.md", sha],
+      ["docs/two.md", otherSha],
+      ["docs/three.md", "c".repeat(40)],
+      ["docs/four.md", "d".repeat(40)],
+      ["docs/five.md", "e".repeat(40)],
+    ]);
+    const listIgnoredFn = () => [".squad/agents/scotty/history.md"];
+    let hashCalls = 0;
+    const hashFn = () => {
+      hashCalls += 1;
+      return sha; // matches docs/one.md only
+    };
+    // All five destinations share one signature, so they belong to a
+    // single group regardless of attrFn's return keys.
+    const attrFn = () => new Map<string, string>();
+
+    assert.throws(
+      () => checkNoUntrackedMutableStateCopies(destHashes, listIgnoredFn, hashFn, attrFn),
+      /process\.exit\(1\)/,
+    );
+    assert.equal(hashCalls, 1, "expected exactly one hashFn call for one source and one group");
+  });
+
+  it("calls hashFn once per distinct signature when destinations have different clean-filter attributes", () => {
+    const shaGroupA = "a".repeat(40);
+    const shaGroupB = "b".repeat(40);
+    const destHashes = new Map([
+      ["docs/a1.md", shaGroupA],
+      ["docs/a2.md", shaGroupA],
+      [".squad/other/b1.md", shaGroupB],
+    ]);
+    const listIgnoredFn = () => [".squad/agents/scotty/history.md"];
+    const hashCallsPerDest: string[] = [];
+    const hashFn = (_source: string, destinationPath: string) => {
+      hashCallsPerDest.push(destinationPath);
+      return "no-match";
+    };
+    const attrFn = (paths: string[]) =>
+      new Map(
+        paths.map((p) => [p, p.startsWith(".squad/") ? "text=unspecified" : "text=set|eol=lf"]),
+      );
+
+    checkNoUntrackedMutableStateCopies(destHashes, listIgnoredFn, hashFn, attrFn);
+    assert.equal(exitState.code, null);
+    // Exactly 2 hashFn calls total (one per distinct signature group), and
+    // the representative for each group is the first destination path
+    // encountered with that signature.
+    assert.equal(hashCallsPerDest.length, 2);
+    assert.ok(hashCallsPerDest.includes("docs/a1.md"));
+    assert.ok(hashCallsPerDest.includes(".squad/other/b1.md"));
+  });
+
+  it("does not flag a source matched against its own unchanged path", () => {
+    // Guard against a degenerate self-match: an ignored path should never
+    // be compared against itself even if it somehow appeared as a staged
+    // destination (e.g. a stale/forced entry already caught elsewhere).
+    const sha = "f".repeat(40);
+    const mutablePath = ".squad/agents/scotty/history.md";
+    const destHashes = new Map([[mutablePath, sha]]);
+    const hashFn = () => {
+      throw new Error("should never be called for a self-match");
+    };
+    checkNoUntrackedMutableStateCopies(destHashes, () => [mutablePath], hashFn, noAttrs);
+    assert.equal(exitState.code, null);
+  });
+
+  // ── Fail-closed behavior (follow-up review on commit 441ecac) ───────
+  //
+  // Silently treating "the check itself errored" as "no violation found"
+  // would make this guard trivially disableable by anything that breaks
+  // the listing or hashing step. Both must abort the commit instead.
+
+  it("fails closed (aborts the commit) when enumerating ignored files errors, instead of silently passing", () => {
+    const destHashes = new Map([["docs/new.md", "a".repeat(40)]]);
+    const listIgnoredFn = () => {
+      throw new Error("git ls-files exploded");
+    };
+    const errors: string[] = [];
+    mock.method(console, "error", (msg: string) => errors.push(msg));
+
+    assert.throws(
+      () => checkNoUntrackedMutableStateCopies(destHashes, listIgnoredFn),
+      /process\.exit\(1\)/,
+    );
+    assert.equal(exitState.code, 1);
+    assert.match(errors.join("\n"), /fail(ing)? closed/i);
+    assert.match(errors.join("\n"), /git ls-files exploded/);
+  });
+
+  it("fails closed (aborts the commit) when hashing a candidate source errors, instead of silently skipping it", () => {
+    const destHashes = new Map([["docs/new.md", "a".repeat(40)]]);
+    const listIgnoredFn = () => [".squad/agents/scotty/history.md"];
+    const hashFn = () => {
+      throw new Error("git hash-object exploded");
+    };
+    const errors: string[] = [];
+    mock.method(console, "error", (msg: string) => errors.push(msg));
+
+    assert.throws(
+      () => checkNoUntrackedMutableStateCopies(destHashes, listIgnoredFn, hashFn, noAttrs),
+      /process\.exit\(1\)/,
+    );
+    assert.equal(exitState.code, 1);
+    assert.match(errors.join("\n"), /fail(ing)? closed/i);
+    assert.match(errors.join("\n"), /git hash-object exploded/);
+  });
+
+  it("fails closed (aborts the commit) when resolving clean-filter attributes errors, instead of silently skipping it", () => {
+    const destHashes = new Map([["docs/new.md", "a".repeat(40)]]);
+    const listIgnoredFn = () => [".squad/agents/scotty/history.md"];
+    const attrFn = () => {
+      throw new Error("git check-attr exploded");
+    };
+    const errors: string[] = [];
+    mock.method(console, "error", (msg: string) => errors.push(msg));
+
+    assert.throws(
+      () =>
+        checkNoUntrackedMutableStateCopies(
+          destHashes,
+          listIgnoredFn,
+          () => {
+            throw new Error("hashFn should never run when attribute resolution already failed");
+          },
+          attrFn,
+        ),
+      /process\.exit\(1\)/,
+    );
+    assert.equal(exitState.code, 1);
+    assert.match(errors.join("\n"), /fail(ing)? closed/i);
+    assert.match(errors.join("\n"), /git check-attr exploded/);
+  });
+
+  it("real git: listUntrackedMutableStateFiles propagates (does not swallow) a real git failure", () => {
+    // Regression test for the follow-up review on commit 441ecac: the
+    // listing function must propagate a genuine git failure rather than
+    // catching and returning []. Running `git ls-files` with a cwd that is
+    // not inside any Git repository (and GIT_CEILING_DIRECTORIES capping
+    // discovery there) reliably reproduces that failure.
+    const dir = mkdtempSync(join(tmpdir(), "stfc-untracked-copy-failclosed-"));
+    const isolatedGitEnv: Record<string, string> = { GIT_CEILING_DIRECTORIES: dir };
+    for (const [key, value] of Object.entries(process.env)) {
+      if (!key.startsWith("GIT_") && value !== undefined) isolatedGitEnv[key] = value;
+    }
+
+    try {
+      const exec = (cmd: string, args: string[], options: Record<string, unknown>) =>
+        execFileSync(cmd, args, { cwd: dir, env: isolatedGitEnv, ...options }) as unknown as string;
+
+      assert.throws(() => listUntrackedMutableStateFiles(exec));
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 
@@ -541,6 +1230,93 @@ describe("checkWorkflowPinningTests", () => {
       }
     });
 
+    it("blocks a real staged deletion (git rm --cached) of a non-allowlisted mutable-state path", () => {
+      // Regression test for the reviewer finding on PR #314: the previous
+      // tests only called checkSquadBoundary(deleted, deleted) directly,
+      // which is a shape the real hook can never produce — parseNameStatus
+      // only ever recorded a `D` entry in `deleted`, never in `staged`, so
+      // the allowlist membership check in checkSquadBoundary was dead code
+      // and EVERY `git rm --cached` deletion silently passed, allowlisted
+      // or not. This drives `git diff --cached --name-status -z -M -C`
+      // through the real `pre-commit.mjs` entry point for a path that is
+      // deliberately NOT in MUTABLE_SQUAD_STATE_DELETION_ALLOWLIST, and must
+      // fail the boundary check.
+      const dir = mkdtempSync(join(tmpdir(), "stfc-pre-commit-reject-untrack-"));
+      const scriptsDir = join(dir, "scripts");
+      const binDir = join(dir, "bin");
+      const isolatedGitEnv = { ...process.env };
+      for (const key of Object.keys(isolatedGitEnv)) {
+        if (key.startsWith("GIT_")) delete isolatedGitEnv[key];
+      }
+
+      try {
+        mkdirSync(scriptsDir, { recursive: true });
+        mkdirSync(binDir);
+        writeFileSync(
+          join(scriptsDir, "pre-commit.mjs"),
+          readFileSync(resolve("scripts/pre-commit.mjs"), "utf8"),
+        );
+        writeFileSync(
+          join(scriptsDir, "pre-commit-checks.mjs"),
+          readFileSync(resolve("scripts/pre-commit-checks.mjs"), "utf8"),
+        );
+        writeFileSync(join(scriptsDir, "check-artifact-hygiene.mjs"), "process.exit(0);\n");
+
+        const pathKey = Object.keys(isolatedGitEnv).find((key) => key.toLowerCase() === "path") ?? "PATH";
+        const pathSeparator = process.platform === "win32" ? ";" : ":";
+        isolatedGitEnv[pathKey] = `${binDir}${pathSeparator}${isolatedGitEnv[pathKey] ?? ""}`;
+        if (process.platform === "win32") {
+          writeFileSync(join(binDir, "npm.cmd"), "@echo off\r\nexit /b 0\r\n");
+        } else {
+          writeFileSync(join(binDir, "npm"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+        }
+
+        // NOTE: must stay OUTSIDE MUTABLE_SQUAD_STATE_DELETION_ALLOWLIST.
+        const nonAllowlisted = ".squad/log/2026-05-16-real-repo-untrack.md";
+        mkdirSync(join(dir, ".squad", "log"), { recursive: true });
+        writeFileSync(join(dir, nonAllowlisted), "tracked log entry\n");
+        execFileSync("git", ["init", "--quiet"], { cwd: dir, env: isolatedGitEnv });
+        execFileSync("git", ["config", "user.name", "Pre-commit test"], {
+          cwd: dir,
+          env: isolatedGitEnv,
+        });
+        execFileSync("git", ["config", "user.email", "pre-commit-test@example.invalid"], {
+          cwd: dir,
+          env: isolatedGitEnv,
+        });
+        execFileSync("git", ["add", nonAllowlisted], { cwd: dir, env: isolatedGitEnv });
+        execFileSync("git", ["commit", "--quiet", "-m", "Add non-allowlisted log entry"], {
+          cwd: dir,
+          env: isolatedGitEnv,
+        });
+        execFileSync("git", ["rm", "--cached", nonAllowlisted], {
+          cwd: dir,
+          env: isolatedGitEnv,
+        });
+
+        const stagedStatus = execFileSync("git", ["diff", "--cached", "--name-status"], {
+          cwd: dir,
+          encoding: "utf8",
+          env: isolatedGitEnv,
+        });
+        assert.equal(stagedStatus.trim(), `D\t${nonAllowlisted}`);
+
+        const result = spawnSync(process.execPath, [join(scriptsDir, "pre-commit.mjs")], {
+          cwd: dir,
+          encoding: "utf8",
+          env: isolatedGitEnv,
+        });
+        assert.equal(
+          result.status,
+          1,
+          `expected a non-allowlisted mutable-state deletion to be rejected:\n${result.stdout}${result.stderr}`,
+        );
+        assert.match(result.stderr + result.stdout, /\.squad\/log\/2026-05-16-real-repo-untrack\.md/);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
     it("blocks a real staged rename of mutable state onto an ordinary tracked path", () => {
       // Regression test for the rename bypass (PR #314 review): git's rename
       // detection reports only the destination for `--name-status`, and
@@ -629,6 +1405,384 @@ describe("checkWorkflowPinningTests", () => {
           result.stderr + result.stdout,
           new RegExp(mutableSource.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")),
         );
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it("blocks a real staged copy of an unchanged mutable-state file onto an ordinary tracked path", () => {
+      // Regression test for the copy-laundering gap flagged in PR #314
+      // review: `git diff --cached --name-status -M -C` (without
+      // `--find-copies-harder`) only searches for copy *sources* among
+      // files that were themselves modified in the same diff. Copying an
+      // UNCHANGED mutable-state file to an ordinary path — leaving the
+      // source untouched on disk and unstaged — is reported as a plain
+      // `A`dd for the destination and never surfaces the source path
+      // unless `--find-copies-harder` is passed.
+      const dir = mkdtempSync(join(tmpdir(), "stfc-pre-commit-copy-"));
+      const scriptsDir = join(dir, "scripts");
+      const binDir = join(dir, "bin");
+      const isolatedGitEnv = { ...process.env };
+      for (const key of Object.keys(isolatedGitEnv)) {
+        if (key.startsWith("GIT_")) delete isolatedGitEnv[key];
+      }
+
+      try {
+        mkdirSync(scriptsDir, { recursive: true });
+        mkdirSync(binDir);
+        writeFileSync(
+          join(scriptsDir, "pre-commit.mjs"),
+          readFileSync(resolve("scripts/pre-commit.mjs"), "utf8"),
+        );
+        writeFileSync(
+          join(scriptsDir, "pre-commit-checks.mjs"),
+          readFileSync(resolve("scripts/pre-commit-checks.mjs"), "utf8"),
+        );
+        writeFileSync(join(scriptsDir, "check-artifact-hygiene.mjs"), "process.exit(0);\n");
+
+        const pathKey = Object.keys(isolatedGitEnv).find((key) => key.toLowerCase() === "path") ?? "PATH";
+        const pathSeparator = process.platform === "win32" ? ";" : ":";
+        isolatedGitEnv[pathKey] = `${binDir}${pathSeparator}${isolatedGitEnv[pathKey] ?? ""}`;
+        if (process.platform === "win32") {
+          writeFileSync(join(binDir, "npm.cmd"), "@echo off\r\nexit /b 0\r\n");
+        } else {
+          writeFileSync(join(binDir, "npm"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+        }
+
+        const mutableSource = ".squad/agents/scotty/history.md";
+        // Large-ish, identical content so Git's default 50% similarity
+        // threshold still detects this as a copy once --find-copies-harder
+        // is in play.
+        const body = "line\n".repeat(200);
+        mkdirSync(join(dir, ".squad", "agents", "scotty"), { recursive: true });
+        writeFileSync(join(dir, mutableSource), body);
+        execFileSync("git", ["init", "--quiet"], { cwd: dir, env: isolatedGitEnv });
+        execFileSync("git", ["config", "user.name", "Pre-commit test"], {
+          cwd: dir,
+          env: isolatedGitEnv,
+        });
+        execFileSync("git", ["config", "user.email", "pre-commit-test@example.invalid"], {
+          cwd: dir,
+          env: isolatedGitEnv,
+        });
+        execFileSync("git", ["add", mutableSource], { cwd: dir, env: isolatedGitEnv });
+        execFileSync("git", ["commit", "--quiet", "-m", "Add mutable history file"], {
+          cwd: dir,
+          env: isolatedGitEnv,
+        });
+
+        // Copy (not move) the source: it remains on disk, unchanged and
+        // unstaged, while only the destination is staged.
+        const ordinaryDestination = "docs/laundered-history.md";
+        mkdirSync(join(dir, "docs"), { recursive: true });
+        writeFileSync(join(dir, ordinaryDestination), body);
+        execFileSync("git", ["add", ordinaryDestination], { cwd: dir, env: isolatedGitEnv });
+
+        const stagedStatusWithoutFlag = execFileSync(
+          "git",
+          ["diff", "--cached", "--name-status", "-M", "-C"],
+          { cwd: dir, encoding: "utf8", env: isolatedGitEnv },
+        );
+        assert.match(
+          stagedStatusWithoutFlag,
+          /^A\t/,
+          `expected git to report a plain add without --find-copies-harder, got:\n${stagedStatusWithoutFlag}`,
+        );
+
+        const stagedStatusWithFlag = execFileSync(
+          "git",
+          ["diff", "--cached", "--name-status", "-M", "-C", "--find-copies-harder"],
+          { cwd: dir, encoding: "utf8", env: isolatedGitEnv },
+        );
+        assert.match(
+          stagedStatusWithFlag,
+          /^C\d+\t/,
+          `expected --find-copies-harder to detect this as a copy, got:\n${stagedStatusWithFlag}`,
+        );
+
+        const result = spawnSync(process.execPath, [join(scriptsDir, "pre-commit.mjs")], {
+          cwd: dir,
+          encoding: "utf8",
+          env: isolatedGitEnv,
+        });
+        assert.equal(
+          result.status,
+          1,
+          `expected copying mutable state onto an ordinary path to be rejected:\n${result.stdout}`,
+        );
+        assert.match(
+          result.stderr + result.stdout,
+          new RegExp(mutableSource.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")),
+        );
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it("blocks a staged copy of an untracked, no-longer-ignored mutable file when the commit removes its ignore rule", () => {
+      // `git ls-files --others --ignored --exclude-standard` only reports
+      // ignored paths. When a commit removes an ignore rule, the mutable
+      // source becomes ordinary untracked content, so the copy guard must
+      // still enumerate it independently of Git's rename/copy detection.
+      const dir = mkdtempSync(join(tmpdir(), "stfc-pre-commit-untracked-copy-"));
+      const scriptsDir = join(dir, "scripts");
+      const binDir = join(dir, "bin");
+      const isolatedGitEnv = { ...process.env };
+      for (const key of Object.keys(isolatedGitEnv)) {
+        if (key.startsWith("GIT_")) delete isolatedGitEnv[key];
+      }
+
+      try {
+        mkdirSync(scriptsDir, { recursive: true });
+        mkdirSync(binDir);
+        writeFileSync(
+          join(scriptsDir, "pre-commit.mjs"),
+          readFileSync(resolve("scripts/pre-commit.mjs"), "utf8"),
+        );
+        writeFileSync(
+          join(scriptsDir, "pre-commit-checks.mjs"),
+          readFileSync(resolve("scripts/pre-commit-checks.mjs"), "utf8"),
+        );
+        writeFileSync(join(scriptsDir, "check-artifact-hygiene.mjs"), "process.exit(0);\n");
+
+        const pathKey = Object.keys(isolatedGitEnv).find((key) => key.toLowerCase() === "path") ?? "PATH";
+        const pathSeparator = process.platform === "win32" ? ";" : ":";
+        isolatedGitEnv[pathKey] = `${binDir}${pathSeparator}${isolatedGitEnv[pathKey] ?? ""}`;
+        if (process.platform === "win32") {
+          writeFileSync(join(binDir, "npm.cmd"), "@echo off\r\nexit /b 0\r\n");
+        } else {
+          writeFileSync(join(binDir, "npm"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+        }
+
+        // Initially ignore the mutable source so the staged .gitignore
+        // edit below reproduces removing that rule in the same commit.
+        writeFileSync(join(dir, ".gitignore"), ".squad/agents/*/history.md\n");
+
+        const body = "line\n".repeat(200);
+        const mutableSource = ".squad/agents/scotty/history.md";
+        mkdirSync(join(dir, ".squad", "agents", "scotty"), { recursive: true });
+        writeFileSync(join(dir, mutableSource), body);
+
+        execFileSync("git", ["init", "--quiet"], { cwd: dir, env: isolatedGitEnv });
+        execFileSync("git", ["config", "user.name", "Pre-commit test"], {
+          cwd: dir,
+          env: isolatedGitEnv,
+        });
+        execFileSync("git", ["config", "user.email", "pre-commit-test@example.invalid"], {
+          cwd: dir,
+          env: isolatedGitEnv,
+        });
+        execFileSync("git", ["add", ".gitignore"], { cwd: dir, env: isolatedGitEnv });
+        execFileSync("git", ["commit", "--quiet", "-m", "Add .gitignore"], {
+          cwd: dir,
+          env: isolatedGitEnv,
+        });
+
+        // Sanity-check the initial premise: the source is untracked and
+        // ignored, never staged.
+        const statusBeforeCopy = execFileSync("git", ["status", "--porcelain", "--ignored"], {
+          cwd: dir,
+          encoding: "utf8",
+          env: isolatedGitEnv,
+        });
+        assert.match(
+          statusBeforeCopy,
+          /!! \.squad\//,
+          `expected the mutable source to show as ignored before copying, got:\n${statusBeforeCopy}`,
+        );
+
+        // Remove and stage the ignore rule. The mutable file is now
+        // untracked but not ignored, even though it was ignored at HEAD.
+        writeFileSync(join(dir, ".gitignore"), "");
+        execFileSync("git", ["add", ".gitignore"], { cwd: dir, env: isolatedGitEnv });
+        const notIgnored = spawnSync(
+          "git",
+          ["check-ignore", "--quiet", "--", mutableSource],
+          { cwd: dir, encoding: "utf8", env: isolatedGitEnv },
+        );
+        assert.equal(notIgnored.status, 1, "fixture bug: the source should no longer be ignored");
+        const untrackedListing = execFileSync(
+          "git",
+          ["ls-files", "--others", "-z", "--", ".squad"],
+          { cwd: dir, encoding: "utf8", env: isolatedGitEnv },
+        );
+        assert.ok(
+          untrackedListing.split("\0").includes(mutableSource),
+          "the unignored mutable source should be enumerated as untracked",
+        );
+        const ignoredOnlyListing = execFileSync(
+          "git",
+          ["ls-files", "--others", "--ignored", "--exclude-standard", "-z", "--", ".squad"],
+          { cwd: dir, encoding: "utf8", env: isolatedGitEnv },
+        );
+        assert.ok(
+          !ignoredOnlyListing.split("\0").includes(mutableSource),
+          "fixture bug: the old ignored-only enumeration should miss the unignored source",
+        );
+
+        // Copy (not move) identical bytes into an ordinary path and stage
+        // only the destination alongside the ignore-rule removal.
+        const ordinaryDestination = "docs/laundered-from-unignored.md";
+        mkdirSync(join(dir, "docs"), { recursive: true });
+        writeFileSync(join(dir, ordinaryDestination), body);
+        execFileSync("git", ["add", ordinaryDestination], { cwd: dir, env: isolatedGitEnv });
+
+        const stagedStatus = execFileSync(
+          "git",
+          ["diff", "--cached", "--name-status", "-M", "-C", "--find-copies-harder"],
+          { cwd: dir, encoding: "utf8", env: isolatedGitEnv },
+        );
+        assert.match(
+          stagedStatus,
+          /^A\tdocs\/laundered-from-unignored\.md$/m,
+          `expected git to report a plain add even with --find-copies-harder, since the source ` +
+            `was never tracked, got:\n${stagedStatus}`,
+        );
+
+        const result = spawnSync(process.execPath, [join(scriptsDir, "pre-commit.mjs")], {
+          cwd: dir,
+          encoding: "utf8",
+          env: isolatedGitEnv,
+        });
+        assert.equal(
+          result.status,
+          1,
+          `expected copying an untracked, unignored mutable-state file onto an ordinary path to be ` +
+            `rejected:\n${result.stdout}`,
+        );
+        const output = result.stderr + result.stdout;
+        assert.match(output, new RegExp(ordinaryDestination.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+        assert.match(output, new RegExp(mutableSource.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+        assert.ok(!output.includes(body), "the guard must not log mutable source contents");
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it("blocks a real staged copy of an untracked/ignored source even when source and destination have different clean-filter rules", () => {
+      // Regression test for the follow-up review on commit 441ecac: a
+      // naive implementation that hashes the source under its OWN path's
+      // `.gitattributes` (rather than the destination's) can miss this
+      // exact scenario — the source is marked `-text` (store as-is) and
+      // the destination is marked `text eol=lf` (normalize CRLF -> LF on
+      // add), so byte-identical CRLF content hashes differently depending
+      // on whose attributes apply. Only hashing under
+      // `--path=<destination>` reproduces the real staged blob hash.
+      const dir = mkdtempSync(join(tmpdir(), "stfc-pre-commit-untracked-copy-filters-"));
+      const scriptsDir = join(dir, "scripts");
+      const binDir = join(dir, "bin");
+      const isolatedGitEnv = { ...process.env };
+      for (const key of Object.keys(isolatedGitEnv)) {
+        if (key.startsWith("GIT_")) delete isolatedGitEnv[key];
+      }
+
+      try {
+        mkdirSync(scriptsDir, { recursive: true });
+        mkdirSync(binDir);
+        writeFileSync(
+          join(scriptsDir, "pre-commit.mjs"),
+          readFileSync(resolve("scripts/pre-commit.mjs"), "utf8"),
+        );
+        writeFileSync(
+          join(scriptsDir, "pre-commit-checks.mjs"),
+          readFileSync(resolve("scripts/pre-commit-checks.mjs"), "utf8"),
+        );
+        writeFileSync(join(scriptsDir, "check-artifact-hygiene.mjs"), "process.exit(0);\n");
+
+        const pathKey = Object.keys(isolatedGitEnv).find((key) => key.toLowerCase() === "path") ?? "PATH";
+        const pathSeparator = process.platform === "win32" ? ";" : ":";
+        isolatedGitEnv[pathKey] = `${binDir}${pathSeparator}${isolatedGitEnv[pathKey] ?? ""}`;
+        if (process.platform === "win32") {
+          writeFileSync(join(binDir, "npm.cmd"), "@echo off\r\nexit /b 0\r\n");
+        } else {
+          writeFileSync(join(binDir, "npm"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+        }
+
+        execFileSync("git", ["init", "--quiet"], { cwd: dir, env: isolatedGitEnv });
+        execFileSync("git", ["config", "user.name", "Pre-commit test"], {
+          cwd: dir,
+          env: isolatedGitEnv,
+        });
+        execFileSync("git", ["config", "user.email", "pre-commit-test@example.invalid"], {
+          cwd: dir,
+          env: isolatedGitEnv,
+        });
+        execFileSync("git", ["config", "core.autocrlf", "false"], { cwd: dir, env: isolatedGitEnv });
+
+        writeFileSync(
+          join(dir, ".gitignore"),
+          ".squad/agents/*/history.md\n",
+        );
+        writeFileSync(
+          join(dir, ".gitattributes"),
+          [".squad/agents/*/history.md -text", "docs/*.md text eol=lf", ""].join("\n"),
+        );
+        execFileSync("git", ["add", ".gitignore", ".gitattributes"], {
+          cwd: dir,
+          env: isolatedGitEnv,
+        });
+        execFileSync("git", ["commit", "--quiet", "-m", "Add .gitignore and .gitattributes"], {
+          cwd: dir,
+          env: isolatedGitEnv,
+        });
+
+        const mutableSource = ".squad/agents/scotty/history.md";
+        mkdirSync(join(dir, ".squad", "agents", "scotty"), { recursive: true });
+        const crlfBody = Buffer.from("line\r\n".repeat(50), "ascii");
+        writeFileSync(join(dir, mutableSource), crlfBody);
+
+        const statusBeforeCopy = execFileSync("git", ["status", "--porcelain", "--ignored"], {
+          cwd: dir,
+          encoding: "utf8",
+          env: isolatedGitEnv,
+        });
+        assert.match(
+          statusBeforeCopy,
+          /!! \.squad\//,
+          `expected the mutable source to show as ignored before copying, got:\n${statusBeforeCopy}`,
+        );
+
+        const ordinaryDestination = "docs/laundered-crlf.md";
+        mkdirSync(join(dir, "docs"), { recursive: true });
+        writeFileSync(join(dir, ordinaryDestination), crlfBody);
+        execFileSync("git", ["add", ordinaryDestination], { cwd: dir, env: isolatedGitEnv });
+
+        // Confirm the premise that makes this a meaningful regression test:
+        // hashing the source under its OWN path diverges from what Git
+        // actually staged for the destination.
+        const actualStagedHash = execFileSync(
+          "git",
+          ["diff", "--cached", "--raw", "--abbrev=40"],
+          { cwd: dir, encoding: "utf8", env: isolatedGitEnv },
+        )
+          .trim()
+          .split(/\s+/)[3];
+        const hashUnderSourceOwnPath = execFileSync(
+          "git",
+          ["hash-object", "--", mutableSource],
+          { cwd: dir, encoding: "utf8", env: isolatedGitEnv },
+        ).trim();
+        assert.notEqual(
+          hashUnderSourceOwnPath,
+          actualStagedHash,
+          "fixture bug: expected the source's own-path hash to diverge from the real staged " +
+            "hash for this test to be a meaningful regression of the --path=<destination> fix",
+        );
+
+        const result = spawnSync(process.execPath, [join(scriptsDir, "pre-commit.mjs")], {
+          cwd: dir,
+          encoding: "utf8",
+          env: isolatedGitEnv,
+        });
+        assert.equal(
+          result.status,
+          1,
+          `expected copying an untracked/ignored mutable-state file with differing clean-filter ` +
+            `rules onto an ordinary path to be rejected:\n${result.stdout}`,
+        );
+        const output = result.stderr + result.stdout;
+        assert.match(output, new RegExp(ordinaryDestination.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+        assert.match(output, new RegExp(mutableSource.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
       } finally {
         rmSync(dir, { recursive: true, force: true });
       }
@@ -754,6 +1908,75 @@ describe("checkWorkflowPinningTests", () => {
       ]) {
         const result = spawnSync("git", ["check-ignore", "--quiet", path], { encoding: "utf8" });
         assert.equal(result.status, 0, `expected \`git check-ignore\` to report ${path} as ignored`);
+      }
+    });
+
+    it("matches and gitignores .squad/worktree-inbox/ snapshots", () => {
+      const path = ".squad/worktree-inbox/2026-06-02T000000Z-obrien/manifest.json";
+      assert.ok(
+        MUTABLE_SQUAD_STATE_PATTERNS.some((pattern) => pattern.test(path)),
+        `expected ${path} to match a mutable-state guard pattern`,
+      );
+      const result = spawnSync("git", ["check-ignore", "--quiet", path], { encoding: "utf8" });
+      assert.equal(result.status, 0, `expected \`git check-ignore\` to report ${path} as ignored`);
+    });
+
+    it("rejects `git add` of a backend-owned worktree-inbox snapshot (real repository)", () => {
+      // Real-repo invariant for the worktree-inbox bypass (PR #314 review):
+      // `git add` on an ignored path must fail outright (without -f), so a
+      // backend-owned snapshot can never be staged by accident even before
+      // the pre-commit boundary check runs.
+      const dir = mkdtempSync(join(tmpdir(), "stfc-worktree-inbox-"));
+      const isolatedGitEnv = { ...process.env };
+      for (const key of Object.keys(isolatedGitEnv)) {
+        if (key.startsWith("GIT_")) delete isolatedGitEnv[key];
+      }
+
+      try {
+        writeFileSync(join(dir, ".gitignore"), readFileSync(resolve(".gitignore"), "utf8"));
+        execFileSync("git", ["init", "--quiet"], { cwd: dir, env: isolatedGitEnv });
+        execFileSync("git", ["config", "user.name", "Pre-commit test"], {
+          cwd: dir,
+          env: isolatedGitEnv,
+        });
+        execFileSync("git", ["config", "user.email", "pre-commit-test@example.invalid"], {
+          cwd: dir,
+          env: isolatedGitEnv,
+        });
+        execFileSync("git", ["add", ".gitignore"], { cwd: dir, env: isolatedGitEnv });
+        execFileSync("git", ["commit", "--quiet", "-m", "Add .gitignore"], {
+          cwd: dir,
+          env: isolatedGitEnv,
+        });
+
+        const snapshotDir = join(dir, ".squad", "worktree-inbox", "2026-06-02T000000Z-obrien");
+        mkdirSync(snapshotDir, { recursive: true });
+        const snapshotPath = join(snapshotDir, "manifest.json");
+        writeFileSync(snapshotPath, JSON.stringify({ backend: "two-layer" }));
+
+        const addResult = spawnSync(
+          "git",
+          ["add", ".squad/worktree-inbox/2026-06-02T000000Z-obrien/manifest.json"],
+          { cwd: dir, encoding: "utf8", env: isolatedGitEnv },
+        );
+        assert.notEqual(
+          addResult.status,
+          0,
+          `expected \`git add\` of an ignored worktree-inbox snapshot to fail:\n${addResult.stdout}${addResult.stderr}`,
+        );
+
+        const stagedStatus = execFileSync("git", ["diff", "--cached", "--name-only"], {
+          cwd: dir,
+          encoding: "utf8",
+          env: isolatedGitEnv,
+        });
+        assert.equal(
+          stagedStatus.trim(),
+          "",
+          `expected nothing to be staged after the rejected \`git add\`, got:\n${stagedStatus}`,
+        );
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
       }
     });
 

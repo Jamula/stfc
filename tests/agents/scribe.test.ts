@@ -78,6 +78,25 @@ const worktreeReference = readFileSync(
   resolve(process.cwd(), ".squad/templates/worktree-reference.md"),
   "utf-8",
 );
+const gitWorkflowSkill = readFileSync(
+  resolve(process.cwd(), ".github/skills/git-workflow/SKILL.md"),
+  "utf-8",
+);
+const gitWorkflowTemplate = readFileSync(
+  resolve(process.cwd(), ".squad/templates/skills/git-workflow/SKILL.md"),
+  "utf-8",
+);
+const spawnReference = readFileSync(
+  resolve(process.cwd(), ".squad/templates/spawn-reference.md"),
+  "utf-8",
+);
+const crossSquadCommunication = readFileSync(
+  resolve(
+    process.cwd(),
+    ".github/skills/cross-squad-communication/SKILL.md",
+  ),
+  "utf-8",
+);
 const rules = readFileSync(
   resolve(process.cwd(), ".github/copilot-instructions.md"),
   "utf-8",
@@ -492,6 +511,91 @@ describe("Scribe — decision inbox persistence", () => {
   });
 });
 
+describe("Scribe — backend-aware identity/history reads share the fallback rule", () => {
+  it("spawn-reference.md gates history.md, decisions.md, identity/wisdom.md, and identity/now.md behind the same local/worktree-only fallback and nonlocal fail-closed rule", () => {
+    const normalized = spawnReference.replace(/\s+/g, " ");
+    const fallbackClause =
+      /only for `local`\/`worktree` backends; for `orphan`, `two-layer`, or `git-notes`, follow the state-backend handshake and report a missing bridge/i;
+
+    for (const [label, anchor] of [
+      ["agents/{name}/history.md", "Read logical key `agents/{name}/history.md` with `squad_state_read`"],
+      ["decisions/decisions.md", "Read logical state key `decisions/decisions.md` with `squad_state_read`"],
+      ["identity/wisdom.md", "Read logical key `identity/wisdom.md` with `squad_state_read`"],
+      ["identity/now.md", "Read logical key `identity/now.md` with `squad_state_read`"],
+    ] as const) {
+      const start = normalized.indexOf(anchor);
+      assert.ok(start >= 0, `spawn-reference.md should resolve ${label} through state tools`);
+      const window = normalized.slice(start, start + 400);
+      assert.match(
+        window,
+        fallbackClause,
+        `spawn-reference.md's ${label} read should share the local/worktree-only fallback and nonlocal fail-closed rule`,
+      );
+    }
+  });
+
+  it("cross-squad-communication.md resolves peer identity/now.md and identity/wisdom.md through state tools, with no unconditional direct checkout read", () => {
+    const normalized = crossSquadCommunication.replace(/\s+/g, " ");
+
+    assert.match(
+      normalized,
+      /use Pattern 0 to ask the peer coordinator to resolve logical state keys `identity\/now\.md` and `identity\/wisdom\.md`/i,
+      "cross-squad-communication.md should resolve peer identity/now.md and identity/wisdom.md through the peer's state tools",
+    );
+    assert.match(
+      normalized,
+      /Reading `\.squad\/identity\/now\.md` directly is only valid when the peer is confirmed on the `local`\/`worktree` backend; never read it as a checkout snapshot for `orphan`, `two-layer`, or `git-notes` backends/i,
+      "cross-squad-communication.md should gate any direct identity/now.md read to a confirmed local/worktree peer",
+    );
+    assert.match(
+      normalized,
+      /if the peer's backend is unknown or unreachable, fail closed and report the missing bridge/i,
+      "cross-squad-communication.md should fail closed when the peer's backend cannot be confirmed",
+    );
+
+    // No unconditional direct checkout read of peer decisions/decisions.md anywhere in the skill.
+    assert.doesNotMatch(
+      crossSquadCommunication,
+      /Get-Content\s+"[^"]*decisions[^"]*"/i,
+      "cross-squad-communication.md should never read a peer's decisions ledger via a direct checkout read",
+    );
+  });
+});
+
+describe("Squad command skill — parity with GitHub-facing Squad skill", () => {
+  it("retains the same size thresholds, link-status fail-closed rule, and untagged-entry/user-review gate", () => {
+    const normalized = squadCommands.replace(/\s+/g, " ");
+    const archiveStart = normalized.indexOf("### Archive Old Decisions");
+    const nextCommand = normalized.indexOf("### Summarize Agent History", archiveStart);
+    assert.ok(
+      archiveStart >= 0 && nextCommand > archiveStart,
+      "Squad command skill should define a bounded archive command",
+    );
+    const archiveCommand = normalized.slice(archiveStart, nextCommand);
+
+    assert.match(
+      archiveCommand,
+      /If the ledger is at least 20,480 bytes, review entries older than 30 days/i,
+      "archive command should preserve the 20,480-byte / 30-day review threshold",
+    );
+    assert.match(
+      archiveCommand,
+      /if it is at least 51,200 bytes, review entries older than 7 days/i,
+      "archive command should preserve the 51,200-byte / 7-day review threshold",
+    );
+    assert.match(
+      archiveCommand,
+      /if status cannot be confirmed, retain the entry/i,
+      "archive command should fail closed and retain entries whose linked GitHub status cannot be confirmed",
+    );
+    assert.match(
+      archiveCommand,
+      /Until then, leave untagged entries unchanged and active and never infer archive eligibility from age alone/i,
+      "archive command should gate untagged entries on user review before any age-based inference",
+    );
+  });
+});
+
 describe("GitHub-facing Squad — decision archive eligibility", () => {
   it("includes the semantic taxonomy and dry-run/user-review safeguards", () => {
     const normalized = githubSquadSkill.replace(/\s+/g, " ");
@@ -611,6 +715,27 @@ describe("Scribe — generated coordinator archive safeguards", () => {
       );
     }
   });
+});
+
+describe("Scribe — spawn template health reports use entry counts, not byte-size deltas", () => {
+  for (const [label, text] of [
+    ["Scribe spawn template", spawnTemplates],
+    ["after-agent reference", afterAgentReference],
+  ] as const) {
+    it(`${label} HEALTH REPORT step reports entry counts rather than before/after size`, () => {
+      const normalized = text.replace(/\s+/g, " ");
+      assert.match(
+        normalized,
+        /HEALTH REPORT: Report ENTRY COUNTS, never file sizes: `N removed from source \/ N added to destination`/,
+        `${label} should match the active coordinator's entry-count health-report rule`,
+      );
+      assert.doesNotMatch(
+        normalized,
+        /before\/after size/i,
+        `${label} should not report a byte-size delta as the integrity signal`,
+      );
+    });
+  }
 });
 
 describe("Reflect — decision state key", () => {
@@ -812,6 +937,71 @@ describe("Scribe — secret-handling active/template parity", () => {
         new RegExp(marker, "i").test(secretHandlingTemplate),
         `secret-handling template should mirror: ${marker}`,
       );
+    }
+  });
+});
+
+describe("worktree-reference.md — no merge=union reliance for backend-owned state", () => {
+  it("does not claim a .gitattributes merge=union driver auto-resolves .squad/ state, consistent with git-workflow/SKILL.md", () => {
+    const normalized = worktreeReference.replace(/\s+/g, " ");
+
+    assert.doesNotMatch(
+      normalized,
+      /merge=union.{0,120}auto-resolves/i,
+      "worktree-reference.md should not claim merge=union auto-resolves append-only .squad/ files",
+    );
+    assert.match(
+      normalized,
+      /Do not rely on `\.gitattributes` `merge=union` to reconcile `\.squad\/` runtime state across worktrees or branches/i,
+      "worktree-reference.md should match git-workflow/SKILL.md's merge=union guidance",
+    );
+    assert.match(
+      normalized,
+      /union merge is not a persistence mechanism for backend-owned state/i,
+      "worktree-reference.md should state union merge is not a persistence mechanism for backend-owned state",
+    );
+  });
+});
+
+describe("git-workflow — backend-aware worktree cleanup", () => {
+  it("keeps the canonical skill and template aligned and limits checkout copies to the local/worktree fallback", () => {
+    const cleanupPolicy =
+      "Before removing a worktree, resolve its configured state backend. For `local`/`worktree` backends, use the configured state tools with canonical logical paths when available; the checkout-snapshot fallback below is permitted only when those tools are unavailable. For `orphan`, `two-layer`, or `git-notes` backends, reconcile and clean mutable state only through the configured state tools using canonical logical paths (for example, `agents/{agent}/history.md`, `decisions/decisions.md`, `identity/now.md`, and `log/{timestamp}-{topic}.md`). Never read or copy a worktree `.squad/` checkout snapshot for these backends. If any required state tool is unavailable, fail closed, leave the worktree in place, and report the missing bridge.";
+    const cleanupFallbackHeading =
+      "#### Local/worktree checkout-snapshot fallback (only when state tools unavailable)";
+
+    for (const [label, text] of [
+      ["canonical git-workflow skill", gitWorkflowSkill],
+      ["git-workflow template", gitWorkflowTemplate],
+    ] as const) {
+      const normalized = text.replace(/\r\n/g, "\n").replace(/\s+/g, " ");
+      const cleanupStart = normalized.indexOf(
+        label === "canonical git-workflow skill"
+          ? "### Cleanup After Merge"
+          : "## Worktree Cleanup",
+      );
+      assert.ok(cleanupStart >= 0, `${label} should define worktree cleanup guidance`);
+      const cleanup = normalized.slice(cleanupStart);
+
+      assert.ok(cleanup.includes(cleanupPolicy), `${label} should match the shared backend policy`);
+      assert.ok(
+        cleanup.includes(cleanupFallbackHeading),
+        `${label} should explicitly scope snapshot fallback to local/worktree`,
+      );
+      assert.doesNotMatch(
+        cleanup,
+        /Before removing a worktree, preserve (?:any|its) uncommitted `\.squad\/` (?:state|artifacts) as a complete snapshot/i,
+        `${label} must not direct unconditional checkout copying`,
+      );
+
+      const fallbackStart = cleanup.indexOf(cleanupFallbackHeading);
+      const copyCommands = [...cleanup.matchAll(/(?:cp -a|robocopy\s+\$source)/g)];
+      for (const copyCommand of copyCommands) {
+        assert.ok(
+          copyCommand.index > fallbackStart,
+          `${label} must keep checkout-copy commands inside the local/worktree fallback`,
+        );
+      }
     }
   });
 });
