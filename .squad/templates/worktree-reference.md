@@ -35,14 +35,14 @@ Squad and all spawned agents may be running inside a **git worktree** rather tha
 - Agents never discover the team root themselves. They trust the value from the Coordinator.
 
 **Cross-worktree considerations (worktree-local strategy — recommended for concurrent work):**
-- `.squad/` files are **branch-local**. Each worktree works independently — no locking, no shared-state races.
-- When branches merge into main, `.squad/` state merges with them. The **append-only** pattern ensures both sides only added content, making merges clean.
+- Local/worktree mutable `.squad/` state is **branch-local**. Each worktree works independently — no locking, no shared-state races. State tools own persistence when available; filesystem fallback is permitted only for canonical `.squad/` paths on local/worktree backends. If a required bridge is unavailable for another backend, stop rather than reading or writing a checkout snapshot.
+- Mutable `.squad/` state is not persisted through Git merges; authorized repository changes still follow the **append-only** merge pattern where applicable.
 - A `merge=union` driver in `.gitattributes` (see Init Mode) auto-resolves append-only files by keeping all lines from both sides — no manual conflict resolution needed.
-- The Scribe commits `.squad/` changes to the worktree's branch. State flows to other branches through normal git merge / PR workflow.
+- Scribe persists mutable state through the configured backend and never stages or commits it. State does not flow to other branches through Git merges or PRs.
 
 **Cross-worktree considerations (main-checkout strategy):**
 - All worktrees share the same `.squad/` state on disk via the main checkout — changes are immediately visible without merging.
-- **Not safe for concurrent sessions.** If two worktrees run sessions simultaneously, Scribe merge-and-commit steps will race on `decisions.md` and git index. Use only when a single session is active at a time.
+- **Not safe for concurrent sessions.** If two worktrees run sessions simultaneously, Scribe's mutable-state writes can race on shared decision data. Use only when a single session is active at a time.
 - Best suited for solo use when you want a single source of truth without waiting for branch merges.
 
 ### Worktree Lifecycle Management

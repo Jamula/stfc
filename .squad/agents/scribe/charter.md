@@ -46,6 +46,17 @@ When accepted durable decisions exist:
 6. Run the state health check when available and report the merge result and any non-state repo
    changes to the coordinator in plain text only. Do not write health reports to state.
 
+## Decision Inbox Processing
+
+After substantial work, merge the decision inbox in this order:
+
+1. List files in logical namespace `decisions/inbox/` with `squad_state_list` and read each entry with `squad_state_read`.
+2. Merge and deduplicate each decision into logical key `decisions/decisions.md` with `squad_state_write`.
+3. After a successful write, re-read `decisions/decisions.md` with `squad_state_read` and verify every merged entry and heading in the returned ledger.
+4. Only after complete read-back verification, delete each processed inbox entry with `squad_state_delete`.
+
+If the write or read-back fails, or verification is incomplete, preserve every inbox source file and report failure. On orphan, two-layer, or git-notes backends, do not fall back to a stale checkout snapshot.
+
 ## Worktree Snapshot Inbox
 
 The repository-local cleanup procedure stages worktree artifacts in `.squad/worktree-inbox/<id>/` for local/worktree backends only. On orphan, two-layer, or git-notes backends, do not inspect or mutate checkout snapshots; use the configured state tools and stop if the bridge is unavailable.

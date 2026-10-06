@@ -164,13 +164,13 @@ After user approval:
    - Use the configured governed memory or state tool.
    - If no runtime persistence tool is available, report the learning without claiming it was saved.
 
-2. **For Behavioral Changes:**
-   - Route the accountable specialist to update the minimum tracked governing source.
-   - Validate the change and open a focused PR.
+2. **For Team Decisions:**
+   - Write with `squad_state_write` in logical namespace `decisions/inbox/` for `{agent}-{topic}.md`. Use physical path `.squad/decisions/inbox/{agent}-{topic}.md` only as a local/worktree fallback. On orphan, two-layer, or git-notes backends, stop and report a missing bridge instead of writing a checkout snapshot.
+   - The Squad Coordinator reviews accepted team decisions and records them in logical key `decisions/decisions.md`
 
-3. **Never Use Throwaway Proposal Files:**
-   - Do not create local or gitignored Markdown proposals, including `.squad/decisions/inbox/*.md`, for reflection or directive capture.
-   - Runtime memory may preserve context, but it does not replace the tracked source change required to alter behavior.
+3. **For Skills:**
+   - Document recommendation in session notes
+   - Squad Coordinator reviews and routes to the skill owner
 
 ---
 
@@ -222,7 +222,7 @@ User: "Perfect! This is exactly the format I want for all PRs"
 ❌ **Don't use reflect when:**
 - Simple one-off questions with no pattern
 - User is just exploring ideas (no concrete decisions)
-- Learning is already captured in history.md/`decisions/decisions.md`
+- Learning is already captured in `history.md`/`decisions/decisions.md`
 
 ---
 

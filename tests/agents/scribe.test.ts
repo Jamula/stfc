@@ -97,6 +97,22 @@ const reflectTemplate = readFileSync(
   resolve(process.cwd(), ".squad/templates/skills/reflect/SKILL.md"),
   "utf-8",
 );
+const reflectSkill = readFileSync(
+  resolve(process.cwd(), ".github/skills/reflect/SKILL.md"),
+  "utf-8",
+);
+const secretHandling = readFileSync(
+  resolve(process.cwd(), ".github/skills/secret-handling/SKILL.md"),
+  "utf-8",
+);
+const supersededPrDetection = readFileSync(
+  resolve(process.cwd(), ".squad/skills/superseded-pr-detection/SKILL.md"),
+  "utf-8",
+);
+const worktreeReference = readFileSync(
+  resolve(process.cwd(), ".squad/templates/worktree-reference.md"),
+  "utf-8",
+);
 const rules = readFileSync(
   resolve(process.cwd(), ".github/copilot-instructions.md"),
   "utf-8",
@@ -243,6 +259,7 @@ describe("Scribe — decision state keys", () => {
     ["squad commands", squadCommands],
     ["scope override fanout", scopeOverrideFanout],
     ["architectural proposals", architecturalProposals],
+    ["Reflect skill", reflectSkill],
     ["Reflect template", reflectTemplate],
   ] as const;
 
@@ -328,6 +345,16 @@ describe("Scribe — decision inbox persistence", () => {
       assert.ok(
         beforeDeleteGate && beforeDeleteGate.index < deleteCall,
         `${label} should gate deletion on a stated verify/confirm-before-delete step`,
+      );
+      assert.match(
+        inboxTask,
+        /decisions\/inbox\/?/i,
+        `${label} should identify the logical inbox namespace`,
+      );
+      assert.match(
+        inboxTask,
+        /decisions\/decisions\.md/i,
+        `${label} should write to the logical decision-ledger key`,
       );
       assert.match(
         inboxTask,
@@ -501,28 +528,112 @@ describe("Scribe — generated coordinator archive safeguards", () => {
 });
 
 describe("Reflect — decision state key", () => {
-  it("uses the logical decision-ledger key for operational references", () => {
-    const normalized = reflectTemplate.replace(/\r\n/g, "\n");
-    assert.match(
-      normalized,
-      /Logical state key `decisions\/decisions\.md`/,
-      "Reflect should identify the logical decision-ledger key",
-    );
+  for (const [label, text] of [
+    ["active Reflect skill", reflectSkill],
+    ["Reflect template", reflectTemplate],
+  ] as const) {
+    it(`${label} uses the logical ledger key and namespace with Coordinator ownership`, () => {
+      const normalized = text.replace(/\r\n/g, "\n");
+      assert.match(
+        normalized,
+        /Logical state key `decisions\/decisions\.md`/,
+        `${label} should identify the logical decision-ledger key`,
+      );
+      assert.match(
+        normalized,
+        /logical namespace `decisions\/inbox\/`/i,
+        `${label} should identify the logical decision-inbox namespace`,
+      );
 
-    const withoutValidPaths = normalized
-      .replace(/`?decisions\/decisions\.md`?/g, "")
-      .replace(/\.squad\/decisions\/decisions\.md/g, "");
-    assert.doesNotMatch(
-      withoutValidPaths,
-      /`?decisions\.md`?/i,
-      "Reflect should not refer to the decision ledger by its bare filename",
-    );
-    assert.doesNotMatch(
-      withoutValidPaths,
-      /`?decision\.md`?/i,
-      "Reflect should not refer to the decision ledger by a singular bare filename",
-    );
-  });
+      const withoutValidKeys = normalized
+        .replace(/\.squad\/decisions\/decisions\.md/g, "")
+        .replace(/decisions\/decisions\.md/g, "");
+      assert.doesNotMatch(
+        withoutValidKeys,
+        /\bdecisions?\.md\b/i,
+        `${label} should not use a bare decision-ledger filename`,
+      );
+
+      const physicalInboxReferences = normalized
+        .split("\n")
+        .filter((line) => line.includes(".squad/decisions/inbox/"));
+      assert.ok(
+        physicalInboxReferences.length > 0 &&
+          physicalInboxReferences.every((line) =>
+            /local\/worktree fallback/i.test(line),
+          ),
+        `${label} should limit physical inbox paths to local/worktree fallback`,
+      );
+      assert.match(
+        normalized,
+        /On orphan, two-layer, or git-notes backends, stop and report a missing bridge/i,
+        `${label} should fail closed when a governed state bridge is unavailable`,
+      );
+
+      const teamDecisionStart = normalized.indexOf("**For Team Decisions:**");
+      const skillsStart = normalized.indexOf(
+        "3. **For Skills:**",
+        teamDecisionStart,
+      );
+      assert.ok(
+        teamDecisionStart >= 0 && skillsStart > teamDecisionStart,
+        `${label} should define a bounded team-decision persistence step`,
+      );
+      const teamDecisionStep = normalized.slice(teamDecisionStart, skillsStart);
+      assert.match(
+        teamDecisionStep,
+        /squad_state_write/i,
+        `${label} should persist team decisions through state tools`,
+      );
+      assert.match(
+        teamDecisionStep,
+        /logical namespace `decisions\/inbox\/`/i,
+        `${label} should target the logical inbox namespace`,
+      );
+      assert.match(
+        teamDecisionStep,
+        /Squad Coordinator/i,
+        `${label} should route decision review and recording to the Coordinator`,
+      );
+      assert.match(
+        teamDecisionStep,
+        /decisions\/decisions\.md/i,
+        `${label} should identify the logical ledger key`,
+      );
+      assert.doesNotMatch(
+        teamDecisionStep,
+        /\blead\b/i,
+        `${label} should not assign accepted-decision review to a generic Lead`,
+      );
+    });
+  }
+});
+
+describe("Scribe — mutable-state persistence guidance", () => {
+  for (const [label, text] of [
+    ["live coordinator prompt", squadAgent],
+    ["active Scribe charter", charter],
+    ["Scribe template", scribeTemplate],
+    ["Scribe spawn template", spawnTemplates],
+    ["after-agent Scribe prompt", afterAgentReference],
+    ["secret-handling skill", secretHandling],
+    ["superseded-PR skill", supersededPrDetection],
+    ["worktree reference", worktreeReference],
+  ] as const) {
+    it(`${label} does not direct Scribe to commit mutable state`, () => {
+      const normalized = text.replace(/\r\n/g, "\n");
+      assert.match(
+        normalized,
+        /configured (?:state )?backend|runtime state tools own persistence/i,
+        `${label} should identify the configured persistence mechanism`,
+      );
+      assert.doesNotMatch(
+        normalized,
+        /git add \.squad\/|Scribe auto-commits|Scribe commits \.squad|normal Scribe commit|Scribe merge-and-commit/i,
+        `${label} should not require Scribe to stage or commit mutable state`,
+      );
+    });
+  }
 });
 
 describe("Scribe — worktree snapshot ingestion", () => {
