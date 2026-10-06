@@ -7,6 +7,7 @@ const initSurfaces = [
   ".github/skills/coordinator-init-mode/SKILL.md",
   ".squad/templates/init-mode.md",
   ".squad/reference/init-detail.md",
+  ".squad/templates/skills/init-mode/SKILL.md",
 ];
 
 function readInitSurface(path: string): string {

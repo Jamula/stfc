@@ -1,6 +1,6 @@
 ---
 name: reflect
-description: Learning capture system that extracts HIGH/MED/LOW confidence patterns from conversations to prevent repeating mistakes. Use after user corrections ("no", "wrong"), praise ("perfect", "exactly"), or when discovering edge cases. Complements .squad/agents/{agent}/history.md and logical key decisions/decisions.md.
+description: Learning capture system that extracts HIGH/MED/LOW confidence patterns from conversations to prevent repeating mistakes. Use after user corrections ("no", "wrong"), praise ("perfect", "exactly"), or when discovering edge cases. Complements logical state key agents/{agent}/history.md (local/worktree physical fallback: .squad/agents/{agent}/history.md) and logical key decisions/decisions.md.
 license: MIT
 version: 1.0.0-squad
 domain: team-memory, learning
@@ -19,7 +19,7 @@ Analyze conversations and propose improvements to squad knowledge based on what 
 
 **Reflect complements existing Squad knowledge systems:**
 
-1. **`.squad/agents/{agent}/history.md`** — Permanent learnings from completed work (append-only; each agent updates their own file; Scribe propagates cross-agent updates)
+1. Logical state key `agents/{agent}/history.md` — Permanent learnings from completed work (append-only; each agent updates their own key; Scribe propagates cross-agent updates). Physical `.squad/agents/{agent}/history.md` is a local/worktree-only fallback.
 2. Logical state key `decisions/decisions.md` — Team-wide decisions that all agents respect; local/worktree physical path: `.squad/decisions/decisions.md`
 3. **`reflect` skill** — Captures in-flight learnings from conversations that may graduate to `history.md` or logical key `decisions/decisions.md`
 
@@ -27,7 +27,7 @@ Analyze conversations and propose improvements to squad knowledge based on what 
 - Use `reflect` during work to capture learnings
 - At session end, review captured learnings
 - Promote HIGH confidence patterns → Squad Coordinator for `decisions/decisions.md` review
-- Promote agent-specific patterns → `{agent}/history.md` updates
+- Promote agent-specific patterns → logical key `agents/{agent}/history.md` updates
 
 ---
 
@@ -64,7 +64,7 @@ Analyze conversations and propose improvements to squad knowledge based on what 
 
 Determine what knowledge system should be updated:
 
-1. **Agent-specific learning** → `.squad/agents/{agent}/history.md`
+1. **Agent-specific learning** → logical key `agents/{agent}/history.md`, written with `squad_state_append`
 2. **Team-wide decision** → use `squad_state_write` in logical namespace `decisions/inbox/` for `{agent}-{topic}.md`. Use physical path `.squad/decisions/inbox/{agent}-{topic}.md` only as a local/worktree fallback. On orphan, two-layer, or git-notes backends, stop and report a missing bridge instead of writing a checkout snapshot.
 3. **Skill-specific improvement** → Document in session, recommend to skill owner
 
@@ -134,7 +134,8 @@ Present findings:
 │                                                             │
 │ [MED]  + Add preference: "{specific preference}"            │
 │   Source: "{evidence from conversation}"                    │
-│   Target: .squad/agents/{agent}/history.md                  │
+│   Target: logical key agents/{agent}/history.md             │
+│   Local/worktree fallback: .squad/agents/{agent}/history.md │
 │                                                             │
 │ [LOW]  ~ Note for review: "{observation}"                   │
 │   Source: "{pattern observed}"                              │
@@ -161,7 +162,11 @@ Present findings:
 After user approval:
 
 1. **For Agent History:**
-   - Append to `.squad/agents/{agent}/history.md` under `## Learnings` section
+   - Append with `squad_state_append` to logical key `agents/{agent}/history.md` under `## Learnings` section
+   - Re-read the key with `squad_state_read` and verify the appended learning
+   - Use physical `.squad/agents/{agent}/history.md` only as a local/worktree fallback when state tools are unavailable
+   - On orphan, two-layer, or git-notes backends, fail closed and report a missing bridge rather than writing a checkout snapshot
+   - If the write or read-back fails, preserve the source learning and report failure
    - Format: Date, assignment context, key learning
 
 2. **For Team Decisions:**
@@ -188,7 +193,8 @@ User: "No, use the code search tools first, grep is too slow"
 ```
 [HIGH] + Add constraint: "Use code intelligence tools before grep"
   Source: "No, use the code search tools first, grep is too slow"
-  Target: .squad/agents/{agent}/history.md
+  Target: logical key agents/{agent}/history.md
+  Local/worktree fallback: .squad/agents/{agent}/history.md
 ```
 
 ### Example 2: Success Pattern
@@ -228,5 +234,5 @@ User: "Perfect! This is exactly the format I want for all PRs"
 ## See Also
 
 - Logical key `decisions/decisions.md` — Team-wide decisions; local/worktree physical path: `.squad/decisions/decisions.md`
-- `.squad/agents/*/history.md` — Agent-specific learnings
+- Logical key `agents/{agent}/history.md` — Agent-specific learnings; local/worktree physical fallback: `.squad/agents/{agent}/history.md`
 - `.squad/routing.md` — Work assignment patterns
