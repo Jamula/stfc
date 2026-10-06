@@ -10,6 +10,10 @@ const initSurfaces = [
   ".squad/reference/init-detail.md",
   ".squad/templates/skills/init-mode/SKILL.md",
 ];
+const coordinatorSurfaces = [
+  ".github/agents/squad.agent.md",
+  ".squad/templates/squad.agent.md.template",
+];
 
 const canonicalEmptyLedger = `# .squad/decisions/ — Decision Registry
 
@@ -112,28 +116,42 @@ describe("Init Mode state ownership guidance", () => {
       assert.match(text, /\.squad\/\*\/audit-trail\.md/);
     });
 
-    it(`${path} seeds casting and agent history according to the configured backend`, () => {
+    it(`${path} keeps casting policy and registry static and routes only history by backend`, () => {
       const text = readInitSurface(path);
 
       assert.match(
         text,
-        /for the local\/worktree backend, copy .* create registry\.json and history\.json .* as files/,
+        /for every backend, initialize the authoritative static casting files in the checkout/,
       );
       assert.match(
         text,
-        /for every other backend, seed this same data through squad_state_write to the equivalent logical keys instead of writing checkout files directly/,
+        /if \.squad\/casting\/policy\.json is absent, copy \.squad\/templates\/casting-policy\.json/,
       );
       assert.match(
         text,
-        /read it back with squad_state_read to verify the write before proceeding/,
+        /create or update \.squad\/casting\/registry\.json as a static file while preserving existing persistent-name assignments/,
       );
       assert.match(
         text,
-        /for the local\/worktree backend, write history\.md as a file/,
+        /never send casting\/policy\.json or casting\/registry\.json through state tools/,
       );
       assert.match(
         text,
-        /for every other backend, seed it through squad_state_write to the logical agents\/\{name\}\/history\.md key and verify with squad_state_read; do not create a checkout copy/,
+        /the assignment history\.json is mutable state: for local\/worktree, create or append \.squad\/casting\/history\.json on the local state filesystem/,
+      );
+      assert.match(
+        text,
+        /for orphan, two-layer, or git-notes, seed only logical key casting\/history\.json with squad_state_write and verify it with squad_state_read/,
+      );
+      assert.doesNotMatch(
+        text,
+        /squad_state_write.{0,100}casting\/(?:policy|registry)\.json/i,
+        "static casting policy and registry must not use mutable-state writes",
+      );
+      assert.match(text, /do not create a checkout copy/);
+      assert.match(
+        text,
+        /if the bridge is unavailable, the write fails, or readback does not confirm the write, fail closed/,
       );
     });
 
@@ -208,6 +226,52 @@ describe("Init Mode state ownership guidance", () => {
       );
       assert.match(text, /not a persistence mechanism for backend-owned state/);
       assert.doesNotMatch(text, /\.squad\/[^ ]* merge=union/);
+    });
+  }
+});
+
+describe("Coordinator casting policy and registry are static across state backends", () => {
+  for (const path of coordinatorSurfaces) {
+    it(`${path} protects only mutable casting history and keeps policy/registry on disk`, () => {
+      const text = readInitSurface(path);
+      const handshakeStart = text.indexOf("for all backends except");
+      const handshakeEnd = text.indexOf("the squad_state_* and memory.* tools", handshakeStart);
+      assert.ok(
+        handshakeStart >= 0 && handshakeEnd > handshakeStart,
+        `${path} should define a state-backend handshake`,
+      );
+      const handshake = text.slice(handshakeStart, handshakeEnd);
+
+      assert.match(
+        handshake,
+        /\.squad\/casting\/history\.json/,
+        `${path} should protect mutable casting history under non-local backends`,
+      );
+      assert.doesNotMatch(
+        handshake,
+        /\.squad\/casting\/\*\.json/,
+        `${path} must not ban static casting files with a wildcard`,
+      );
+      assert.match(
+        handshake,
+        /\.squad\/casting\/policy\.json and \.squad\/casting\/registry\.json are authoritative static files that remain on disk for every backend/,
+        `${path} should permit static casting policy and registry files on disk`,
+      );
+      assert.match(
+        handshake,
+        /read\/write them with file tools and never route them through state tools/,
+        `${path} should keep static casting files out of state tools`,
+      );
+      assert.match(
+        text,
+        /for every backend, create or update the authoritative static \.squad\/casting\/registry\.json in the checkout/,
+        `${path} should maintain the static registry in the checkout`,
+      );
+      assert.match(
+        text,
+        /for orphan, two-layer, or git-notes, use only logical key casting\/history\.json with squad_state_write, then verify it with squad_state_read/,
+        `${path} should route only mutable casting history through non-local state tools`,
+      );
     });
   }
 });
@@ -331,19 +395,5 @@ describe("Init Mode — memory ignore uses wildcard-plus-negation, backend init 
       );
     });
 
-    it(`${path} seeds casting and history through state tools for non-local backends`, () => {
-      const text = readInitSurface(path);
-
-      assert.match(
-        text,
-        /for every other backend, seed this same data through squad_state_write to the equivalent logical keys/,
-      );
-      assert.match(
-        text,
-        /for every other backend, seed it through squad_state_write to the logical agents\/\{name\}\/history\.md key/,
-      );
-      assert.match(text, /verify the write before proceeding/);
-      assert.match(text, /do not create a checkout copy/);
-    });
   }
 });

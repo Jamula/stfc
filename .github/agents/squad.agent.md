@@ -170,7 +170,7 @@ Repository-wide merge requirements are defined by the repository's PR workflow a
 
 **State-backend handshake — MANDATORY on every session before any state mutation (bradygaster/squad#1305):**
 
-For all backends EXCEPT `"local"` / `"worktree"`, the runtime owns persistence and you MUST NOT touch `.squad/decisions/decisions.md`, `.squad/decisions/inbox/`, `.squad/agents/*/history.md`, `.squad/casting/*.json`, `.squad/identity/*.md`, or backend-owned runtime files under `.squad/memory/*` (excluding the static, constitution-tracked `.squad/memory/config.json` policy file) via `create` / `edit` / `write_file` tools. `.squad/memory/config.json` is static tracked configuration, not runtime-managed memory. All other files under `.squad/memory/` remain runtime-owned and must not be directly edited for non-local backends. These writes either fail at the pre-commit hook or create phantom state the runtime overwrites at next read — a contract violation that produces silent data loss.
+For all backends EXCEPT `"local"` / `"worktree"`, the runtime owns persistence and you MUST NOT touch `.squad/decisions/decisions.md`, `.squad/decisions/inbox/`, `.squad/agents/*/history.md`, `.squad/casting/history.json`, `.squad/identity/*.md`, or backend-owned runtime files under `.squad/memory/*` (excluding the static, constitution-tracked `.squad/memory/config.json` policy file) via `create` / `edit` / `write_file` tools. `.squad/casting/policy.json` and `.squad/casting/registry.json` are authoritative static files that remain on disk for every backend; read/write them with file tools and never route them through state tools. `.squad/memory/config.json` is static tracked configuration, not runtime-managed memory. All other files under `.squad/memory/` remain runtime-owned and must not be directly edited for non-local backends. These writes either fail at the pre-commit hook or create phantom state the runtime overwrites at next read — a contract violation that produces silent data loss.
 
 The `squad_state_*` and `memory.*` tools that own persistence are exposed via the `squad_state` MCP server (declared in `.github/mcp.json`). Copilot CLI may load MCP tools **lazily** — they are not always advertised in your initial function list at session start. You MUST proactively confirm they are reachable:
 
@@ -843,8 +843,8 @@ After selecting a naming mode:
 5. **Ralph is always "Ralph"** — exempt from casting.
 6. **Rai is always "Rai"** — exempt from casting.
 7. **@copilot is always "@copilot"** — exempt from casting. If the user says "add team member copilot" or "add copilot", this is the GitHub Copilot coding agent. Do NOT cast a name — follow the Copilot Coding Agent Member section instead.
-8. Store the mapping in `.squad/casting/registry.json`.
-9. Record the assignment snapshot in `.squad/casting/history.json`.
+8. For every backend, create or update the authoritative static `.squad/casting/registry.json` in the checkout, preserving existing persistent-name assignments. Keep `.squad/casting/policy.json` on disk from the authoritative casting-policy template; do not send either static file through state tools.
+9. Record mutable assignment snapshots in `history.json`. For `local`/`worktree`, create or append `.squad/casting/history.json` on the local state filesystem. For `orphan`, `two-layer`, or `git-notes`, use only logical key `casting/history.json` with `squad_state_write`, then verify it with `squad_state_read`; never use a checkout copy and fail closed if the bridge or verification is unavailable.
 10. Use the allocated name everywhere: charter.md, history.md, team.md, routing.md, spawn prompts.
 
 ### Overflow Handling
