@@ -25,7 +25,7 @@ function defaultExists(p) {
 
 // ── Check #9 — Mutable Squad state must use the configured backend ───
 
-const MUTABLE_SQUAD_STATE_PATTERNS = [
+export const MUTABLE_SQUAD_STATE_PATTERNS = [
   /^\.squad\/agents\/[^/]+\/history\.md$/,
   /^\.squad\/agents\/[^/]+\/history-archive\.md$/,
   /^\.squad\/casting\/history\.json$/,
@@ -34,7 +34,12 @@ const MUTABLE_SQUAD_STATE_PATTERNS = [
   /^\.squad\/decisions\/inbox\//,
   /^\.squad\/identity\//,
   /^\.squad\/log\//,
-  /^\.squad\/memory(?:\/|$)/,
+  // `.squad/memory/config.json` is the static, version-controlled policy
+  // file (default provider, prompt-only fallback, external providers) —
+  // it is not backend-owned mutable state and must stay trackable. Every
+  // other path under `.squad/memory/` (e.g. index.json) is backend-owned
+  // and remains guarded.
+  /^\.squad\/memory\/(?!config\.json$)/,
   /^\.squad\/orchestration-log\//,
   /^\.squad\/sessions\//,
   /^\.squad\/\.scratch\//,
@@ -45,14 +50,36 @@ const MUTABLE_SQUAD_STATE_PATTERNS = [
   /^\.squad\/rai\/audit-trail\.md$/,
 ];
 
-const MUTABLE_SQUAD_STATE_DELETION_ALLOWLIST = new Set([
+// One-time migration allowlist: these backend-owned paths were tracked
+// before the configured state backend existed. They may be removed from
+// the index (via `git rm --cached`, preserving the working-tree file) as
+// part of the migration, but must never be staged again afterward. This
+// is an exact, enumerated list — not a general deletion bypass.
+//
+// `.squad/log/**` and `.squad/orchestration-log/**` are intentionally
+// EXCLUDED here pending a separate, explicitly user-approved migration;
+// see PR #314 discussion.
+export const MUTABLE_SQUAD_STATE_DELETION_ALLOWLIST = new Set([
   '.squad/decisions/decisions.md',
+  '.squad/identity/now.md',
+  '.squad/identity/wisdom.md',
+  '.squad/casting/history.json',
+  '.squad/rai/audit-trail.md',
+  '.squad/agents/bashir/history-archive.md',
+  '.squad/agents/garak/history-archive.md',
+  '.squad/agents/kirk/history-archive.md',
+  '.squad/agents/obrien/history-archive.md',
+  '.squad/agents/picard/history-archive.md',
+  '.squad/agents/scotty/history-archive.md',
+  '.squad/agents/tuvok/history-archive.md',
+  '.squad/agents/uhura/history-archive.md',
 ]);
 
 /**
  * Mutable Squad state must be persisted through the configured backend,
- * not staged or committed from the working tree. Only the canonical decisions
- * ledger may be deleted as part of its migration.
+ * not staged or committed from the working tree. Only paths in the deletion
+ * allowlist above may be deleted as part of migrating them off direct git
+ * tracking.
  */
 export function checkSquadBoundary(staged, deleted = []) {
   const deletedPaths = new Set(deleted);

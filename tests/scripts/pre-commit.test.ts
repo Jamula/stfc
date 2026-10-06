@@ -86,11 +86,14 @@ describe("checkSquadBoundary", () => {
   });
 
   it("rejects staged deletions of other mutable state paths", () => {
+    // NOTE: paths here must stay OUTSIDE MUTABLE_SQUAD_STATE_DELETION_ALLOWLIST
+    // (the one-time migration allowlist) so this test keeps validating that
+    // non-allowlisted mutable-state deletions are still rejected.
     const deleted = [
       ".squad/agents/scotty/history.md",
-      ".squad/identity/now.md",
+      ".squad/sessions/2026-05-16.json",
       ".squad/log/2026-05-16.md",
-      ".squad/rai/audit-trail.md",
+      ".squad/fact-checker/audit-trail.md",
     ];
     const errors: string[] = [];
     mock.method(console, "error", (msg: string) => errors.push(msg));
@@ -421,6 +424,91 @@ describe("checkWorkflowPinningTests", () => {
 
   afterEach(() => {
     mock.restoreAll();
+  });
+
+  // ── Real-repository mutable-state invariant ───────────────────────
+  //
+  // Regression test for the migration deadlock fixed alongside PR #314's
+  // revision: the guard patterns must not match any path that is both
+  // tracked in HEAD *and* absent from the deletion allowlist, except for
+  // the explicitly documented, pending exception below. Unlike the other
+  // tests in this file, this one runs against the real working-tree repo
+  // (via `git ls-files`) rather than a synthetic temp repo, because the
+  // bug it guards against is specifically a mismatch between the guard's
+  // patterns/allowlist and the *actual* tracked file set.
+  describe("mutable-state guard invariants (real repository)", () => {
+    let MUTABLE_SQUAD_STATE_PATTERNS: RegExp[];
+    let MUTABLE_SQUAD_STATE_DELETION_ALLOWLIST: Set<string>;
+
+    beforeEach(async () => {
+      const mod = await import("../../scripts/pre-commit-checks.mjs");
+      MUTABLE_SQUAD_STATE_PATTERNS = mod.MUTABLE_SQUAD_STATE_PATTERNS;
+      MUTABLE_SQUAD_STATE_DELETION_ALLOWLIST = mod.MUTABLE_SQUAD_STATE_DELETION_ALLOWLIST;
+    });
+
+    it("has no tracked path matching the guard patterns outside the deletion allowlist, except the documented pending log/orchestration-log exception", () => {
+      const tracked = execFileSync("git", ["ls-files", ".squad"], { encoding: "utf8" })
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean);
+
+      const unexpected = tracked.filter((path) => {
+        const matchesGuard = MUTABLE_SQUAD_STATE_PATTERNS.some((pattern) => pattern.test(path));
+        if (!matchesGuard) return false;
+        if (MUTABLE_SQUAD_STATE_DELETION_ALLOWLIST.has(path)) return false;
+        // One-time, narrowly-scoped pending exception: Scribe is independently
+        // auditing these two namespaces for durable records. They remain
+        // tracked and matched by the guard until that audit completes and an
+        // explicit go-ahead is given; this is not a general bypass — any
+        // tracked path outside these two prefixes must be allowlisted or
+        // untracked, never silently excluded here.
+        return !(path.startsWith(".squad/log/") || path.startsWith(".squad/orchestration-log/"));
+      });
+
+      assert.deepEqual(
+        unexpected,
+        [],
+        "found tracked .squad paths matched by the mutable-state guard but missing from the " +
+          "deletion allowlist (outside the documented log/orchestration-log exception); add them " +
+          "to MUTABLE_SQUAD_STATE_DELETION_ALLOWLIST or untrack them",
+      );
+    });
+
+    it("never matches the static memory policy file .squad/memory/config.json", () => {
+      assert.equal(
+        MUTABLE_SQUAD_STATE_PATTERNS.some((pattern) => pattern.test(".squad/memory/config.json")),
+        false,
+      );
+    });
+
+    it("still matches other files under .squad/memory/", () => {
+      assert.equal(
+        MUTABLE_SQUAD_STATE_PATTERNS.some((pattern) => pattern.test(".squad/memory/index.json")),
+        true,
+      );
+    });
+
+    it("does not gitignore the static memory policy file .squad/memory/config.json", () => {
+      const result = spawnSync("git", ["check-ignore", "--quiet", ".squad/memory/config.json"], {
+        encoding: "utf8",
+      });
+      assert.equal(
+        result.status,
+        1,
+        "expected `git check-ignore` to report .squad/memory/config.json as NOT ignored (exit 1)",
+      );
+    });
+
+    it("still gitignores other files under .squad/memory/", () => {
+      const result = spawnSync("git", ["check-ignore", "--quiet", ".squad/memory/index.json"], {
+        encoding: "utf8",
+      });
+      assert.equal(
+        result.status,
+        0,
+        "expected `git check-ignore` to report .squad/memory/index.json as ignored (exit 0)",
+      );
+    });
   });
 
   it("passes when no workflow files are staged", () => {

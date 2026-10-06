@@ -1,5 +1,9 @@
 /** Type declarations for scripts/pre-commit-checks.mjs */
 
+export const MUTABLE_SQUAD_STATE_PATTERNS: RegExp[];
+
+export const MUTABLE_SQUAD_STATE_DELETION_ALLOWLIST: Set<string>;
+
 export function checkSquadBoundary(staged: string[], deleted?: string[]): void;
 
 export function checkPortableFilenames(staged: string[]): void;
