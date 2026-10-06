@@ -46,6 +46,10 @@ const squadAgent = readFileSync(
   resolve(process.cwd(), ".github/agents/squad.agent.md"),
   "utf-8",
 );
+const coordinatorTemplate = readFileSync(
+  resolve(process.cwd(), ".squad/templates/squad.agent.md.template"),
+  "utf-8",
+);
 const rules = readFileSync(
   resolve(process.cwd(), ".github/copilot-instructions.md"),
   "utf-8",
@@ -207,6 +211,44 @@ describe("Scribe — decision state keys", () => {
         }
       }
     }
+  });
+});
+
+describe("Scribe — decision inbox persistence", () => {
+  it("verifies the ledger read-back before deleting inbox sources", () => {
+    const normalized = coordinatorTemplate.replace(/\r\n/g, "\n");
+    const inboxStart = normalized.indexOf("2. DECISION INBOX:");
+    const nextTask = normalized.indexOf("3. ORCHESTRATION LOG:", inboxStart);
+    assert.ok(inboxStart >= 0 && nextTask > inboxStart, "template should define the decision inbox task");
+
+    const inboxTask = normalized.slice(inboxStart, nextTask);
+    const writeCall = inboxTask.indexOf("squad_state_write");
+    const readBackCall = inboxTask.indexOf("squad_state_read", writeCall + 1);
+    const verification = inboxTask.indexOf(
+      "verify every merged entry and heading persisted",
+      readBackCall + 1,
+    );
+    const deleteCall = inboxTask.indexOf("squad_state_delete", verification + 1);
+
+    assert.ok(
+      writeCall >= 0 &&
+        readBackCall > writeCall &&
+        verification > readBackCall &&
+        deleteCall > verification,
+      "the task should write, read back and verify every merged entry and heading, then delete",
+    );
+    assert.ok(
+      inboxTask.includes(
+        "If the write or read-back fails, or verification is incomplete, preserve every inbox source file and report failure.",
+      ),
+      "the task should preserve inbox sources and report failure when persistence is not verified",
+    );
+    assert.ok(
+      inboxTask.includes(
+        "On orphan, two-layer, or git-notes backends, do not fall back to a stale checkout snapshot.",
+      ),
+      "the task should not use stale checkout snapshots on governed backends",
+    );
   });
 });
 
