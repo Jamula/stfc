@@ -33,13 +33,15 @@ export function hashObjectForPath(
 export function checkAttrSignatures(
   paths: string[],
   exec?: (cmd: string, args: string[], options: Record<string, unknown>) => string,
-): Map<string, string>;
+): Map<string, { signature: string; pathIndependent: boolean }>;
 
 export function checkNoUntrackedMutableStateCopies(
   destHashes: Map<string, string>,
   listIgnoredFn?: () => string[],
   hashFn?: (sourcePath: string, destinationPath: string) => string,
-  attrFn?: (paths: string[]) => Map<string, string>,
+  attrFn?: (
+    paths: string[],
+  ) => Map<string, { signature: string; pathIndependent: boolean }>,
 ): void;
 
 export function grepTestsForWorkflow(basename: string): string[];
