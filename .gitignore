@@ -57,5 +57,7 @@ summary.md
 .squad/identity/
 .squad/casting/history.json
 .squad/rai/audit-trail.md
-.squad/agents/*/history-archive.md
+# Squad: bare and timestamped archive variants (e.g.
+# history-archive-2026-06-02.md, history-archive-20260602T044144Z.md)
+.squad/agents/*/history-archive*
 # /Squad: state owned by squad-state branch

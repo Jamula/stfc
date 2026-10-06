@@ -13,22 +13,23 @@ import {
   checkSquadBoundary,
   checkPortableFilenames,
   checkWorkflowPinningTests,
+  parseNameStatus,
 } from './pre-commit-checks.mjs';
 
 execSync('node scripts/check-artifact-hygiene.mjs --staged', { stdio: 'inherit' });
 
 // --- Enforcement checks (fail fast before running the full test suite) ---
 
-const staged = execSync('git diff --cached --name-only', { encoding: 'utf8' })
-  .split(/\r?\n/)
-  .filter(Boolean);
-const deleted = execSync('git diff --cached --name-only --diff-filter=D', {
+// `-z` avoids Git's quoting of unusual filenames; `-M -C` make rename/copy
+// detection explicit instead of depending on the repo's `diff.renames`
+// config. See parseNameStatus for why both the destination AND the source
+// of a rename/copy matter to the Squad boundary check.
+const statusOutput = execSync('git diff --cached --name-status -z -M -C', {
   encoding: 'utf8',
-})
-  .split(/\r?\n/)
-  .filter(Boolean);
+});
+const { staged, deleted, renamedFrom } = parseNameStatus(statusOutput);
 
-checkSquadBoundary(staged, deleted);
+checkSquadBoundary(staged, deleted, renamedFrom);
 checkPortableFilenames(staged);
 checkWorkflowPinningTests(staged);
 
