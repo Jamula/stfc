@@ -193,7 +193,7 @@ describe("SWA project structure (T-SWA-002)", () => {
       );
     });
 
-    it("pins the SWA API runtime and package engine to supported Node 22", () => {
+    it("aligns the SWA API runtime and package engine with api/.nvmrc", () => {
       const config = JSON.parse(read("staticwebapp.config.json")) as {
         platform?: { apiRuntime?: string };
       };
@@ -203,9 +203,11 @@ describe("SWA project structure (T-SWA-002)", () => {
       const apiLock = JSON.parse(read("api/package-lock.json")) as {
         packages?: Record<string, { engines?: { node?: string } }>;
       };
+      const apiNodeVersion = read("api/.nvmrc").trim();
 
-      assert.equal(config.platform?.apiRuntime, "node:22");
-      assert.equal(apiPackage.engines?.node, ">=22");
+      assert.equal(apiNodeVersion, "22");
+      assert.equal(config.platform?.apiRuntime, `node:${apiNodeVersion}`);
+      assert.equal(apiPackage.engines?.node, `>=${apiNodeVersion}`);
       assert.equal(apiLock.packages?.[""]?.engines?.node, apiPackage.engines?.node);
     });
   });
