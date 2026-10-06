@@ -15,12 +15,13 @@
 - Logical key `decisions/decisions.md` — shared canonical decision ledger; local/worktree path: `.squad/decisions/decisions.md`
 - Logical namespace `decisions/inbox/` — decision drop-box, read and merged through the configured backend
 - Cross-agent context propagation — when one agent's decision affects another
-- Decision archival — **HARD GATE**: use ledger size only to trigger eligibility review before every merge:
-  - **Tier 1 (30-day):** If logical key `decisions/decisions.md` is >20KB, review entries older than 30 days
-  - **Tier 2 (7-day):** If still >50KB after Tier 1, review entries older than 7 days
-  - Age alone never establishes archival eligibility. Keep entries with open/unresolved items, active blockers, open linked issues, or unverifiable status in the active ledger.
-  - Archive only entries verified complete or resolved; if status cannot be confirmed, retain the entry.
-  - Emit HEALTH REPORT to session log after archival reviews
+- Decision archival — **HARD GATE**: size and age thresholds trigger eligibility review only, never archival by themselves:
+  - **Tier 1 (30-day):** If logical key `decisions/decisions.md` is >20KB, review entries older than 30 days.
+  - **Tier 2 (7-day):** If still >50KB after Tier 1, review entries older than 7 days.
+  - **Retention taxonomy:** `constitutional` = hot forever; `standing-rule` = hot forever; `active-blocker` = hot until closed; `unresolved-followup` = hot until closed; `canonical-pattern` = hot forever; `current-epic` = hot until epic closes; `operational-learning` = hot until a similar pattern recurs at least 3 times or 90 days pass without recurrence; `archive-eligible` = verified completion or resolution only, with 7 days hot before archive.
+  - Keep open, unresolved, or unverifiable entries in the active ledger. At archive-decision time, verify linked GitHub issue/PR status for `current-epic` and `archive-eligible` entries; if status cannot be confirmed, retain the entry.
+  - **Bulk-tagging gate:** Before bulk-tagging, Scribe must dry-run classification against the live ledger and write one review artifact to `.squad/log/{ts}-decisions-classification-sample.md`. It must define the durable tagging convention, sample-classify 10–15 entries, and specify future-inbox behavior. Require user review of the artifact before bulk tagging. Do not invent a convention; until review, leave untagged entries unchanged and active.
+  - Emit HEALTH REPORT to session log after archival reviews.
 
 ## How I Work
 
@@ -40,10 +41,10 @@ After every substantial work session:
 2. **Merge the decision inbox:**
    - List all files in `decisions/inbox/` with `squad_state_list`
    - Read each entry with `squad_state_read`
-   - Append each decision's contents to `decisions.md` with `squad_state_write` after dedupe
+   - Append each decision's contents to `decisions/decisions.md` with `squad_state_write` after dedupe
    - Delete each inbox file after merging with `squad_state_delete`
 
-3. **Deduplicate and consolidate decisions.md:**
+3. **Deduplicate and consolidate `decisions/decisions.md`:**
    - Parse the file into decision blocks (each block starts with `### `).
    - **Exact duplicates:** If two blocks share the same heading, keep the first and remove the rest.
    - **Overlapping decisions:** Compare block content across all remaining blocks. If two or more blocks cover the same area (same topic, same architectural concern, same component) but were written independently (different dates, different authors), consolidate them:
@@ -63,7 +64,7 @@ After every substantial work session:
 
 5. **Verify persistence through the runtime backend:**
    - Run `squad_state_health` when available.
-   - Re-read `decisions.md`, `log/{timestamp}-{topic}.md`, and any updated histories with `squad_state_read`.
+   - Re-read `decisions/decisions.md`, `log/{timestamp}-{topic}.md`, and any updated histories with `squad_state_read`.
    - Never stage or commit mutable state, amend/reset/checkout files, push notes, or switch branches to persist it.
    - If a write or verification fails, preserve the source inbox entry and report the failure; do not fall back to a checkout snapshot on a governed backend.
 

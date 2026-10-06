@@ -19,6 +19,29 @@ const scribeTemplate = readFileSync(
   resolve(process.cwd(), ".squad/templates/scribe-charter.md"),
   "utf-8",
 );
+const spawnTemplates = readFileSync(
+  resolve(process.cwd(), ".squad/reference/spawn-templates.md"),
+  "utf-8",
+);
+const afterAgentReference = readFileSync(
+  resolve(process.cwd(), ".squad/templates/after-agent-reference.md"),
+  "utf-8",
+);
+const squadCommands = readFileSync(
+  resolve(process.cwd(), ".copilot/skills/squad-commands/SKILL.md"),
+  "utf-8",
+);
+const scopeOverrideFanout = readFileSync(
+  resolve(process.cwd(), ".copilot/skills/scope-override-fanout/SKILL.md"),
+  "utf-8",
+);
+const architecturalProposals = readFileSync(
+  resolve(
+    process.cwd(),
+    ".squad/templates/skills/architectural-proposals/SKILL.md",
+  ),
+  "utf-8",
+);
 const squadAgent = readFileSync(
   resolve(process.cwd(), ".github/agents/squad.agent.md"),
   "utf-8",
@@ -67,14 +90,17 @@ describe("Scribe — decision consolidation", () => {
 describe("Scribe — decision archive eligibility", () => {
   for (const [label, text] of [
     ["active coordinator", squadAgent],
+    ["live Scribe charter", charter],
     ["Scribe template", scribeTemplate],
+    ["Scribe spawn template", spawnTemplates],
+    ["after-agent reference", afterAgentReference],
   ] as const) {
     it(`${label} treats age thresholds as review triggers and retains unresolved entries`, () => {
       const normalized = text.replace(/\s+/g, " ");
 
       assert.match(
         normalized,
-        /(?:review triggers, not automatic archival eligibility|use ledger size only to trigger eligibility review)/,
+        /(?:thresholds trigger eligibility review only|use ledger size only to trigger eligibility review)/i,
         `${label} should use age thresholds only to trigger archival review`,
       );
       assert.match(
@@ -94,29 +120,94 @@ describe("Scribe — decision archive eligibility", () => {
       );
 
       for (const requiredGuidance of [
-        "open/unresolved",
-        "active blockers",
-        "open linked issues",
-        "unverifiable status",
-        "active ledger",
+        "Keep open, unresolved, or unverifiable entries in the active ledger",
+        "current-epic",
+        "active-blocker",
       ]) {
         assert.ok(
           normalized.includes(requiredGuidance),
-          `${label} should keep ${requiredGuidance} entries active`,
+          `${label} should preserve ${requiredGuidance} retention guidance`,
         );
       }
       assert.match(
         normalized,
-        /Archive only entries verified complete or resolved/,
-        `${label} should archive only verified complete or resolved entries`,
+        /archive-eligible`?\s*=\s*verified completion or resolution only.{0,80}7 days hot before archive/i,
+        `${label} should require verified status and a 7-day hot period`,
       );
       assert.match(
         normalized,
-        /status cannot be confirmed/,
-        `${label} should retain entries whose status cannot be verified`,
+        /dry-run classification against the live ledger/,
+        `${label} should require a live-ledger dry-run before bulk tagging`,
       );
+      assert.match(
+        normalized,
+        /durable tagging convention.{0,120}10.?15 entries.{0,120}future-inbox behavior/i,
+        `${label} should require the planned dry-run output`,
+      );
+      assert.match(
+        normalized,
+        /user review.{0,80}before bulk tagging/i,
+        `${label} should require user review before bulk tagging`,
+      );
+      assert.match(
+        normalized,
+        /until review, leave untagged entries unchanged and active/i,
+        `${label} should retain untagged entries until review`,
+      );
+
+      for (const [semanticClass, retention] of [
+        ["constitutional", "hot forever"],
+        ["standing-rule", "hot forever"],
+        ["active-blocker", "hot until closed"],
+        ["unresolved-followup", "hot until closed"],
+        ["canonical-pattern", "hot forever"],
+        ["current-epic", "hot until epic closes"],
+        [
+          "operational-learning",
+          "hot until a similar pattern recurs at least 3 times or 90 days pass without recurrence",
+        ],
+      ] as const) {
+        assert.ok(
+          normalized.includes(`\`${semanticClass}\` = ${retention}`),
+          `${label} should preserve ${semanticClass} retention`,
+        );
+      }
     });
   }
+});
+
+describe("Scribe — decision state keys", () => {
+  const operationalGuidance = [
+    ["active coordinator", squadAgent],
+    ["live Scribe charter", charter],
+    ["Scribe template", scribeTemplate],
+    ["Scribe spawn template", spawnTemplates],
+    ["after-agent reference", afterAgentReference],
+    ["squad commands", squadCommands],
+    ["scope override fanout", scopeOverrideFanout],
+    ["architectural proposals", architecturalProposals],
+  ] as const;
+
+  it("uses decisions/decisions.md as the logical decision-ledger key", () => {
+    for (const [label, text] of operationalGuidance) {
+      const normalized = text.replace(/\r\n/g, "\n");
+      assert.match(
+        normalized,
+        /decisions\/decisions\.md/,
+        `${label} should identify the logical decision-ledger key`,
+      );
+
+      for (const line of normalized.split("\n")) {
+        if (line.includes("squad_state_") && /decision|decisions\.md/i.test(line)) {
+          assert.doesNotMatch(
+            line,
+            /(?<![/\\])decisions\.md\b/,
+            `${label} should not pass the bare decisions.md key to state tools`,
+          );
+        }
+      }
+    }
+  });
 });
 
 describe("Scribe — worktree snapshot ingestion", () => {
