@@ -45,6 +45,31 @@ describe("Init Mode state ownership guidance", () => {
       assert.match(text, /\.squad\/\*\/audit-trail\.md/);
     });
 
+    it(`${path} seeds casting and agent history according to the configured backend`, () => {
+      const text = readInitSurface(path);
+
+      assert.match(
+        text,
+        /for the local\/worktree backend, copy .* create registry\.json and history\.json .* as files/,
+      );
+      assert.match(
+        text,
+        /for every other backend, seed this same data through squad_state_write to the equivalent logical keys instead of writing checkout files directly/,
+      );
+      assert.match(
+        text,
+        /read it back with squad_state_read to verify the write before proceeding/,
+      );
+      assert.match(
+        text,
+        /for the local\/worktree backend, write history\.md as a file/,
+      );
+      assert.match(
+        text,
+        /for every other backend, seed it through squad_state_write to the logical agents\/\{name\}\/history\.md key and verify with squad_state_read; do not create a checkout copy/,
+      );
+    });
+
     it(`${path} keeps the active ledger backend-owned, not Git-merged`, () => {
       const text = readInitSurface(path);
 
@@ -102,6 +127,21 @@ describe("Init Mode — memory ignore uses wildcard-plus-negation, backend init 
     );
     assert.match(text, /rest of \.squad\/memory\/ is backend-owned runtime state/);
   });
+
+  for (const path of [
+    ".github/skills/coordinator-init-mode/SKILL.md",
+    ".squad/templates/skills/init-mode/SKILL.md",
+  ]) {
+    it(`${path} fails closed when the non-local state bridge cannot verify seeding`, () => {
+      const text = readInitSurface(path);
+
+      assert.match(
+        text,
+        /if the state-tool bridge is unavailable or readback does not confirm the writes, fail closed before proceeding/,
+      );
+      assert.match(text, /never fall back to checkout files/);
+    });
+  }
 
   const scopedSurfaces = [
     ".squad/templates/init-mode.md",

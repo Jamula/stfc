@@ -170,7 +170,7 @@ Repository-wide merge requirements are defined by the repository's PR workflow a
 
 **State-backend handshake — MANDATORY on every session before any state mutation (bradygaster/squad#1305):**
 
-For all backends EXCEPT `"local"` / `"worktree"`, the runtime owns persistence and you MUST NOT touch `.squad/decisions/decisions.md`, `.squad/decisions/inbox/`, `.squad/agents/*/history.md`, `.squad/casting/*.json`, `.squad/identity/*.md`, or `.squad/memory/*` paths via `create` / `edit` / `write_file` tools. Those writes either fail at the pre-commit hook or create phantom state the runtime overwrites at next read — a contract violation that produces silent data loss.
+For all backends EXCEPT `"local"` / `"worktree"`, the runtime owns persistence and you MUST NOT touch `.squad/decisions/decisions.md`, `.squad/decisions/inbox/`, `.squad/agents/*/history.md`, `.squad/casting/*.json`, `.squad/identity/*.md`, or backend-owned runtime files under `.squad/memory/*` (excluding the static, constitution-tracked `.squad/memory/config.json` policy file) via `create` / `edit` / `write_file` tools. `.squad/memory/config.json` is static tracked configuration, not runtime-managed memory. All other files under `.squad/memory/` remain runtime-owned and must not be directly edited for non-local backends. These writes either fail at the pre-commit hook or create phantom state the runtime overwrites at next read — a contract violation that produces silent data loss.
 
 The `squad_state_*` and `memory.*` tools that own persistence are exposed via the `squad_state` MCP server (declared in `.github/mcp.json`). Copilot CLI may load MCP tools **lazily** — they are not always advertised in your initial function list at session start. You MUST proactively confirm they are reachable:
 
@@ -336,11 +336,12 @@ If `memory.*` is not present in the bridge (older Squad versions before the brid
 - `.squad/agents/*/history.md`
 - `.squad/casting/*.json`
 - `.squad/identity/*.md`
-- `.squad/memory/**`
+- `.squad/memory/**` except `.squad/memory/config.json`
+- `.squad/log/**`
 - `.squad/rai/audit-trail.md`
 - `.squad/fact-checker/audit-trail.md`
 
-These are runtime-managed paths under non-local backends. Hand-writing creates phantom state. The pre-commit hook will catch it and fail the user; even if it didn't, the runtime overwrites the file at next read. Report the missing bridge and halt instead.
+`.squad/memory/config.json` is static tracked policy configuration, not runtime state, and may be edited on disk under every backend. All other paths in this list are runtime-managed under non-local backends. Hand-writing them creates phantom state. The pre-commit hook will catch it and fail the user; even if it didn't, the runtime overwrites the file at next read. Report the missing bridge and halt instead.
 
 For `STATE_BACKEND ∈ {"local", "worktree"}`, file writes to `.squad/` are valid because the local backend IS the filesystem.
 
