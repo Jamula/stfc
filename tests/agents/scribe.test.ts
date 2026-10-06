@@ -78,6 +78,14 @@ const worktreeReference = readFileSync(
   resolve(process.cwd(), ".squad/templates/worktree-reference.md"),
   "utf-8",
 );
+const gitWorkflowSkill = readFileSync(
+  resolve(process.cwd(), ".github/skills/git-workflow/SKILL.md"),
+  "utf-8",
+);
+const gitWorkflowTemplate = readFileSync(
+  resolve(process.cwd(), ".squad/templates/skills/git-workflow/SKILL.md"),
+  "utf-8",
+);
 const spawnReference = readFileSync(
   resolve(process.cwd(), ".squad/templates/spawn-reference.md"),
   "utf-8",
@@ -952,6 +960,49 @@ describe("worktree-reference.md — no merge=union reliance for backend-owned st
       /union merge is not a persistence mechanism for backend-owned state/i,
       "worktree-reference.md should state union merge is not a persistence mechanism for backend-owned state",
     );
+  });
+});
+
+describe("git-workflow — backend-aware worktree cleanup", () => {
+  it("keeps the canonical skill and template aligned and limits checkout copies to the local/worktree fallback", () => {
+    const cleanupPolicy =
+      "Before removing a worktree, resolve its configured state backend. For `local`/`worktree` backends, use the configured state tools with canonical logical paths when available; the checkout-snapshot fallback below is permitted only when those tools are unavailable. For `orphan`, `two-layer`, or `git-notes` backends, reconcile and clean mutable state only through the configured state tools using canonical logical paths (for example, `agents/{agent}/history.md`, `decisions/decisions.md`, `identity/now.md`, and `log/{timestamp}-{topic}.md`). Never read or copy a worktree `.squad/` checkout snapshot for these backends. If any required state tool is unavailable, fail closed, leave the worktree in place, and report the missing bridge.";
+    const cleanupFallbackHeading =
+      "#### Local/worktree checkout-snapshot fallback (only when state tools unavailable)";
+
+    for (const [label, text] of [
+      ["canonical git-workflow skill", gitWorkflowSkill],
+      ["git-workflow template", gitWorkflowTemplate],
+    ] as const) {
+      const normalized = text.replace(/\r\n/g, "\n").replace(/\s+/g, " ");
+      const cleanupStart = normalized.indexOf(
+        label === "canonical git-workflow skill"
+          ? "### Cleanup After Merge"
+          : "## Worktree Cleanup",
+      );
+      assert.ok(cleanupStart >= 0, `${label} should define worktree cleanup guidance`);
+      const cleanup = normalized.slice(cleanupStart);
+
+      assert.ok(cleanup.includes(cleanupPolicy), `${label} should match the shared backend policy`);
+      assert.ok(
+        cleanup.includes(cleanupFallbackHeading),
+        `${label} should explicitly scope snapshot fallback to local/worktree`,
+      );
+      assert.doesNotMatch(
+        cleanup,
+        /Before removing a worktree, preserve (?:any|its) uncommitted `\.squad\/` (?:state|artifacts) as a complete snapshot/i,
+        `${label} must not direct unconditional checkout copying`,
+      );
+
+      const fallbackStart = cleanup.indexOf(cleanupFallbackHeading);
+      const copyCommands = [...cleanup.matchAll(/(?:cp -a|robocopy\s+\$source)/g)];
+      for (const copyCommand of copyCommands) {
+        assert.ok(
+          copyCommand.index > fallbackStart,
+          `${label} must keep checkout-copy commands inside the local/worktree fallback`,
+        );
+      }
+    }
   });
 });
 

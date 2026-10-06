@@ -124,10 +124,24 @@ The `.squad/` directory exists in each worktree, but Git merge does not reconcil
 
 After a worktree's PR is merged to main:
 
-Before removing it, preserve any uncommitted `.squad/` state in a unique
-staging directory under `.squad/worktree-inbox/`. Stage a complete snapshot
-instead of copying over the main checkout's state, and never reuse an existing
-destination. Scribe consumes these snapshots before deleting them.
+Before removing a worktree, resolve its configured state backend. For
+`local`/`worktree` backends, use the configured state tools with canonical
+logical paths when available; the checkout-snapshot fallback below is
+permitted only when those tools are unavailable. For `orphan`, `two-layer`, or
+`git-notes` backends, reconcile and clean mutable state only through the
+configured state tools using canonical logical paths (for example,
+`agents/{agent}/history.md`, `decisions/decisions.md`, `identity/now.md`, and
+`log/{timestamp}-{topic}.md`). Never read or copy a worktree `.squad/`
+checkout snapshot for these backends. If any required state tool is
+unavailable, fail closed, leave the worktree in place, and report the missing
+bridge.
+
+#### Local/worktree checkout-snapshot fallback (only when state tools unavailable)
+
+Use a unique staging directory under `.squad/worktree-inbox/`; never overwrite
+the main checkout's state or reuse an existing destination. Scribe consumes and
+verifies each snapshot before deleting it. The commands below are only for
+`local`/`worktree` backends when configured state tools are unavailable.
 
 On Linux or macOS:
 

@@ -1519,18 +1519,11 @@ describe("checkWorkflowPinningTests", () => {
       }
     });
 
-    it("blocks a real staged copy of an UNTRACKED/IGNORED mutable-state file onto an ordinary tracked path", () => {
-      // Regression test for the follow-up copy-laundering gap (new Copilot
-      // review on e626f36): `--find-copies-harder` still only searches for
-      // copy sources among blobs that are part of the diff — i.e. TRACKED
-      // content. A mutable-state file excluded from tracking entirely by
-      // `.gitignore` (the normal, intended state for e.g.
-      // `.squad/agents/*/history.md`) was never part of any diff, so no
-      // combination of `-M -C --find-copies-harder` can ever report it as a
-      // copy source. This exercises the content-hash-based check
-      // (`parseRawDiffDestHashes` + `listUntrackedMutableStateFiles` +
-      // `checkNoUntrackedMutableStateCopies`) that closes that gap
-      // independently of Git's rename/copy detection.
+    it("blocks a staged copy of an untracked, no-longer-ignored mutable file when the commit removes its ignore rule", () => {
+      // `git ls-files --others --ignored --exclude-standard` only reports
+      // ignored paths. When a commit removes an ignore rule, the mutable
+      // source becomes ordinary untracked content, so the copy guard must
+      // still enumerate it independently of Git's rename/copy detection.
       const dir = mkdtempSync(join(tmpdir(), "stfc-pre-commit-untracked-copy-"));
       const scriptsDir = join(dir, "scripts");
       const binDir = join(dir, "bin");
@@ -1561,10 +1554,8 @@ describe("checkWorkflowPinningTests", () => {
           writeFileSync(join(binDir, "npm"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
         }
 
-        // Minimal `.gitignore` so the mutable-state source is genuinely
-        // untracked AND ignored — the exact condition `git ls-files
-        // --others --ignored --exclude-standard` is designed to surface,
-        // and the one Git's copy detection can never see into.
+        // Initially ignore the mutable source so the staged .gitignore
+        // edit below reproduces removing that rule in the same commit.
         writeFileSync(join(dir, ".gitignore"), ".squad/agents/*/history.md\n");
 
         const body = "line\n".repeat(200);
@@ -1587,8 +1578,8 @@ describe("checkWorkflowPinningTests", () => {
           env: isolatedGitEnv,
         });
 
-        // Sanity-check the premise: the source is untracked and ignored,
-        // never staged, and git status confirms Git does not track it.
+        // Sanity-check the initial premise: the source is untracked and
+        // ignored, never staged.
         const statusBeforeCopy = execFileSync("git", ["status", "--porcelain", "--ignored"], {
           cwd: dir,
           encoding: "utf8",
@@ -1600,10 +1591,38 @@ describe("checkWorkflowPinningTests", () => {
           `expected the mutable source to show as ignored before copying, got:\n${statusBeforeCopy}`,
         );
 
+        // Remove and stage the ignore rule. The mutable file is now
+        // untracked but not ignored, even though it was ignored at HEAD.
+        writeFileSync(join(dir, ".gitignore"), "");
+        execFileSync("git", ["add", ".gitignore"], { cwd: dir, env: isolatedGitEnv });
+        const notIgnored = spawnSync(
+          "git",
+          ["check-ignore", "--quiet", "--", mutableSource],
+          { cwd: dir, encoding: "utf8", env: isolatedGitEnv },
+        );
+        assert.equal(notIgnored.status, 1, "fixture bug: the source should no longer be ignored");
+        const untrackedListing = execFileSync(
+          "git",
+          ["ls-files", "--others", "-z", "--", ".squad"],
+          { cwd: dir, encoding: "utf8", env: isolatedGitEnv },
+        );
+        assert.ok(
+          untrackedListing.split("\0").includes(mutableSource),
+          "the unignored mutable source should be enumerated as untracked",
+        );
+        const ignoredOnlyListing = execFileSync(
+          "git",
+          ["ls-files", "--others", "--ignored", "--exclude-standard", "-z", "--", ".squad"],
+          { cwd: dir, encoding: "utf8", env: isolatedGitEnv },
+        );
+        assert.ok(
+          !ignoredOnlyListing.split("\0").includes(mutableSource),
+          "fixture bug: the old ignored-only enumeration should miss the unignored source",
+        );
+
         // Copy (not move) identical bytes into an ordinary path and stage
-        // ONLY the destination — the source stays on disk, untracked,
-        // unstaged, exactly as `.gitignore` intends.
-        const ordinaryDestination = "docs/laundered-from-ignored.md";
+        // only the destination alongside the ignore-rule removal.
+        const ordinaryDestination = "docs/laundered-from-unignored.md";
         mkdirSync(join(dir, "docs"), { recursive: true });
         writeFileSync(join(dir, ordinaryDestination), body);
         execFileSync("git", ["add", ordinaryDestination], { cwd: dir, env: isolatedGitEnv });
@@ -1615,7 +1634,7 @@ describe("checkWorkflowPinningTests", () => {
         );
         assert.match(
           stagedStatus,
-          /^A\t/,
+          /^A\tdocs\/laundered-from-unignored\.md$/m,
           `expected git to report a plain add even with --find-copies-harder, since the source ` +
             `was never tracked, got:\n${stagedStatus}`,
         );
@@ -1628,12 +1647,13 @@ describe("checkWorkflowPinningTests", () => {
         assert.equal(
           result.status,
           1,
-          `expected copying an untracked/ignored mutable-state file onto an ordinary path to be ` +
+          `expected copying an untracked, unignored mutable-state file onto an ordinary path to be ` +
             `rejected:\n${result.stdout}`,
         );
         const output = result.stderr + result.stdout;
         assert.match(output, new RegExp(ordinaryDestination.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
         assert.match(output, new RegExp(mutableSource.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+        assert.ok(!output.includes(body), "the guard must not log mutable source contents");
       } finally {
         rmSync(dir, { recursive: true, force: true });
       }

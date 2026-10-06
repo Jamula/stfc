@@ -300,9 +300,8 @@ export function parseRawDiffDestHashes(raw) {
 
 /**
  * List mutable-state files under `.squad/` that exist on disk but are not
- * tracked by Git — either genuinely untracked or excluded via
- * `.gitignore`. These are exactly the paths Git's own copy detection
- * cannot see as copy sources.
+ * tracked by Git, whether ignored or not. These are exactly the paths Git's
+ * own copy detection cannot see as copy sources.
  *
  * Deliberately does NOT catch/swallow errors: if `git ls-files` itself
  * fails, the caller must fail closed (see `checkNoUntrackedMutableStateCopies`)
@@ -312,7 +311,7 @@ export function parseRawDiffDestHashes(raw) {
 export function listUntrackedMutableStateFiles(exec = defaultExecFileSync) {
   const raw = exec(
     'git',
-    ['ls-files', '--others', '--ignored', '--exclude-standard', '-z', '--', '.squad'],
+    ['ls-files', '--others', '-z', '--', '.squad'],
     { encoding: 'utf8' },
   );
   return raw
