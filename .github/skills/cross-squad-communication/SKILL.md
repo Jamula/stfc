@@ -188,7 +188,7 @@ For questions about another squad's static metadata — read their `.squad/` fil
 1. Read target repo's `.squad/team.md` → get stack, members, issue source
 2. For architectural decisions, use Pattern 0 to ask the peer coordinator to resolve logical state key `decisions/decisions.md` through its configured state tools
 3. Read `.squad/routing.md` → understand who handles what
-4. Read `.squad/identity/now.md` → get current focus
+4. For current focus, use Pattern 0 to ask the peer coordinator to resolve logical state keys `identity/now.md` and `identity/wisdom.md` (if present) through its configured state tools. Reading `.squad/identity/now.md` directly is only valid when the peer is confirmed on the `local`/`worktree` backend; never read it as a checkout snapshot for `orphan`, `two-layer`, or `git-notes` backends — if the peer's backend is unknown or unreachable, fail closed and report the missing bridge instead.
 5. Scan code structure if needed (csproj files, directory layout)
 
 **Requirements:**
@@ -200,8 +200,9 @@ For questions about another squad's static metadata — read their `.squad/` fil
 # Query another squad's architecture
 $targetRepo = "C:\repos\platform-squad-repo"
 Get-Content "$targetRepo\.squad\team.md"
-Get-Content "$targetRepo\.squad\identity\now.md"
 # For decisions, ask the peer coordinator to resolve logical state key `decisions/decisions.md` with its configured state tools (Pattern 0).
+# For current focus, ask the peer coordinator to resolve logical state key `identity/now.md` (and `identity/wisdom.md` if present) with its configured state tools (Pattern 0).
+# Direct `Get-Content "$targetRepo\.squad\identity\now.md"` is valid only when the peer is confirmed local/worktree backend.
 ```
 
 **Response quality:** ⭐⭐⭐⭐ — excellent for structural/architectural questions.
@@ -301,7 +302,7 @@ Before sending any cross-squad request, verify the target:
 2. What is the issue_source?            → GitHub Issues | ADO | Planner
 3. What agents are active?              → Check member status column
 4. What is the routing table?           → Read routing.md
-5. What is the current focus?           → Read identity/now.md
+5. What is the current focus?           → Resolve logical key identity/now.md via the peer's state tools (direct read only for confirmed local/worktree backends)
 6. Is Ralph running?                    → Check for recent commits by Ralph
 ```
 

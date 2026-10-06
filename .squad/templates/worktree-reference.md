@@ -37,8 +37,7 @@ Squad and all spawned agents may be running inside a **git worktree** rather tha
 **Cross-worktree considerations (worktree-local strategy — recommended for concurrent work):**
 - Local/worktree mutable `.squad/` state is **branch-local**. Each worktree works independently — no locking, no shared-state races. State tools own persistence when available; filesystem fallback is permitted only for canonical `.squad/` paths on local/worktree backends. If a required bridge is unavailable for another backend, stop rather than reading or writing a checkout snapshot.
 - Mutable `.squad/` state is not persisted through Git merges; authorized repository changes still follow the **append-only** merge pattern where applicable.
-- A `merge=union` driver in `.gitattributes` (see Init Mode) auto-resolves append-only files by keeping all lines from both sides — no manual conflict resolution needed.
-- Scribe persists mutable state through the configured backend and never stages or commits it. State does not flow to other branches through Git merges or PRs.
+- Do not rely on `.gitattributes` `merge=union` to reconcile `.squad/` runtime state across worktrees or branches — union merge is not a persistence mechanism for backend-owned state. Scribe persists mutable state through the configured backend and never stages or commits it. State does not flow to other branches through Git merges or PRs.
 
 **Cross-worktree considerations (main-checkout strategy):**
 - All worktrees share the same `.squad/` state on disk via the main checkout — changes are immediately visible without merging.
