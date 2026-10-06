@@ -1003,6 +1003,48 @@ describe("checkNoUntrackedMutableStateCopies", () => {
     assert.equal(exitState.code, null);
   });
 
+  it("allows only the exact reviewed legacy casting migration seed without reading local history", () => {
+    const destHashes = new Map([
+      [
+        ".squad/templates/casting-history-migration.json",
+        "d8f0154c77053e1cb4894277d4ee3630f6c86952",
+      ],
+    ]);
+    let hashCalls = 0;
+
+    checkNoUntrackedMutableStateCopies(
+      destHashes,
+      () => [".squad/casting/history.json"],
+      () => {
+        hashCalls += 1;
+        throw new Error("approved legacy history source must not be opened");
+      },
+      noAttrs,
+    );
+
+    assert.equal(exitState.code, null);
+    assert.equal(hashCalls, 0);
+  });
+
+  it("continues blocking casting-history copies with any other staged blob", () => {
+    const stagedHash = "f".repeat(40);
+    const destHashes = new Map([
+      [".squad/templates/casting-history-migration.json", stagedHash],
+    ]);
+
+    assert.throws(
+      () =>
+        checkNoUntrackedMutableStateCopies(
+          destHashes,
+          () => [".squad/casting/history.json"],
+          () => stagedHash,
+          noAttrs,
+        ),
+      /process\.exit\(1\)/,
+    );
+    assert.equal(exitState.code, 1);
+  });
+
   it("rejects a staged file whose hash matches an ignored mutable-state source", () => {
     const sha = "e".repeat(40);
     const destHashes = new Map([["docs/laundered.md", sha]]);

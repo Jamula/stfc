@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
@@ -439,19 +440,23 @@ describe("Casting history follows the configured state backend", () => {
     );
     assert.match(
       migration,
-      /for local\/worktree, preserve an existing \.squad\/casting\/history\.json; if it is absent, create the physical file/,
+      /for local\/worktree, preserve an existing \.squad\/casting\/history\.json\. if it is absent, create the physical file from the tracked \.squad\/templates\/casting-history-migration\.json and verify the resulting snapshot content and record counts against the seed/,
     );
     assert.match(
       migration,
-      /for orphan, two-layer, or git-notes, read logical key casting\/history\.json with squad_state_read and preserve it when present/,
+      /this migration-only seed is for existing squads; fresh new-team initialization must continue using the empty \.squad\/templates\/casting-history\.json/,
     );
     assert.match(
       migration,
-      /treat only the explicit response state key not found: casting\/history\.json as absence; then initialize the logical key with squad_state_write and immediately verify the seed with squad_state_read/i,
+      /for orphan, two-layer, or git-notes, first read logical key casting\/history\.json with squad_state_read and preserve it when present/,
     );
     assert.match(
       migration,
-      /if the bridge is unavailable, any other read fails, the write fails, or readback does not match, fail closed/,
+      /treat only the exact response state key not found: casting\/history\.json as absence\. only then read the tracked \.squad\/templates\/casting-history-migration\.json, initialize the logical key with squad_state_write, and immediately read it back with squad_state_read\. verify the full snapshot content and the universe_usage_history entry count and assignment_cast_snapshots key count against the seed/i,
+    );
+    assert.match(
+      migration,
+      /if the seed cannot be read, the bridge is unavailable, any other state read fails, the write fails, or readback content\/counts do not match, fail closed/,
     );
     assert.match(
       migration,
@@ -461,6 +466,40 @@ describe("Casting history follows the configured state backend", () => {
       migration,
       /squad_state_write.{0,120}casting\/(?:policy|registry)\.json/i,
       "static policy and registry files must never be initialized through state tools",
+    );
+  });
+
+  it("preserves the tracked legacy history as an existing-squad-only seed and keeps the fresh seed empty", () => {
+    const migrationSeedText = readFileSync(
+      resolve(process.cwd(), ".squad/templates/casting-history-migration.json"),
+      "utf-8",
+    ).replace(/\r\n/g, "\n");
+    const migrationSeed = JSON.parse(migrationSeedText) as {
+      universe_usage_history: unknown[];
+      assignment_cast_snapshots: Record<string, unknown>;
+    };
+    assert.equal(
+      createHash("sha256").update(migrationSeedText).digest("hex"),
+      "848d8bb5286a367c5e2be730967b3d7f6a81842794548a544f95e383c1c56c50",
+      "migration seed must remain byte-for-byte equivalent to the tracked legacy history",
+    );
+    assert.equal(migrationSeed.universe_usage_history.length, 6);
+    assert.deepEqual(Object.keys(migrationSeed.assignment_cast_snapshots), [
+      "stfc-gift-redeemer-initial-2026-05-08",
+    ]);
+
+    const freshSeedText = readFileSync(
+      resolve(process.cwd(), ".squad/templates/casting-history.json"),
+      "utf-8",
+    ).replace(/\r\n/g, "\n");
+    assert.deepEqual(JSON.parse(freshSeedText), {
+      universe_usage_history: [],
+      assignment_cast_snapshots: {},
+    });
+    assert.notEqual(
+      createHash("sha256").update(migrationSeedText).digest("hex"),
+      createHash("sha256").update(freshSeedText).digest("hex"),
+      "the one-time migration history must not replace the empty fresh-team seed",
     );
   });
 

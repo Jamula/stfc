@@ -1,0 +1,77 @@
+{
+  "universe_usage_history": [
+    {
+      "universe": "Star Trek",
+      "assigned_at": "2026-05-08T21:09:39-07:00",
+      "assignment_id": "stfc-gift-redeemer-initial-2026-05-08",
+      "agent_count": 5,
+      "user_requested": true
+    },
+    {
+      "universe": "Star Trek",
+      "assigned_at": "2026-05-08T21:29:58-07:00",
+      "assignment_id": "stfc-gift-redeemer-initial-2026-05-08",
+      "expansion_type": "diegetic",
+      "agent_added": "Tuvok",
+      "reason": "Editorial specialist recruited to break constitutional revision deadlock"
+    },
+    {
+      "universe": "Star Trek",
+      "assigned_at": "2026-05-16T20:50:30-07:00",
+      "assignment_id": "stfc-gift-redeemer-initial-2026-05-08",
+      "expansion_type": "diegetic",
+      "agent_added": "Kirk",
+      "role_changes": [
+        { "agent": "Picard", "from": "Lead", "to": "M2 / Engineering Manager" }
+      ],
+      "reason": "User-requested role swap for consistency with other squads — EM (Picard) sits above Lead (Kirk)"
+    },
+    {
+      "universe": "Star Trek",
+      "assigned_at": "2026-05-16T20:55:00-07:00",
+      "assignment_id": "stfc-gift-redeemer-initial-2026-05-08",
+      "expansion_type": "diegetic",
+      "agent_added": "Garak",
+      "agent_retired": "Borg Queen",
+      "seat_inherited": "Critic",
+      "reason": "User-requested Critic-seat swap for consistency with cyrusj's other squad where Garak holds the Critic role"
+    },
+    {
+      "universe": "Star Trek",
+      "assigned_at": "2026-05-18T00:57:58.675+00:00",
+      "assignment_id": "stfc-gift-redeemer-initial-2026-05-08",
+      "expansion_type": "diegetic",
+      "agent_added": "O'Brien",
+      "role": "DevOps / Platform Engineer",
+      "reason": "Audit-resolution hire — consolidates workflow ownership (R7), Platform/Tooling charter (R11), Security toolchain, and Release engineering (R13) into one charter. User-affirmed via structured-form responses 2026-05-18 to audit issues #65/#66. Chief-of-Operations archetype (DS9/TNG) chosen for the literal DevOps fit; name implies function/pressure, not authority."
+    },
+    {
+      "universe": "Generic (legacy)",
+      "assigned_at": "2026-05-18T00:57:58.675+00:00",
+      "assignment_id": "stfc-gift-redeemer-initial-2026-05-08",
+      "expansion_type": "registry-backfill",
+      "agents_added": ["Scribe", "Ralph"],
+      "reason": "Audit flagged Scribe and Ralph missing from casting/registry.json (issue #62). Backfilled as legacy_named entries — both pre-date the Star Trek casting decision and serve mechanical/loop roles where a Trek rename would add ceremony without value."
+    }
+  ],
+  "assignment_cast_snapshots": {
+    "stfc-gift-redeemer-initial-2026-05-08": {
+      "universe": "Star Trek",
+      "assigned_at": "2026-05-08T21:09:39-07:00",
+      "user_requested_universe": true,
+      "members": [
+        { "name": "Picard", "role": "Lead" },
+        { "name": "Scotty", "role": "Core Dev" },
+        { "name": "Uhura", "role": "Integrations Dev" },
+        { "name": "Bashir", "role": "Tester" },
+        { "name": "Borg Queen", "role": "Critic" }
+      ],
+      "overflow_additions": [
+        { "name": "Tuvok", "role": "Process Auditor / Editorial Specialist", "added_at": "2026-05-08T21:29:58-07:00", "expansion_type": "diegetic" },
+        { "name": "Kirk", "role": "Lead", "added_at": "2026-05-16T20:50:30-07:00", "expansion_type": "diegetic", "concurrent_role_change": { "agent": "Picard", "from": "Lead", "to": "M2 / Engineering Manager" } },
+        { "name": "Garak", "role": "Critic", "added_at": "2026-05-16T20:55:00-07:00", "expansion_type": "diegetic", "concurrent_retirement": { "agent": "Borg Queen", "seat_inherited": "Critic" } },
+        { "name": "O'Brien", "role": "DevOps / Platform Engineer", "added_at": "2026-05-18T00:57:58.675+00:00", "expansion_type": "diegetic", "audit_resolution": ["#65", "#66"] }
+      ]
+    }
+  }
+}

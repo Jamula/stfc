@@ -476,6 +476,12 @@ export function checkAttrSignatures(paths, exec = defaultExecFileSync) {
  * `destHashes` is the result of `parseRawDiffDestHashes`. The listing,
  * hashing, and attribute functions are injectable for testing.
  */
+const APPROVED_CASTING_HISTORY_MIGRATION_COPY = {
+  source: ".squad/casting/history.json",
+  destination: ".squad/templates/casting-history-migration.json",
+  blob: "d8f0154c77053e1cb4894277d4ee3630f6c86952",
+};
+
 export function checkNoUntrackedMutableStateCopies(
   destHashes,
   listIgnoredFn = listUntrackedMutableStateFiles,
@@ -504,6 +510,18 @@ export function checkNoUntrackedMutableStateCopies(
         `check).\n  ${err && err.message ? err.message : err}`,
     );
     return;
+  }
+
+  // This exact immutable seed is the reviewed one-time migration artifact.
+  // Match both its tracked destination and Git blob ID before excluding only
+  // the legacy history path, so unrelated or edited state copies stay blocked.
+  const approvedSeedHash =
+    destHashes.get(APPROVED_CASTING_HISTORY_MIGRATION_COPY.destination) ===
+    APPROVED_CASTING_HISTORY_MIGRATION_COPY.blob;
+  if (approvedSeedHash) {
+    ignoredMutableFiles = ignoredMutableFiles.filter(
+      (sourcePath) => sourcePath !== APPROVED_CASTING_HISTORY_MIGRATION_COPY.source,
+    );
   }
 
   if (ignoredMutableFiles.length === 0) return;
