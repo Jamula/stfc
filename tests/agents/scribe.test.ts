@@ -251,6 +251,7 @@ describe("Scribe — semantic classification state path", () => {
   for (const [label, text] of [
     ["active coordinator prompt", squadAgent],
     ["generated coordinator template", coordinatorTemplate],
+    ["active Scribe charter", charter],
     ["Scribe charter template", scribeTemplate],
     ["Scribe spawn template", spawnTemplates],
     ["after-agent Scribe prompt", afterAgentReference],
