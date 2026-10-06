@@ -14,6 +14,11 @@ const coordinatorSurfaces = [
   ".github/agents/squad.agent.md",
   ".squad/templates/squad.agent.md.template",
 ];
+const castingMigrationSurfaces = [
+  ...coordinatorSurfaces,
+  ".squad/reference/casting.md",
+  ".squad/templates/casting-reference.md",
+];
 
 const canonicalEmptyLedger = `# .squad/decisions/ — Decision Registry
 
@@ -405,6 +410,74 @@ describe("Casting history follows the configured state backend", () => {
       contracts[1],
       "the casting reference and its template should describe identical history ownership",
     );
+  });
+
+  function castingMigrationSection(path: string): string {
+    const text = readInitSurface(path);
+    const start = text.indexOf("### migration — already-squadified repos");
+    const end = text.indexOf("---", start);
+    assert.ok(start >= 0 && end > start, `${path} should define an existing-squad migration`);
+    return text.slice(start, end).trim();
+  }
+
+  it("keeps existing-squad migration semantics aligned across active, generated, and reference surfaces", () => {
+    const sections = castingMigrationSurfaces.map(castingMigrationSection);
+    assert.ok(sections.every((section) => section === sections[0]));
+    const migration = sections[0]!;
+
+    assert.match(
+      migration,
+      /when \.squad\/team\.md exists and either static casting file is missing from the checkout or history is absent from the configured backend/,
+    );
+    assert.match(
+      migration,
+      /for every backend, keep \.squad\/casting\/policy\.json and \.squad\/casting\/registry\.json as authoritative static checkout files/,
+    );
+    assert.match(
+      migration,
+      /preserve existing static files and mappings; never send either file through state tools/,
+    );
+    assert.match(
+      migration,
+      /for local\/worktree, preserve an existing \.squad\/casting\/history\.json; if it is absent, create the physical file/,
+    );
+    assert.match(
+      migration,
+      /for orphan, two-layer, or git-notes, read logical key casting\/history\.json with squad_state_read and preserve it when present/,
+    );
+    assert.match(
+      migration,
+      /treat only the explicit response state key not found: casting\/history\.json as absence; then initialize the logical key with squad_state_write and immediately verify the seed with squad_state_read/i,
+    );
+    assert.match(
+      migration,
+      /if the bridge is unavailable, any other read fails, the write fails, or readback does not match, fail closed/,
+    );
+    assert.match(
+      migration,
+      /never create, read, or write a checkout history copy for a non-local backend/,
+    );
+    assert.doesNotMatch(
+      migration,
+      /squad_state_write.{0,120}casting\/(?:policy|registry)\.json/i,
+      "static policy and registry files must never be initialized through state tools",
+    );
+  });
+
+  it("routes startup checks through the existing-squad migration for both coordinator prompts", () => {
+    for (const path of coordinatorSurfaces) {
+      const text = readInitSurface(path);
+      assert.match(
+        text,
+        /\*{0,2}casting migration check:\*{0,2} if \.squad\/team\.md exists, check that the static \.squad\/casting\/policy\.json and \.squad\/casting\/registry\.json exist in the checkout and that history\.json exists in the configured backend/,
+        `${path} should route existing squads through the migration check`,
+      );
+      assert.match(
+        text,
+        /for non-local backends, check history only with squad_state_read on casting\/history\.json; never inspect a checkout history file/,
+        `${path} must not let startup inspect a stale non-local history file`,
+      );
+    }
   });
 });
 
