@@ -37,11 +37,7 @@ const statusOutput = execSync(
   'git diff --cached --name-status -z -M -C --find-copies-harder',
   { encoding: 'utf8' },
 );
-const { staged, deleted, renamedFrom } = parseNameStatus(statusOutput);
-
-checkSquadBoundary(staged, deleted, renamedFrom);
-checkPortableFilenames(staged);
-checkWorkflowPinningTests(staged);
+const { staged, deleted, renamedFrom, renames } = parseNameStatus(statusOutput);
 
 // Even `--find-copies-harder` only searches for copy sources among blobs
 // that are part of the diff (i.e. tracked). An ignored/untracked
@@ -56,6 +52,11 @@ const rawDiffOutput = execSync(
   { encoding: 'utf8' },
 );
 const destHashes = parseRawDiffDestHashes(rawDiffOutput);
+
+checkSquadBoundary(staged, deleted, renamedFrom, renames, destHashes);
+checkPortableFilenames(staged);
+checkWorkflowPinningTests(staged);
+
 checkNoUntrackedMutableStateCopies(destHashes);
 
 // --- Test suite ---

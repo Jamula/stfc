@@ -10,7 +10,7 @@ import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
@@ -29,6 +29,12 @@ type AttrSignature = {
   pathIndependent: boolean;
   hasCustomFilter: boolean;
   matchesIndex: boolean;
+};
+
+type StagedRename = {
+  status: string;
+  source: string;
+  destination: string;
 };
 
 function setupPreCommitTestRepo(dir: string): NodeJS.ProcessEnv {
@@ -145,7 +151,13 @@ function assertPathAwareMutableCopyRejected(
 // ── #9 — Squad boundary ─────────────────────────────────────────────
 
 describe("checkSquadBoundary", () => {
-  let checkSquadBoundary: (staged: string[], deleted?: string[], renamedFrom?: string[]) => void;
+  let checkSquadBoundary: (
+    staged: string[],
+    deleted?: string[],
+    renamedFrom?: string[],
+    renames?: StagedRename[],
+    destHashes?: Map<string, string>,
+  ) => void;
   let exitState: { code: number | null };
 
   beforeEach(async () => {
@@ -213,6 +225,7 @@ describe("checkSquadBoundary", () => {
       staged: string[];
       deleted: string[];
       renamedFrom: string[];
+      renames: StagedRename[];
     };
     let MUTABLE_SQUAD_STATE_DELETION_ALLOWLIST: Set<string>;
 
@@ -455,6 +468,81 @@ describe("checkSquadBoundary", () => {
     assert.match(errors.join("\n"), /\.squad\/agents\/scotty\/history\.md/);
   });
 
+  it("allows only the exact R100 casting-history migration rename with the approved blob", () => {
+    const source = ".squad/casting/history.json";
+    const destination = ".squad/templates/casting-history-migration.json";
+    const blob = "d8f0154c77053e1cb4894277d4ee3630f6c86952";
+
+    checkSquadBoundary(
+      [destination],
+      [],
+      [source],
+      [{ status: "R100", source, destination }],
+      new Map([[destination, blob]]),
+    );
+    assert.equal(exitState.code, null);
+  });
+
+  it("rejects wrong destinations, altered blobs, copies, and other mutable rename sources", () => {
+    const source = ".squad/casting/history.json";
+    const destination = ".squad/templates/casting-history-migration.json";
+    const approvedBlob = "d8f0154c77053e1cb4894277d4ee3630f6c86952";
+    const cases: Array<{
+      status: string;
+      source: string;
+      destination: string;
+      blob: string;
+    }> = [
+      {
+        status: "R100",
+        source,
+        destination: ".squad/templates/other-history.json",
+        blob: approvedBlob,
+      },
+      {
+        status: "R100",
+        source,
+        destination,
+        blob: "f".repeat(40),
+      },
+      {
+        status: "R099",
+        source,
+        destination,
+        blob: approvedBlob,
+      },
+      {
+        status: "C100",
+        source,
+        destination,
+        blob: approvedBlob,
+      },
+      {
+        status: "R100",
+        source: ".squad/agents/scotty/history.md",
+        destination,
+        blob: approvedBlob,
+      },
+    ];
+
+    for (const rename of cases) {
+      exitState.code = null;
+      assert.throws(
+        () =>
+          checkSquadBoundary(
+            [rename.destination],
+            [],
+            [rename.source],
+            [rename],
+            new Map([[rename.destination, rename.blob]]),
+          ),
+        /process\.exit\(1\)/,
+        `expected ${rename.status} from ${rename.source} to ${rename.destination} to be rejected`,
+      );
+      assert.equal(exitState.code, 1);
+    }
+  });
+
   it("rejects a renamed-away mutable source even when it is in the deletion allowlist", () => {
     // The deletion allowlist is reserved for genuine `git rm --cached`
     // untracking (no replacement content). A rename still commits new
@@ -493,6 +581,7 @@ describe("parseNameStatus", () => {
     staged: string[];
     deleted: string[];
     renamedFrom: string[];
+    renames: StagedRename[];
   };
 
   beforeEach(async () => {
@@ -511,6 +600,7 @@ describe("parseNameStatus", () => {
       staged: ["src/new.ts", "src/existing.ts", "src/old.ts"],
       deleted: ["src/old.ts"],
       renamedFrom: [],
+      renames: [],
     });
   });
 
@@ -520,6 +610,13 @@ describe("parseNameStatus", () => {
       staged: ["docs/ordinary.md"],
       deleted: [],
       renamedFrom: [".squad/agents/scotty/history.md"],
+      renames: [
+        {
+          status: "R100",
+          source: ".squad/agents/scotty/history.md",
+          destination: "docs/ordinary.md",
+        },
+      ],
     });
   });
 
@@ -529,6 +626,13 @@ describe("parseNameStatus", () => {
       staged: ["docs/copy.md"],
       deleted: [],
       renamedFrom: ["docs/template.md"],
+      renames: [
+        {
+          status: "C100",
+          source: "docs/template.md",
+          destination: "docs/copy.md",
+        },
+      ],
     });
   });
 
@@ -547,11 +651,23 @@ describe("parseNameStatus", () => {
       staged: ["src/new.ts", "docs/moved.md", "src/old.ts"],
       deleted: ["src/old.ts"],
       renamedFrom: [".squad/identity/now.md"],
+      renames: [
+        {
+          status: "R087",
+          source: ".squad/identity/now.md",
+          destination: "docs/moved.md",
+        },
+      ],
     });
   });
 
   it("returns empty lists for empty input", () => {
-    assert.deepEqual(parseNameStatus(""), { staged: [], deleted: [], renamedFrom: [] });
+    assert.deepEqual(parseNameStatus(""), {
+      staged: [],
+      deleted: [],
+      renamedFrom: [],
+      renames: [],
+    });
   });
 });
 
@@ -2119,6 +2235,141 @@ describe("checkWorkflowPinningTests", () => {
         assert.ok(!output.includes(historyBody.toString()), "the guard must not log history contents");
       } finally {
         rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it("allows only the exact R100 casting-history migration rename through the real hook", () => {
+      const mutableSource = ".squad/casting/history.json";
+      const approvedDestination = ".squad/templates/casting-history-migration.json";
+      const expectedBlob = "d8f0154c77053e1cb4894277d4ee3630f6c86952";
+      const approvedSeedBody = readFileSync(resolve(approvedDestination));
+      const scenarios = [
+        {
+          name: "approved rename",
+          destination: approvedDestination,
+          operation: "rename",
+          expectedStatus: "R100",
+          expectedExit: 0,
+        },
+        {
+          name: "wrong destination",
+          destination: ".squad/templates/other-casting-history.json",
+          operation: "rename",
+          expectedStatus: "R100",
+          expectedExit: 1,
+        },
+        {
+          name: "altered blob",
+          destination: approvedDestination,
+          operation: "altered-rename",
+          expectedStatus: "R",
+          expectedExit: 1,
+        },
+        {
+          name: "copy rather than rename",
+          destination: approvedDestination,
+          operation: "copy",
+          expectedStatus: "C100",
+          expectedExit: 1,
+        },
+      ] as const;
+
+      for (const scenario of scenarios) {
+        const dir = mkdtempSync(join(tmpdir(), "stfc-pre-commit-casting-history-rename-"));
+        const isolatedGitEnv = setupPreCommitTestRepo(dir);
+
+        try {
+          writeFileSync(join(dir, ".gitattributes"), "*.json text eol=lf\n");
+          execFileSync("git", ["add", ".gitattributes"], { cwd: dir, env: isolatedGitEnv });
+          mkdirSync(join(dir, ".squad", "casting"), { recursive: true });
+          writeFileSync(join(dir, mutableSource), approvedSeedBody);
+          execFileSync("git", ["add", mutableSource], { cwd: dir, env: isolatedGitEnv });
+          execFileSync("git", ["commit", "--quiet", "-m", "Track legacy casting history"], {
+            cwd: dir,
+            env: isolatedGitEnv,
+          });
+
+          mkdirSync(join(dir, dirname(scenario.destination)), { recursive: true });
+          if (scenario.operation === "copy") {
+            writeFileSync(join(dir, scenario.destination), approvedSeedBody);
+            execFileSync("git", ["add", scenario.destination], { cwd: dir, env: isolatedGitEnv });
+          } else {
+            execFileSync("git", ["mv", mutableSource, scenario.destination], {
+              cwd: dir,
+              env: isolatedGitEnv,
+            });
+            if (scenario.operation === "altered-rename") {
+              const alteredBody = Buffer.from(approvedSeedBody);
+              alteredBody[0] = alteredBody[0]! ^ 1;
+              writeFileSync(join(dir, scenario.destination), alteredBody);
+              execFileSync("git", ["add", scenario.destination], {
+                cwd: dir,
+                env: isolatedGitEnv,
+              });
+            }
+          }
+
+          const nameStatus = execFileSync(
+            "git",
+            ["diff", "--cached", "--name-status", "-z", "-M", "-C", "--find-copies-harder"],
+            { cwd: dir, encoding: "utf8", env: isolatedGitEnv },
+          )
+            .split("\0")
+            .filter(Boolean);
+          const actualStatus = nameStatus[0] ?? "";
+          if (scenario.expectedStatus === "R") {
+            assert.match(actualStatus, /^R\d+$/, `${scenario.name} fixture should be a rename`);
+            assert.notEqual(actualStatus, "R100", "fixture bug: altered content must not be R100");
+          } else {
+            assert.equal(
+              actualStatus,
+              scenario.expectedStatus,
+              `${scenario.name} fixture should have the expected rename/copy status`,
+            );
+          }
+          assert.equal(
+            nameStatus[1],
+            mutableSource,
+            `${scenario.name} fixture should report the legacy source path`,
+          );
+          assert.equal(
+            nameStatus[2],
+            scenario.destination,
+            `${scenario.name} fixture should report the intended destination`,
+          );
+
+          const stagedBlob = execFileSync("git", ["rev-parse", `:${scenario.destination}`], {
+            cwd: dir,
+            encoding: "utf8",
+            env: isolatedGitEnv,
+          }).trim();
+          if (scenario.name === "approved rename") {
+            assert.equal(stagedBlob, expectedBlob, "fixture bug: approved blob SHA must be staged");
+          } else if (scenario.name === "altered blob") {
+            assert.notEqual(stagedBlob, expectedBlob, "fixture bug: altered rename must change the blob");
+          }
+
+          const result = spawnSync(process.execPath, [join(dir, "scripts", "pre-commit.mjs")], {
+            cwd: dir,
+            encoding: "utf8",
+            env: isolatedGitEnv,
+          });
+          assert.equal(
+            result.status,
+            scenario.expectedExit,
+            `${scenario.name} should ${scenario.expectedExit === 0 ? "pass" : "fail"} the real hook:\n` +
+              `${result.stderr}${result.stdout}`,
+          );
+          if (scenario.expectedExit === 1) {
+            assert.match(
+              result.stderr + result.stdout,
+              /\.squad\/casting\/history\.json/,
+              `${scenario.name} should remain blocked by the mutable-source boundary`,
+            );
+          }
+        } finally {
+          rmSync(dir, { recursive: true, force: true });
+        }
       }
     });
 
