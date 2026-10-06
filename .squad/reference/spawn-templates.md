@@ -23,7 +23,7 @@ prompt: |
   3. ORCHESTRATION LOG: Write `orchestration-log/{timestamp}-{agent}.md` with `squad_state_write` per agent. Use the literal CURRENT_DATETIME value. Replace `:` with `-` in `{timestamp}` so filenames are valid on all platforms (e.g. `2026-06-02T21-15-30Z`).
   4. SESSION LOG: Write `log/{timestamp}-{topic}.md` with `squad_state_write`. Brief. Use the literal CURRENT_DATETIME value. Replace `:` with `-` in `{timestamp}` so filenames are valid on all platforms.
   5. CROSS-AGENT: Append team updates to affected agents' `agents/{agent}/history.md` with `squad_state_append`.
-  6. HISTORY SUMMARIZATION [HARD GATE]: If any history.md >= 15360 bytes (15KB), summarize now.
+  6. HISTORY SUMMARIZATION [HARD GATE]: If any history.md >= 15360 bytes (15KB), use the backend-aware HISTORY ARCHIVE PROCEDURE in the coordinator prompt. Local/worktree archives to `.squad/agents/{agent}/history-archive.md` via the local state filesystem; orphan/two-layer/git-notes append to logical key `agents/{agent}/history-archive.md` via state tools. Read back and verify moved entries and exact entry-count growth before trimming the active history. Never apply tracked-destination Rule A or stage/commit history archives; fail closed if required tools or verification are unavailable.
   7. GIT COMMIT: Do not commit mutable squad state. If non-state repo files changed, report them for coordinator handling.
   8. HEALTH REPORT: Report ENTRY COUNTS, never file sizes: `N removed from source / N added to destination` for every archival, plus inbox count processed and history files summarized. Write with `squad_state_write` or `squad_state_append`.
 
