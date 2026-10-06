@@ -773,6 +773,104 @@ describe("hashObjectForPath", () => {
     );
   });
 
+  it("hashObjectsForPath: batches every source into one invocation under a single --path", async () => {
+    const mod = await import("../../scripts/pre-commit-checks.mjs");
+    const calls: { cmd: string; args: string[] }[] = [];
+    const exec = (cmd: string, args: string[]) => {
+      calls.push({ cmd, args });
+      return "aaa\nbbb\nccc\n";
+    };
+    const result = mod.hashObjectsForPath(
+      [".squad/a/history.md", ".squad/b/history.md", ".squad/c/history.md"],
+      "docs/copy.md",
+      exec,
+    );
+
+    assert.deepEqual(result, ["aaa", "bbb", "ccc"]);
+    assert.equal(calls.length, 1, "all sources must share one git hash-object subprocess");
+    const [firstCall] = calls;
+    assert.ok(firstCall);
+    assert.deepEqual(firstCall.args, [
+      "hash-object",
+      "--filters",
+      "--path=docs/copy.md",
+      "--",
+      ".squad/a/history.md",
+      ".squad/b/history.md",
+      ".squad/c/history.md",
+    ]);
+  });
+
+  it("hashObjectsForPath: throws when git returns fewer hashes than paths", async () => {
+    const mod = await import("../../scripts/pre-commit-checks.mjs");
+    assert.throws(
+      () =>
+        mod.hashObjectsForPath([".squad/a/history.md", ".squad/b/history.md"], "docs/copy.md", () => "aaa\n"),
+      /returned 1 hash\(es\) for 2 path\(s\)/,
+    );
+  });
+
+  it("hashObjectsForPath: chunks so a huge source list cannot blow the command-line limit", async () => {
+    const mod = await import("../../scripts/pre-commit-checks.mjs");
+    const sources = Array.from({ length: 2000 }, (_, i) => `.squad/agents/member${i}/history.md`);
+    const calls: string[][] = [];
+    const exec = (_cmd: string, args: string[]) => {
+      const operands = args.slice(args.indexOf("--") + 1);
+      calls.push(operands);
+      return operands.map(() => "a".repeat(40)).join("\n") + "\n";
+    };
+
+    const result = mod.hashObjectsForPath(sources, "docs/copy.md", exec);
+
+    assert.equal(result.length, sources.length);
+    assert.ok(calls.length > 1, "expected the oversized list to be split across invocations");
+    assert.deepEqual(calls.flat(), sources, "chunking must preserve every path, in order");
+    for (const operands of calls) {
+      const commandLineLength = operands.reduce((sum, p) => sum + p.length + 1, 0);
+      assert.ok(commandLineLength <= 24000 || operands.length === 1);
+    }
+  });
+
+  it("hashObjectsForPath: returns an empty result without spawning git", async () => {
+    const mod = await import("../../scripts/pre-commit-checks.mjs");
+    let called = false;
+    const result = mod.hashObjectsForPath([], "docs/copy.md", () => {
+      called = true;
+      return "";
+    });
+    assert.deepEqual(result, []);
+    assert.equal(called, false);
+  });
+
+  it("real git: batched hashes equal the per-source hashes for the same destination", async () => {
+    const mod = await import("../../scripts/pre-commit-checks.mjs");
+    const dir = mkdtempSync(join(tmpdir(), "stfc-hashobject-batch-"));
+    const isolatedGitEnv = { ...process.env };
+    for (const key of Object.keys(isolatedGitEnv)) {
+      if (key.startsWith("GIT_")) delete isolatedGitEnv[key];
+    }
+
+    try {
+      execFileSync("git", ["init", "-q"], { cwd: dir, env: isolatedGitEnv });
+      const names = ["one.md", "two.md", "three.md"];
+      for (const [i, name] of names.entries()) {
+        writeFileSync(join(dir, name), `content ${i}\r\nsecond line\r\n`);
+      }
+      writeFileSync(join(dir, ".gitattributes"), "*.md text eol=lf\n");
+
+      const exec = (cmd: string, args: string[]) =>
+        execFileSync(cmd, args, { cwd: dir, env: isolatedGitEnv, encoding: "utf8" });
+
+      const individually = names.map((n) => mod.hashObjectForPath(n, "dest.md", exec));
+      const batched = mod.hashObjectsForPath(names, "dest.md", exec);
+
+      assert.deepEqual(batched, individually);
+      assert.equal(new Set(batched).size, names.length, "distinct content must hash distinctly");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it("real git: hashing under the destination's clean-filter rules matches what git actually stages there", () => {
     // Regression test for the follow-up review on commit 441ecac: a source
     // marked `-text` (preserve bytes exactly) and a destination marked
@@ -1043,7 +1141,7 @@ describe("checkNoUntrackedMutableStateCopies", () => {
   let checkNoUntrackedMutableStateCopies: (
     destHashes: Map<string, string>,
     listIgnoredFn?: () => string[],
-    hashFn?: (sourcePath: string, destinationPath: string) => string,
+    hashFn?: (sourcePaths: string[], destinationPath: string) => string[],
     attrFn?: (paths: string[]) => Map<string, AttrSignature>,
     statFn?: (sourcePath: string) => { size: number },
   ) => void;
@@ -1102,7 +1200,7 @@ describe("checkNoUntrackedMutableStateCopies", () => {
   it("passes when no staged destination matches an ignored source's hash", () => {
     const destHashes = new Map([["docs/new.md", "a".repeat(40)]]);
     const listIgnoredFn = () => [mutableSourcePath];
-    const hashFn = () => "b".repeat(40);
+    const hashFn = () => ["b".repeat(40)];
     checkNoUntrackedMutableStateCopies(destHashes, listIgnoredFn, hashFn, noAttrs);
     assert.equal(exitState.code, null);
   });
@@ -1134,11 +1232,11 @@ describe("checkNoUntrackedMutableStateCopies", () => {
         checkNoUntrackedMutableStateCopies(
           destHashes,
           () => [mutableSource],
-          (sourcePath, destPath) => {
+          (sourcePaths, destPath) => {
             hashCalls += 1;
-            assert.equal(sourcePath, mutableSource);
+            assert.deepEqual(sourcePaths, [mutableSource]);
             assert.equal(destPath, destination);
-            return matchingHash;
+            return [matchingHash];
           },
           noAttrs,
           (sourcePath) => {
@@ -1164,7 +1262,7 @@ describe("checkNoUntrackedMutableStateCopies", () => {
         checkNoUntrackedMutableStateCopies(
           destHashes,
           () => [".squad/casting/history.json"],
-          () => stagedHash,
+          () => [stagedHash],
           noAttrs,
           () => ({ size: 1 }),
         ),
@@ -1177,7 +1275,7 @@ describe("checkNoUntrackedMutableStateCopies", () => {
     const sha = "e".repeat(40);
     const destHashes = new Map([["docs/laundered.md", sha]]);
     const listIgnoredFn = () => [mutableSourcePath];
-    const hashFn = () => sha;
+    const hashFn = () => [sha];
     const errors: string[] = [];
     mock.method(console, "error", (msg: string) => errors.push(msg));
 
@@ -1195,17 +1293,17 @@ describe("checkNoUntrackedMutableStateCopies", () => {
     const sha = "e".repeat(40);
     const destHashes = new Map([["docs/laundered.md", sha]]);
     const listIgnoredFn = () => [mutableSourcePath];
-    const calls: Array<[string, string]> = [];
-    const hashFn = (sourcePath: string, destinationPath: string) => {
-      calls.push([sourcePath, destinationPath]);
-      return sha;
+    const calls: Array<[string[], string]> = [];
+    const hashFn = (sourcePaths: string[], destinationPath: string) => {
+      calls.push([sourcePaths, destinationPath]);
+      return sourcePaths.map(() => sha);
     };
 
     assert.throws(
       () => checkNoUntrackedMutableStateCopies(destHashes, listIgnoredFn, hashFn, noAttrs),
       /process\.exit\(1\)/,
     );
-    assert.deepEqual(calls, [[mutableSourcePath, "docs/laundered.md"]]);
+    assert.deepEqual(calls, [[[mutableSourcePath], "docs/laundered.md"]]);
   });
 
   it("groups identical built-in conversions without a custom filter", () => {
@@ -1222,7 +1320,7 @@ describe("checkNoUntrackedMutableStateCopies", () => {
     let hashCalls = 0;
     const hashFn = () => {
       hashCalls += 1;
-      return sha; // matches docs/one.md only
+      return [sha]; // matches docs/one.md only
     };
     const attrFn = (paths: string[]) =>
       new Map(
@@ -1254,9 +1352,9 @@ describe("checkNoUntrackedMutableStateCopies", () => {
     ]);
     const listIgnoredFn = () => [mutableSourcePath];
     const hashCallsPerDest: string[] = [];
-    const hashFn = (_source: string, destinationPath: string) => {
+    const hashFn = (sourcePaths: string[], destinationPath: string) => {
       hashCallsPerDest.push(destinationPath);
-      return "no-match";
+      return sourcePaths.map(() => "no-match");
     };
     const attrFn = (paths: string[]) =>
       new Map(
@@ -1309,7 +1407,7 @@ describe("checkNoUntrackedMutableStateCopies", () => {
           listIgnoredFn,
           () => {
             hashCalls += 1;
-            return "a".repeat(40);
+            return ["a".repeat(40)];
           },
           attrFn,
         ),
@@ -1320,6 +1418,121 @@ describe("checkNoUntrackedMutableStateCopies", () => {
     assert.match(errors.join("\n"), /Refusing to execute custom filters/);
     assert.match(errors.join("\n"), /docs\/custom\.md/);
     assert.doesNotMatch(errors.join("\n"), /\.squad\/agents\/scotty\/history\.md/);
+  });
+
+  it("hashes every source for a group in a single batched hashFn call", () => {
+    // Regression guard for the pre-commit cost reported on PR #314: the
+    // check previously spawned one `git hash-object` per ignored
+    // mutable-state file on every commit (~9.7s in this repo). Sources
+    // sharing one conversion group must now be hashed together.
+    const sources = Array.from(
+      { length: 50 },
+      (_, i) => `.squad/agents/member${i}/history.md`,
+    );
+    const destHashes = new Map([
+      ["docs/one.md", "a".repeat(40)],
+      ["docs/two.md", "b".repeat(40)],
+    ]);
+    const calls: string[][] = [];
+    const hashFn = (sourcePaths: string[]) => {
+      calls.push(sourcePaths);
+      return sourcePaths.map(() => "no-match");
+    };
+
+    checkNoUntrackedMutableStateCopies(
+      destHashes,
+      () => sources,
+      hashFn,
+      noAttrs,
+      () => ({ size: 1 }),
+    );
+
+    assert.equal(exitState.code, null);
+    assert.equal(calls.length, 1, "one batched call per conversion group, not one per source");
+    assert.deepEqual(calls[0], sources);
+  });
+
+  it("maps batched hashes back to their own source so violations name the right file", () => {
+    const sources = [
+      ".squad/agents/one/history.md",
+      ".squad/agents/two/history.md",
+      ".squad/agents/three/history.md",
+    ];
+    const matching = "c".repeat(40);
+    const destHashes = new Map([["docs/laundered.md", matching]]);
+    const errors: string[] = [];
+    mock.method(console, "error", (msg: string) => errors.push(msg));
+
+    assert.throws(
+      () =>
+        checkNoUntrackedMutableStateCopies(
+          destHashes,
+          () => sources,
+          // Only the middle source matches the staged blob.
+          (sourcePaths: string[]) =>
+            sourcePaths.map((p) => (p === sources[1] ? matching : "no-match")),
+          noAttrs,
+          () => ({ size: 1 }),
+        ),
+      /process\.exit\(1\)/,
+    );
+
+    const output = errors.join("\n");
+    assert.match(output, /docs\/laundered\.md \(matches ignored source \.squad\/agents\/two\/history\.md\)/);
+    assert.doesNotMatch(output, /agents\/one\/history\.md/);
+    assert.doesNotMatch(output, /agents\/three\/history\.md/);
+  });
+
+  it("fails closed when a batch returns fewer hashes than sources", () => {
+    const sources = [".squad/agents/one/history.md", ".squad/agents/two/history.md"];
+    const destHashes = new Map([["docs/new.md", "a".repeat(40)]]);
+    const errors: string[] = [];
+    mock.method(console, "error", (msg: string) => errors.push(msg));
+
+    assert.throws(
+      () =>
+        checkNoUntrackedMutableStateCopies(
+          destHashes,
+          () => sources,
+          // Truncated result must never be compared positionally.
+          () => ["a".repeat(40)],
+          noAttrs,
+          () => ({ size: 1 }),
+        ),
+      /process\.exit\(1\)/,
+    );
+    assert.equal(exitState.code, 1);
+    assert.match(errors.join("\n"), /fail(ing)? closed/i);
+  });
+
+  it("names the offending source when only one file in a batch cannot be hashed", () => {
+    const goodSource = ".squad/agents/one/history.md";
+    const failingSource = ".squad/agents/two/history.md";
+    const sources = [goodSource, failingSource];
+    const destHashes = new Map([["docs/new.md", "a".repeat(40)]]);
+    const errors: string[] = [];
+    mock.method(console, "error", (msg: string) => errors.push(msg));
+
+    assert.throws(
+      () =>
+        checkNoUntrackedMutableStateCopies(
+          destHashes,
+          () => sources,
+          (sourcePaths: string[]) => {
+            if (sourcePaths.includes(failingSource)) {
+              throw new Error("git hash-object exploded");
+            }
+            return sourcePaths.map(() => "no-match");
+          },
+          noAttrs,
+          () => ({ size: 1 }),
+        ),
+      /process\.exit\(1\)/,
+    );
+    assert.equal(exitState.code, 1);
+    const output = errors.join("\n");
+    assert.match(output, /fail(ing)? closed/i);
+    assert.match(output, /\.squad\/agents\/two\/history\.md/);
   });
 
   it("does not flag a source matched against its own unchanged path", () => {

@@ -48,7 +48,8 @@ and `api/package.json` requires Node.js 22 or newer. Node 22 is the newest
 runtime currently listed for SWA-managed APIs in Microsoft's
 [supported languages and runtimes](https://learn.microsoft.com/en-us/azure/static-web-apps/languages-runtimes).
 The repository build and workflow toolchain remains on Node 24 via `.nvmrc`;
-revisit the API runtime when Static Web Apps supports Node 26.
+revisit the API runtime when Static Web Apps supports Node 24, so the managed
+API matches the toolchain target rather than trailing it.
 
 ---
 

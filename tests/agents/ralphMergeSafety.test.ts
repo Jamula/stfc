@@ -670,9 +670,10 @@ describe("Merge safety — bounded repo-wide scan for unguarded merge authorizat
       scannedRelPaths.has(".github/agents/squad.agent.md"),
       "scanner must include .github/agents/squad.agent.md",
     );
-    assert.ok(
-      !scannedRelPaths.has(".github/agents/squad.agent.md.local-backup"),
-      "scanner must exclude the non-.md local-backup copy of squad.agent.md",
+    assert.deepEqual(
+      Array.from(scannedRelPaths).filter((rel) => !rel.endsWith(".md")),
+      [],
+      "scanner must only pick up .md files, never sibling copies such as a .md.local-backup",
     );
     assert.ok(
       !scannedRelPaths.has(".squad/decisions-archive.md"),
