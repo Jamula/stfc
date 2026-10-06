@@ -21,12 +21,12 @@ Analyze conversations and propose improvements to squad knowledge based on what 
 
 1. **`.squad/agents/{agent}/history.md`** — Permanent learnings from completed work (append-only; each agent updates their own file; Scribe propagates cross-agent updates)
 2. Logical state key `decisions/decisions.md` — Team-wide decisions that all agents respect; local/worktree physical path: `.squad/decisions/decisions.md`
-3. **`reflect` skill** — Captures in-flight learnings from conversations that may graduate to history.md or decisions.md
+3. **`reflect` skill** — Captures in-flight learnings from conversations that may graduate to history.md or `decisions/decisions.md`
 
 **Workflow:**
 - Use `reflect` during work to capture learnings
 - At session end, review captured learnings
-- Promote HIGH confidence patterns → lead agent for decision.md review
+- Promote HIGH confidence patterns → lead agent for `decisions/decisions.md` review
 - Promote agent-specific patterns → `{agent}/history.md` updates
 
 ---
@@ -164,7 +164,7 @@ After user approval:
 
 2. **For Team Decisions:**
    - Write with `squad_state_write` to logical key `decisions/inbox/{agent}-{topic}.md`. Local/worktree physical fallback: `.squad/decisions/inbox/{agent}-{topic}.md`. On orphan, two-layer, or git-notes backends, stop and report a missing bridge instead of writing a checkout snapshot.
-   - Lead agent reviews and merges to `decisions.md` if appropriate
+   - Lead agent reviews and merges to `decisions/decisions.md` if appropriate
 
 3. **For Skills:**
    - Document recommendation in session notes
@@ -218,7 +218,7 @@ User: "Perfect! This is exactly the format I want for all PRs"
 ❌ **Don't use reflect when:**
 - Simple one-off questions with no pattern
 - User is just exploring ideas (no concrete decisions)
-- Learning is already captured in history.md/decisions.md
+- Learning is already captured in history.md/`decisions/decisions.md`
 
 ---
 

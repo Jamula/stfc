@@ -50,6 +50,10 @@ const coordinatorTemplate = readFileSync(
   resolve(process.cwd(), ".squad/templates/squad.agent.md.template"),
   "utf-8",
 );
+const reflectTemplate = readFileSync(
+  resolve(process.cwd(), ".squad/templates/skills/reflect/SKILL.md"),
+  "utf-8",
+);
 const rules = readFileSync(
   resolve(process.cwd(), ".github/copilot-instructions.md"),
   "utf-8",
@@ -94,6 +98,7 @@ describe("Scribe — decision consolidation", () => {
 describe("Scribe — decision archive eligibility", () => {
   for (const [label, text] of [
     ["active coordinator", squadAgent],
+    ["generated coordinator template", coordinatorTemplate],
     ["live Scribe charter", charter],
     ["Scribe template", scribeTemplate],
     ["Scribe spawn template", spawnTemplates],
@@ -170,6 +175,10 @@ describe("Scribe — decision archive eligibility", () => {
           "operational-learning",
           "hot until a similar pattern recurs at least 3 times or 90 days pass without recurrence",
         ],
+        [
+          "archive-eligible",
+          "verified completion or resolution only, with 7 days hot before archive",
+        ],
       ] as const) {
         assert.ok(
           normalized.includes(`\`${semanticClass}\` = ${retention}`),
@@ -183,6 +192,7 @@ describe("Scribe — decision archive eligibility", () => {
 describe("Scribe — decision state keys", () => {
   const operationalGuidance = [
     ["active coordinator", squadAgent],
+    ["generated coordinator template", coordinatorTemplate],
     ["live Scribe charter", charter],
     ["Scribe template", scribeTemplate],
     ["Scribe spawn template", spawnTemplates],
@@ -190,6 +200,7 @@ describe("Scribe — decision state keys", () => {
     ["squad commands", squadCommands],
     ["scope override fanout", scopeOverrideFanout],
     ["architectural proposals", architecturalProposals],
+    ["Reflect template", reflectTemplate],
   ] as const;
 
   it("uses decisions/decisions.md as the logical decision-ledger key", () => {
@@ -215,7 +226,7 @@ describe("Scribe — decision state keys", () => {
 });
 
 describe("Scribe — decision inbox persistence", () => {
-  it("verifies the ledger read-back before deleting inbox sources", () => {
+  it("generated coordinator template verifies the ledger read-back before deleting inbox sources", () => {
     const normalized = coordinatorTemplate.replace(/\r\n/g, "\n");
     const inboxStart = normalized.indexOf("2. DECISION INBOX:");
     const nextTask = normalized.indexOf("3. ORCHESTRATION LOG:", inboxStart);
@@ -248,6 +259,67 @@ describe("Scribe — decision inbox persistence", () => {
         "On orphan, two-layer, or git-notes backends, do not fall back to a stale checkout snapshot.",
       ),
       "the task should not use stale checkout snapshots on governed backends",
+    );
+    assert.match(
+      inboxTask,
+      /DEMOTE its headings so its shallowest heading lands at `####`/,
+      "the task should demote inbox headings before merging them below an entry",
+    );
+    assert.match(
+      inboxTask,
+      /Preserve relative structure\. Never emit an `##` under an `###`/,
+      "the task should preserve heading structure without creating invalid heading levels",
+    );
+  });
+});
+
+describe("Scribe — generated coordinator archive safeguards", () => {
+  it("requires tracked destinations, verified append-first moves, measured gates, and safe failures", () => {
+    const normalized = coordinatorTemplate.replace(/\s+/g, " ");
+    for (const safeguard of [
+      /DESTINATION MUST BE TRACKED/,
+      /git ls-files --error-unmatch <destination>/,
+      /Moving content into an untracked destination is a DELETION/,
+      /APPEND FIRST, VERIFY, THEN DELETE/,
+      /every moved heading is literally present/,
+      /entry count grew by exactly the number moved/,
+      /If the append cannot be verified, DO NOT trim — leave the source intact/,
+      /COUNT ENTRIES, NOT BYTES/,
+      /File size is not a valid integrity signal/,
+      /NEVER REPORT A GATE OUTCOME YOU DID NOT MEASURE/,
+      /"No archival required" must come from an actual measurement/,
+      /If a state tool cannot perform these checks, STOP and report/,
+    ]) {
+      assert.match(
+        normalized,
+        safeguard,
+        `generated coordinator template should preserve ${safeguard}`,
+      );
+    }
+  });
+});
+
+describe("Reflect — decision state key", () => {
+  it("uses the logical decision-ledger key for operational references", () => {
+    const normalized = reflectTemplate.replace(/\r\n/g, "\n");
+    assert.match(
+      normalized,
+      /Logical state key `decisions\/decisions\.md`/,
+      "Reflect should identify the logical decision-ledger key",
+    );
+
+    const withoutValidPaths = normalized
+      .replace(/`?decisions\/decisions\.md`?/g, "")
+      .replace(/\.squad\/decisions\/decisions\.md/g, "");
+    assert.doesNotMatch(
+      withoutValidPaths,
+      /`?decisions\.md`?/i,
+      "Reflect should not refer to the decision ledger by its bare filename",
+    );
+    assert.doesNotMatch(
+      withoutValidPaths,
+      /`?decision\.md`?/i,
+      "Reflect should not refer to the decision ledger by a singular bare filename",
     );
   });
 });
