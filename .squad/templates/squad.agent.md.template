@@ -261,7 +261,7 @@ If `memory.*` is not present in the bridge (older Squad versions before the brid
 - `.squad/decisions/decisions.md`
 - `.squad/decisions/inbox/**`
 - `.squad/agents/*/history.md`
-- `.squad/casting/*.json`
+- `.squad/casting/history.json`
 - `.squad/identity/*.md`
 - `.squad/memory/**` except `.squad/memory/config.json`
 - `.squad/orchestration-log/**`
@@ -270,6 +270,8 @@ If `memory.*` is not present in the bridge (older Squad versions before the brid
 - `.squad/fact-checker/audit-trail.md`
 
 `.squad/memory/config.json` is static tracked policy configuration, not runtime state, and may be edited on disk under every backend. All other paths in this list are runtime-managed under non-local backends. Hand-writing them creates phantom state. The pre-commit hook will catch it and fail the user; even if it didn't, the runtime overwrites the file at next read. Report the missing bridge and halt instead.
+
+`.squad/casting/policy.json` and `.squad/casting/registry.json` are static tracked files, not runtime state; they remain writable with file tools even when the state bridge is unavailable. `.squad/casting/history.json` remains runtime-managed and prohibited from direct file writes on non-local backends.
 
 For `STATE_BACKEND ∈ {"local", "worktree"}`, file writes to `.squad/` are valid because the local backend IS the filesystem.
 
