@@ -16,7 +16,7 @@ User message: *"I override your (c) Decline on [scope]. Accept option (a): [deta
    - One agent per major deliverable (e.g., constitution → Tuvok, script → Scotty, tests → Bashir, workflow → O'Brien).
    - All run simultaneously; no blocking dependencies between them.
    - Each writes a decision memo drop with `squad_state_write` to the logical key `decisions/inbox/{agent}-{deliverable}.md` capturing tradeoffs. For local/worktree backends this resolves to `.squad/decisions/inbox/{agent}-{deliverable}.md`. For orphan, two-layer, or git-notes backends, write only through the configured backend's governing state tools; if the state bridge is unavailable, fail closed and report the missing bridge instead of writing to the checkout file.
-4. **Merge all decision drops into the logical `decisions.md` state key (Scribe task)** — chronological order, with EM's original verdict preserved adjacent to the override for audit trail visibility. Scribe reads/writes this key via `squad_state_read`/`squad_state_append` when state tools are available. For local/worktree backends this resolves to `.squad/decisions/decisions.md`. For orphan, two-layer, or git-notes backends, resolve only through the configured backend's governing state tools — never write the physical checkout file directly, since the runtime can overwrite it and create phantom state. If the state bridge is unavailable for a governed backend, fail closed and report the missing bridge instead of merging into the checkout file.
+4. **Merge all decision drops into the logical `decisions/decisions.md` state key (Scribe task)** — chronological order, with EM's original verdict preserved adjacent to the override for audit trail visibility. Scribe reads/writes this key via `squad_state_read`/`squad_state_append` when state tools are available. For local/worktree backends this resolves to `.squad/decisions/decisions.md`. For orphan, two-layer, or git-notes backends, resolve only through the configured backend's governing state tools — never write the physical checkout file directly, since the runtime can overwrite it and create phantom state. If the state bridge is unavailable for a governed backend, fail closed and report the missing bridge instead of merging into the checkout file.
 5. **Schedule Phase 2 (reviews)** — Hostile fact-check (Garak), architecture (Kirk), governance (Picard), in whatever order suits the scope.
 6. **Do NOT loop back to the EM** for re-approval between Phase 1 and Phase 2. The override is the operative decision; Phase 2 is a final sanity-check, not a re-arbitration.
 
@@ -46,7 +46,7 @@ All parallel, background. Decision memos merged by Scribe. Phase 2: Garak fact-c
 
 - **Bypass EM re-approval:** The override is explicit and pre-scoped; re-asking the EM is redundant friction.
 - **Parallel Phase 1:** No dependencies between agents allow full parallelism; wall-clock time shrinks.
-- **Preserve EM verdict in decisions.md:** Historical record helps future readers understand the trade (why was the EM skeptical? what changed?).
+- **Preserve EM verdict in `decisions/decisions.md`:** Historical record helps future readers understand the trade (why was the EM skeptical? what changed?).
 - **Phase 2 is a final check, not a veto:** Hostile fact-check (Garak), architecture (Kirk), and governance (Picard) validate the override is sound, but they do not have veto power over the user's explicit decision.
 
 ## Prerequisites

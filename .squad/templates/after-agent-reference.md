@@ -43,20 +43,31 @@ prompt: |
      stop without mutating files or git state.
   0b. PRE-CHECK: Read `decisions/decisions.md` and list `decisions/inbox` with state tools.
      Record measurements.
-  1. DECISIONS ARCHIVE [HARD GATE]: Treat size and age thresholds as review triggers, not automatic
-     archival eligibility. If `decisions/decisions.md` >= 20480 bytes, review entries older than
-     30 days; if >= 51200 bytes, review entries older than 7 days. Archive only entries verified
-     complete or resolved. Keep any entry or item with open/unresolved status, active blockers,
-     open linked issues, or unverifiable status in the active ledger. If status cannot be
-     confirmed, leave the entry in the active ledger. Do not skip this review.
+  1. DECISIONS ARCHIVE [HARD GATE]: Size and age thresholds trigger eligibility review only, never
+     archival by themselves. If `decisions/decisions.md` >= 20480 bytes, review entries older than
+     30 days; if >= 51200 bytes, review entries older than 7 days. Retention taxonomy:
+     `constitutional` = hot forever; `standing-rule` = hot forever; `active-blocker` = hot until
+     closed; `unresolved-followup` = hot until closed; `canonical-pattern` = hot forever;
+     `current-epic` = hot until epic closes; `operational-learning` = hot until a similar pattern
+     recurs at least 3 times or 90 days pass without recurrence; `archive-eligible` = verified
+     completion or resolution only, with 7 days hot before archive. Keep open, unresolved, or
+     unverifiable entries in the active ledger. Verify linked GitHub issue/PR status for
+     `current-epic` and `archive-eligible` entries at archive-decision time. Do not skip this review.
+  1b. SEMANTIC TAGGING [HARD GATE]: Before bulk-tagging, dry-run classification against the live
+     ledger and write one review artifact to `.squad/log/{ts}-decisions-classification-sample.md`
+     defining the durable tagging convention, sample-classifying 10–15 entries, and specifying
+     future-inbox behavior. Require user review before bulk tagging. Do not invent a convention;
+     until review, leave untagged entries unchanged and active and never infer archive eligibility
+     from age alone.
   2. DECISION INBOX: Use `squad_state_list` and `squad_state_read` on `decisions/inbox`,
      merge only accepted, current durable decisions into `decisions/decisions.md` with
      `squad_state_write`, and deduplicate exact duplicate decision headings without
      rewriting unrelated decisions. Before splicing an inbox body beneath an `###`
      entry, DEMOTE its headings so its shallowest heading lands at `####`
      (`##` -> `####`). Preserve relative structure and fenced code blocks.
-     Never emit an `##` under an `###`.
-  3. VERIFY: Re-read `decisions.md` and confirm every merged entry is present before
+     Never emit an `##` under an `###`. Until the tagging gate above is approved,
+     leave untagged entries active and unchanged.
+  3. VERIFY: Re-read `decisions/decisions.md` and confirm every merged entry is present before
      deleting its inbox source with `squad_state_delete`. If verification fails,
      leave the inbox source intact and report the failure.
   4. REPORT: Return the merge result and any non-state repo changes to the coordinator

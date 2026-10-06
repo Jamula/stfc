@@ -13,11 +13,12 @@
 
 - `.squad/decisions/decisions.md` -- the canonical durable decision record
 - `.squad/decisions/inbox/` -- the decision drop-box
-- Decision archival — **HARD GATE**: use ledger size only to trigger eligibility review before every merge:
-  - **Tier 1 (30-day):** If logical key `decisions/decisions.md` is >20KB, review entries older than 30 days
-  - **Tier 2 (7-day):** If still >50KB after Tier 1, review entries older than 7 days
-  - Age alone never establishes archival eligibility. Keep entries with open/unresolved items, active blockers, open linked issues, or unverifiable status in the active ledger.
-  - Archive only entries verified complete or resolved; if status cannot be confirmed, retain the entry.
+- Decision archival — **HARD GATE**: size and age thresholds trigger eligibility review only, never archival by themselves:
+  - **Tier 1 (30-day):** If logical key `decisions/decisions.md` is >20KB, review entries older than 30 days.
+  - **Tier 2 (7-day):** If still >50KB after Tier 1, review entries older than 7 days.
+  - **Retention taxonomy:** `constitutional` = hot forever; `standing-rule` = hot forever; `active-blocker` = hot until closed; `unresolved-followup` = hot until closed; `canonical-pattern` = hot forever; `current-epic` = hot until epic closes; `operational-learning` = hot until a similar pattern recurs at least 3 times or 90 days pass without recurrence; `archive-eligible` = verified completion or resolution only, with 7 days hot before archive.
+  - Keep open, unresolved, or unverifiable entries in the active ledger. At archive-decision time, verify linked GitHub issue/PR status for `current-epic` and `archive-eligible` entries; if status cannot be confirmed, retain the entry.
+  - **Bulk-tagging gate:** Before bulk-tagging, Scribe must dry-run classification against the live ledger and write one review artifact to `.squad/log/{ts}-decisions-classification-sample.md`. It must define the durable tagging convention, sample-classify 10–15 entries, and specify future-inbox behavior. Require user review of the artifact before bulk tagging. Do not invent a convention; until review, leave untagged entries unchanged and active.
 
 Scribe does not create specialist histories, orchestration logs, session logs, proposals, triage
 records, communications records, hooks, E2E records, or onboarding output. When reconciling an
@@ -33,11 +34,11 @@ without creating new records.
 When accepted durable decisions exist:
 
 1. List and read `decisions/inbox/` through the configured state backend.
-2. Merge only accepted, current durable decisions into `decisions.md` with `squad_state_write`; do not manufacture session records.
+2. Merge only accepted, current durable decisions into `decisions/decisions.md` with `squad_state_write`; do not manufacture session records.
 3. Demote inbox headings so the shallowest body heading lands at `####`, preserving relative
    hierarchy and fenced code blocks.
 4. Deduplicate exact duplicate decision headings without rewriting unrelated decisions.
-5. Re-read `decisions.md` with `squad_state_read` and confirm every merged entry is present before
+5. Re-read `decisions/decisions.md` with `squad_state_read` and confirm every merged entry is present before
    deleting its inbox source with `squad_state_delete`. If verification fails, leave the inbox source
    intact and report the failure.
 6. Run the state health check when available and report the merge result and any non-state repo

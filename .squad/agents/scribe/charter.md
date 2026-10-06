@@ -13,7 +13,8 @@
 
 - `.squad/decisions/decisions.md` -- the canonical durable decision record
 - `.squad/decisions/inbox/` -- the decision drop-box
-- **Decision archival** — age and size thresholds trigger eligibility review only; archive complete/resolved entries, and retain open or unverifiable items in the active ledger.
+- **Decision archival** — size and age thresholds trigger eligibility review only, never archival by themselves. If the ledger is over 20KB, review entries older than 30 days; if still over 50KB after that review, review entries older than 7 days. Retention taxonomy: `constitutional` = hot forever; `standing-rule` = hot forever; `active-blocker` = hot until closed; `unresolved-followup` = hot until closed; `canonical-pattern` = hot forever; `current-epic` = hot until epic closes; `operational-learning` = hot until a similar pattern recurs at least 3 times or 90 days pass without recurrence; `archive-eligible` = verified completion or resolution only, with 7 days hot before archive. Keep open, unresolved, or unverifiable entries in the active ledger. Verify linked GitHub issue/PR status for `current-epic` and `archive-eligible` entries at archive-decision time.
+- **Bulk-tagging gate** — before bulk-tagging, run dry-run classification against the live ledger and write one review artifact to `.squad/log/{ts}-decisions-classification-sample.md` defining the durable tagging convention, sample-classifying 10–15 entries, and specifying future-inbox behavior. Require user review before bulk tagging. Do not invent a convention; until review, leave untagged entries unchanged and active.
 
 Scribe does not create specialist histories, orchestration logs, session logs, proposals, triage
 records, communications records, hooks, E2E records, or onboarding output. When reconciling an
@@ -35,11 +36,11 @@ fails, report the failure and do not fall back to a checkout snapshot.
 When accepted durable decisions exist:
 
 1. List and read `decisions/inbox/` through the configured state backend.
-2. Merge only accepted, current durable decisions into `decisions.md` with `squad_state_write`; do not manufacture session records.
+2. Merge only accepted, current durable decisions into `decisions/decisions.md` with `squad_state_write`; do not manufacture session records.
 3. Demote inbox headings so the shallowest body heading lands at `####`, preserving relative
    hierarchy and fenced code blocks.
 4. Deduplicate exact duplicate decision headings without rewriting unrelated decisions.
-5. Re-read `decisions.md` with `squad_state_read` and confirm every merged entry is present before
+5. Re-read `decisions/decisions.md` with `squad_state_read` and confirm every merged entry is present before
    deleting its inbox source with `squad_state_delete`. If verification fails, leave the inbox source
    intact and report the failure.
 6. Run the state health check when available and report the merge result and any non-state repo
