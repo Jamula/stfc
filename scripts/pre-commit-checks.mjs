@@ -208,32 +208,69 @@ export const MUTABLE_SQUAD_STATE_DELETION_ALLOWLIST = new Set([
   '.squad/orchestration-log/tuvok-phase-a-2026-06-01T031440Z.md',
 ]);
 
+const APPROVED_CASTING_HISTORY_MIGRATION_COPY = {
+  source: '.squad/casting/history.json',
+  destination: '.squad/templates/casting-history-migration.json',
+  blob: 'd8f0154c77053e1cb4894277d4ee3630f6c86952',
+};
+
 /**
  * Mutable Squad state must be persisted through the configured backend,
  * not staged or committed from the working tree. Only paths in the deletion
  * allowlist above may be deleted as part of migrating them off direct git
  * tracking.
  *
- * `renamedFrom` is the list of source paths for staged renames/copies (see
- * `parseNameStatus`). A rename whose *source* matches a mutable-state
- * pattern is always a violation, regardless of what the destination path
- * looks like or whether the source is in the deletion allowlist: renaming
- * mutable state onto an ordinary tracked path commits its content under a
- * disguised name, and `git diff --name-only`/`--diff-filter=D` alone would
- * never surface the source path to catch it (rename detection reports only
- * the destination). The deletion allowlist stays reserved for genuine
- * `git rm --cached` untracking, which leaves no new tracked content behind.
+ * `renamedFrom` and `renames` are the source paths and status-bearing entries
+ * for staged renames/copies (see `parseNameStatus`). A rename/copy whose
+ * source matches a mutable-state pattern is a violation, except for the one
+ * exact R100 legacy casting-history migration seed and blob. The deletion
+ * allowlist stays reserved for genuine `git rm --cached` untracking.
  */
-export function checkSquadBoundary(staged, deleted = [], renamedFrom = []) {
+export function checkSquadBoundary(
+  staged,
+  deleted = [],
+  renamedFrom = [],
+  renames = [],
+  destHashes = new Map(),
+) {
   const deletedPaths = new Set(deleted);
   const violations = staged.filter((f) =>
     !(deletedPaths.has(f) && MUTABLE_SQUAD_STATE_DELETION_ALLOWLIST.has(f)) &&
       MUTABLE_SQUAD_STATE_PATTERNS.some((re) => re.test(f)),
   );
 
-  const renameViolations = renamedFrom.filter((f) =>
-    MUTABLE_SQUAD_STATE_PATTERNS.some((re) => re.test(f)),
-  );
+  const isApprovedCastingHistoryMigrationRename = (rename) =>
+    rename.status === 'R100' &&
+    rename.source === APPROVED_CASTING_HISTORY_MIGRATION_COPY.source &&
+    rename.destination === APPROVED_CASTING_HISTORY_MIGRATION_COPY.destination &&
+    destHashes.get(rename.destination) === APPROVED_CASTING_HISTORY_MIGRATION_COPY.blob;
+  const renameViolations = [];
+  if (renames.length > 0) {
+    for (const rename of renames) {
+      if (
+        MUTABLE_SQUAD_STATE_PATTERNS.some((re) => re.test(rename.source)) &&
+        !isApprovedCastingHistoryMigrationRename(rename)
+      ) {
+        renameViolations.push(rename.source);
+      }
+    }
+
+    const describedSources = new Set(renames.map((rename) => rename.source));
+    for (const source of renamedFrom) {
+      if (
+        !describedSources.has(source) &&
+        MUTABLE_SQUAD_STATE_PATTERNS.some((re) => re.test(source))
+      ) {
+        renameViolations.push(source);
+      }
+    }
+  } else {
+    renameViolations.push(
+      ...renamedFrom.filter((source) =>
+        MUTABLE_SQUAD_STATE_PATTERNS.some((re) => re.test(source)),
+      ),
+    );
+  }
 
   const allViolations = [...new Set([...violations, ...renameViolations])];
   if (allViolations.length === 0) return;
@@ -477,12 +514,6 @@ export function checkAttrSignatures(paths, exec = defaultExecFileSync) {
  * hashing, attribute, staged-attribute, and source-stat functions are injectable
  * for testing.
  */
-const APPROVED_CASTING_HISTORY_MIGRATION_COPY = {
-  source: ".squad/casting/history.json",
-  destination: ".squad/templates/casting-history-migration.json",
-  blob: "d8f0154c77053e1cb4894277d4ee3630f6c86952",
-};
-
 export function checkNoUntrackedMutableStateCopies(
   destHashes,
   listIgnoredFn = listUntrackedMutableStateFiles,
@@ -748,6 +779,7 @@ export function parseNameStatus(raw) {
   const staged = [];
   const deleted = [];
   const renamedFrom = [];
+  const renames = [];
 
   let i = 0;
   while (i < tokens.length) {
@@ -758,6 +790,7 @@ export function parseNameStatus(raw) {
       const newPath = tokens[i++];
       staged.push(newPath);
       renamedFrom.push(oldPath);
+      renames.push({ status, source: oldPath, destination: newPath });
     } else if (kind === 'D') {
       const deletedPath = tokens[i++];
       staged.push(deletedPath);
@@ -767,7 +800,7 @@ export function parseNameStatus(raw) {
     }
   }
 
-  return { staged, deleted, renamedFrom };
+  return { staged, deleted, renamedFrom, renames };
 }
 
 // ── Check #11 — Staged filenames must be valid on Windows ───────────

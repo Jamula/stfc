@@ -8,12 +8,23 @@ export function checkSquadBoundary(
   staged: string[],
   deleted?: string[],
   renamedFrom?: string[],
+  renames?: Array<{
+    status: string;
+    source: string;
+    destination: string;
+  }>,
+  destHashes?: Map<string, string>,
 ): void;
 
 export function parseNameStatus(raw: string): {
   staged: string[];
   deleted: string[];
   renamedFrom: string[];
+  renames: Array<{
+    status: string;
+    source: string;
+    destination: string;
+  }>;
 };
 
 export function checkPortableFilenames(staged: string[]): void;
