@@ -25,14 +25,21 @@ export function listUntrackedMutableStateFiles(
 ): string[];
 
 export function hashObjectForPath(
-  filePath: string,
+  sourcePath: string,
+  destinationPath: string,
   exec?: (cmd: string, args: string[], options: Record<string, unknown>) => string,
-): string | null;
+): string;
+
+export function checkAttrSignatures(
+  paths: string[],
+  exec?: (cmd: string, args: string[], options: Record<string, unknown>) => string,
+): Map<string, string>;
 
 export function checkNoUntrackedMutableStateCopies(
   destHashes: Map<string, string>,
-  ignoredMutableFiles: string[],
-  hashFn?: (filePath: string) => string | null,
+  listIgnoredFn?: () => string[],
+  hashFn?: (sourcePath: string, destinationPath: string) => string,
+  attrFn?: (paths: string[]) => Map<string, string>,
 ): void;
 
 export function grepTestsForWorkflow(basename: string): string[];
