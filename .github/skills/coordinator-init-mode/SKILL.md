@@ -1,6 +1,6 @@
 ---
 name: "coordinator-init-mode"
-description: "The complete two-phase Init Mode protocol the Squad coordinator runs when no team exists yet in the current repo. Phase 1 = propose the team (no files created, wait for user confirm). Phase 2 = create .squad/ scaffolding, casting state, .gitattributes for merge drivers, and the always-on built-ins (Scribe, Ralph, Rai, Fact Checker). Loaded on demand when the coordinator detects no .squad/team.md exists."
+description: "The complete two-phase Init Mode protocol the Squad coordinator runs when no team exists yet in the current repo. Phase 1 = propose the team (no files created, wait for user confirm). Phase 2 = create .squad/ scaffolding, backend configuration and ignores, tracked append-only merge guidance, and the always-on built-ins (Scribe, Ralph, Rai, Fact Checker). Loaded on demand when the coordinator detects no .squad/team.md exists."
 allowedTools: []
 confidence: high
 domain: squad-internals
@@ -69,7 +69,38 @@ No team exists yet. **Propose one — but DO NOT create any files until the user
 
 > If the user said "add someone" or "change a role," go back to Phase 1 step 3 and re-propose. **Do NOT enter Phase 2 until the user confirms.**
 
-6. Create the `.squad/` directory structure (see `.squad/templates/` for format guides or use the standard structure: `team.md`, `routing.md`, `ceremonies.md`, `decisions/decisions.md`, `decisions/inbox/`, `casting/`, `agents/`, `orchestration-log/`, `skills/`, `log/`, `rai/`).
+6. Create the `.squad/` directory structure (see `.squad/templates/` for format guides or use the standard structure: `team.md`, `routing.md`, `ceremonies.md`, `decisions/`, `casting/`, `agents/`, `orchestration-log/`, `skills/`, `log/`, `rai/`). Include the logical `decisions/inbox/` backend-owned runtime namespace; it is not a required checkout directory for nonlocal backends.
+
+**Initialize state ownership:** Create `.squad/config.json` with `version: 1` and `stateBackend` set to the explicitly selected backend; if there is no explicit backend choice, default `stateBackend` to `local` (for example, `{"version":1,"stateBackend":"local"}`). This is tracked configuration, not mutable state.
+
+Ensure the repository-root `.gitignore` excludes the local active ledger and runtime state:
+
+```
+.squad/decisions/decisions.md
+.squad/decisions/inbox/
+.squad/decisions.md
+.squad/agents/*/history.md
+.squad/agents/*/history-archive*
+.squad/casting/history.json
+.squad/identity/
+.squad/log/
+.squad/orchestration-log/
+.squad/memory/*
+!.squad/memory/config.json
+.squad/sessions/
+.squad/.scratch/
+.squad/.cache/
+.squad/.watch-pids
+.squad/ralph-circuit-breaker.json
+.squad/*/audit-trail.md
+.squad-workstream
+```
+
+Use the wildcard-plus-negation pair (`.squad/memory/*` then `!.squad/memory/config.json`) rather than ignoring the whole `memory/` directory: `.squad/memory/config.json` is a static, constitution-tracked policy file and must stay tracked, while the rest of `.squad/memory/` is backend-owned runtime state.
+
+Treat `decisions/inbox/` as a backend-independent logical runtime namespace. Ignore the physical `.squad/decisions/inbox/` fallback in `.gitignore`; use that checkout path only with local/worktree backends. For nonlocal backends, access the logical namespace through state tools and do not create, read, or write a checkout snapshot. Never Git-merge or commit the inbox state.
+
+The physical `.squad/decisions/decisions.md` path is local/worktree-only. Use it only with the `local` or `worktree` backend. With every other backend, read and write the active ledger through the logical `decisions/decisions.md` key using the state tools; do not create or fall back to a checkout copy. Never commit the active ledger or runtime state.
 
 **Casting state initialization:** Copy `.squad/templates/casting-policy.json` to `.squad/casting/policy.json` (or create from defaults). Create `registry.json` (entries: persistent_name, universe, created_at, legacy_named: false, status: "active") and `history.json` (first assignment snapshot with unique assignment_id).
 
@@ -77,17 +108,7 @@ No team exists yet. **Propose one — but DO NOT create any files until the user
 
 **Team.md structure:** `team.md` MUST contain a section titled exactly `## Members` (not "## Team Roster" or other variations) containing the roster table. This header is hard-coded in GitHub workflows (`squad-heartbeat.yml`, `squad-issue-assign.yml`, `squad-triage.yml`, `sync-squad-labels.yml`) for label automation. If the header is missing or titled differently, label routing breaks.
 
-**Merge driver for append-only files:** Create or update `.gitattributes` at the repo root to enable conflict-free merging of `.squad/` state across branches:
-
-```
-.squad/decisions/decisions.md merge=union
-.squad/agents/*/history.md merge=union
-.squad/log/** merge=union
-.squad/orchestration-log/** merge=union
-.squad/rai/audit-trail.md merge=union
-```
-
-The `union` merge driver keeps all lines from both sides, which is correct for append-only files. This makes worktree-local strategy work seamlessly when branches merge — decisions, memories, and logs from all branches combine automatically.
+**Merge driver guidance:** Do not generate `.gitattributes` union rules for mutable or runtime state. Preserve an existing `merge=union` rule only for an artifact verified to be both tracked and a non-runtime append-only archive. Merge-driver rules are not a persistence mechanism for backend-owned state.
 
 7. Say: *"✅ Team hired. Try: '{FirstCastName}, set up the project structure'"*
 

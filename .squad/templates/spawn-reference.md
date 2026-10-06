@@ -132,10 +132,10 @@ prompt: |
   note refs, or write mutable `.squad/` state files by hand. Static config (charters,
   team.md, routing.md, skills) remains on disk and may be read with normal file tools.
 
-  Read `agents/{name}/history.md` with `squad_state_read` when state tools are available; otherwise fall back to `.squad/agents/{name}/history.md`.
+  Read logical key `agents/{name}/history.md` with `squad_state_read` when state tools are available. If that key is unavailable or not found, read `.squad/agents/{name}/history.md` only for `local`/`worktree` backends; for `orphan`, `two-layer`, or `git-notes`, follow the state-backend handshake and report a missing bridge instead of reading a checkout copy.
   Read logical state key `decisions/decisions.md` with `squad_state_read` when state tools are available. If that key is unavailable or not found, read `.squad/decisions/decisions.md` only for `local`/`worktree` backends; for `orphan`, `two-layer`, or `git-notes`, follow the state-backend handshake and report a missing bridge.
-  If .squad/identity/wisdom.md exists, read it before starting work.
-  If .squad/identity/now.md exists, read it at spawn time.
+  Read logical key `identity/wisdom.md` with `squad_state_read` when state tools are available, and read it before starting work if it exists. If that key is unavailable or not found, read `.squad/identity/wisdom.md` only for `local`/`worktree` backends; for `orphan`, `two-layer`, or `git-notes`, follow the state-backend handshake and report a missing bridge instead of reading a checkout copy.
+  Read logical key `identity/now.md` with `squad_state_read` when state tools are available, and read it at spawn time if it exists. If that key is unavailable or not found, read `.squad/identity/now.md` only for `local`/`worktree` backends; for `orphan`, `two-layer`, or `git-notes`, follow the state-backend handshake and report a missing bridge instead of reading a checkout copy.
   Check project skill directories (.squad/skills/, .github/skills/, .copilot/skills/, .claude/skills/, .agents/skills/) for any SKILL.md the coordinator attached to your prompt.
   Read any relevant SKILL.md files before working.
 

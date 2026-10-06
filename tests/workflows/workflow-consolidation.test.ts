@@ -615,10 +615,16 @@ describe("workflow consolidation", () => {
         /\bmain-only\b/,
         `${skillPath} must explicitly describe the main-only model`,
       );
+      const normalizedSkill = skill.replace(/\s+/g, " ");
       assert.match(
-        skill.replace(/\s+/g, " "),
-        /Before removing (?:it|a worktree), preserve (?:any )?(?:its )?uncommitted `\.squad\/` (?:state|artifacts)/i,
-        `${skillPath} must preserve uncommitted .squad state before worktree removal`,
+        normalizedSkill,
+        /For `local`\/`worktree` backends, use the configured state tools with canonical logical paths when available; the checkout-snapshot fallback below is permitted only when those tools are unavailable\./i,
+        `${skillPath} must limit checkout snapshots to local/worktree fallback`,
+      );
+      assert.match(
+        normalizedSkill,
+        /For `orphan`, `two-layer`, or `git-notes` backends, reconcile and clean mutable state only through the configured state tools using canonical logical paths.{0,300}Never read or copy a worktree `\.squad\/` checkout snapshot for these backends\. If any required state tool is unavailable, fail closed/i,
+        `${skillPath} must fail closed and avoid checkout snapshots for non-local backends`,
       );
       for (const lane of ["scope", "technical", "operations"]) {
         assert.match(
