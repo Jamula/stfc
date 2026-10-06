@@ -1122,32 +1122,35 @@ describe("checkNoUntrackedMutableStateCopies", () => {
     assert.equal(exitState.code, null);
   });
 
-  it("allows only the exact reviewed legacy casting migration seed without reading local history", () => {
+  it("rejects an added migration seed when the legacy casting history source remains", () => {
     const mutableSource = ".squad/casting/history.json";
-    const destHashes = new Map([
-      [
-        ".squad/templates/casting-history-migration.json",
-        "d8f0154c77053e1cb4894277d4ee3630f6c86952",
-      ],
-    ]);
+    const destination = ".squad/templates/casting-history-migration.json";
+    const matchingHash = "d8f0154c77053e1cb4894277d4ee3630f6c86952";
+    const destHashes = new Map([[destination, matchingHash]]);
     let hashCalls = 0;
 
-    checkNoUntrackedMutableStateCopies(
-      destHashes,
-      () => [mutableSource],
-      () => {
-        hashCalls += 1;
-        throw new Error("approved legacy history source must not be opened");
-      },
-      noAttrs,
-      (sourcePath) => {
-        assert.equal(sourcePath, mutableSource);
-        return { size: 1 };
-      },
+    assert.throws(
+      () =>
+        checkNoUntrackedMutableStateCopies(
+          destHashes,
+          () => [mutableSource],
+          (sourcePath, destPath) => {
+            hashCalls += 1;
+            assert.equal(sourcePath, mutableSource);
+            assert.equal(destPath, destination);
+            return matchingHash;
+          },
+          noAttrs,
+          (sourcePath) => {
+            assert.equal(sourcePath, mutableSource);
+            return { size: 1 };
+          },
+        ),
+      /process\.exit\(1\)/,
     );
 
-    assert.equal(exitState.code, null);
-    assert.equal(hashCalls, 0);
+    assert.equal(exitState.code, 1);
+    assert.equal(hashCalls, 1);
   });
 
   it("continues blocking casting-history copies with any other staged blob", () => {
@@ -2153,13 +2156,11 @@ describe("checkWorkflowPinningTests", () => {
       }
     });
 
-    it("allows the approved casting seed alone but rejects a second ordinary copy", () => {
+    it("rejects an added casting migration seed while its ignored source remains", () => {
       const dir = mkdtempSync(join(tmpdir(), "stfc-pre-commit-casting-seed-copy-"));
       const isolatedGitEnv = setupPreCommitTestRepo(dir);
       const mutableSource = ".squad/casting/history.json";
       const approvedSeed = ".squad/templates/casting-history-migration.json";
-      const ordinaryDestination = "docs/casting-history-copy.json";
-      const historyBody = Buffer.from("synthetic private casting history payload\n");
       const approvedSeedBody = readFileSync(resolve(approvedSeed));
 
       try {
@@ -2175,11 +2176,33 @@ describe("checkWorkflowPinningTests", () => {
         });
 
         mkdirSync(join(dir, ".squad", "casting"), { recursive: true });
-        writeFileSync(join(dir, mutableSource), historyBody);
+        writeFileSync(join(dir, mutableSource), approvedSeedBody);
         mkdirSync(join(dir, ".squad", "templates"), { recursive: true });
         writeFileSync(join(dir, approvedSeed), approvedSeedBody);
         execFileSync("git", ["add", approvedSeed], { cwd: dir, env: isolatedGitEnv });
 
+        const mutableSourceStatus = execFileSync(
+          "git",
+          ["status", "--short", "--ignored", "--", mutableSource],
+          { cwd: dir, encoding: "utf8", env: isolatedGitEnv },
+        );
+        assert.match(
+          mutableSourceStatus,
+          /!! \.squad\/casting\/history\.json/,
+          "fixture bug: the legacy mutable source must remain ignored in the worktree",
+        );
+        const stagedNameStatus = execFileSync(
+          "git",
+          ["diff", "--cached", "--name-status", "-z", "-M", "-C", "--find-copies-harder"],
+          { cwd: dir, encoding: "utf8", env: isolatedGitEnv },
+        )
+          .split("\0")
+          .filter(Boolean);
+        assert.deepEqual(
+          stagedNameStatus,
+          ["A", approvedSeed],
+          "fixture bug: the seed must be a plain add, not a detected migration rename",
+        );
         assert.equal(
           execFileSync("git", ["rev-parse", `:${approvedSeed}`], {
             cwd: dir,
@@ -2190,35 +2213,6 @@ describe("checkWorkflowPinningTests", () => {
           "fixture bug: the staged migration seed must use the approved blob",
         );
 
-        const seedOnlyResult = spawnSync(process.execPath, [join(dir, "scripts", "pre-commit.mjs")], {
-          cwd: dir,
-          encoding: "utf8",
-          env: isolatedGitEnv,
-        });
-        assert.equal(
-          seedOnlyResult.status,
-          0,
-          `expected the approved migration seed alone to pass:\n` +
-            `${seedOnlyResult.stderr}${seedOnlyResult.stdout}`,
-        );
-
-        mkdirSync(join(dir, "docs"), { recursive: true });
-        writeFileSync(join(dir, ordinaryDestination), historyBody);
-        execFileSync("git", ["add", ordinaryDestination], { cwd: dir, env: isolatedGitEnv });
-        assert.equal(
-          execFileSync("git", ["rev-parse", `:${ordinaryDestination}`], {
-            cwd: dir,
-            encoding: "utf8",
-            env: isolatedGitEnv,
-          }).trim(),
-          execFileSync("git", ["hash-object", "--", mutableSource], {
-            cwd: dir,
-            encoding: "utf8",
-            env: isolatedGitEnv,
-          }).trim(),
-          "fixture bug: the ordinary destination must be an exact copy of legacy history",
-        );
-
         const result = spawnSync(process.execPath, [join(dir, "scripts", "pre-commit.mjs")], {
           cwd: dir,
           encoding: "utf8",
@@ -2227,12 +2221,13 @@ describe("checkWorkflowPinningTests", () => {
         assert.equal(
           result.status,
           1,
-          `expected the real pre-commit entry point to reject the ordinary history copy:\n` +
+          `expected the real pre-commit entry point to reject the added migration seed:\n` +
             `${result.stderr}${result.stdout}`,
         );
         const output = result.stderr + result.stdout;
-        assert.ok(output.includes(ordinaryDestination), `expected destination in output:\n${output}`);
-        assert.ok(!output.includes(historyBody.toString()), "the guard must not log history contents");
+        assert.ok(output.includes(approvedSeed), `expected destination in output:\n${output}`);
+        assert.ok(output.includes(mutableSource), `expected source in output:\n${output}`);
+        assert.ok(!output.includes(approvedSeedBody.toString()), "the guard must not log history contents");
       } finally {
         rmSync(dir, { recursive: true, force: true });
       }

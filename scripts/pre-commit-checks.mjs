@@ -545,12 +545,6 @@ export function checkNoUntrackedMutableStateCopies(
     return;
   }
 
-  // Only the exact reviewed migration seed may skip comparison with its
-  // legacy history source; keep that source available for every other path.
-  const hasApprovedSeed =
-    destHashes.get(APPROVED_CASTING_HISTORY_MIGRATION_COPY.destination) ===
-    APPROVED_CASTING_HISTORY_MIGRATION_COPY.blob;
-
   if (ignoredMutableFiles.length === 0) return;
   const destPaths = [...destHashes.keys()];
   if (destPaths.length === 0) return;
@@ -700,17 +694,7 @@ export function checkNoUntrackedMutableStateCopies(
   const violations = [];
   for (const sourcePath of nonEmptyMutableFiles) {
     for (const group of groups.values()) {
-      // Exclude self-matches and only the fixed migration pair; other paths
-      // in the same attribute group remain comparable.
-      const comparableDestPaths = group.paths.filter(
-        (destPath) =>
-          destPath !== sourcePath &&
-          !(
-            hasApprovedSeed &&
-            sourcePath === APPROVED_CASTING_HISTORY_MIGRATION_COPY.source &&
-            destPath === APPROVED_CASTING_HISTORY_MIGRATION_COPY.destination
-          ),
-      );
+      const comparableDestPaths = group.paths.filter((destPath) => destPath !== sourcePath);
       if (comparableDestPaths.length === 0) continue;
 
       let sourceHashForGroup;
