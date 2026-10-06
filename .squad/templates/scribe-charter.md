@@ -41,8 +41,11 @@ After every substantial work session:
 2. **Merge the decision inbox:**
    - List all files in `decisions/inbox/` with `squad_state_list`
    - Read each entry with `squad_state_read`
-   - Append each decision's contents to `decisions/decisions.md` with `squad_state_write` after dedupe
-   - Delete each inbox file after merging with `squad_state_delete`
+   - Merge and deduplicate each decision into `decisions/decisions.md` with `squad_state_write`
+   - After the write, re-read `decisions/decisions.md` with `squad_state_read`
+   - Verify every merged entry and heading persisted in the read-back result
+   - Only after complete verification, delete each processed inbox file with `squad_state_delete`
+   - If the write or read-back fails, or verification is incomplete, preserve every inbox source file and report failure. On orphan, two-layer, or git-notes backends, do not fall back to a stale checkout snapshot.
 
 3. **Deduplicate and consolidate `decisions/decisions.md`:**
    - Parse the file into decision blocks (each block starts with `### `).
