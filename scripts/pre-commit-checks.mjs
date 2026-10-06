@@ -481,6 +481,18 @@ export function checkNoUntrackedMutableStateCopies(
   listIgnoredFn = listUntrackedMutableStateFiles,
   hashFn = hashObjectForPath,
   attrFn = checkAttrSignatures,
+  hasStagedAttributeFileFn = () => {
+    const stagedPaths = defaultExecFileSync(
+      'git',
+      ['diff', '--cached', '--name-only', '--no-renames', '-z'],
+      { encoding: 'utf8' },
+    )
+      .split('\0')
+      .filter(Boolean);
+    return stagedPaths.some(
+      (stagedPath) => stagedPath === '.gitattributes' || stagedPath.endsWith('/.gitattributes'),
+    );
+  },
 ) {
   let ignoredMutableFiles;
   try {
@@ -564,16 +576,7 @@ export function checkNoUntrackedMutableStateCopies(
   // behavior.
   let hasStagedAttributeFile;
   try {
-    const stagedPaths = defaultExecFileSync(
-      'git',
-      ['diff', '--cached', '--name-only', '--no-renames', '-z'],
-      { encoding: 'utf8' },
-    )
-      .split('\0')
-      .filter(Boolean);
-    hasStagedAttributeFile = stagedPaths.some(
-      (stagedPath) => stagedPath === '.gitattributes' || stagedPath.endsWith('/.gitattributes'),
-    );
+    hasStagedAttributeFile = hasStagedAttributeFileFn();
   } catch (err) {
     fail(
       'Could not determine whether .gitattributes files are staged while checking for ' +

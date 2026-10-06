@@ -955,7 +955,19 @@ describe("checkNoUntrackedMutableStateCopies", () => {
     exitState = captureExit();
     mock.method(console, "error", () => {});
     const mod = await import("../../scripts/pre-commit-checks.mjs");
-    checkNoUntrackedMutableStateCopies = mod.checkNoUntrackedMutableStateCopies;
+    checkNoUntrackedMutableStateCopies = (
+      destHashes,
+      listIgnoredFn,
+      hashFn,
+      attrFn,
+    ) =>
+      mod.checkNoUntrackedMutableStateCopies(
+        destHashes,
+        listIgnoredFn,
+        hashFn,
+        attrFn,
+        () => false,
+      );
     listUntrackedMutableStateFiles = mod.listUntrackedMutableStateFiles;
     mutableSourceDir = mkdtempSync(join(tmpdir(), "stfc-mutable-source-fixture-"));
     mutableSourcePath = join(mutableSourceDir, ".squad", "agents", "scotty", "history.md");
