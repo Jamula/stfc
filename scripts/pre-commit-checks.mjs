@@ -323,8 +323,8 @@ export function listUntrackedMutableStateFiles(exec = defaultExecFileSync) {
 /**
  * Compute the Git blob SHA Git would assign to `sourcePath`'s current
  * on-disk content if it were committed AT `destinationPath` — i.e. using
- * `destinationPath`'s `.gitattributes` to decide which clean filters/line-
- * ending normalization apply, not `sourcePath`'s own.
+ * `destinationPath`'s working-tree `.gitattributes` to decide which clean
+ * filters/line-ending normalization apply, not `sourcePath`'s own.
  *
  * This distinction is load-bearing: `git hash-object`'s default behavior
  * (no `--path` override) derives filter rules from the hashed file's OWN
@@ -350,45 +350,26 @@ export function hashObjectForPath(sourcePath, destinationPath, exec = defaultExe
   ).trim();
 }
 
-/**
- * Reject a staged file whose content is byte-identical (by Git blob hash,
- * computed under the destination's own clean-filter rules — see
- * `hashObjectForPath`) to an untracked/ignored mutable-state source. Only
- * an exact full-content match is treated as a violation — deliberately
- * conservative, with no fuzzy/partial matching, to avoid false positives
- * on merely similar files.
- *
- * Fails closed: if enumerating untracked/ignored mutable-state files, or
- * hashing any candidate against a staged destination, itself errors, this
- * aborts the commit with a diagnostic rather than silently treating the
- * error as "no violation found" — a guard that can be silently disabled
- * by making its own enumeration/hashing step fail is not a guard.
- *
- * `destHashes` is the result of `parseRawDiffDestHashes`. `listIgnoredFn`
- * defaults to `listUntrackedMutableStateFiles` and `hashFn` defaults to
- * `hashObjectForPath`; both are injectable for testing.
- */
-/**
- * The subset of `.gitattributes` attributes that affect what
- * `git hash-object --path=<p>` (and therefore `git add`) does to a file's
- * bytes before storing them: whether text normalization applies at all
- * (`text`), what line ending it normalizes to (`eol`), and any content
- * filter driver (`filter`, e.g. clean/smudge filters). Two paths sharing
- * identical values for all three are guaranteed to produce the same blob
- * hash for the same input bytes, regardless of any other attribute.
- */
-const CLEAN_FILTER_ATTRS = ['text', 'eol', 'filter'];
+/** Attributes that affect Git's built-in clean conversions. */
+const HASH_FILTER_ATTRS = [
+  'text',
+  'eol',
+  'filter',
+  'ident',
+  'working-tree-encoding',
+  'crlf',
+];
 
 /**
- * Batch-resolve the clean-filter-relevant `.gitattributes` values for every
- * path in `paths` with a single `git check-attr` invocation (rather than
- * one process per path), returning a Map of path -> a string signature
- * that is equal for two paths if and only if they resolve to the same
- * `text`/`eol`/`filter` attribute values (and therefore need only one
- * representative `hashObjectForPath` call between them per source file).
+ * Batch-resolve the attributes that affect `git hash-object --filters
+ * --path=<p>` using the working-tree `.gitattributes`, matching the
+ * attribute source used by that hash operation. `--all` lets us distinguish
+ * an absent filter attribute from a custom driver literally named
+ * "unspecified".
  *
- * `--cached` resolves attributes from the index (what's actually being
- * committed) rather than the working tree, consistent with what's staged.
+ * Paths can share one hash only when they have the same built-in conversion
+ * attributes AND no custom filter driver. A clean filter command can use
+ * `%f`, so even the same filter driver on two paths is not path-independent.
  *
  * Deliberately does NOT catch/swallow errors — propagates like
  * `listUntrackedMutableStateFiles` and `hashObjectForPath`, so the caller
@@ -399,7 +380,7 @@ export function checkAttrSignatures(paths, exec = defaultExecFileSync) {
 
   const raw = exec(
     'git',
-    ['check-attr', '--cached', '-z', ...CLEAN_FILTER_ATTRS, '--', ...paths],
+    ['check-attr', '--all', '-z', '--', ...paths],
     { encoding: 'utf8' },
   );
   const tokens = raw.split('\0');
@@ -412,17 +393,62 @@ export function checkAttrSignatures(paths, exec = defaultExecFileSync) {
     valuesByPath.get(path)[attr] = value;
   }
 
+  // `check-attr --all` omits attributes whose value is the reserved
+  // "unspecified" state, which is indistinguishable there from an absent
+  // filter attribute. If a clean/process driver with either sentinel name
+  // is configured, conservatively disable grouping for such paths.
+  let hasReservedFilterDriver = false;
+  if (
+    paths.some(
+      (path) => !Object.prototype.hasOwnProperty.call(valuesByPath.get(path) ?? {}, 'filter'),
+    )
+  ) {
+    try {
+      hasReservedFilterDriver =
+        exec(
+          'git',
+          [
+            'config',
+            '--null',
+            '--get-regexp',
+            '^filter\\.(unspecified|unset)\\.(clean|process)$',
+          ],
+          { encoding: 'utf8' },
+        ).length > 0;
+    } catch (err) {
+      if (err?.status !== 1) throw err;
+    }
+  }
+
   const signatures = new Map();
   for (const path of paths) {
     const values = valuesByPath.get(path) ?? {};
-    signatures.set(
-      path,
-      CLEAN_FILTER_ATTRS.map((attr) => `${attr}=${values[attr] ?? 'unspecified'}`).join('|'),
-    );
+    const filter = Object.prototype.hasOwnProperty.call(values, 'filter');
+    signatures.set(path, {
+      signature: JSON.stringify(HASH_FILTER_ATTRS.map((attr) => values[attr] ?? 'unspecified')),
+      pathIndependent: !filter && !hasReservedFilterDriver,
+    });
   }
   return signatures;
 }
 
+/**
+ * Reject a staged file whose content is byte-identical (by Git blob hash,
+ * computed under the destination's own working-tree clean-filter rules —
+ * see `hashObjectForPath`) to an untracked/ignored mutable-state source.
+ * Only an exact full-content match is treated as a violation — deliberately
+ * conservative, with no fuzzy/partial matching, to avoid false positives
+ * on merely similar files.
+ *
+ * Fails closed: if enumerating untracked/ignored mutable-state files, or
+ * hashing any candidate against a staged destination, itself errors, this
+ * aborts the commit with a diagnostic rather than silently treating the
+ * error as "no violation found" — a guard that can be silently disabled
+ * by making its own enumeration/hashing step fail is not a guard.
+ *
+ * `destHashes` is the result of `parseRawDiffDestHashes`. The listing,
+ * hashing, and attribute functions are injectable for testing.
+ */
 export function checkNoUntrackedMutableStateCopies(
   destHashes,
   listIgnoredFn = listUntrackedMutableStateFiles,
@@ -445,15 +471,11 @@ export function checkNoUntrackedMutableStateCopies(
 
   const destPaths = [...destHashes.keys()];
 
-  // Group staged destinations by their effective clean-filter signature so
-  // each untracked/ignored source is hashed at most once PER DISTINCT
-  // signature, not once per destination. Destinations sharing a signature
-  // are guaranteed to produce an identical hash for the same source
-  // content, so hashing against one representative path per group and
-  // comparing that single hash against every destination hash in the
-  // group is equivalent to (but far cheaper than) hashing against each
-  // destination individually — repositories typically have very few
-  // distinct `.gitattributes` rule sets, even when many files are staged.
+  // Hashing uses worktree attributes. If those differ from the index,
+  // cached signatures would not describe the actual hash operation. Also,
+  // custom clean filters may use `%f`, so equal filter-driver names do not
+  // prove path-independent output. Only group paths with identical built-in
+  // conversions and no custom filter; hash every other destination itself.
   let signatures;
   try {
     signatures = attrFn(destPaths);
@@ -466,13 +488,14 @@ export function checkNoUntrackedMutableStateCopies(
     return;
   }
 
-  const groups = new Map(); // signature -> { representative, paths: string[] }
+  const groups = new Map(); // signature or unique symbol -> { representative, paths: string[] }
   for (const destPath of destPaths) {
-    const signature = signatures.get(destPath) ?? '';
-    let group = groups.get(signature);
+    const attributes = signatures.get(destPath);
+    const key = attributes?.pathIndependent ? attributes.signature : Symbol(destPath);
+    let group = groups.get(key);
     if (!group) {
       group = { representative: destPath, paths: [] };
-      groups.set(signature, group);
+      groups.set(key, group);
     }
     group.paths.push(destPath);
   }

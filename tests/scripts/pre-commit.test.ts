@@ -24,6 +24,72 @@ function captureExit(): { code: number | null } {
   return state;
 }
 
+type AttrSignature = { signature: string; pathIndependent: boolean };
+
+function setupPreCommitTestRepo(dir: string): NodeJS.ProcessEnv {
+  const scriptsDir = join(dir, "scripts");
+  const binDir = join(dir, "bin");
+  const isolatedGitEnv = { ...process.env };
+  for (const key of Object.keys(isolatedGitEnv)) {
+    if (key.startsWith("GIT_")) delete isolatedGitEnv[key];
+  }
+
+  mkdirSync(scriptsDir, { recursive: true });
+  mkdirSync(binDir);
+  writeFileSync(
+    join(scriptsDir, "pre-commit.mjs"),
+    readFileSync(resolve("scripts/pre-commit.mjs"), "utf8"),
+  );
+  writeFileSync(
+    join(scriptsDir, "pre-commit-checks.mjs"),
+    readFileSync(resolve("scripts/pre-commit-checks.mjs"), "utf8"),
+  );
+  writeFileSync(join(scriptsDir, "check-artifact-hygiene.mjs"), "process.exit(0);\n");
+
+  const pathKey = Object.keys(isolatedGitEnv).find((key) => key.toLowerCase() === "path") ?? "PATH";
+  const pathSeparator = process.platform === "win32" ? ";" : ":";
+  isolatedGitEnv[pathKey] = `${binDir}${pathSeparator}${isolatedGitEnv[pathKey] ?? ""}`;
+  if (process.platform === "win32") {
+    writeFileSync(join(binDir, "npm.cmd"), "@echo off\r\nexit /b 0\r\n");
+  } else {
+    writeFileSync(join(binDir, "npm"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+  }
+
+  execFileSync("git", ["init", "--quiet"], { cwd: dir, env: isolatedGitEnv });
+  execFileSync("git", ["config", "user.name", "Pre-commit test"], {
+    cwd: dir,
+    env: isolatedGitEnv,
+  });
+  execFileSync("git", ["config", "user.email", "pre-commit-test@example.invalid"], {
+    cwd: dir,
+    env: isolatedGitEnv,
+  });
+  execFileSync("git", ["config", "core.autocrlf", "false"], { cwd: dir, env: isolatedGitEnv });
+  return isolatedGitEnv;
+}
+
+function getGitAttributeValues(
+  dir: string,
+  env: NodeJS.ProcessEnv,
+  paths: string[],
+  cached: boolean,
+): Map<string, Record<string, string>> {
+  const args = ["check-attr", ...(cached ? ["--cached"] : []), "-z", "text", "eol", "filter", "--", ...paths];
+  const raw = execFileSync("git", args, { cwd: dir, encoding: "utf8", env });
+  const tokens = raw.split("\0");
+  const valuesByPath = new Map<string, Record<string, string>>();
+  for (let i = 0; i + 2 < tokens.length; i += 3) {
+    const path = tokens[i];
+    const attr = tokens[i + 1];
+    const value = tokens[i + 2];
+    if (path === undefined || attr === undefined || value === undefined) continue;
+    const values = valuesByPath.get(path) ?? {};
+    values[attr] = value;
+    valuesByPath.set(path, values);
+  }
+  return valuesByPath;
+}
+
 // ── #9 — Squad boundary ─────────────────────────────────────────────
 
 describe("checkSquadBoundary", () => {
@@ -567,7 +633,11 @@ describe("hashObjectForPath", () => {
 
       writeFileSync(
         join(dir, ".gitattributes"),
-        [".squad/agents/*/history.md -text", "docs/*.md text eol=lf", ""].join("\n"),
+        [
+          ".squad/agents/*/history.md -text",
+          "docs/*.md text eol=lf",
+          "",
+        ].join("\n"),
       );
       execFileSync("git", ["add", ".gitattributes"], { cwd: dir, env: isolatedGitEnv });
       execFileSync("git", ["commit", "--quiet", "-m", "Add .gitattributes"], {
@@ -621,7 +691,7 @@ describe("checkAttrSignatures", () => {
   let checkAttrSignatures: (
     paths: string[],
     exec?: (cmd: string, args: string[], options: Record<string, unknown>) => string,
-  ) => Map<string, string>;
+  ) => Map<string, AttrSignature>;
 
   beforeEach(async () => {
     const mod = await import("../../scripts/pre-commit-checks.mjs");
@@ -635,7 +705,7 @@ describe("checkAttrSignatures", () => {
     assert.deepEqual(checkAttrSignatures([], exec), new Map());
   });
 
-  it("parses batched git check-attr -z output into one signature per path", () => {
+  it("parses batched git check-attr --all -z output into one signature per path", () => {
     const raw = [
       "docs/a.md",
       "text",
@@ -643,26 +713,29 @@ describe("checkAttrSignatures", () => {
       "docs/a.md",
       "eol",
       "lf",
-      "docs/a.md",
-      "filter",
-      "unspecified",
       "docs/b.md",
       "text",
-      "unspecified",
-      "docs/b.md",
-      "eol",
-      "unspecified",
-      "docs/b.md",
-      "filter",
-      "unspecified",
+      "unset",
       "",
     ].join("\0");
-    const exec = () => raw;
+    const exec = (_cmd: string, args: string[]) => (args[0] === "config" ? "" : raw);
 
     const signatures = checkAttrSignatures(["docs/a.md", "docs/b.md"], exec);
-    assert.equal(signatures.get("docs/a.md"), "text=set|eol=lf|filter=unspecified");
-    assert.equal(signatures.get("docs/b.md"), "text=unspecified|eol=unspecified|filter=unspecified");
-    assert.notEqual(signatures.get("docs/a.md"), signatures.get("docs/b.md"));
+    assert.deepEqual(signatures.get("docs/a.md"), {
+      signature: JSON.stringify(["set", "lf", "unspecified", "unspecified", "unspecified", "unspecified"]),
+      pathIndependent: true,
+    });
+    assert.deepEqual(signatures.get("docs/b.md"), {
+      signature: JSON.stringify(["unset", "unspecified", "unspecified", "unspecified", "unspecified", "unspecified"]),
+      pathIndependent: true,
+    });
+    assert.notEqual(signatures.get("docs/a.md")?.signature, signatures.get("docs/b.md")?.signature);
+  });
+
+  it("never treats a custom filter value as path-independent, including a sentinel-like driver name", () => {
+    const raw = ["docs/a.md", "filter", "unspecified", ""].join("\0");
+    const signature = checkAttrSignatures(["docs/a.md"], () => raw).get("docs/a.md");
+    assert.equal(signature?.pathIndependent, false);
   });
 
   it("gives identical signatures to paths with identical attribute values", () => {
@@ -673,47 +746,47 @@ describe("checkAttrSignatures", () => {
       "docs/a.md",
       "eol",
       "lf",
-      "docs/a.md",
-      "filter",
-      "unspecified",
       "docs/c.md",
       "text",
       "set",
       "docs/c.md",
       "eol",
       "lf",
-      "docs/c.md",
-      "filter",
-      "unspecified",
       "",
     ].join("\0");
-    const exec = () => raw;
+    const exec = (_cmd: string, args: string[]) => (args[0] === "config" ? "" : raw);
 
     const signatures = checkAttrSignatures(["docs/a.md", "docs/c.md"], exec);
-    assert.equal(signatures.get("docs/a.md"), signatures.get("docs/c.md"));
+    assert.deepEqual(signatures.get("docs/a.md"), signatures.get("docs/c.md"));
   });
 
-  it("invokes a single batched `git check-attr --cached -z` call for all paths", () => {
+  it("batches worktree attributes and checks only ambiguous sentinel filter drivers", () => {
     const calls: { cmd: string; args: string[] }[] = [];
     const exec = (cmd: string, args: string[]) => {
       calls.push({ cmd, args });
       return "";
     };
     checkAttrSignatures(["docs/a.md", "docs/b.md", "src/c.txt"], exec);
-    assert.equal(calls.length, 1, "expected exactly one batched git invocation");
+    assert.equal(calls.length, 2, "expected one batched attribute lookup and one sentinel-driver lookup");
     assert.deepEqual(calls[0], {
       cmd: "git",
       args: [
         "check-attr",
-        "--cached",
+        "--all",
         "-z",
-        "text",
-        "eol",
-        "filter",
         "--",
         "docs/a.md",
         "docs/b.md",
         "src/c.txt",
+      ],
+    });
+    assert.deepEqual(calls[1], {
+      cmd: "git",
+      args: [
+        "config",
+        "--null",
+        "--get-regexp",
+        "^filter\\.(unspecified|unset)\\.(clean|process)$",
       ],
     });
   });
@@ -736,21 +809,43 @@ describe("checkAttrSignatures", () => {
       execFileSync("git", ["init", "--quiet"], { cwd: dir, env: isolatedGitEnv });
       writeFileSync(
         join(dir, ".gitattributes"),
-        [".squad/agents/*/history.md -text", "docs/*.md text eol=lf", ""].join("\n"),
+        [
+          ".squad/agents/*/history.md -text",
+          "docs/*.md text eol=lf",
+          "docs/filter.md filter=unspecified",
+          "",
+        ].join("\n"),
       );
       execFileSync("git", ["add", ".gitattributes"], { cwd: dir, env: isolatedGitEnv });
+      execFileSync("git", ["config", "filter.unspecified.clean", "unused clean command"], {
+        cwd: dir,
+        env: isolatedGitEnv,
+      });
 
       const exec = (cmd: string, args: string[], options: Record<string, unknown>) =>
         execFileSync(cmd, args, { cwd: dir, env: isolatedGitEnv, ...options }) as unknown as string;
 
       const signatures = checkAttrSignatures(
-        ["docs/a.md", "docs/b.md", ".squad/agents/scotty/history.md"],
+        [
+          "docs/a.md",
+          "docs/b.md",
+          "docs/filter.md",
+          ".squad/agents/scotty/history.md",
+        ],
         exec,
       );
-      assert.equal(signatures.get("docs/a.md"), signatures.get("docs/b.md"));
+      assert.equal(
+        signatures.get("docs/a.md")?.signature,
+        signatures.get("docs/b.md")?.signature,
+      );
       assert.notEqual(
-        signatures.get("docs/a.md"),
-        signatures.get(".squad/agents/scotty/history.md"),
+        signatures.get("docs/a.md")?.signature,
+        signatures.get(".squad/agents/scotty/history.md")?.signature,
+      );
+      assert.equal(
+        signatures.get("docs/filter.md")?.pathIndependent,
+        false,
+        "a configured driver named 'unspecified' must not be grouped as an absent filter",
       );
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -763,7 +858,7 @@ describe("checkNoUntrackedMutableStateCopies", () => {
     destHashes: Map<string, string>,
     listIgnoredFn?: () => string[],
     hashFn?: (sourcePath: string, destinationPath: string) => string,
-    attrFn?: (paths: string[]) => Map<string, string>,
+    attrFn?: (paths: string[]) => Map<string, AttrSignature>,
   ) => void;
   let listUntrackedMutableStateFiles: (
     exec?: (cmd: string, args: string[], options: Record<string, unknown>) => string,
@@ -771,7 +866,7 @@ describe("checkNoUntrackedMutableStateCopies", () => {
   let exitState: { code: number | null };
 
   /** Stub attrFn for tests that aren't exercising the grouping behavior. */
-  const noAttrs = () => new Map<string, string>();
+  const noAttrs = () => new Map<string, AttrSignature>();
 
   beforeEach(async () => {
     exitState = captureExit();
@@ -843,12 +938,7 @@ describe("checkNoUntrackedMutableStateCopies", () => {
     assert.deepEqual(calls, [[".squad/agents/scotty/history.md", "docs/laundered.md"]]);
   });
 
-  it("calls hashFn at most once per distinct clean-filter signature, not once per destination", () => {
-    // Performance regression test (follow-up review on commit 441ecac):
-    // with D staged destinations that all share the same clean-filter
-    // attributes, hashFn must be called once per ignored source TOTAL —
-    // not once per (source, destination) pair — since every destination
-    // in the group would hash identically anyway.
+  it("groups identical built-in conversions without a custom filter", () => {
     const sha = "a".repeat(40);
     const otherSha = "b".repeat(40);
     const destHashes = new Map([
@@ -864,18 +954,22 @@ describe("checkNoUntrackedMutableStateCopies", () => {
       hashCalls += 1;
       return sha; // matches docs/one.md only
     };
-    // All five destinations share one signature, so they belong to a
-    // single group regardless of attrFn's return keys.
-    const attrFn = () => new Map<string, string>();
+    const attrFn = (paths: string[]) =>
+      new Map(
+        paths.map((path) => [
+          path,
+          { signature: "text=set|eol=lf|filter=unspecified", pathIndependent: true },
+        ]),
+      );
 
     assert.throws(
       () => checkNoUntrackedMutableStateCopies(destHashes, listIgnoredFn, hashFn, attrFn),
       /process\.exit\(1\)/,
     );
-    assert.equal(hashCalls, 1, "expected exactly one hashFn call for one source and one group");
+    assert.equal(hashCalls, 1, "expected one hash per source for a shared built-in conversion group");
   });
 
-  it("calls hashFn once per distinct signature when destinations have different clean-filter attributes", () => {
+  it("calls hashFn once per distinct path-independent conversion signature", () => {
     const shaGroupA = "a".repeat(40);
     const shaGroupB = "b".repeat(40);
     const destHashes = new Map([
@@ -891,7 +985,15 @@ describe("checkNoUntrackedMutableStateCopies", () => {
     };
     const attrFn = (paths: string[]) =>
       new Map(
-        paths.map((p) => [p, p.startsWith(".squad/") ? "text=unspecified" : "text=set|eol=lf"]),
+        paths.map((path) => [
+          path,
+          {
+            signature: path.startsWith(".squad/")
+              ? "text=unspecified|filter=unspecified"
+              : "text=set|eol=lf|filter=unspecified",
+            pathIndependent: true,
+          },
+        ]),
       );
 
     checkNoUntrackedMutableStateCopies(destHashes, listIgnoredFn, hashFn, attrFn);
@@ -1783,6 +1885,234 @@ describe("checkWorkflowPinningTests", () => {
         const output = result.stderr + result.stdout;
         assert.match(output, new RegExp(ordinaryDestination.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
         assert.match(output, new RegExp(mutableSource.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it("blocks copies when a clean filter uses %f and the matching destination is not the representative", () => {
+      const dir = mkdtempSync(join(tmpdir(), "stfc-pre-commit-untracked-copy-path-filter-"));
+      const isolatedGitEnv = setupPreCommitTestRepo(dir);
+      const mutableSource = ".squad/agents/scotty/history.md";
+      const firstDestination = "docs/one.md";
+      const copiedDestination = "docs/two.md";
+      const body = Buffer.from("mutable state copied byte-for-byte\n");
+
+      try {
+        writeFileSync(join(dir, ".gitignore"), ".squad/agents/*/history.md\n");
+        writeFileSync(join(dir, ".gitattributes"), "docs/*.md filter=path-sensitive\n");
+        writeFileSync(
+          join(dir, ".git", "clean-filter.cjs"),
+          [
+            "const chunks = [];",
+            "process.stdin.on('data', (chunk) => chunks.push(chunk));",
+            "process.stdin.on('end', () => {",
+            "  process.stdout.write(Buffer.concat([Buffer.from(`${process.argv[2]}\\n`), ...chunks]));",
+            "});",
+            "",
+          ].join("\n"),
+        );
+        execFileSync("git", ["config", "filter.path-sensitive.clean", 'node .git/clean-filter.cjs "%f"'], {
+          cwd: dir,
+          env: isolatedGitEnv,
+        });
+        execFileSync("git", ["add", ".gitignore", ".gitattributes"], { cwd: dir, env: isolatedGitEnv });
+        execFileSync("git", ["commit", "--quiet", "-m", "Add ignore and filter rules"], {
+          cwd: dir,
+          env: isolatedGitEnv,
+        });
+
+        mkdirSync(join(dir, ".squad", "agents", "scotty"), { recursive: true });
+        writeFileSync(join(dir, mutableSource), body);
+        mkdirSync(join(dir, "docs"), { recursive: true });
+        writeFileSync(join(dir, firstDestination), "unrelated staged document\n");
+        writeFileSync(join(dir, copiedDestination), body);
+
+        const attributes = getGitAttributeValues(
+          dir,
+          isolatedGitEnv,
+          [firstDestination, copiedDestination],
+          true,
+        );
+        assert.deepEqual(
+          attributes.get(firstDestination),
+          attributes.get(copiedDestination),
+          "fixture bug: destinations must share the same indexed text/eol/filter attributes",
+        );
+
+        execFileSync("git", ["add", firstDestination, copiedDestination], {
+          cwd: dir,
+          env: isolatedGitEnv,
+        });
+        const stagedHash = execFileSync("git", ["rev-parse", `:${copiedDestination}`], {
+          cwd: dir,
+          encoding: "utf8",
+          env: isolatedGitEnv,
+        }).trim();
+        const hashUnderCopiedPath = execFileSync(
+          "git",
+          ["hash-object", "--filters", `--path=${copiedDestination}`, "--", mutableSource],
+          { cwd: dir, encoding: "utf8", env: isolatedGitEnv },
+        ).trim();
+        const hashUnderRepresentativePath = execFileSync(
+          "git",
+          ["hash-object", "--filters", `--path=${firstDestination}`, "--", mutableSource],
+          { cwd: dir, encoding: "utf8", env: isolatedGitEnv },
+        ).trim();
+        assert.equal(hashUnderCopiedPath, stagedHash, "fixture bug: destination path must reproduce git add");
+        assert.notEqual(
+          hashUnderRepresentativePath,
+          stagedHash,
+          "fixture bug: the representative's %f result must differ from the copied destination",
+        );
+
+        const result = spawnSync(process.execPath, [join(dir, "scripts", "pre-commit.mjs")], {
+          cwd: dir,
+          encoding: "utf8",
+          env: isolatedGitEnv,
+        });
+        assert.equal(
+          result.status,
+          1,
+          `expected the real pre-commit entry point to reject the path-sensitive clean-filter copy:\n` +
+            `${result.stderr}${result.stdout}`,
+        );
+        const output = result.stderr + result.stdout;
+        assert.ok(output.includes(copiedDestination), `expected copied destination in output:\n${output}`);
+        assert.ok(output.includes(mutableSource), `expected mutable source in output:\n${output}`);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it("uses worktree .gitattributes when comparing hashes even if indexed attributes still group destinations", () => {
+      const dir = mkdtempSync(join(tmpdir(), "stfc-pre-commit-untracked-copy-attr-divergence-"));
+      const isolatedGitEnv = setupPreCommitTestRepo(dir);
+      const mutableSource = ".squad/agents/scotty/history.md";
+      const firstDestination = "docs/one.md";
+      const copiedDestination = "docs/two.md";
+      const body = Buffer.from("mutable state copied byte-for-byte\n");
+
+      try {
+        writeFileSync(join(dir, ".gitignore"), ".squad/agents/*/history.md\n");
+        writeFileSync(join(dir, ".gitattributes"), "docs/*.md filter=first\n");
+        writeFileSync(
+          join(dir, ".git", "clean-filter.cjs"),
+          [
+            "const chunks = [];",
+            "process.stdin.on('data', (chunk) => chunks.push(chunk));",
+            "process.stdin.on('end', () => {",
+            "  process.stdout.write(Buffer.concat([Buffer.from(`${process.argv[2]}\\n`), ...chunks]));",
+            "});",
+            "",
+          ].join("\n"),
+        );
+        execFileSync("git", ["config", "filter.first.clean", "node .git/clean-filter.cjs first"], {
+          cwd: dir,
+          env: isolatedGitEnv,
+        });
+        execFileSync("git", ["config", "filter.second.clean", "node .git/clean-filter.cjs second"], {
+          cwd: dir,
+          env: isolatedGitEnv,
+        });
+        execFileSync("git", ["add", ".gitignore", ".gitattributes"], { cwd: dir, env: isolatedGitEnv });
+        execFileSync("git", ["commit", "--quiet", "-m", "Add ignore and baseline filter rules"], {
+          cwd: dir,
+          env: isolatedGitEnv,
+        });
+
+        writeFileSync(
+          join(dir, ".gitattributes"),
+          ["docs/*.md filter=first", "docs/two.md filter=second", ""].join("\n"),
+        );
+        assert.notEqual(
+          execFileSync("git", ["diff", "--", ".gitattributes"], {
+            cwd: dir,
+            encoding: "utf8",
+            env: isolatedGitEnv,
+          }),
+          "",
+          "fixture bug: .gitattributes must differ in the worktree",
+        );
+        assert.equal(
+          execFileSync("git", ["diff", "--cached", "--", ".gitattributes"], {
+            cwd: dir,
+            encoding: "utf8",
+            env: isolatedGitEnv,
+          }),
+          "",
+          "fixture bug: divergent .gitattributes must not be staged",
+        );
+
+        const indexedAttributes = getGitAttributeValues(
+          dir,
+          isolatedGitEnv,
+          [firstDestination, copiedDestination],
+          true,
+        );
+        const worktreeAttributes = getGitAttributeValues(
+          dir,
+          isolatedGitEnv,
+          [firstDestination, copiedDestination],
+          false,
+        );
+        assert.equal(
+          indexedAttributes.get(firstDestination)?.filter,
+          indexedAttributes.get(copiedDestination)?.filter,
+          "fixture bug: cached attributes must group both destinations under the same filter",
+        );
+        assert.notEqual(
+          worktreeAttributes.get(firstDestination)?.filter,
+          worktreeAttributes.get(copiedDestination)?.filter,
+          "fixture bug: worktree attributes must select different filters",
+        );
+
+        mkdirSync(join(dir, ".squad", "agents", "scotty"), { recursive: true });
+        writeFileSync(join(dir, mutableSource), body);
+        mkdirSync(join(dir, "docs"), { recursive: true });
+        writeFileSync(join(dir, firstDestination), "unrelated staged document\n");
+        writeFileSync(join(dir, copiedDestination), body);
+        execFileSync("git", ["add", firstDestination, copiedDestination], {
+          cwd: dir,
+          env: isolatedGitEnv,
+        });
+
+        const stagedHash = execFileSync("git", ["rev-parse", `:${copiedDestination}`], {
+          cwd: dir,
+          encoding: "utf8",
+          env: isolatedGitEnv,
+        }).trim();
+        const hashUnderCopiedPath = execFileSync(
+          "git",
+          ["hash-object", "--filters", `--path=${copiedDestination}`, "--", mutableSource],
+          { cwd: dir, encoding: "utf8", env: isolatedGitEnv },
+        ).trim();
+        const hashUnderIndexedRepresentative = execFileSync(
+          "git",
+          ["hash-object", "--filters", `--path=${firstDestination}`, "--", mutableSource],
+          { cwd: dir, encoding: "utf8", env: isolatedGitEnv },
+        ).trim();
+        assert.equal(hashUnderCopiedPath, stagedHash, "fixture bug: worktree filter must reproduce git add");
+        assert.notEqual(
+          hashUnderIndexedRepresentative,
+          stagedHash,
+          "fixture bug: stale indexed grouping must miss the copied destination if it uses one representative",
+        );
+
+        const result = spawnSync(process.execPath, [join(dir, "scripts", "pre-commit.mjs")], {
+          cwd: dir,
+          encoding: "utf8",
+          env: isolatedGitEnv,
+        });
+        assert.equal(
+          result.status,
+          1,
+          `expected the real pre-commit entry point to reject the copy despite attribute divergence:\n` +
+            `${result.stderr}${result.stdout}`,
+        );
+        const output = result.stderr + result.stdout;
+        assert.ok(output.includes(copiedDestination), `expected copied destination in output:\n${output}`);
+        assert.ok(output.includes(mutableSource), `expected mutable source in output:\n${output}`);
       } finally {
         rmSync(dir, { recursive: true, force: true });
       }
