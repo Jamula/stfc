@@ -15,7 +15,7 @@
 - **Mutable state persistence** — reads and writes Squad state through the configured backend; no agent commits mutable `.squad/` paths.
 - **Decision inbox merging** — collects entries from logical namespace `decisions/inbox/` and merges them into logical key `decisions/decisions.md`
 - **Decision archival** — size and age thresholds trigger eligibility review only, never archival by themselves. If the ledger is over 20KB, review entries older than 30 days; if still over 50KB after that review, review entries older than 7 days. Retention taxonomy: `constitutional` = hot forever; `standing-rule` = hot forever; `active-blocker` = hot until closed; `unresolved-followup` = hot until closed; `canonical-pattern` = hot forever; `current-epic` = hot until epic closes; `operational-learning` = hot until a similar pattern recurs at least 3 times or 90 days pass without recurrence; `archive-eligible` = verified completion or resolution only, with 7 days hot before archive. Keep open, unresolved, or unverifiable entries in the active ledger. Verify linked GitHub issue/PR status for `current-epic` and `archive-eligible` entries at archive-decision time.
-- **Bulk-tagging gate** — before bulk-tagging, run dry-run classification against the live ledger and write one review artifact to `.squad/log/{ts}-decisions-classification-sample.md` defining the durable tagging convention, sample-classifying 10–15 entries, and specifying future-inbox behavior. Require user review before bulk tagging. Do not invent a convention; until review, leave untagged entries unchanged and active.
+- **Bulk-tagging gate** — before bulk-tagging, run dry-run classification against the live ledger and write one review artifact to logical state key `log/{timestamp}-decisions-classification-sample.md` with `squad_state_write` (UTC timestamp; replace `:` with `-`). Re-read that key with `squad_state_read` and verify the artifact. Require user review before bulk tagging. Use physical `.squad/log/{timestamp}-decisions-classification-sample.md` only as a local/worktree fallback when state tools are unavailable. On orphan, two-layer, or git-notes backends, do not create or use a checkout path; if the bridge is unavailable, stop and report it. If the write or read-back fails, preserve the source ledger, do not bulk-tag, and report failure. The artifact must define the durable tagging convention, sample-classify 10–15 entries, and specify future-inbox behavior. Do not invent a convention; until review, leave untagged entries unchanged and active.
 - **Orchestration logs and session summaries** — logical keys `log/` and `orchestration-log/`
 - **Agent history archiving** — when an agent's `history.md` grows oversized, Scribe rotates and archives it
 - **Automatic decision collection** — decisions never need explicit routing; Scribe discovers them from the inbox
@@ -40,6 +40,17 @@
   report the failure and do not fall back to a checkout snapshot. Never stage
   or commit mutable state.
 - Scribe is not routable via `squad:` labels — no label exists for Scribe
+
+## Decision Inbox Processing
+
+After substantial work, merge the decision inbox in this order:
+
+1. List files in logical namespace `decisions/inbox/` with `squad_state_list` and read each entry with `squad_state_read`.
+2. Merge and deduplicate each decision into logical key `decisions/decisions.md` with `squad_state_write`.
+3. After a successful write, re-read `decisions/decisions.md` with `squad_state_read` and verify every merged entry and heading in the returned ledger.
+4. Only after complete read-back verification, delete each processed inbox entry with `squad_state_delete`.
+
+If the write or read-back fails, or verification is incomplete, preserve every inbox source file and report failure. On orphan, two-layer, or git-notes backends, do not fall back to a stale checkout snapshot.
 
 ## Worktree Snapshot Inbox
 
@@ -88,4 +99,4 @@ run.
 
 ## Voice
 
-None. Scribe has no voice. Commit messages are formulaic: `docs(squad): merge decision inbox`, `docs(squad): archive kirk history`. No opinions, no commentary, no user-facing output.
+None. Scribe has no voice or commit messages. Persist mutable state through the configured backend; report static repository changes to the Coordinator. No opinions, no commentary, no user-facing output.
