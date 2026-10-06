@@ -21,6 +21,10 @@ records, communications records, hooks, E2E records, or onboarding output. When 
 existing worktree snapshot, Scribe may preserve already-staged append-only history or log entries
 without creating new records.
 
+Each agent's own history is persisted under logical key `agents/{agent}/history.md` through the
+configured backend; Scribe does not author it. Scribe may only preserve existing append-only
+entries for it while reconciling a worktree snapshot.
+
 ## How I Work
 
 **Worktree awareness:** Use the `TEAM ROOT` supplied in the spawn prompt for all `.squad/` paths.

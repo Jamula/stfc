@@ -1,6 +1,6 @@
 ---
 name: reflect
-description: Learning capture system that extracts HIGH/MED/LOW confidence patterns from conversations to prevent repeating mistakes. Use after user corrections ("no", "wrong"), praise ("perfect", "exactly"), or when discovering edge cases. Complements .squad/agents/{agent}/history.md and logical key decisions/decisions.md.
+description: Learning capture system that extracts HIGH/MED/LOW confidence patterns from conversations to prevent repeating mistakes. Use after user corrections ("no", "wrong"), praise ("perfect", "exactly"), or when discovering edge cases. Complements logical state key agents/{agent}/history.md (local/worktree physical fallback: .squad/agents/{agent}/history.md) and logical key decisions/decisions.md.
 license: MIT
 version: 1.0.0-squad
 domain: team-memory, learning
@@ -19,7 +19,7 @@ Analyze conversations and propose improvements to squad knowledge based on what 
 
 **Reflect complements existing Squad knowledge systems:**
 
-1. **Governed runtime memory** — Durable observations and decisions persisted through configured state tools
+1. Logical state key `agents/{agent}/history.md` — Permanent learnings from completed work (append-only; each agent updates their own key). Physical `.squad/agents/{agent}/history.md` is a local/worktree-only fallback.
 2. Logical state key `decisions/decisions.md` — Team-wide decisions that all agents respect; local/worktree physical path: `.squad/decisions/decisions.md`
 3. **Tracked governing source** — Coordinator prompts, skills, and other behavior-defining files changed through focused pull requests
 4. **`reflect` skill** — Identifies learnings that may warrant either runtime memory or an approved tracked behavior change
@@ -27,9 +27,8 @@ Analyze conversations and propose improvements to squad knowledge based on what 
 **Workflow:**
 - Use `reflect` during work to capture learnings
 - At session end, review captured learnings
-- Persist evidence through governed runtime memory when available
-- Promote accepted behavior changes through the accountable specialist as tracked source changes in a focused PR
-- Report adjacent improvements separately; do not expand the current scope without explicit user approval
+- Promote HIGH confidence patterns → Squad Coordinator for `decisions/decisions.md` review
+- Promote agent-specific patterns → logical key `agents/{agent}/history.md` updates
 
 ---
 
@@ -66,9 +65,9 @@ Analyze conversations and propose improvements to squad knowledge based on what 
 
 Determine what knowledge system should be updated:
 
-1. **Observation or preference** → Governed runtime memory, when configured
-2. **Accepted team-wide behavior change** → The accountable tracked instruction or skill source, through a focused PR
-3. **Adjacent improvement** → Report separately and require explicit user approval before adding it to scope
+1. **Agent-specific learning** → logical key `agents/{agent}/history.md`, written with `squad_state_append`
+2. **Team-wide decision** → use `squad_state_write` in logical namespace `decisions/inbox/` for `{agent}-{topic}.md`. Use physical path `.squad/decisions/inbox/{agent}-{topic}.md` only as a local/worktree fallback. On orphan, two-layer, or git-notes backends, stop and report a missing bridge instead of writing a checkout snapshot.
+3. **Skill-specific improvement** → Document in session, recommend to skill owner
 
 ### Phase 2: Analyze Conversation
 
@@ -134,7 +133,8 @@ Present findings:
 │                                                             │
 │ [MED]  + Add preference: "{specific preference}"            │
 │   Source: "{evidence from conversation}"                    │
-│   Target: governed runtime memory                            │
+│   Target: logical key agents/{agent}/history.md             │
+│   Local/worktree fallback: .squad/agents/{agent}/history.md │
 │                                                             │
 │ [LOW]  ~ Note for review: "{observation}"                   │
 │   Source: "{pattern observed}"                              │
@@ -160,9 +160,13 @@ Present findings:
 
 After user approval:
 
-1. **For Runtime Memory:**
-   - Use the configured governed memory or state tool.
-   - If no runtime persistence tool is available, report the learning without claiming it was saved.
+1. **For Agent History:**
+   - Append with `squad_state_append` to logical key `agents/{agent}/history.md` under `## Learnings` section
+   - Re-read the key with `squad_state_read` and verify the appended learning
+   - Use physical `.squad/agents/{agent}/history.md` only as a local/worktree fallback when state tools are unavailable
+   - On orphan, two-layer, or git-notes backends, fail closed and report a missing bridge rather than writing a checkout snapshot
+   - If the write or read-back fails, preserve the source learning and report failure
+   - Format: Date, assignment context, key learning
 
 2. **For Team Decisions:**
    - Write with `squad_state_write` in logical namespace `decisions/inbox/` for `{agent}-{topic}.md`. Use physical path `.squad/decisions/inbox/{agent}-{topic}.md` only as a local/worktree fallback. On orphan, two-layer, or git-notes backends, stop and report a missing bridge instead of writing a checkout snapshot.
@@ -228,6 +232,7 @@ User: "Perfect! This is exactly the format I want for all PRs"
 
 ## See Also
 
-- `.squad/decisions/decisions.md` — Runtime-backed team decisions
+- Logical key `decisions/decisions.md` — Team-wide decisions; local/worktree physical path: `.squad/decisions/decisions.md`
+- Logical key `agents/{agent}/history.md` — Agent-specific learnings; local/worktree physical fallback: `.squad/agents/{agent}/history.md`
 - `.github/agents/squad.agent.md` — Coordinator behavior
 - `.squad/routing.md` — Work assignment patterns

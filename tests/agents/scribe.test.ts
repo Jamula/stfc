@@ -286,6 +286,114 @@ describe("Scribe — decision state keys", () => {
   });
 });
 
+describe("Scribe — semantic classification state path", () => {
+  for (const [label, text] of [
+    ["active coordinator prompt", squadAgent],
+    ["generated coordinator template", coordinatorTemplate],
+    ["Scribe charter template", scribeTemplate],
+    ["Squad command skill", squadCommands],
+  ] as const) {
+    it(`${label} writes and verifies the review artifact through logical log state`, () => {
+      const normalized = text.replace(/\r\n/g, "\n");
+      const artifactGuidance = normalized
+        .split("\n")
+        .find((line) => line.includes("decisions-classification-sample.md"));
+      assert.ok(
+        artifactGuidance,
+        `${label} should define the classification artifact destination`,
+      );
+
+      assert.match(
+        artifactGuidance,
+        /logical state key `log\/\{timestamp\}-decisions-classification-sample\.md`/,
+        `${label} should target the logical log key`,
+      );
+      assert.match(
+        artifactGuidance,
+        /with `squad_state_write`/,
+        `${label} should persist the artifact through the state backend`,
+      );
+      assert.match(
+        artifactGuidance,
+        /Re-read that key with `squad_state_read` and verify the artifact/,
+        `${label} should verify the artifact through the state backend`,
+      );
+      assert.match(
+        artifactGuidance,
+        /physical `\.squad\/log\/\{timestamp\}-decisions-classification-sample\.md` only as a local\/worktree fallback/,
+        `${label} should limit the physical log path to local/worktree fallback`,
+      );
+      assert.match(
+        artifactGuidance,
+        /On orphan, two-layer, or git-notes backends, do not create or use a checkout path; if the bridge is unavailable, stop and report it/,
+        `${label} should fail closed instead of using governed-backend checkout paths`,
+      );
+      assert.match(
+        artifactGuidance,
+        /If the write or read-back fails, preserve the source ledger, do not bulk-tag, and report failure/,
+        `${label} should preserve source data and report failed persistence`,
+      );
+    });
+  }
+});
+
+describe("Agent history — logical state paths", () => {
+  for (const [label, text, hasPathSpecificFallback] of [
+    ["active coordinator prompt", squadAgent, true],
+    ["generated coordinator template", coordinatorTemplate, true],
+    ["active Scribe charter", charter, false],
+    ["Scribe charter template", scribeTemplate, true],
+    ["active Reflect skill", reflectSkill, true],
+    ["Reflect template", reflectTemplate, true],
+  ] as const) {
+    it(`${label} routes agent histories through logical state`, () => {
+      const normalized = text.replace(/\r\n/g, "\n");
+      const collapsed = normalized.replace(/\s+/g, " ");
+      assert.match(
+        collapsed,
+        /agents\/(?:\{agent\}|\*)\/history\.md/,
+        `${label} should name the logical agent-history key`,
+      );
+      assert.match(
+        collapsed,
+        /squad_state_append|through the configured backend/,
+        `${label} should route agent-history writes through state tools`,
+      );
+      assert.match(
+        normalized,
+        /On orphan, two-layer, or git-notes backends/,
+        `${label} should define governed-backend behavior`,
+      );
+
+      if (hasPathSpecificFallback) {
+        const physicalHistoryReferences = normalized
+          .split("\n")
+          .filter((line) =>
+            line.includes(".squad/agents/{agent}/history.md"),
+          );
+        assert.ok(
+          physicalHistoryReferences.length > 0 &&
+            physicalHistoryReferences.every((line) =>
+              /local\/worktree(?:-only| physical)? fallback/i.test(line),
+            ),
+          `${label} should limit physical history paths to local/worktree fallback`,
+        );
+        assert.match(
+          normalized,
+          /If the write or read-back fails, preserve the source (?:update|learning) and report failure/,
+          `${label} should preserve source learnings and report persistence failures`,
+        );
+      } else {
+        assert.match(
+          collapsed,
+          /Filesystem fallback for mutable state is permitted only for local\/worktree backends/,
+          `${label} should limit filesystem fallback to local/worktree`,
+        );
+      }
+    });
+  }
+});
+
 describe("Scribe — decision inbox persistence", () => {
   for (const [label, text, startMarker, endMarker] of [
     [
