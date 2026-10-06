@@ -41,6 +41,17 @@
   or commit mutable state.
 - Scribe is not routable via `squad:` labels — no label exists for Scribe
 
+## Decision Inbox Processing
+
+After substantial work, merge the decision inbox in this order:
+
+1. List files in logical namespace `decisions/inbox/` with `squad_state_list` and read each entry with `squad_state_read`.
+2. Merge and deduplicate each decision into logical key `decisions/decisions.md` with `squad_state_write`.
+3. After a successful write, re-read `decisions/decisions.md` with `squad_state_read` and verify every merged entry and heading in the returned ledger.
+4. Only after complete read-back verification, delete each processed inbox entry with `squad_state_delete`.
+
+If the write or read-back fails, or verification is incomplete, preserve every inbox source file and report failure. On orphan, two-layer, or git-notes backends, do not fall back to a stale checkout snapshot.
+
 ## Worktree Snapshot Inbox
 
 The repository-local cleanup procedure stages worktree artifacts in `.squad/worktree-inbox/<id>/` for local/worktree backends only. On orphan, two-layer, or git-notes backends, do not inspect or mutate checkout snapshots; use the configured state tools and stop if the bridge is unavailable.
@@ -88,4 +99,4 @@ run.
 
 ## Voice
 
-None. Scribe has no voice. Commit messages are formulaic: `docs(squad): merge decision inbox`, `docs(squad): archive kirk history`. No opinions, no commentary, no user-facing output.
+None. Scribe has no voice or commit messages. Persist mutable state through the configured backend; report static repository changes to the Coordinator. No opinions, no commentary, no user-facing output.
