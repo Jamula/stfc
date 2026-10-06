@@ -16,7 +16,6 @@ import {
   checkNoUntrackedMutableStateCopies,
   parseNameStatus,
   parseRawDiffDestHashes,
-  listUntrackedMutableStateFiles,
 } from './pre-commit-checks.mjs';
 
 execSync('node scripts/check-artifact-hygiene.mjs --staged', { stdio: 'inherit' });
@@ -57,8 +56,7 @@ const rawDiffOutput = execSync(
   { encoding: 'utf8' },
 );
 const destHashes = parseRawDiffDestHashes(rawDiffOutput);
-const ignoredMutableFiles = listUntrackedMutableStateFiles();
-checkNoUntrackedMutableStateCopies(destHashes, ignoredMutableFiles);
+checkNoUntrackedMutableStateCopies(destHashes);
 
 // --- Test suite ---
 

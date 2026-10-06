@@ -303,18 +303,18 @@ export function parseRawDiffDestHashes(raw) {
  * tracked by Git — either genuinely untracked or excluded via
  * `.gitignore`. These are exactly the paths Git's own copy detection
  * cannot see as copy sources.
+ *
+ * Deliberately does NOT catch/swallow errors: if `git ls-files` itself
+ * fails, the caller must fail closed (see `checkNoUntrackedMutableStateCopies`)
+ * rather than silently treating "the command errored" the same as "there is
+ * nothing to check" — the latter would quietly disable this guard.
  */
 export function listUntrackedMutableStateFiles(exec = defaultExecFileSync) {
-  let raw;
-  try {
-    raw = exec(
-      'git',
-      ['ls-files', '--others', '--ignored', '--exclude-standard', '-z', '--', '.squad'],
-      { encoding: 'utf8' },
-    );
-  } catch {
-    return [];
-  }
+  const raw = exec(
+    'git',
+    ['ls-files', '--others', '--ignored', '--exclude-standard', '-z', '--', '.squad'],
+    { encoding: 'utf8' },
+  );
   return raw
     .split('\0')
     .filter(Boolean)
@@ -322,41 +322,187 @@ export function listUntrackedMutableStateFiles(exec = defaultExecFileSync) {
 }
 
 /**
- * Compute the Git blob SHA Git would assign to `filePath`'s current
- * on-disk content — applying the same clean filters/line-ending
- * normalization `git add` would apply — without reading or printing that
- * content ourselves.
+ * Compute the Git blob SHA Git would assign to `sourcePath`'s current
+ * on-disk content if it were committed AT `destinationPath` — i.e. using
+ * `destinationPath`'s `.gitattributes` to decide which clean filters/line-
+ * ending normalization apply, not `sourcePath`'s own.
+ *
+ * This distinction is load-bearing: `git hash-object`'s default behavior
+ * (no `--path` override) derives filter rules from the hashed file's OWN
+ * path. A mutable-state source and an ordinary destination can be covered
+ * by different `.gitattributes` rules (e.g. the source marked `-text` to
+ * preserve bytes exactly, the destination marked `text eol=lf` to
+ * normalize line endings) — then hashing the source under its own path
+ * yields a blob SHA that never matches what Git actually staged for the
+ * destination, even for byte-for-byte identical on-disk content, letting
+ * an exact copy evade detection. Hashing under `--path=<destinationPath>`
+ * reproduces exactly what `git add` would have produced for that content
+ * at that destination.
+ *
+ * Deliberately does NOT catch/swallow errors: if `git hash-object` fails
+ * (e.g. the file disappeared since it was listed), the caller must fail
+ * closed rather than silently skipping the comparison.
  */
-export function hashObjectForPath(filePath, exec = defaultExecFileSync) {
-  try {
-    return exec('git', ['hash-object', '--', filePath], { encoding: 'utf8' }).trim();
-  } catch {
-    return null;
-  }
+export function hashObjectForPath(sourcePath, destinationPath, exec = defaultExecFileSync) {
+  return exec(
+    'git',
+    ['hash-object', '--filters', `--path=${destinationPath}`, '--', sourcePath],
+    { encoding: 'utf8' },
+  ).trim();
 }
 
 /**
- * Reject a staged file whose content is byte-identical (by Git blob hash)
- * to an untracked/ignored mutable-state source. Only an exact full-content
- * match is treated as a violation — deliberately conservative, with no
- * fuzzy/partial matching, to avoid false positives on merely similar files.
+ * Reject a staged file whose content is byte-identical (by Git blob hash,
+ * computed under the destination's own clean-filter rules — see
+ * `hashObjectForPath`) to an untracked/ignored mutable-state source. Only
+ * an exact full-content match is treated as a violation — deliberately
+ * conservative, with no fuzzy/partial matching, to avoid false positives
+ * on merely similar files.
  *
- * `destHashes` is the result of `parseRawDiffDestHashes`; `ignoredMutableFiles`
- * is the result of `listUntrackedMutableStateFiles`; `hashFn` defaults to
- * `hashObjectForPath` and is injectable for testing.
+ * Fails closed: if enumerating untracked/ignored mutable-state files, or
+ * hashing any candidate against a staged destination, itself errors, this
+ * aborts the commit with a diagnostic rather than silently treating the
+ * error as "no violation found" — a guard that can be silently disabled
+ * by making its own enumeration/hashing step fail is not a guard.
+ *
+ * `destHashes` is the result of `parseRawDiffDestHashes`. `listIgnoredFn`
+ * defaults to `listUntrackedMutableStateFiles` and `hashFn` defaults to
+ * `hashObjectForPath`; both are injectable for testing.
  */
+/**
+ * The subset of `.gitattributes` attributes that affect what
+ * `git hash-object --path=<p>` (and therefore `git add`) does to a file's
+ * bytes before storing them: whether text normalization applies at all
+ * (`text`), what line ending it normalizes to (`eol`), and any content
+ * filter driver (`filter`, e.g. clean/smudge filters). Two paths sharing
+ * identical values for all three are guaranteed to produce the same blob
+ * hash for the same input bytes, regardless of any other attribute.
+ */
+const CLEAN_FILTER_ATTRS = ['text', 'eol', 'filter'];
+
+/**
+ * Batch-resolve the clean-filter-relevant `.gitattributes` values for every
+ * path in `paths` with a single `git check-attr` invocation (rather than
+ * one process per path), returning a Map of path -> a string signature
+ * that is equal for two paths if and only if they resolve to the same
+ * `text`/`eol`/`filter` attribute values (and therefore need only one
+ * representative `hashObjectForPath` call between them per source file).
+ *
+ * `--cached` resolves attributes from the index (what's actually being
+ * committed) rather than the working tree, consistent with what's staged.
+ *
+ * Deliberately does NOT catch/swallow errors — propagates like
+ * `listUntrackedMutableStateFiles` and `hashObjectForPath`, so the caller
+ * fails closed.
+ */
+export function checkAttrSignatures(paths, exec = defaultExecFileSync) {
+  if (paths.length === 0) return new Map();
+
+  const raw = exec(
+    'git',
+    ['check-attr', '--cached', '-z', ...CLEAN_FILTER_ATTRS, '--', ...paths],
+    { encoding: 'utf8' },
+  );
+  const tokens = raw.split('\0');
+  if (tokens.length > 0 && tokens[tokens.length - 1] === '') tokens.pop();
+
+  const valuesByPath = new Map();
+  for (let i = 0; i + 2 < tokens.length; i += 3) {
+    const [path, attr, value] = [tokens[i], tokens[i + 1], tokens[i + 2]];
+    if (!valuesByPath.has(path)) valuesByPath.set(path, {});
+    valuesByPath.get(path)[attr] = value;
+  }
+
+  const signatures = new Map();
+  for (const path of paths) {
+    const values = valuesByPath.get(path) ?? {};
+    signatures.set(
+      path,
+      CLEAN_FILTER_ATTRS.map((attr) => `${attr}=${values[attr] ?? 'unspecified'}`).join('|'),
+    );
+  }
+  return signatures;
+}
+
 export function checkNoUntrackedMutableStateCopies(
   destHashes,
-  ignoredMutableFiles,
+  listIgnoredFn = listUntrackedMutableStateFiles,
   hashFn = hashObjectForPath,
+  attrFn = checkAttrSignatures,
 ) {
+  let ignoredMutableFiles;
+  try {
+    ignoredMutableFiles = listIgnoredFn();
+  } catch (err) {
+    fail(
+      'Could not enumerate untracked/ignored Squad state while checking staged files for ' +
+        'disguised copies of mutable state (failing closed rather than silently skipping this ' +
+        `check).\n  ${err && err.message ? err.message : err}`,
+    );
+    return;
+  }
+
+  if (ignoredMutableFiles.length === 0) return;
+
+  const destPaths = [...destHashes.keys()];
+
+  // Group staged destinations by their effective clean-filter signature so
+  // each untracked/ignored source is hashed at most once PER DISTINCT
+  // signature, not once per destination. Destinations sharing a signature
+  // are guaranteed to produce an identical hash for the same source
+  // content, so hashing against one representative path per group and
+  // comparing that single hash against every destination hash in the
+  // group is equivalent to (but far cheaper than) hashing against each
+  // destination individually — repositories typically have very few
+  // distinct `.gitattributes` rule sets, even when many files are staged.
+  let signatures;
+  try {
+    signatures = attrFn(destPaths);
+  } catch (err) {
+    fail(
+      'Could not resolve clean-filter attributes for staged destinations while checking for ' +
+        'disguised copies of mutable state (failing closed rather than silently skipping this ' +
+        `check).\n  ${err && err.message ? err.message : err}`,
+    );
+    return;
+  }
+
+  const groups = new Map(); // signature -> { representative, paths: string[] }
+  for (const destPath of destPaths) {
+    const signature = signatures.get(destPath) ?? '';
+    let group = groups.get(signature);
+    if (!group) {
+      group = { representative: destPath, paths: [] };
+      groups.set(signature, group);
+    }
+    group.paths.push(destPath);
+  }
+
   const violations = [];
   for (const sourcePath of ignoredMutableFiles) {
-    const sourceHash = hashFn(sourcePath);
-    if (!sourceHash) continue;
-    for (const [destPath, destHash] of destHashes) {
-      if (destHash === sourceHash && destPath !== sourcePath) {
-        violations.push({ source: sourcePath, destination: destPath });
+    for (const group of groups.values()) {
+      // Exclude a destination that IS this exact source path up front, so
+      // a degenerate self-match group never triggers a hashFn call —
+      // there is nothing meaningful to compare it against.
+      const comparableDestPaths = group.paths.filter((destPath) => destPath !== sourcePath);
+      if (comparableDestPaths.length === 0) continue;
+
+      let sourceHashForGroup;
+      try {
+        sourceHashForGroup = hashFn(sourcePath, group.representative);
+      } catch (err) {
+        fail(
+          `Could not hash untracked/ignored Squad state file "${sourcePath}" against staged ` +
+            `destination "${group.representative}" while checking for disguised copies of ` +
+            `mutable state (failing closed rather than silently skipping this check).\n` +
+            `  ${err && err.message ? err.message : err}`,
+        );
+        return;
+      }
+      for (const destPath of comparableDestPaths) {
+        if (sourceHashForGroup === destHashes.get(destPath)) {
+          violations.push({ source: sourcePath, destination: destPath });
+        }
       }
     }
   }
