@@ -79,10 +79,29 @@ describe("checkSquadBoundary", () => {
     assert.equal(exitState.code, 1);
   });
 
-  it("allows staged deletions of mutable state paths", () => {
+  it("allows staged deletion of the canonical decisions ledger", () => {
     const deleted = [".squad/decisions/decisions.md"];
     checkSquadBoundary(deleted, deleted);
     assert.equal(exitState.code, null);
+  });
+
+  it("rejects staged deletions of other mutable state paths", () => {
+    const deleted = [
+      ".squad/agents/scotty/history.md",
+      ".squad/log/2026-05-16.md",
+      ".squad/rai/audit-trail.md",
+    ];
+    const errors: string[] = [];
+    mock.method(console, "error", (msg: string) => errors.push(msg));
+
+    assert.throws(
+      () => checkSquadBoundary(deleted, deleted),
+      /process\.exit\(1\)/,
+    );
+    assert.equal(exitState.code, 1);
+    for (const file of deleted) {
+      assert.ok(errors.join("\n").includes(`- ${file}`), `expected ${file} to be rejected`);
+    }
   });
 
   it("still rejects staged mutable-state content alongside a deletion", () => {
