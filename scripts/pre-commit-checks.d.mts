@@ -58,6 +58,7 @@ export function checkNoUntrackedMutableStateCopies(
       matchesIndex: boolean;
     }
   >,
+  hasStagedAttributeFileFn?: () => boolean,
 ): void;
 
 export function grepTestsForWorkflow(basename: string): string[];
