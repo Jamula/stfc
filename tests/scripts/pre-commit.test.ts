@@ -24,7 +24,11 @@ function captureExit(): { code: number | null } {
   return state;
 }
 
-type AttrSignature = { signature: string; pathIndependent: boolean };
+type AttrSignature = {
+  signature: string;
+  pathIndependent: boolean;
+  hasCustomFilter: boolean;
+};
 
 function setupPreCommitTestRepo(dir: string): NodeJS.ProcessEnv {
   const scriptsDir = join(dir, "scripts");
@@ -771,10 +775,12 @@ describe("checkAttrSignatures", () => {
     assert.deepEqual(signatures.get("docs/a.md"), {
       signature: JSON.stringify(["set", "lf", "unspecified", "unspecified", "unspecified", "unspecified"]),
       pathIndependent: true,
+      hasCustomFilter: false,
     });
     assert.deepEqual(signatures.get("docs/b.md"), {
       signature: JSON.stringify(["unset", "unspecified", "unspecified", "unspecified", "unspecified", "unspecified"]),
       pathIndependent: true,
+      hasCustomFilter: false,
     });
     assert.notEqual(signatures.get("docs/a.md")?.signature, signatures.get("docs/b.md")?.signature);
   });
@@ -783,6 +789,7 @@ describe("checkAttrSignatures", () => {
     const raw = ["docs/a.md", "filter", "unspecified", ""].join("\0");
     const signature = checkAttrSignatures(["docs/a.md"], () => raw).get("docs/a.md");
     assert.equal(signature?.pathIndependent, false);
+    assert.equal(signature?.hasCustomFilter, true);
   });
 
   it("gives identical signatures to paths with identical attribute values", () => {
@@ -829,12 +836,7 @@ describe("checkAttrSignatures", () => {
     });
     assert.deepEqual(calls[1], {
       cmd: "git",
-      args: [
-        "config",
-        "--null",
-        "--get-regexp",
-        "^filter\\.(unspecified|unset)\\.(clean|process)$",
-      ],
+      args: ["config", "--null", "--get-regexp", "^filter\\.unspecified\\.(clean|process)$"],
     });
   });
 
@@ -894,6 +896,7 @@ describe("checkAttrSignatures", () => {
         false,
         "a configured driver named 'unspecified' must not be grouped as an absent filter",
       );
+      assert.equal(signatures.get("docs/filter.md")?.hasCustomFilter, true);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -913,7 +916,13 @@ describe("checkNoUntrackedMutableStateCopies", () => {
   let exitState: { code: number | null };
 
   /** Stub attrFn for tests that aren't exercising the grouping behavior. */
-  const noAttrs = () => new Map<string, AttrSignature>();
+  const noAttrs = (paths: string[]) =>
+    new Map(
+      paths.map((path) => [
+        path,
+        { signature: "no-attributes", pathIndependent: true, hasCustomFilter: false },
+      ]),
+    );
 
   beforeEach(async () => {
     exitState = captureExit();
@@ -1005,7 +1014,11 @@ describe("checkNoUntrackedMutableStateCopies", () => {
       new Map(
         paths.map((path) => [
           path,
-          { signature: "text=set|eol=lf|filter=unspecified", pathIndependent: true },
+          {
+            signature: "text=set|eol=lf|filter=unspecified",
+            pathIndependent: true,
+            hasCustomFilter: false,
+          },
         ]),
       );
 
@@ -1039,6 +1052,7 @@ describe("checkNoUntrackedMutableStateCopies", () => {
               ? "text=unspecified|filter=unspecified"
               : "text=set|eol=lf|filter=unspecified",
             pathIndependent: true,
+            hasCustomFilter: false,
           },
         ]),
       );
@@ -1051,6 +1065,44 @@ describe("checkNoUntrackedMutableStateCopies", () => {
     assert.equal(hashCallsPerDest.length, 2);
     assert.ok(hashCallsPerDest.includes("docs/a1.md"));
     assert.ok(hashCallsPerDest.includes(".squad/other/b1.md"));
+  });
+
+  it("fails before hashing a mutable source for a staged destination with a custom filter", () => {
+    const destHashes = new Map([["docs/custom.md", "a".repeat(40)]]);
+    const listIgnoredFn = () => [".squad/agents/scotty/history.md"];
+    const errors: string[] = [];
+    let hashCalls = 0;
+    mock.method(console, "error", (msg: string) => errors.push(msg));
+    const attrFn = (paths: string[]) =>
+      new Map(
+        paths.map((path) => [
+          path,
+          {
+            signature: "filter=path-sensitive",
+            pathIndependent: false,
+            hasCustomFilter: true,
+          },
+        ]),
+      );
+
+    assert.throws(
+      () =>
+        checkNoUntrackedMutableStateCopies(
+          destHashes,
+          listIgnoredFn,
+          () => {
+            hashCalls += 1;
+            return "a".repeat(40);
+          },
+          attrFn,
+        ),
+      /process\.exit\(1\)/,
+    );
+    assert.equal(exitState.code, 1);
+    assert.equal(hashCalls, 0, "a custom filter must never receive mutable-state source bytes");
+    assert.match(errors.join("\n"), /Refusing to execute custom filters/);
+    assert.match(errors.join("\n"), /docs\/custom\.md/);
+    assert.doesNotMatch(errors.join("\n"), /\.squad\/agents\/scotty\/history\.md/);
   });
 
   it("does not flag a source matched against its own unchanged path", () => {
@@ -1106,6 +1158,21 @@ describe("checkNoUntrackedMutableStateCopies", () => {
     assert.equal(exitState.code, 1);
     assert.match(errors.join("\n"), /fail(ing)? closed/i);
     assert.match(errors.join("\n"), /git hash-object exploded/);
+  });
+
+  it("fails closed when an enumerated mutable-state source cannot be inspected", () => {
+    const destHashes = new Map([["docs/new.md", "a".repeat(40)]]);
+    const sourcePath = `.squad/agents/missing-pre-commit-source-${process.pid}/history.md`;
+    const errors: string[] = [];
+    mock.method(console, "error", (msg: string) => errors.push(msg));
+
+    assert.throws(
+      () => checkNoUntrackedMutableStateCopies(destHashes, () => [sourcePath]),
+      /process\.exit\(1\)/,
+    );
+    assert.equal(exitState.code, 1);
+    assert.match(errors.join("\n"), /fail(ing)? closed/i);
+    assert.match(errors.join("\n"), new RegExp(sourcePath.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   });
 
   it("fails closed (aborts the commit) when resolving clean-filter attributes errors, instead of silently skipping it", () => {
@@ -1808,6 +1875,70 @@ describe("checkWorkflowPinningTests", () => {
       }
     });
 
+    it("allows an unrelated empty staged file when an ignored mutable-state source is empty", () => {
+      const dir = mkdtempSync(join(tmpdir(), "stfc-pre-commit-empty-mutable-source-"));
+      const isolatedGitEnv = setupPreCommitTestRepo(dir);
+      const mutableSource = ".squad/memory/audit.jsonl";
+      const ordinaryDestination = "docs/empty.md";
+
+      try {
+        writeFileSync(join(dir, ".gitignore"), `${mutableSource}\n`);
+        execFileSync("git", ["add", ".gitignore"], { cwd: dir, env: isolatedGitEnv });
+        execFileSync("git", ["commit", "--quiet", "-m", "Ignore runtime audit state"], {
+          cwd: dir,
+          env: isolatedGitEnv,
+        });
+
+        mkdirSync(join(dir, ".squad", "memory"), { recursive: true });
+        writeFileSync(join(dir, mutableSource), Buffer.alloc(0));
+        const ignoredStatus = spawnSync("git", ["check-ignore", "--quiet", "--", mutableSource], {
+          cwd: dir,
+          encoding: "utf8",
+          env: isolatedGitEnv,
+        });
+        assert.equal(ignoredStatus.status, 0, "fixture bug: the empty mutable source must be ignored");
+        const untrackedPaths = execFileSync("git", ["ls-files", "--others", "-z", "--", ".squad"], {
+          cwd: dir,
+          encoding: "utf8",
+          env: isolatedGitEnv,
+        }).split("\0");
+        assert.ok(
+          untrackedPaths.includes(mutableSource),
+          "fixture bug: the empty mutable source must be enumerated",
+        );
+
+        mkdirSync(join(dir, "docs"), { recursive: true });
+        writeFileSync(join(dir, ordinaryDestination), Buffer.alloc(0));
+        execFileSync("git", ["add", ordinaryDestination], { cwd: dir, env: isolatedGitEnv });
+        const stagedHash = execFileSync("git", ["rev-parse", `:${ordinaryDestination}`], {
+          cwd: dir,
+          encoding: "utf8",
+          env: isolatedGitEnv,
+        }).trim();
+        const sourceHash = execFileSync("git", ["hash-object", "--", mutableSource], {
+          cwd: dir,
+          encoding: "utf8",
+          env: isolatedGitEnv,
+        }).trim();
+        assert.equal(stagedHash, sourceHash, "fixture bug: empty source and destination share the empty blob");
+
+        const result = spawnSync(process.execPath, [join(dir, "scripts", "pre-commit.mjs")], {
+          cwd: dir,
+          encoding: "utf8",
+          env: isolatedGitEnv,
+        });
+        assert.equal(
+          result.status,
+          0,
+          `expected an unrelated empty ordinary file to pass the real pre-commit entry point:\n` +
+            `${result.stderr}${result.stdout}`,
+        );
+        assert.doesNotMatch(result.stderr + result.stdout, /byte-identical to an untracked\/ignored/);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
     it("blocks a real staged copy of an untracked/ignored source even when source and destination have different clean-filter rules", () => {
       // Regression test for the follow-up review on commit 441ecac: a
       // naive implementation that hashes the source under its OWN path's
@@ -1937,7 +2068,7 @@ describe("checkWorkflowPinningTests", () => {
       }
     });
 
-    it("blocks copies when a clean filter uses %f and the matching destination is not the representative", () => {
+    it("fails closed for a %f clean filter without running it on mutable-state bytes", () => {
       const dir = mkdtempSync(join(tmpdir(), "stfc-pre-commit-untracked-copy-path-filter-"));
       const isolatedGitEnv = setupPreCommitTestRepo(dir);
       const mutableSource = ".squad/agents/scotty/history.md";
@@ -1951,10 +2082,13 @@ describe("checkWorkflowPinningTests", () => {
         writeFileSync(
           join(dir, ".git", "clean-filter.cjs"),
           [
+            "const fs = require('node:fs');",
             "const chunks = [];",
             "process.stdin.on('data', (chunk) => chunks.push(chunk));",
             "process.stdin.on('end', () => {",
-            "  process.stdout.write(Buffer.concat([Buffer.from(`${process.argv[2]}\\n`), ...chunks]));",
+            "  const filterPath = process.argv[2].replace(/^'(.*)'$/, '$1');",
+            "  fs.appendFileSync('.git/filter-invocations.log', `${filterPath}\\n`);",
+            "  process.stdout.write(Buffer.concat([Buffer.from(`${filterPath}\\n`), ...chunks]));",
             "});",
             "",
           ].join("\n"),
@@ -1991,26 +2125,17 @@ describe("checkWorkflowPinningTests", () => {
           cwd: dir,
           env: isolatedGitEnv,
         });
-        const stagedHash = execFileSync("git", ["rev-parse", `:${copiedDestination}`], {
-          cwd: dir,
-          encoding: "utf8",
-          env: isolatedGitEnv,
-        }).trim();
-        const hashUnderCopiedPath = execFileSync(
-          "git",
-          ["hash-object", "--filters", `--path=${copiedDestination}`, "--", mutableSource],
-          { cwd: dir, encoding: "utf8", env: isolatedGitEnv },
-        ).trim();
-        const hashUnderRepresentativePath = execFileSync(
-          "git",
-          ["hash-object", "--filters", `--path=${firstDestination}`, "--", mutableSource],
-          { cwd: dir, encoding: "utf8", env: isolatedGitEnv },
-        ).trim();
-        assert.equal(hashUnderCopiedPath, stagedHash, "fixture bug: destination path must reproduce git add");
-        assert.notEqual(
-          hashUnderRepresentativePath,
-          stagedHash,
-          "fixture bug: the representative's %f result must differ from the copied destination",
+        const stagedFilterInvocations = readFileSync(
+          join(dir, ".git", "filter-invocations.log"),
+          "utf8",
+        )
+          .trim()
+          .split(/\r?\n/)
+          .sort();
+        assert.deepEqual(
+          stagedFilterInvocations,
+          [firstDestination, copiedDestination].sort(),
+          "fixture bug: staging should invoke the pathname-aware filter only for ordinary destinations",
         );
 
         const result = spawnSync(process.execPath, [join(dir, "scripts", "pre-commit.mjs")], {
@@ -2021,12 +2146,25 @@ describe("checkWorkflowPinningTests", () => {
         assert.equal(
           result.status,
           1,
-          `expected the real pre-commit entry point to reject the path-sensitive clean-filter copy:\n` +
+          `expected the real pre-commit entry point to fail closed for a custom clean filter:\n` +
             `${result.stderr}${result.stdout}`,
         );
         const output = result.stderr + result.stdout;
-        assert.ok(output.includes(copiedDestination), `expected copied destination in output:\n${output}`);
-        assert.ok(output.includes(mutableSource), `expected mutable source in output:\n${output}`);
+        assert.match(output, /custom clean\/process filter/i);
+        assert.ok(output.includes(copiedDestination), `expected destination in output:\n${output}`);
+        assert.ok(!output.includes(body.toString()), "the guard must not log mutable source contents");
+        const filterInvocationsAfterHook = readFileSync(
+          join(dir, ".git", "filter-invocations.log"),
+          "utf8",
+        )
+          .trim()
+          .split(/\r?\n/)
+          .sort();
+        assert.deepEqual(
+          filterInvocationsAfterHook,
+          stagedFilterInvocations,
+          "pre-commit must not execute the clean filter against mutable-state source bytes",
+        );
       } finally {
         rmSync(dir, { recursive: true, force: true });
       }
@@ -2038,39 +2176,19 @@ describe("checkWorkflowPinningTests", () => {
       const mutableSource = ".squad/agents/scotty/history.md";
       const firstDestination = "docs/one.md";
       const copiedDestination = "docs/two.md";
-      const body = Buffer.from("mutable state copied byte-for-byte\n");
 
       try {
         writeFileSync(join(dir, ".gitignore"), ".squad/agents/*/history.md\n");
-        writeFileSync(join(dir, ".gitattributes"), "docs/*.md filter=first\n");
-        writeFileSync(
-          join(dir, ".git", "clean-filter.cjs"),
-          [
-            "const chunks = [];",
-            "process.stdin.on('data', (chunk) => chunks.push(chunk));",
-            "process.stdin.on('end', () => {",
-            "  process.stdout.write(Buffer.concat([Buffer.from(`${process.argv[2]}\\n`), ...chunks]));",
-            "});",
-            "",
-          ].join("\n"),
-        );
-        execFileSync("git", ["config", "filter.first.clean", "node .git/clean-filter.cjs first"], {
-          cwd: dir,
-          env: isolatedGitEnv,
-        });
-        execFileSync("git", ["config", "filter.second.clean", "node .git/clean-filter.cjs second"], {
-          cwd: dir,
-          env: isolatedGitEnv,
-        });
+        writeFileSync(join(dir, ".gitattributes"), "docs/*.md -ident\n");
         execFileSync("git", ["add", ".gitignore", ".gitattributes"], { cwd: dir, env: isolatedGitEnv });
-        execFileSync("git", ["commit", "--quiet", "-m", "Add ignore and baseline filter rules"], {
+        execFileSync("git", ["commit", "--quiet", "-m", "Add ignore and baseline ident rules"], {
           cwd: dir,
           env: isolatedGitEnv,
         });
 
         writeFileSync(
           join(dir, ".gitattributes"),
-          ["docs/*.md filter=first", "docs/two.md filter=second", ""].join("\n"),
+          ["docs/*.md -ident", "docs/two.md ident", ""].join("\n"),
         );
         assert.notEqual(
           execFileSync("git", ["diff", "--", ".gitattributes"], {
@@ -2096,70 +2214,44 @@ describe("checkWorkflowPinningTests", () => {
           isolatedGitEnv,
           [firstDestination, copiedDestination],
           true,
+          ["ident"],
         );
         const worktreeAttributes = getGitAttributeValues(
           dir,
           isolatedGitEnv,
           [firstDestination, copiedDestination],
           false,
+          ["ident"],
         );
         assert.equal(
-          indexedAttributes.get(firstDestination)?.filter,
-          indexedAttributes.get(copiedDestination)?.filter,
-          "fixture bug: cached attributes must group both destinations under the same filter",
+          indexedAttributes.get(firstDestination)?.ident,
+          indexedAttributes.get(copiedDestination)?.ident,
+          "fixture bug: cached attributes must group both destinations under the same ident value",
         );
         assert.notEqual(
-          worktreeAttributes.get(firstDestination)?.filter,
-          worktreeAttributes.get(copiedDestination)?.filter,
-          "fixture bug: worktree attributes must select different filters",
+          worktreeAttributes.get(firstDestination)?.ident,
+          worktreeAttributes.get(copiedDestination)?.ident,
+          "fixture bug: worktree attributes must select different ident values",
         );
 
         mkdirSync(join(dir, ".squad", "agents", "scotty"), { recursive: true });
-        writeFileSync(join(dir, mutableSource), body);
+        const identBody = Buffer.from(`$Id: ${"b".repeat(40)} $\n`);
+        writeFileSync(join(dir, mutableSource), identBody);
         mkdirSync(join(dir, "docs"), { recursive: true });
         writeFileSync(join(dir, firstDestination), "unrelated staged document\n");
-        writeFileSync(join(dir, copiedDestination), body);
+        writeFileSync(join(dir, copiedDestination), identBody);
         execFileSync("git", ["add", firstDestination, copiedDestination], {
           cwd: dir,
           env: isolatedGitEnv,
         });
 
-        const stagedHash = execFileSync("git", ["rev-parse", `:${copiedDestination}`], {
-          cwd: dir,
-          encoding: "utf8",
-          env: isolatedGitEnv,
-        }).trim();
-        const hashUnderCopiedPath = execFileSync(
-          "git",
-          ["hash-object", "--filters", `--path=${copiedDestination}`, "--", mutableSource],
-          { cwd: dir, encoding: "utf8", env: isolatedGitEnv },
-        ).trim();
-        const hashUnderIndexedRepresentative = execFileSync(
-          "git",
-          ["hash-object", "--filters", `--path=${firstDestination}`, "--", mutableSource],
-          { cwd: dir, encoding: "utf8", env: isolatedGitEnv },
-        ).trim();
-        assert.equal(hashUnderCopiedPath, stagedHash, "fixture bug: worktree filter must reproduce git add");
-        assert.notEqual(
-          hashUnderIndexedRepresentative,
-          stagedHash,
-          "fixture bug: stale indexed grouping must miss the copied destination if it uses one representative",
+        assertPathAwareMutableCopyRejected(
+          dir,
+          isolatedGitEnv,
+          mutableSource,
+          firstDestination,
+          copiedDestination,
         );
-
-        const result = spawnSync(process.execPath, [join(dir, "scripts", "pre-commit.mjs")], {
-          cwd: dir,
-          encoding: "utf8",
-          env: isolatedGitEnv,
-        });
-        assert.equal(
-          result.status,
-          1,
-          `expected the real pre-commit entry point to reject the copy despite attribute divergence:\n` +
-            `${result.stderr}${result.stdout}`,
-        );
-        const output = result.stderr + result.stdout;
-        assert.ok(output.includes(copiedDestination), `expected copied destination in output:\n${output}`);
-        assert.ok(output.includes(mutableSource), `expected mutable source in output:\n${output}`);
       } finally {
         rmSync(dir, { recursive: true, force: true });
       }
