@@ -85,7 +85,8 @@ Ensure the repository-root `.gitignore` excludes the local active ledger and run
 .squad/identity/
 .squad/log/
 .squad/orchestration-log/
-.squad/memory/
+.squad/memory/*
+!.squad/memory/config.json
 .squad/sessions/
 .squad/.scratch/
 .squad/.cache/
@@ -94,6 +95,8 @@ Ensure the repository-root `.gitignore` excludes the local active ledger and run
 .squad/*/audit-trail.md
 .squad-workstream
 ```
+
+Use the wildcard-plus-negation pair (`.squad/memory/*` then `!.squad/memory/config.json`) rather than ignoring the whole `memory/` directory: `.squad/memory/config.json` is a static, constitution-tracked policy file and must stay tracked, while the rest of `.squad/memory/` is backend-owned runtime state.
 
 Treat `decisions/inbox/` as a backend-independent logical runtime namespace. Ignore the physical `.squad/decisions/inbox/` fallback in `.gitignore`; use that checkout path only with local/worktree backends. For nonlocal backends, access the logical namespace through state tools and do not create, read, or write a checkout snapshot. Never Git-merge or commit the inbox state.
 
