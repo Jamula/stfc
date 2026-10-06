@@ -44,15 +44,19 @@ const MUTABLE_SQUAD_STATE_PATTERNS = [
   /^\.squad\/rai\/audit-trail\.md$/,
 ];
 
+const MUTABLE_SQUAD_STATE_DELETION_ALLOWLIST = new Set([
+  '.squad/decisions/decisions.md',
+]);
+
 /**
  * Mutable Squad state must be persisted through the configured backend,
- * not staged or committed from the working tree. Staged deletions are allowed
- * so local-only state can be untracked without committing its contents.
+ * not staged or committed from the working tree. Only the canonical decisions
+ * ledger may be deleted as part of its migration.
  */
 export function checkSquadBoundary(staged, deleted = []) {
   const deletedPaths = new Set(deleted);
   const violations = staged.filter((f) =>
-    !deletedPaths.has(f) &&
+    !(deletedPaths.has(f) && MUTABLE_SQUAD_STATE_DELETION_ALLOWLIST.has(f)) &&
       MUTABLE_SQUAD_STATE_PATTERNS.some((re) => re.test(f)),
   );
   if (violations.length === 0) return;
