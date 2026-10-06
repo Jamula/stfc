@@ -66,6 +66,8 @@ export const MUTABLE_SQUAD_STATE_DELETION_ALLOWLIST = new Set([
   '.squad/identity/wisdom.md',
   '.squad/casting/history.json',
   '.squad/rai/audit-trail.md',
+  '.squad/memory/index.json',
+  '.squad/memory/audit.jsonl',
   '.squad/agents/bashir/history-archive.md',
   '.squad/agents/garak/history-archive.md',
   '.squad/agents/kirk/history-archive.md',
@@ -250,10 +252,15 @@ export function checkSquadBoundary(staged, deleted = [], renamedFrom = []) {
  * For a rename/copy, `--name-status -z` emits `<status>\0<old>\0<new>\0`;
  * every other status emits `<status>\0<path>\0`.
  *
- * - `staged`: every path that will exist in the tree after this commit
- *   (added, modified, or the destination of a rename/copy).
- * - `deleted`: paths removed outright (`D`) — used for the one-time
- *   `git rm --cached` migration allowlist.
+ * - `staged`: every path touched by this commit — added, modified, deleted,
+ *   or the destination of a rename/copy. This matches the old
+ *   `git diff --cached --name-only` behavior (which lists deletions too)
+ *   so the other guard checks (portable filenames, workflow pinning
+ *   tests) keep seeing every changed path, deletions included.
+ * - `deleted`: paths removed outright (`D`) — also included in `staged`
+ *   above, and additionally broken out here so `checkSquadBoundary` can
+ *   apply the one-time `git rm --cached` migration allowlist to genuine
+ *   deletions without conflating them with adds/modifies.
  * - `renamedFrom`: source paths of renames/copies — checked independently
  *   so a rename out of a mutable-state path can't bypass the guard.
  */
@@ -275,7 +282,9 @@ export function parseNameStatus(raw) {
       staged.push(newPath);
       renamedFrom.push(oldPath);
     } else if (kind === 'D') {
-      deleted.push(tokens[i++]);
+      const deletedPath = tokens[i++];
+      staged.push(deletedPath);
+      deleted.push(deletedPath);
     } else {
       staged.push(tokens[i++]);
     }
