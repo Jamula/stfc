@@ -117,6 +117,13 @@ const worktreeReference = readFileSync(
   resolve(process.cwd(), ".squad/templates/worktree-reference.md"),
   "utf-8",
 );
+const crossSquadCommunication = readFileSync(
+  resolve(
+    process.cwd(),
+    ".github/skills/cross-squad-communication/SKILL.md",
+  ),
+  "utf-8",
+);
 const rules = readFileSync(
   resolve(process.cwd(), ".github/copilot-instructions.md"),
   "utf-8",
@@ -548,6 +555,91 @@ describe("Scribe — decision inbox persistence", () => {
   });
 });
 
+describe("Scribe — backend-aware identity/history reads share the fallback rule", () => {
+  it("spawn-reference.md gates history.md, decisions.md, identity/wisdom.md, and identity/now.md behind the same local/worktree-only fallback and nonlocal fail-closed rule", () => {
+    const normalized = spawnReference.replace(/\s+/g, " ");
+    const fallbackClause =
+      /only for `local`\/`worktree` backends; for `orphan`, `two-layer`, or `git-notes`, follow the state-backend handshake and report a missing bridge/i;
+
+    for (const [label, anchor] of [
+      ["agents/{name}/history.md", "Read logical key `agents/{name}/history.md` with `squad_state_read`"],
+      ["decisions/decisions.md", "Read logical state key `decisions/decisions.md` with `squad_state_read`"],
+      ["identity/wisdom.md", "Read logical key `identity/wisdom.md` with `squad_state_read`"],
+      ["identity/now.md", "Read logical key `identity/now.md` with `squad_state_read`"],
+    ] as const) {
+      const start = normalized.indexOf(anchor);
+      assert.ok(start >= 0, `spawn-reference.md should resolve ${label} through state tools`);
+      const window = normalized.slice(start, start + 400);
+      assert.match(
+        window,
+        fallbackClause,
+        `spawn-reference.md's ${label} read should share the local/worktree-only fallback and nonlocal fail-closed rule`,
+      );
+    }
+  });
+
+  it("cross-squad-communication.md resolves peer identity/now.md and identity/wisdom.md through state tools, with no unconditional direct checkout read", () => {
+    const normalized = crossSquadCommunication.replace(/\s+/g, " ");
+
+    assert.match(
+      normalized,
+      /use Pattern 0 to ask the peer coordinator to resolve logical state keys `identity\/now\.md` and `identity\/wisdom\.md`/i,
+      "cross-squad-communication.md should resolve peer identity/now.md and identity/wisdom.md through the peer's state tools",
+    );
+    assert.match(
+      normalized,
+      /Reading `\.squad\/identity\/now\.md` directly is only valid when the peer is confirmed on the `local`\/`worktree` backend; never read it as a checkout snapshot for `orphan`, `two-layer`, or `git-notes` backends/i,
+      "cross-squad-communication.md should gate any direct identity/now.md read to a confirmed local/worktree peer",
+    );
+    assert.match(
+      normalized,
+      /if the peer's backend is unknown or unreachable, fail closed and report the missing bridge/i,
+      "cross-squad-communication.md should fail closed when the peer's backend cannot be confirmed",
+    );
+
+    // No unconditional direct checkout read of peer decisions/decisions.md anywhere in the skill.
+    assert.doesNotMatch(
+      crossSquadCommunication,
+      /Get-Content\s+"[^"]*decisions[^"]*"/i,
+      "cross-squad-communication.md should never read a peer's decisions ledger via a direct checkout read",
+    );
+  });
+});
+
+describe("Squad command skill — parity with GitHub-facing Squad skill", () => {
+  it("retains the same size thresholds, link-status fail-closed rule, and untagged-entry/user-review gate", () => {
+    const normalized = squadCommands.replace(/\s+/g, " ");
+    const archiveStart = normalized.indexOf("### Archive Old Decisions");
+    const nextCommand = normalized.indexOf("### Summarize Agent History", archiveStart);
+    assert.ok(
+      archiveStart >= 0 && nextCommand > archiveStart,
+      "Squad command skill should define a bounded archive command",
+    );
+    const archiveCommand = normalized.slice(archiveStart, nextCommand);
+
+    assert.match(
+      archiveCommand,
+      /If the ledger is at least 20,480 bytes, review entries older than 30 days/i,
+      "archive command should preserve the 20,480-byte / 30-day review threshold",
+    );
+    assert.match(
+      archiveCommand,
+      /if it is at least 51,200 bytes, review entries older than 7 days/i,
+      "archive command should preserve the 51,200-byte / 7-day review threshold",
+    );
+    assert.match(
+      archiveCommand,
+      /if status cannot be confirmed, retain the entry/i,
+      "archive command should fail closed and retain entries whose linked GitHub status cannot be confirmed",
+    );
+    assert.match(
+      archiveCommand,
+      /Until then, leave untagged entries unchanged and active and never infer archive eligibility from age alone/i,
+      "archive command should gate untagged entries on user review before any age-based inference",
+    );
+  });
+});
+
 describe("GitHub-facing Squad — decision archive eligibility", () => {
   it("includes the semantic taxonomy and dry-run/user-review safeguards", () => {
     const normalized = githubSquadSkill.replace(/\s+/g, " ");
@@ -666,6 +758,56 @@ describe("Scribe — generated coordinator archive safeguards", () => {
         `generated coordinator template should preserve ${safeguard}`,
       );
     }
+  });
+});
+
+describe("Scribe — spawn template health reports use entry counts, not byte-size deltas", () => {
+  it("Scribe spawn template HEALTH REPORT step reports entry counts rather than before/after size", () => {
+    const normalized = spawnTemplates.replace(/\s+/g, " ");
+    assert.match(
+      normalized,
+      /HEALTH REPORT: Report ENTRY COUNTS, never file sizes: `N removed from source \/ N added to destination`/,
+      "Scribe spawn template should match the active coordinator's entry-count health-report rule",
+    );
+    assert.doesNotMatch(
+      normalized,
+      /before\/after size/i,
+      "Scribe spawn template should not report a byte-size delta as the integrity signal",
+    );
+  });
+
+  // The decision-only Scribe prompt in after-agent-reference.md deliberately has no
+  // persisted HEALTH REPORT step (see the "does not assign ... health-report writes"
+  // test below) — it verifies merges by entry presence, never file size, and returns
+  // the merge result/errors to the coordinator in plain text instead of writing a
+  // health report to state at all.
+  it("after-agent reference REPORT step returns the merge result/errors via entry-level verification, never a byte-size health report", () => {
+    const normalized = afterAgentReference.replace(/\s+/g, " ");
+    assert.match(
+      normalized,
+      /confirm every merged entry is present/,
+      "after-agent reference should verify merges by entry presence, not file size",
+    );
+    assert.match(
+      normalized,
+      /REPORT: Return the merge result[\s\S]*?to the coordinator/,
+      "after-agent reference should report the merge result to the coordinator",
+    );
+    assert.match(
+      normalized,
+      /report the failure/,
+      "after-agent reference should report merge/verification errors",
+    );
+    assert.match(
+      normalized,
+      /Do not write orchestration logs, session logs, specialist\s+histories, archival records, or health reports to state/,
+      "after-agent reference should not persist any health report, eliminating byte-size reporting entirely",
+    );
+    assert.doesNotMatch(
+      normalized,
+      /before\/after size/i,
+      "after-agent reference should not report a byte-size delta as the integrity signal",
+    );
   });
 });
 
