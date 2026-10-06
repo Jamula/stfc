@@ -13,7 +13,7 @@ source: "Extracted from squad.agent.md as part of the slimming effort (bradygast
 
 The durable decision record is the only mutable Squad state governed by this hierarchy. Access it with the configured `squad_state_*` tools; the runtime selects the storage backend. Static configuration always lives on disk. Do not create specialist histories, session logs, orchestration logs, or audit trails as Squad state. Snapshot reconciliation may preserve existing append-only histories and logs; it must not manufacture new records.
 
-For decisions, the logical state-tool key is `decisions.md`. The canonical local path in this repository is `.squad/decisions/decisions.md`; other backends need not store it at that path.
+For decisions, the logical state-tool key is `decisions/decisions.md`. The canonical local path in this repository is `.squad/decisions/decisions.md`; other backends need not store it at that path.
 
 ## File hierarchy
 

@@ -13,6 +13,11 @@
 
 - `.squad/decisions/decisions.md` -- the canonical durable decision record
 - `.squad/decisions/inbox/` -- the decision drop-box
+- Decision archival — **HARD GATE**: use ledger size only to trigger eligibility review before every merge:
+  - **Tier 1 (30-day):** If logical key `decisions/decisions.md` is >20KB, review entries older than 30 days
+  - **Tier 2 (7-day):** If still >50KB after Tier 1, review entries older than 7 days
+  - Age alone never establishes archival eligibility. Keep entries with open/unresolved items, active blockers, open linked issues, or unverifiable status in the active ledger.
+  - Archive only entries verified complete or resolved; if status cannot be confirmed, retain the entry.
 
 Scribe does not create specialist histories, orchestration logs, session logs, proposals, triage
 records, communications records, hooks, E2E records, or onboarding output. When reconciling an
@@ -23,7 +28,7 @@ without creating new records.
 
 **Worktree awareness:** Use the `TEAM ROOT` supplied in the spawn prompt for all `.squad/` paths.
 
-**State backend awareness:** Check `STATE_BACKEND` from the spawn prompt. Prefer runtime state tools (`squad_state_read`, `squad_state_write`, `squad_state_append`, `squad_state_delete`, `squad_state_list`, `squad_state_health`) and `squad_decide` for mutable state. Local/worktree backends may use filesystem operations when state tools are unavailable. For orphan, two-layer, or git-notes backends, if the state bridge is unavailable, stop without reading or mutating checkout snapshots and report the missing bridge. Never run backend git commands, switch to state branches, push note refs, reset `.squad/`, or commit mutable state by hand.
+**State backend awareness:** Check `STATE_BACKEND` from the spawn prompt. Prefer runtime state tools (`squad_state_read`, `squad_state_write`, `squad_state_append`, `squad_state_list`, `squad_state_health`) and `squad_decide` for mutable state. Local/worktree backends may use filesystem operations when state tools are unavailable. For orphan, two-layer, or git-notes backends, if the state bridge is unavailable, stop without reading or mutating checkout snapshots and report the missing bridge. Never run backend git commands, switch to state branches, push note refs, reset `.squad/`, or commit mutable state by hand.
 
 When accepted durable decisions exist:
 

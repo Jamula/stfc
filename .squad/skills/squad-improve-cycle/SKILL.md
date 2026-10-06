@@ -12,7 +12,7 @@ approved edits surgically.
 ## Inputs (read in this order)
 
 1. `.github/copilot-instructions.md` — the current rule set
-2. `decisions.md` via `squad_state_read` when available — recently ratified
+2. `decisions/decisions.md` via `squad_state_read` when available — recently ratified
    decisions (last 30 days). Treat this as a logical state key, not a guaranteed
    checkout path. If state tools are unavailable, read
    `.squad/decisions/decisions.md` only for local/worktree backends. For

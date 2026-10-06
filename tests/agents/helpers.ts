@@ -213,7 +213,11 @@ export function assertBackendAwareDecisionsReference(charter: string): void {
     stateReadIndex + 180,
   );
   assert.match(stateReadGuidance, /\blogical key\b/, "State read should name a logical key");
-  assert.match(stateReadGuidance, /\bdecisions\.md\b/, "State read should use decisions.md");
+  assert.match(
+    stateReadGuidance,
+    /\blogical(?: state)? key decisions\/decisions\.md\b/,
+    "State read should use logical key decisions/decisions.md",
+  );
   assert.match(stateReadGuidance, /\bstate tools?\b/, "State read should be conditional on state tools");
   assert.match(stateReadGuidance, /\bavailable\b/, "State read should be used when available");
 

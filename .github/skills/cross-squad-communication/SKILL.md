@@ -69,7 +69,7 @@ $targetRepo = "C:\repos\platform-squad-repo"
 $promptFile = New-TemporaryFile
 @"
 You are working in a Squad-enabled repository.
-Read `.squad/team.md`. For decisions, resolve the logical state key `decisions.md` through your configured state tools; do not assume a physical checkout path.
+Read `.squad/team.md`. For decisions, resolve the logical state key `decisions/decisions.md` through your configured state tools; do not assume a physical checkout path.
 
 [CROSS-SQUAD REQUEST]
 From: research-squad
@@ -95,7 +95,7 @@ Start-Process pwsh -ArgumentList "-NoProfile -Command `"copilot -C '$targetRepo'
 | Scenario | Pattern | Why |
 |----------|---------|-----|
 | Quick knowledge query | Synchronous CLI (Pattern 0) | Fast answer, no overhead |
-| "What did you decide about X?" | Synchronous CLI (Pattern 0) | Read decisions.md via the target squad's context |
+| "What did you decide about X?" | Synchronous CLI (Pattern 0) | Read `decisions/decisions.md` via the target squad's state tools |
 | PR review request | Either (Pattern 0 or 2/3) | Sync for quick feedback, async for thorough review |
 | Task delegation (do work in their repo) | Async (Pattern 2 or 3) | Work needs to persist beyond the session |
 | Long-running analysis | Async (Pattern 2) | May take multiple cycles |
@@ -182,11 +182,11 @@ while ($proc -and -not $proc.HasExited) {
 
 ### Pattern 1: Read-Only Static Metadata Query (No CLI Needed)
 
-For questions about another squad's static metadata — read their `.squad/` files directly. For decisions, ask the peer coordinator to resolve its logical state key `decisions.md` through its configured state tools (Pattern 0); do not read a checkout copy.
+For questions about another squad's static metadata — read their `.squad/` files directly. For decisions, ask the peer coordinator to resolve its logical state key `decisions/decisions.md` through its configured state tools (Pattern 0); do not read a checkout copy.
 
 **Protocol:**
 1. Read target repo's `.squad/team.md` → get stack, members, issue source
-2. For architectural decisions, use Pattern 0 to ask the peer coordinator to resolve logical state key `decisions.md` through its configured state tools
+2. For architectural decisions, use Pattern 0 to ask the peer coordinator to resolve logical state key `decisions/decisions.md` through its configured state tools
 3. Read `.squad/routing.md` → understand who handles what
 4. Read `.squad/identity/now.md` → get current focus
 5. Scan code structure if needed (csproj files, directory layout)
@@ -201,7 +201,7 @@ For questions about another squad's static metadata — read their `.squad/` fil
 $targetRepo = "C:\repos\platform-squad-repo"
 Get-Content "$targetRepo\.squad\team.md"
 Get-Content "$targetRepo\.squad\identity\now.md"
-# For decisions, ask the peer coordinator to resolve logical state key `decisions.md` with its configured state tools (Pattern 0).
+# For decisions, ask the peer coordinator to resolve logical state key `decisions/decisions.md` with its configured state tools (Pattern 0).
 ```
 
 **Response quality:** ⭐⭐⭐⭐ — excellent for structural/architectural questions.
@@ -333,7 +333,7 @@ $team = Get-Content "$target\.squad\team.md" -Raw
 
 # Step 2: Extract answer from metadata
 # team.md reveals tech stack and member roles
-# Ask the peer coordinator to resolve logical state key `decisions.md` with its configured state tools (Pattern 0).
+# Ask the peer coordinator to resolve logical state key `decisions/decisions.md` with its configured state tools (Pattern 0).
 
 # Step 3: If deeper analysis needed, create async request (Pattern 2)
 ```

@@ -13,6 +13,7 @@
 
 - `.squad/decisions/decisions.md` -- the canonical durable decision record
 - `.squad/decisions/inbox/` -- the decision drop-box
+- **Decision archival** — age and size thresholds trigger eligibility review only; archive complete/resolved entries, and retain open or unverifiable items in the active ledger.
 
 Scribe does not create specialist histories, orchestration logs, session logs, proposals, triage
 records, communications records, hooks, E2E records, or onboarding output. When reconciling an
@@ -24,7 +25,7 @@ without creating new records.
 **Worktree awareness:** Use the `TEAM ROOT` supplied in the spawn prompt for all `.squad/` paths.
 
 **State backend awareness:** Use `squad_state_read`, `squad_state_write`, `squad_state_append`,
-`squad_state_delete`, and `squad_state_list` for mutable state; use `squad_state_health` to confirm
+and `squad_state_list` for mutable state; use `squad_state_health` to confirm
 the active backend. Filesystem fallback for mutable state is permitted only for local/worktree
 backends. Never switch state branches, push note refs, reset `.squad/`, or stage or commit mutable
 state manually. On orphan, two-layer, or git-notes backends, if a required state tool or bridge is

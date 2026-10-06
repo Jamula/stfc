@@ -19,7 +19,7 @@ or orthogonal gate under the active team review policy.
 1. **Source Check:** Identify direct evidence.
 2. **Counter-Hypothesis:** Identify a plausible alternative explanation.
 3. **Existence Check:** Confirm named URLs, packages, APIs, files, and versions.
-4. **Consistency Check:** Compare against current repository state and durable decisions. Read decisions with `squad_state_read` using logical key `decisions.md` first whenever state tools are available. If the tool or key is unavailable, use `.squad/decisions/decisions.md` only in a local/worktree checkout. In orphan, two-layer, or git-notes backends, do not inspect checkout snapshots; stop and report the missing state bridge.
+4. **Consistency Check:** Compare against current repository state and durable decisions. Read decisions with `squad_state_read` using logical key `decisions/decisions.md` first whenever state tools are available. If the key is unavailable or not found, use `.squad/decisions/decisions.md` only in a local/worktree checkout. In orphan, two-layer, or git-notes backends, do not inspect checkout snapshots; stop and report the missing state bridge.
 
 ## Confidence Ratings
 

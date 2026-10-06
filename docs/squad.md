@@ -1,6 +1,6 @@
 # The Squad
 
-An AI team that lives in this repository under `.squad/`. Each member has a persistent name, a charter, and an append-only history. Decisions are recorded under the logical state key `decisions.md`; local/worktree backends materialize it at `.squad/decisions/decisions.md`. The coordinator routes work; the members execute it.
+An AI team that lives in this repository under `.squad/`. Each member has a persistent name, a charter, and an append-only history. Decisions are recorded under the logical state key `decisions/decisions.md`; local/worktree backends materialize it at `.squad/decisions/decisions.md`. The coordinator routes work; the members execute it.
 
 ---
 
@@ -69,8 +69,8 @@ An AI team that lives in this repository under `.squad/`. Each member has a pers
 |----------|------|---------|
 | Roster | `.squad/team.md` | Authoritative team membership, roles, status |
 | Routing rules | `.squad/routing.md` | Work routing table — which agent handles what |
-| Decisions | `decisions.md` (logical key); local/worktree: `.squad/decisions/decisions.md` | Team-wide append-only ledger managed through the configured state backend |
-| Decision inboxes | `decisions/inbox/{agent}-{slug}.md` (logical key); local/worktree: `.squad/decisions/inbox/{agent}-{slug}.md` | Per-agent handoff; the Coordinator merges accepted entries into `decisions.md` |
+| Decisions | `decisions/decisions.md` (logical key); local/worktree: `.squad/decisions/decisions.md` | Team-wide append-only ledger managed through the configured state backend |
+| Decision inboxes | `decisions/inbox/{agent}-{slug}.md` (logical key); local/worktree: `.squad/decisions/inbox/{agent}-{slug}.md` | Per-agent handoff; the Coordinator merges accepted entries into `decisions/decisions.md` |
 | Charters | `.squad/agents/{name}/charter.md` | Role definition for each member |
 | Histories | `.squad/agents/{name}/history.md` | Append-only personal learnings |
 | Model overrides | `.squad/config.json` | Persistent per-agent model selections |

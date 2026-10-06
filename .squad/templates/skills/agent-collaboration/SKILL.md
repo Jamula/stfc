@@ -41,6 +41,6 @@ If you have reviewer authority and reject work: the original author is locked ou
 
 ## Anti-Patterns
 - Don't read all agent charters — you only need your own context + decisions.md
-- Don't write directly to logical key `decisions.md` — submit proposals through the state-backed inbox instead
+- Don't write directly to logical key `decisions/decisions.md` — submit proposals through the state-backed inbox instead
 - Don't modify other agents' history.md files — that's Scribe's job
 - Don't assume CWD is the repo root — always use TEAM ROOT

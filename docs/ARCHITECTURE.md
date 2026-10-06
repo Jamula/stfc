@@ -380,10 +380,10 @@ runbook. Issue #220 Phase 1 does not add this context to the live ruleset:
 comment-derived status is operational governance, not a security boundary
 against a session acting with the repository owner's identity.
 
-**Decisions.** The append-only ledger uses logical key `decisions.md` (live),
+**Decisions.** The append-only ledger uses logical key `decisions/decisions.md` (live),
 with roll-over to `.squad/decisions-archive.md`. Agents submit decisions via
 `squad_state_write` to logical key `decisions/inbox/{agent}-{slug}.md`; the
-Coordinator appends accepted items to `decisions.md`. Physical paths
+Coordinator appends accepted items to `decisions/decisions.md`. Physical paths
 `.squad/decisions/decisions.md` and `.squad/decisions/inbox/` apply only to
 local/worktree. Governed backends fail closed if the state bridge is unavailable.
 
@@ -478,7 +478,7 @@ Validate at `package.json:20,28`.
 `concurrency.group`, permission scopes). Any edit to the workflow
 ships in the same commit as the pinning-test update (Rule 3).
 Canonical pattern is **structural parse + assert on object graph**, not
-substring grep. The live decision ledger uses logical key `decisions.md`; its
+substring grep. The live decision ledger uses logical key `decisions/decisions.md`; its
 physical path `.squad/decisions/decisions.md` applies only to local/worktree.
 See `.squad/decisions-archive.md` (Uhura PR #102).
 

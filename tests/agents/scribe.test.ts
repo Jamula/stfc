@@ -59,6 +59,10 @@ function assertSafeDecisionMerge(text: string, label: string): void {
     `${label}: verification failure must retain the source`);
 }
 
+const squadAgent = readFileSync(
+  resolve(process.cwd(), ".github/agents/squad.agent.md"),
+  "utf-8",
+);
 const rules = readFileSync(
   resolve(process.cwd(), ".github/copilot-instructions.md"),
   "utf-8",
@@ -98,6 +102,61 @@ describe("Scribe — decision consolidation", () => {
       "copilot-instructions.md should list the decision inbox",
     );
   });
+});
+
+describe("Scribe — decision archive eligibility", () => {
+  for (const [label, text] of [
+    ["active coordinator", squadAgent],
+    ["Scribe template", scribeTemplate],
+  ] as const) {
+    it(`${label} treats age thresholds as review triggers and retains unresolved entries`, () => {
+      const normalized = text.replace(/\s+/g, " ");
+
+      assert.match(
+        normalized,
+        /(?:review triggers, not automatic archival eligibility|use ledger size only to trigger eligibility review)/,
+        `${label} should use age thresholds only to trigger archival review`,
+      );
+      assert.match(
+        normalized,
+        /review entries older than 30 days/,
+        `${label} should review, not automatically archive, 30-day-old entries`,
+      );
+      assert.match(
+        normalized,
+        /review entries older than 7 days/,
+        `${label} should review, not automatically archive, 7-day-old entries`,
+      );
+      assert.doesNotMatch(
+        normalized,
+        /archive entries older than (?:30|7) days/i,
+        `${label} should not make age alone sufficient for archival`,
+      );
+
+      for (const requiredGuidance of [
+        "open/unresolved",
+        "active blockers",
+        "open linked issues",
+        "unverifiable status",
+        "active ledger",
+      ]) {
+        assert.ok(
+          normalized.includes(requiredGuidance),
+          `${label} should keep ${requiredGuidance} entries active`,
+        );
+      }
+      assert.match(
+        normalized,
+        /Archive only entries verified complete or resolved/,
+        `${label} should archive only verified complete or resolved entries`,
+      );
+      assert.match(
+        normalized,
+        /status cannot be confirmed/,
+        `${label} should retain entries whose status cannot be verified`,
+      );
+    });
+  }
 });
 
 describe("Scribe — worktree snapshot ingestion", () => {
