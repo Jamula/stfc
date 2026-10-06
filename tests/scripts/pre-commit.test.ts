@@ -150,6 +150,11 @@ describe("checkSquadBoundary", () => {
       ".squad/log/2026-05-16.md",
       ".squad/memory/index.json",
       ".squad/orchestration-log/session.md",
+      ".squad/sessions/session-001.md",
+      ".squad/.scratch/output.json",
+      ".squad/.cache/index.json",
+      ".squad/.watch-pids",
+      ".squad/ralph-circuit-breaker.json",
       ".squad/rai/audit-trail.md",
       ".squad/fact-checker/audit-trail.md",
     ];

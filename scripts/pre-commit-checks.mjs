@@ -35,6 +35,11 @@ const MUTABLE_SQUAD_STATE_PATTERNS = [
   /^\.squad\/log\//,
   /^\.squad\/memory(?:\/|$)/,
   /^\.squad\/orchestration-log\//,
+  /^\.squad\/sessions\//,
+  /^\.squad\/\.scratch\//,
+  /^\.squad\/\.cache\//,
+  /^\.squad\/\.watch-pids$/,
+  /^\.squad\/ralph-circuit-breaker\.json$/,
   /^\.squad\/fact-checker\/audit-trail\.md$/,
   /^\.squad\/rai\/audit-trail\.md$/,
 ];
