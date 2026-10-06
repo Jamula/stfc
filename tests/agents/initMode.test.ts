@@ -91,6 +91,18 @@ describe("Init Mode state ownership guidance", () => {
 });
 
 describe("Init Mode — memory ignore uses wildcard-plus-negation, backend init precedes mutable writes", () => {
+  it("the active coordinator skill keeps static memory config tracked", () => {
+    const text = readInitSurface(".github/skills/coordinator-init-mode/SKILL.md");
+
+    assert.match(text, /\.squad\/memory\/\*/);
+    assert.match(text, /!\.squad\/memory\/config\.json/);
+    assert.match(
+      text,
+      /config\.json is a static, constitution-tracked policy file and must stay tracked/,
+    );
+    assert.match(text, /rest of \.squad\/memory\/ is backend-owned runtime state/);
+  });
+
   const scopedSurfaces = [
     ".squad/templates/init-mode.md",
     ".squad/reference/init-detail.md",
