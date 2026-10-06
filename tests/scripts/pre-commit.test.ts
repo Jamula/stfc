@@ -934,6 +934,8 @@ describe("checkNoUntrackedMutableStateCopies", () => {
     exec?: (cmd: string, args: string[], options: Record<string, unknown>) => string,
   ) => string[];
   let exitState: { code: number | null };
+  let mutableSourceDir: string;
+  let mutableSourcePath: string;
 
   /** Stub attrFn for tests that aren't exercising the grouping behavior. */
   const noAttrs = (paths: string[]) =>
@@ -955,15 +957,20 @@ describe("checkNoUntrackedMutableStateCopies", () => {
     const mod = await import("../../scripts/pre-commit-checks.mjs");
     checkNoUntrackedMutableStateCopies = mod.checkNoUntrackedMutableStateCopies;
     listUntrackedMutableStateFiles = mod.listUntrackedMutableStateFiles;
+    mutableSourceDir = mkdtempSync(join(tmpdir(), "stfc-mutable-source-fixture-"));
+    mutableSourcePath = join(mutableSourceDir, ".squad", "agents", "scotty", "history.md");
+    mkdirSync(join(mutableSourceDir, ".squad", "agents", "scotty"), { recursive: true });
+    writeFileSync(mutableSourcePath, "mutable state fixture\n");
   });
 
   afterEach(() => {
     mock.restoreAll();
+    rmSync(mutableSourceDir, { recursive: true, force: true });
   });
 
   it("passes when no staged destination matches an ignored source's hash", () => {
     const destHashes = new Map([["docs/new.md", "a".repeat(40)]]);
-    const listIgnoredFn = () => [".squad/agents/scotty/history.md"];
+    const listIgnoredFn = () => [mutableSourcePath];
     const hashFn = () => "b".repeat(40);
     checkNoUntrackedMutableStateCopies(destHashes, listIgnoredFn, hashFn, noAttrs);
     assert.equal(exitState.code, null);
@@ -987,7 +994,7 @@ describe("checkNoUntrackedMutableStateCopies", () => {
   it("rejects a staged file whose hash matches an ignored mutable-state source", () => {
     const sha = "e".repeat(40);
     const destHashes = new Map([["docs/laundered.md", sha]]);
-    const listIgnoredFn = () => [".squad/agents/scotty/history.md"];
+    const listIgnoredFn = () => [mutableSourcePath];
     const hashFn = () => sha;
     const errors: string[] = [];
     mock.method(console, "error", (msg: string) => errors.push(msg));
@@ -999,13 +1006,13 @@ describe("checkNoUntrackedMutableStateCopies", () => {
     assert.equal(exitState.code, 1);
     const output = errors.join("\n");
     assert.match(output, /docs\/laundered\.md/);
-    assert.match(output, /\.squad\/agents\/scotty\/history\.md/);
+    assert.ok(output.includes(mutableSourcePath));
   });
 
   it("passes the staged destination path to hashFn so filters are resolved from it, not the source", () => {
     const sha = "e".repeat(40);
     const destHashes = new Map([["docs/laundered.md", sha]]);
-    const listIgnoredFn = () => [".squad/agents/scotty/history.md"];
+    const listIgnoredFn = () => [mutableSourcePath];
     const calls: Array<[string, string]> = [];
     const hashFn = (sourcePath: string, destinationPath: string) => {
       calls.push([sourcePath, destinationPath]);
@@ -1016,7 +1023,7 @@ describe("checkNoUntrackedMutableStateCopies", () => {
       () => checkNoUntrackedMutableStateCopies(destHashes, listIgnoredFn, hashFn, noAttrs),
       /process\.exit\(1\)/,
     );
-    assert.deepEqual(calls, [[".squad/agents/scotty/history.md", "docs/laundered.md"]]);
+    assert.deepEqual(calls, [[mutableSourcePath, "docs/laundered.md"]]);
   });
 
   it("groups identical built-in conversions without a custom filter", () => {
@@ -1029,7 +1036,7 @@ describe("checkNoUntrackedMutableStateCopies", () => {
       ["docs/four.md", "d".repeat(40)],
       ["docs/five.md", "e".repeat(40)],
     ]);
-    const listIgnoredFn = () => [".squad/agents/scotty/history.md"];
+    const listIgnoredFn = () => [mutableSourcePath];
     let hashCalls = 0;
     const hashFn = () => {
       hashCalls += 1;
@@ -1063,7 +1070,7 @@ describe("checkNoUntrackedMutableStateCopies", () => {
       ["docs/a2.md", shaGroupA],
       [".squad/other/b1.md", shaGroupB],
     ]);
-    const listIgnoredFn = () => [".squad/agents/scotty/history.md"];
+    const listIgnoredFn = () => [mutableSourcePath];
     const hashCallsPerDest: string[] = [];
     const hashFn = (_source: string, destinationPath: string) => {
       hashCallsPerDest.push(destinationPath);
@@ -1096,7 +1103,7 @@ describe("checkNoUntrackedMutableStateCopies", () => {
 
   it("fails before hashing a mutable source for a staged destination with a custom filter", () => {
     const destHashes = new Map([["docs/custom.md", "a".repeat(40)]]);
-    const listIgnoredFn = () => [".squad/agents/scotty/history.md"];
+    const listIgnoredFn = () => [mutableSourcePath];
     const errors: string[] = [];
     let hashCalls = 0;
     mock.method(console, "error", (msg: string) => errors.push(msg));
@@ -1138,7 +1145,7 @@ describe("checkNoUntrackedMutableStateCopies", () => {
     // be compared against itself even if it somehow appeared as a staged
     // destination (e.g. a stale/forced entry already caught elsewhere).
     const sha = "f".repeat(40);
-    const mutablePath = ".squad/agents/scotty/history.md";
+    const mutablePath = mutableSourcePath;
     const destHashes = new Map([[mutablePath, sha]]);
     const hashFn = () => {
       throw new Error("should never be called for a self-match");
@@ -1172,7 +1179,7 @@ describe("checkNoUntrackedMutableStateCopies", () => {
 
   it("fails closed (aborts the commit) when hashing a candidate source errors, instead of silently skipping it", () => {
     const destHashes = new Map([["docs/new.md", "a".repeat(40)]]);
-    const listIgnoredFn = () => [".squad/agents/scotty/history.md"];
+    const listIgnoredFn = () => [mutableSourcePath];
     const hashFn = () => {
       throw new Error("git hash-object exploded");
     };
@@ -1205,7 +1212,7 @@ describe("checkNoUntrackedMutableStateCopies", () => {
 
   it("fails closed (aborts the commit) when resolving clean-filter attributes errors, instead of silently skipping it", () => {
     const destHashes = new Map([["docs/new.md", "a".repeat(40)]]);
-    const listIgnoredFn = () => [".squad/agents/scotty/history.md"];
+    const listIgnoredFn = () => [mutableSourcePath];
     const attrFn = () => {
       throw new Error("git check-attr exploded");
     };
