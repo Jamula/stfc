@@ -447,7 +447,18 @@ The core application and required-check workflows are grouped by purpose:
 **Pre-commit.** `scripts/pre-commit.mjs` (installed by `simple-git-hooks`):
 
 1. Runs `check-artifact-hygiene.mjs --staged` on staged content.
-2. Reads staged files (`git diff --cached --name-only`).
+2. Parses staged changes via `git diff --cached --name-status -z -M -C`
+   (`parseNameStatus` in `scripts/pre-commit-checks.mjs`). `-z` emits
+   NUL-delimited records so filenames with spaces, unicode, or characters
+   Git would otherwise quote parse safely; `-M -C` enable explicit
+   rename/copy detection rather than relying on the repo's `diff.renames`
+   config. Renames/copies emit `<status>\0<old>\0<new>\0`; every other
+   status emits `<status>\0<path>\0`. The parser derives `staged` (every
+   touched path, including deletions and rename/copy destinations — this
+   matches the old `--name-only` behavior other checks depend on),
+   `deleted` (paths removed outright, for the `git rm --cached` migration
+   allowlist), and `renamedFrom` (rename/copy source paths, so a rename
+   out of a mutable-state path can't bypass the boundary check).
 3. Runs `checkSquadBoundary` — rejects mutable `.squad/` state paths for
    every actor; direct commits of mutable state are not supported.
 4. Runs `checkPortableFilenames` — blocks filenames illegal on Windows.

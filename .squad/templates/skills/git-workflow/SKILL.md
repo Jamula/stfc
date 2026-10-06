@@ -36,7 +36,20 @@ This handoff guard follows issue #220.
 
 ## Worktree Cleanup
 
-Before removing a worktree, preserve its uncommitted `.squad/` artifacts as a
-complete snapshot in a unique `.squad/worktree-inbox/` directory; do not
-overwrite the main checkout's state or reuse an existing destination. Follow
-the canonical git-workflow skill's verification procedure before removal.
+Before removing a worktree, resolve its configured state backend. For
+`local`/`worktree` backends, use the configured state tools with canonical
+logical paths when available; the checkout-snapshot fallback below is
+permitted only when those tools are unavailable. For `orphan`, `two-layer`, or
+`git-notes` backends, reconcile and clean mutable state only through the
+configured state tools using canonical logical paths (for example,
+`agents/{agent}/history.md`, `decisions/decisions.md`, `identity/now.md`, and
+`log/{timestamp}-{topic}.md`). Never read or copy a worktree `.squad/`
+checkout snapshot for these backends. If any required state tool is
+unavailable, fail closed, leave the worktree in place, and report the missing
+bridge.
+
+#### Local/worktree checkout-snapshot fallback (only when state tools unavailable)
+
+Follow the canonical git-workflow skill's snapshot and verification procedure.
+Do not use that checkout-snapshot procedure for `orphan`, `two-layer`, or
+`git-notes` backends.

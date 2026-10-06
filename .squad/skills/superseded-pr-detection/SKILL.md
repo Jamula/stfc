@@ -48,7 +48,7 @@ For governance PRs the load-bearing tokens are typically:
 | Residual diff | Right action |
 |---|---|
 | Empty | Close without merge. |
-| Scribe-owned only (`.squad/agents/*/history.md`, `.squad/decisions/*`, `.squad/log/*`, `.squad/orchestration-log/*`) | Close without merge; ask Scribe to port the residue to `main` in a normal Scribe commit. |
+| Scribe-owned only (`.squad/agents/*/history.md`, `.squad/decisions/*`, `.squad/log/*`, `.squad/orchestration-log/*`) | Close without merge; ask Scribe to port the residue through the configured state backend. Local/worktree filesystem fallback is only for canonical paths when permitted. Scribe never stages or commits mutable state. |
 | Non-trivial substantive bytes | Treat as a fresh PR — review on its real scope, not the original framing. |
 
 ## What this skill is NOT
@@ -74,8 +74,8 @@ For governance PRs the load-bearing tokens are typically:
 
 ## Cross-references
 
-- `.github/copilot-instructions.md` §2 (`.squad/` write boundary — only
-  Scribe commits there)
+- `.github/copilot-instructions.md` §2 (`.squad/` write boundary — mutable
+  state uses the configured backend; Scribe never commits it)
 - `.github/copilot-instructions.md` §4 (`main` diverges from `origin/main`
   constantly — rebase before every push) — same root cause class
 - `.squad/skills/amendment-audit/SKILL.md` — runs AFTER this skill confirms
