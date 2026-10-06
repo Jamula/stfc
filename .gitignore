@@ -30,6 +30,8 @@ playwright-diagnostics/
 .squad/.scratch/
 .squad/.watch-pids
 .squad/ralph-circuit-breaker.json
+# Squad: two-layer/orphan backend worktree-inbox (backend-owned, never committed)
+.squad/worktree-inbox/
 # Squad: SubSquad activation file (local to this machine)
 .squad-workstream
 
