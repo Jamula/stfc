@@ -28,6 +28,7 @@ type AttrSignature = {
   signature: string;
   pathIndependent: boolean;
   hasCustomFilter: boolean;
+  matchesIndex: boolean;
 };
 
 function setupPreCommitTestRepo(dir: string): NodeJS.ProcessEnv {
@@ -776,11 +777,13 @@ describe("checkAttrSignatures", () => {
       signature: JSON.stringify(["set", "lf", "unspecified", "unspecified", "unspecified", "unspecified"]),
       pathIndependent: true,
       hasCustomFilter: false,
+      matchesIndex: true,
     });
     assert.deepEqual(signatures.get("docs/b.md"), {
       signature: JSON.stringify(["unset", "unspecified", "unspecified", "unspecified", "unspecified", "unspecified"]),
       pathIndependent: true,
       hasCustomFilter: false,
+      matchesIndex: true,
     });
     assert.notEqual(signatures.get("docs/a.md")?.signature, signatures.get("docs/b.md")?.signature);
   });
@@ -814,14 +817,18 @@ describe("checkAttrSignatures", () => {
     assert.deepEqual(signatures.get("docs/a.md"), signatures.get("docs/c.md"));
   });
 
-  it("batches worktree attributes and checks only ambiguous sentinel filter drivers", () => {
+  it("batches index/worktree attributes and checks ambiguous sentinel filter drivers", () => {
     const calls: { cmd: string; args: string[] }[] = [];
     const exec = (cmd: string, args: string[]) => {
       calls.push({ cmd, args });
       return "";
     };
     checkAttrSignatures(["docs/a.md", "docs/b.md", "src/c.txt"], exec);
-    assert.equal(calls.length, 2, "expected one batched attribute lookup and one sentinel-driver lookup");
+    assert.equal(
+      calls.length,
+      3,
+      "expected batched worktree and index attribute lookups plus a sentinel-driver lookup",
+    );
     assert.deepEqual(calls[0], {
       cmd: "git",
       args: [
@@ -835,6 +842,19 @@ describe("checkAttrSignatures", () => {
       ],
     });
     assert.deepEqual(calls[1], {
+      cmd: "git",
+      args: [
+        "check-attr",
+        "--cached",
+        "--all",
+        "-z",
+        "--",
+        "docs/a.md",
+        "docs/b.md",
+        "src/c.txt",
+      ],
+    });
+    assert.deepEqual(calls[2], {
       cmd: "git",
       args: ["config", "--null", "--get-regexp", "^filter\\.unspecified\\.(clean|process)$"],
     });
@@ -920,7 +940,12 @@ describe("checkNoUntrackedMutableStateCopies", () => {
     new Map(
       paths.map((path) => [
         path,
-        { signature: "no-attributes", pathIndependent: true, hasCustomFilter: false },
+        {
+          signature: "no-attributes",
+          pathIndependent: true,
+          hasCustomFilter: false,
+          matchesIndex: true,
+        },
       ]),
     );
 
@@ -1018,6 +1043,7 @@ describe("checkNoUntrackedMutableStateCopies", () => {
             signature: "text=set|eol=lf|filter=unspecified",
             pathIndependent: true,
             hasCustomFilter: false,
+            matchesIndex: true,
           },
         ]),
       );
@@ -1053,6 +1079,7 @@ describe("checkNoUntrackedMutableStateCopies", () => {
               : "text=set|eol=lf|filter=unspecified",
             pathIndependent: true,
             hasCustomFilter: false,
+            matchesIndex: true,
           },
         ]),
       );
@@ -1081,6 +1108,7 @@ describe("checkNoUntrackedMutableStateCopies", () => {
             signature: "filter=path-sensitive",
             pathIndependent: false,
             hasCustomFilter: true,
+            matchesIndex: true,
           },
         ]),
       );
@@ -2170,7 +2198,7 @@ describe("checkWorkflowPinningTests", () => {
       }
     });
 
-    it("uses worktree .gitattributes when comparing hashes even if indexed attributes still group destinations", () => {
+    it("fails closed when .gitattributes changes after the mutable copy was staged", () => {
       const dir = mkdtempSync(join(tmpdir(), "stfc-pre-commit-untracked-copy-attr-divergence-"));
       const isolatedGitEnv = setupPreCommitTestRepo(dir);
       const mutableSource = ".squad/agents/scotty/history.md";
@@ -2185,6 +2213,33 @@ describe("checkWorkflowPinningTests", () => {
           cwd: dir,
           env: isolatedGitEnv,
         });
+
+        mkdirSync(join(dir, ".squad", "agents", "scotty"), { recursive: true });
+        const identBody = Buffer.from(`$Id: ${"b".repeat(40)} $\n`);
+        writeFileSync(join(dir, mutableSource), identBody);
+        mkdirSync(join(dir, "docs"), { recursive: true });
+        writeFileSync(join(dir, firstDestination), "unrelated staged document\n");
+        writeFileSync(join(dir, copiedDestination), identBody);
+        execFileSync("git", ["add", firstDestination, copiedDestination], {
+          cwd: dir,
+          env: isolatedGitEnv,
+        });
+
+        const stagedCopyHash = execFileSync("git", ["rev-parse", `:${copiedDestination}`], {
+          cwd: dir,
+          encoding: "utf8",
+          env: isolatedGitEnv,
+        }).trim();
+        const hashUnderOriginalAttributes = execFileSync(
+          "git",
+          ["hash-object", "--stdin"],
+          { cwd: dir, encoding: "utf8", input: identBody, env: isolatedGitEnv },
+        ).trim();
+        assert.equal(
+          stagedCopyHash,
+          hashUnderOriginalAttributes,
+          "fixture bug: git add must stage the copy before the attribute change",
+        );
 
         writeFileSync(
           join(dir, ".gitattributes"),
@@ -2231,27 +2286,34 @@ describe("checkWorkflowPinningTests", () => {
         assert.notEqual(
           worktreeAttributes.get(firstDestination)?.ident,
           worktreeAttributes.get(copiedDestination)?.ident,
-          "fixture bug: worktree attributes must select different ident values",
+          "fixture bug: worktree attributes must diverge after staging the copy",
         );
 
-        mkdirSync(join(dir, ".squad", "agents", "scotty"), { recursive: true });
-        const identBody = Buffer.from(`$Id: ${"b".repeat(40)} $\n`);
-        writeFileSync(join(dir, mutableSource), identBody);
-        mkdirSync(join(dir, "docs"), { recursive: true });
-        writeFileSync(join(dir, firstDestination), "unrelated staged document\n");
-        writeFileSync(join(dir, copiedDestination), identBody);
-        execFileSync("git", ["add", firstDestination, copiedDestination], {
+        const hashUnderCurrentWorktreeAttributes = execFileSync(
+          "git",
+          ["hash-object", "--filters", `--path=${copiedDestination}`, "--", mutableSource],
+          { cwd: dir, encoding: "utf8", env: isolatedGitEnv },
+        ).trim();
+        assert.notEqual(
+          hashUnderCurrentWorktreeAttributes,
+          stagedCopyHash,
+          "fixture bug: post-stage worktree attributes must hash the mutable source differently",
+        );
+
+        const result = spawnSync(process.execPath, [join(dir, "scripts", "pre-commit.mjs")], {
           cwd: dir,
+          encoding: "utf8",
           env: isolatedGitEnv,
         });
-
-        assertPathAwareMutableCopyRejected(
-          dir,
-          isolatedGitEnv,
-          mutableSource,
-          firstDestination,
-          copiedDestination,
+        assert.equal(
+          result.status,
+          1,
+          `expected the real pre-commit entry point to reject ambiguous staged attributes:\n` +
+            `${result.stderr}${result.stdout}`,
         );
+        const output = result.stderr + result.stdout;
+        assert.match(output, /differ between the index and worktree/i);
+        assert.ok(output.includes(copiedDestination), `expected destination in output:\n${output}`);
       } finally {
         rmSync(dir, { recursive: true, force: true });
       }

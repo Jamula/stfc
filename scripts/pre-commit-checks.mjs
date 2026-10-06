@@ -362,10 +362,10 @@ const HASH_FILTER_ATTRS = [
 
 /**
  * Batch-resolve the attributes that affect `git hash-object --filters
- * --path=<p>` using the working-tree `.gitattributes`, matching the
- * attribute source used by that hash operation. `--all` lets us distinguish
- * an absent filter attribute from a custom driver literally named
- * "unspecified".
+ * --path=<p>` using both the index and working-tree `.gitattributes`.
+ * The index describes attributes when the destination blob was staged;
+ * `hash-object` would use worktree attributes now. `--all` lets us resolve
+ * built-in conversions while safely handling custom filter driver names.
  *
  * Paths can share one hash only when they have the same built-in conversion
  * attributes AND no custom filter driver. A clean filter command can use
@@ -378,20 +378,21 @@ const HASH_FILTER_ATTRS = [
 export function checkAttrSignatures(paths, exec = defaultExecFileSync) {
   if (paths.length === 0) return new Map();
 
-  const raw = exec(
-    'git',
-    ['check-attr', '--all', '-z', '--', ...paths],
-    { encoding: 'utf8' },
-  );
-  const tokens = raw.split('\0');
-  if (tokens.length > 0 && tokens[tokens.length - 1] === '') tokens.pop();
+  const parseAttributes = (args) => {
+    const raw = exec('git', args, { encoding: 'utf8' });
+    const tokens = raw.split('\0');
+    if (tokens.length > 0 && tokens[tokens.length - 1] === '') tokens.pop();
 
-  const valuesByPath = new Map();
-  for (let i = 0; i + 2 < tokens.length; i += 3) {
-    const [path, attr, value] = [tokens[i], tokens[i + 1], tokens[i + 2]];
-    if (!valuesByPath.has(path)) valuesByPath.set(path, {});
-    valuesByPath.get(path)[attr] = value;
-  }
+    const valuesByPath = new Map();
+    for (let i = 0; i + 2 < tokens.length; i += 3) {
+      const [path, attr, value] = [tokens[i], tokens[i + 1], tokens[i + 2]];
+      if (!valuesByPath.has(path)) valuesByPath.set(path, {});
+      valuesByPath.get(path)[attr] = value;
+    }
+    return valuesByPath;
+  };
+  const worktreeValues = parseAttributes(['check-attr', '--all', '-z', '--', ...paths]);
+  const indexValues = parseAttributes(['check-attr', '--cached', '--all', '-z', '--', ...paths]);
 
   // `check-attr --all` omits attributes whose value is the reserved
   // "unspecified" state, which is indistinguishable there from an absent
@@ -401,11 +402,13 @@ export function checkAttrSignatures(paths, exec = defaultExecFileSync) {
   const configuredSentinelDrivers = new Set();
   const sentinelValuesToCheck = new Set();
   for (const path of paths) {
-    const values = valuesByPath.get(path) ?? {};
-    if (!Object.prototype.hasOwnProperty.call(values, 'filter')) {
-      sentinelValuesToCheck.add('unspecified');
-    } else if (sentinelFilterValues.has(values.filter)) {
-      sentinelValuesToCheck.add(values.filter);
+    for (const valuesByPath of [worktreeValues, indexValues]) {
+      const values = valuesByPath.get(path) ?? {};
+      if (!Object.prototype.hasOwnProperty.call(values, 'filter')) {
+        sentinelValuesToCheck.add('unspecified');
+      } else if (sentinelFilterValues.has(values.filter)) {
+        sentinelValuesToCheck.add(values.filter);
+      }
     }
   }
 
@@ -425,18 +428,26 @@ export function checkAttrSignatures(paths, exec = defaultExecFileSync) {
 
   const signatures = new Map();
   for (const path of paths) {
-    const values = valuesByPath.get(path) ?? {};
-    const hasFilterAttribute = Object.prototype.hasOwnProperty.call(values, 'filter');
-    const filterValue = values.filter;
-    const hasCustomFilter = hasFilterAttribute
-      ? sentinelFilterValues.has(filterValue)
-        ? configuredSentinelDrivers.has(filterValue)
-        : true
-      : configuredSentinelDrivers.has('unspecified');
+    const worktreeAttrs = worktreeValues.get(path) ?? {};
+    const indexAttrs = indexValues.get(path) ?? {};
+    const hasCustomFilter = [worktreeAttrs, indexAttrs].some((values) => {
+      const hasFilterAttribute = Object.prototype.hasOwnProperty.call(values, 'filter');
+      const filterValue = values.filter;
+      return hasFilterAttribute
+        ? sentinelFilterValues.has(filterValue)
+          ? configuredSentinelDrivers.has(filterValue)
+          : true
+        : configuredSentinelDrivers.has('unspecified');
+    });
+    const signatureFor = (values) =>
+      JSON.stringify(HASH_FILTER_ATTRS.map((attr) => values[attr] ?? 'unspecified'));
+    const worktreeSignature = signatureFor(worktreeAttrs);
+    const indexSignature = signatureFor(indexAttrs);
     signatures.set(path, {
-      signature: JSON.stringify(HASH_FILTER_ATTRS.map((attr) => values[attr] ?? 'unspecified')),
-      pathIndependent: !hasCustomFilter,
+      signature: worktreeSignature,
+      pathIndependent: !hasCustomFilter && worktreeSignature === indexSignature,
       hasCustomFilter,
+      matchesIndex: worktreeSignature === indexSignature,
     });
   }
   return signatures;
@@ -511,6 +522,19 @@ export function checkNoUntrackedMutableStateCopies(
       'Could not resolve clean-filter attributes for staged destinations while checking for ' +
         'disguised copies of mutable state (failing closed rather than silently skipping this ' +
         `check).\n  ${err && err.message ? err.message : err}`,
+    );
+    return;
+  }
+
+  const destinationsWithAttributeDivergence = destPaths.filter(
+    (destPath) => signatures.get(destPath)?.matchesIndex !== true,
+  );
+  if (destinationsWithAttributeDivergence.length > 0) {
+    fail(
+      'Cannot safely compare mutable-state copies because the clean-conversion attributes for ' +
+        'staged destination(s) differ between the index and worktree. Refusing to guess which ' +
+        'attributes produced the staged blobs.\n' +
+        `  Destinations:\n${destinationsWithAttributeDivergence.map((path) => `    - ${path}`).join('\n')}`,
     );
     return;
   }
