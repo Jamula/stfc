@@ -66,6 +66,10 @@ const secretHandling = readFileSync(
   resolve(process.cwd(), ".github/skills/secret-handling/SKILL.md"),
   "utf-8",
 );
+const secretHandlingTemplate = readFileSync(
+  resolve(process.cwd(), ".squad/templates/skills/secret-handling/SKILL.md"),
+  "utf-8",
+);
 const supersededPrDetection = readFileSync(
   resolve(process.cwd(), ".squad/skills/superseded-pr-detection/SKILL.md"),
   "utf-8",
@@ -699,6 +703,7 @@ describe("Scribe — mutable-state persistence guidance", () => {
     ["Scribe spawn template", spawnTemplates],
     ["after-agent Scribe prompt", afterAgentReference],
     ["secret-handling skill", secretHandling],
+    ["secret-handling template", secretHandlingTemplate],
     ["superseded-PR skill", supersededPrDetection],
     ["worktree reference", worktreeReference],
   ] as const) {
@@ -716,6 +721,99 @@ describe("Scribe — mutable-state persistence guidance", () => {
       );
     });
   }
+});
+
+describe("Scribe — secret-handling active/template parity", () => {
+  it("active and template secret-handling skills agree on the no-stage/no-commit policy", () => {
+    for (const text of [secretHandling, secretHandlingTemplate]) {
+      const normalized = text.replace(/\r\n/g, "\n");
+      assert.match(
+        normalized,
+        /Scribe never stages or commits mutable `\.squad\/` state/,
+        "skill must state Scribe never stages or commits mutable state",
+      );
+      assert.match(
+        normalized,
+        /authorized committer must (?:unstage and remediate|remove the secret)/i,
+        "skill must route remediation to the authorized committer, not Scribe",
+      );
+      assert.doesNotMatch(
+        normalized,
+        /Scribe MUST[\s\S]{0,80}git reset HEAD|Scribe commits ALL `\.squad\/`/i,
+        "skill must not direct Scribe to stage, unstage, or commit `.squad/` changes",
+      );
+    }
+  });
+
+  it("does not model partial secret-value disclosure in sample report output", () => {
+    for (const text of [secretHandling, secretHandlingTemplate]) {
+      const normalized = text.replace(/\r\n/g, "\n");
+      assert.match(
+        normalized,
+        /Never print the matched value while reporting a finding/,
+        "skill must instruct withholding the matched value when reporting",
+      );
+    }
+    // The template's commit-blocked sample must use a non-value label
+    // (e.g. "DATABASE_URL assignment detected (value withheld)") rather than
+    // echoing a redacted-but-present secret value like `DATABASE_URL=...`.
+    // Scope the check to the "SECRET DETECTED — commit blocked" sample block;
+    // the separate git-history leak alert example is out of scope here.
+    const normalizedTemplate = secretHandlingTemplate.replace(/\r\n/g, "\n");
+    const blockStart = normalizedTemplate.indexOf(
+      "SECRET DETECTED — commit blocked",
+    );
+    const blockEnd = normalizedTemplate.indexOf(
+      "Exit with error (never silently skip)",
+      blockStart,
+    );
+    assert.ok(
+      blockStart >= 0 && blockEnd > blockStart,
+      "template should contain the commit-blocked sample report block",
+    );
+    const commitBlockedSample = normalizedTemplate.slice(blockStart, blockEnd);
+    assert.doesNotMatch(
+      commitBlockedSample,
+      /Pattern:\s*[A-Z_]+(?:KEY|TOKEN|SECRET|PASSWORD|URL)=\S/,
+      "template's sample commit-blocked report must not echo a redacted-but-present secret value",
+    );
+    assert.match(
+      commitBlockedSample,
+      /Pattern:\s*DATABASE_URL assignment detected \(value withheld\)/,
+      "template's sample commit-blocked report should use a non-value label",
+    );
+  });
+
+  it("keeps active and template secret-handling guidance substantively aligned", () => {
+    const stripExamples = (text: string) =>
+      text
+        .replace(/\r\n/g, "\n")
+        .split("\n")
+        .filter((line) => !/^#|^>/.test(line.trim()))
+        .join("\n")
+        .replace(/\s+/g, " ")
+        .trim();
+    assert.equal(
+      stripExamples(secretHandlingTemplate).length > 0,
+      true,
+      "template body should not be empty",
+    );
+    for (const marker of [
+      "Secret Scanning Before Authorized Commits",
+      "the authorized committer may proceed",
+      "Remediation — If a Secret Was Already Committed",
+    ]) {
+      assert.ok(
+        secretHandling.includes(marker.split(" ").slice(0, 3).join(" ")) ||
+          new RegExp(marker, "i").test(secretHandling),
+        `active secret-handling skill should contain: ${marker}`,
+      );
+      assert.ok(
+        new RegExp(marker, "i").test(secretHandlingTemplate),
+        `secret-handling template should mirror: ${marker}`,
+      );
+    }
+  });
 });
 
 describe("Scribe — worktree snapshot ingestion", () => {
