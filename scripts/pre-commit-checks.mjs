@@ -47,6 +47,9 @@ export const MUTABLE_SQUAD_STATE_PATTERNS = [
   /^\.squad\/memory\/(?!config\.json$)/,
   /^\.squad\/orchestration-log\//,
   /^\.squad\/sessions\//,
+  // Two-layer/orphan backend inbox used to shuttle worktree-local writes
+  // back to the owning branch; backend-owned, never a committable path.
+  /^\.squad\/worktree-inbox\//,
   /^\.squad\/\.scratch\//,
   /^\.squad\/\.cache\//,
   /^\.squad\/\.watch-pids$/,

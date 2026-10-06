@@ -259,6 +259,17 @@ describe("checkSquadBoundary", () => {
     assert.equal(exitState.code, 1);
   });
 
+  it("rejects .squad/worktree-inbox/*", () => {
+    // The two-layer/orphan backend's worktree-inbox shuttles worktree-local
+    // writes back to the owning branch; it is backend-owned runtime state
+    // and must never be committed from a worktree checkout directly.
+    assert.throws(
+      () => checkSquadBoundary([".squad/worktree-inbox/2026-06-02T000000Z-obrien.md"]),
+      /process\.exit\(1\)/,
+    );
+    assert.equal(exitState.code, 1);
+  });
+
   it("rejects mutable state paths even when SQUAD_SCRIBE=1 is set", () => {
     const errors: string[] = [];
     mock.method(console, "error", (msg: string) => errors.push(msg));
@@ -275,6 +286,7 @@ describe("checkSquadBoundary", () => {
       ".squad/log/2026-05-16.md",
       ".squad/memory/index.json",
       ".squad/orchestration-log/session.md",
+      ".squad/worktree-inbox/2026-06-02T000000Z-obrien.md",
       ".squad/sessions/session-001.md",
       ".squad/.scratch/output.json",
       ".squad/.cache/index.json",
@@ -826,6 +838,115 @@ describe("checkWorkflowPinningTests", () => {
         rmSync(dir, { recursive: true, force: true });
       }
     });
+
+    it("blocks a real staged copy of an unchanged mutable-state file onto an ordinary tracked path", () => {
+      // Regression test for the copy-laundering gap flagged in PR #314
+      // review: `git diff --cached --name-status -M -C` (without
+      // `--find-copies-harder`) only searches for copy *sources* among
+      // files that were themselves modified in the same diff. Copying an
+      // UNCHANGED mutable-state file to an ordinary path — leaving the
+      // source untouched on disk and unstaged — is reported as a plain
+      // `A`dd for the destination and never surfaces the source path
+      // unless `--find-copies-harder` is passed.
+      const dir = mkdtempSync(join(tmpdir(), "stfc-pre-commit-copy-"));
+      const scriptsDir = join(dir, "scripts");
+      const binDir = join(dir, "bin");
+      const isolatedGitEnv = { ...process.env };
+      for (const key of Object.keys(isolatedGitEnv)) {
+        if (key.startsWith("GIT_")) delete isolatedGitEnv[key];
+      }
+
+      try {
+        mkdirSync(scriptsDir, { recursive: true });
+        mkdirSync(binDir);
+        writeFileSync(
+          join(scriptsDir, "pre-commit.mjs"),
+          readFileSync(resolve("scripts/pre-commit.mjs"), "utf8"),
+        );
+        writeFileSync(
+          join(scriptsDir, "pre-commit-checks.mjs"),
+          readFileSync(resolve("scripts/pre-commit-checks.mjs"), "utf8"),
+        );
+        writeFileSync(join(scriptsDir, "check-artifact-hygiene.mjs"), "process.exit(0);\n");
+
+        const pathKey = Object.keys(isolatedGitEnv).find((key) => key.toLowerCase() === "path") ?? "PATH";
+        const pathSeparator = process.platform === "win32" ? ";" : ":";
+        isolatedGitEnv[pathKey] = `${binDir}${pathSeparator}${isolatedGitEnv[pathKey] ?? ""}`;
+        if (process.platform === "win32") {
+          writeFileSync(join(binDir, "npm.cmd"), "@echo off\r\nexit /b 0\r\n");
+        } else {
+          writeFileSync(join(binDir, "npm"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+        }
+
+        const mutableSource = ".squad/agents/scotty/history.md";
+        // Large-ish, identical content so Git's default 50% similarity
+        // threshold still detects this as a copy once --find-copies-harder
+        // is in play.
+        const body = "line\n".repeat(200);
+        mkdirSync(join(dir, ".squad", "agents", "scotty"), { recursive: true });
+        writeFileSync(join(dir, mutableSource), body);
+        execFileSync("git", ["init", "--quiet"], { cwd: dir, env: isolatedGitEnv });
+        execFileSync("git", ["config", "user.name", "Pre-commit test"], {
+          cwd: dir,
+          env: isolatedGitEnv,
+        });
+        execFileSync("git", ["config", "user.email", "pre-commit-test@example.invalid"], {
+          cwd: dir,
+          env: isolatedGitEnv,
+        });
+        execFileSync("git", ["add", mutableSource], { cwd: dir, env: isolatedGitEnv });
+        execFileSync("git", ["commit", "--quiet", "-m", "Add mutable history file"], {
+          cwd: dir,
+          env: isolatedGitEnv,
+        });
+
+        // Copy (not move) the source: it remains on disk, unchanged and
+        // unstaged, while only the destination is staged.
+        const ordinaryDestination = "docs/laundered-history.md";
+        mkdirSync(join(dir, "docs"), { recursive: true });
+        writeFileSync(join(dir, ordinaryDestination), body);
+        execFileSync("git", ["add", ordinaryDestination], { cwd: dir, env: isolatedGitEnv });
+
+        const stagedStatusWithoutFlag = execFileSync(
+          "git",
+          ["diff", "--cached", "--name-status", "-M", "-C"],
+          { cwd: dir, encoding: "utf8", env: isolatedGitEnv },
+        );
+        assert.match(
+          stagedStatusWithoutFlag,
+          /^A\t/,
+          `expected git to report a plain add without --find-copies-harder, got:\n${stagedStatusWithoutFlag}`,
+        );
+
+        const stagedStatusWithFlag = execFileSync(
+          "git",
+          ["diff", "--cached", "--name-status", "-M", "-C", "--find-copies-harder"],
+          { cwd: dir, encoding: "utf8", env: isolatedGitEnv },
+        );
+        assert.match(
+          stagedStatusWithFlag,
+          /^C\d+\t/,
+          `expected --find-copies-harder to detect this as a copy, got:\n${stagedStatusWithFlag}`,
+        );
+
+        const result = spawnSync(process.execPath, [join(scriptsDir, "pre-commit.mjs")], {
+          cwd: dir,
+          encoding: "utf8",
+          env: isolatedGitEnv,
+        });
+        assert.equal(
+          result.status,
+          1,
+          `expected copying mutable state onto an ordinary path to be rejected:\n${result.stdout}`,
+        );
+        assert.match(
+          result.stderr + result.stdout,
+          new RegExp(mutableSource.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")),
+        );
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
   });
 
   afterEach(() => {
@@ -947,6 +1068,75 @@ describe("checkWorkflowPinningTests", () => {
       ]) {
         const result = spawnSync("git", ["check-ignore", "--quiet", path], { encoding: "utf8" });
         assert.equal(result.status, 0, `expected \`git check-ignore\` to report ${path} as ignored`);
+      }
+    });
+
+    it("matches and gitignores .squad/worktree-inbox/ snapshots", () => {
+      const path = ".squad/worktree-inbox/2026-06-02T000000Z-obrien/manifest.json";
+      assert.ok(
+        MUTABLE_SQUAD_STATE_PATTERNS.some((pattern) => pattern.test(path)),
+        `expected ${path} to match a mutable-state guard pattern`,
+      );
+      const result = spawnSync("git", ["check-ignore", "--quiet", path], { encoding: "utf8" });
+      assert.equal(result.status, 0, `expected \`git check-ignore\` to report ${path} as ignored`);
+    });
+
+    it("rejects `git add` of a backend-owned worktree-inbox snapshot (real repository)", () => {
+      // Real-repo invariant for the worktree-inbox bypass (PR #314 review):
+      // `git add` on an ignored path must fail outright (without -f), so a
+      // backend-owned snapshot can never be staged by accident even before
+      // the pre-commit boundary check runs.
+      const dir = mkdtempSync(join(tmpdir(), "stfc-worktree-inbox-"));
+      const isolatedGitEnv = { ...process.env };
+      for (const key of Object.keys(isolatedGitEnv)) {
+        if (key.startsWith("GIT_")) delete isolatedGitEnv[key];
+      }
+
+      try {
+        writeFileSync(join(dir, ".gitignore"), readFileSync(resolve(".gitignore"), "utf8"));
+        execFileSync("git", ["init", "--quiet"], { cwd: dir, env: isolatedGitEnv });
+        execFileSync("git", ["config", "user.name", "Pre-commit test"], {
+          cwd: dir,
+          env: isolatedGitEnv,
+        });
+        execFileSync("git", ["config", "user.email", "pre-commit-test@example.invalid"], {
+          cwd: dir,
+          env: isolatedGitEnv,
+        });
+        execFileSync("git", ["add", ".gitignore"], { cwd: dir, env: isolatedGitEnv });
+        execFileSync("git", ["commit", "--quiet", "-m", "Add .gitignore"], {
+          cwd: dir,
+          env: isolatedGitEnv,
+        });
+
+        const snapshotDir = join(dir, ".squad", "worktree-inbox", "2026-06-02T000000Z-obrien");
+        mkdirSync(snapshotDir, { recursive: true });
+        const snapshotPath = join(snapshotDir, "manifest.json");
+        writeFileSync(snapshotPath, JSON.stringify({ backend: "two-layer" }));
+
+        const addResult = spawnSync(
+          "git",
+          ["add", ".squad/worktree-inbox/2026-06-02T000000Z-obrien/manifest.json"],
+          { cwd: dir, encoding: "utf8", env: isolatedGitEnv },
+        );
+        assert.notEqual(
+          addResult.status,
+          0,
+          `expected \`git add\` of an ignored worktree-inbox snapshot to fail:\n${addResult.stdout}${addResult.stderr}`,
+        );
+
+        const stagedStatus = execFileSync("git", ["diff", "--cached", "--name-only"], {
+          cwd: dir,
+          encoding: "utf8",
+          env: isolatedGitEnv,
+        });
+        assert.equal(
+          stagedStatus.trim(),
+          "",
+          `expected nothing to be staged after the rejected \`git add\`, got:\n${stagedStatus}`,
+        );
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
       }
     });
 
