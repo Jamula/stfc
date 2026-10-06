@@ -437,6 +437,133 @@ describe("parseNameStatus", () => {
   });
 });
 
+// ── #13 — Untracked/ignored mutable-state copy detection ────────────
+//
+// `-C --find-copies-harder` only searches for copy sources among blobs
+// that are part of the diff (tracked content). An ignored/untracked
+// mutable-state file was never part of any diff, so Git's own copy
+// detection can never report it as a source. These tests exercise the
+// content-hash-based check that closes that gap.
+
+describe("parseRawDiffDestHashes", () => {
+  let parseRawDiffDestHashes: (raw: string) => Map<string, string>;
+
+  beforeEach(async () => {
+    const mod = await import("../../scripts/pre-commit-checks.mjs");
+    parseRawDiffDestHashes = mod.parseRawDiffDestHashes;
+  });
+
+  it("maps an added file to its post-image blob hash", () => {
+    const sha = "b".repeat(40);
+    const raw = [`:000000 100644 ${"0".repeat(40)} ${sha} A`, "docs/new.md", ""].join("\0");
+    assert.deepEqual(parseRawDiffDestHashes(raw), new Map([["docs/new.md", sha]]));
+  });
+
+  it("maps a modified file to its post-image blob hash", () => {
+    const sha = "c".repeat(40);
+    const raw = [`:100644 100644 ${"a".repeat(40)} ${sha} M`, "docs/existing.md", ""].join("\0");
+    assert.deepEqual(parseRawDiffDestHashes(raw), new Map([["docs/existing.md", sha]]));
+  });
+
+  it("maps a rename/copy to the destination path and post-image hash, ignoring the source", () => {
+    const sha = "d".repeat(40);
+    const raw = [
+      `:100644 100644 ${"a".repeat(40)} ${sha} R100`,
+      "docs/old.md",
+      "docs/new.md",
+      "",
+    ].join("\0");
+    assert.deepEqual(parseRawDiffDestHashes(raw), new Map([["docs/new.md", sha]]));
+  });
+
+  it("excludes deletions (no post-image to compare)", () => {
+    const raw = [
+      `:100644 000000 ${"a".repeat(40)} ${"0".repeat(40)} D`,
+      "docs/removed.md",
+      "",
+    ].join("\0");
+    assert.deepEqual(parseRawDiffDestHashes(raw), new Map());
+  });
+
+  it("returns an empty map for empty input", () => {
+    assert.deepEqual(parseRawDiffDestHashes(""), new Map());
+  });
+});
+
+describe("checkNoUntrackedMutableStateCopies", () => {
+  let checkNoUntrackedMutableStateCopies: (
+    destHashes: Map<string, string>,
+    ignoredMutableFiles: string[],
+    hashFn?: (filePath: string) => string | null,
+  ) => void;
+  let exitState: { code: number | null };
+
+  beforeEach(async () => {
+    exitState = captureExit();
+    mock.method(console, "error", () => {});
+    const mod = await import("../../scripts/pre-commit-checks.mjs");
+    checkNoUntrackedMutableStateCopies = mod.checkNoUntrackedMutableStateCopies;
+  });
+
+  afterEach(() => {
+    mock.restoreAll();
+  });
+
+  it("passes when no staged destination matches an ignored source's hash", () => {
+    const destHashes = new Map([["docs/new.md", "a".repeat(40)]]);
+    const hashFn = () => "b".repeat(40);
+    checkNoUntrackedMutableStateCopies(destHashes, [".squad/agents/scotty/history.md"], hashFn);
+    assert.equal(exitState.code, null);
+  });
+
+  it("passes when there are no untracked mutable-state files to compare against", () => {
+    const destHashes = new Map([["docs/new.md", "a".repeat(40)]]);
+    checkNoUntrackedMutableStateCopies(destHashes, [], () => "unused");
+    assert.equal(exitState.code, null);
+  });
+
+  it("rejects a staged file whose hash matches an ignored mutable-state source", () => {
+    const sha = "e".repeat(40);
+    const destHashes = new Map([["docs/laundered.md", sha]]);
+    const hashFn = () => sha;
+    const errors: string[] = [];
+    mock.method(console, "error", (msg: string) => errors.push(msg));
+
+    assert.throws(
+      () =>
+        checkNoUntrackedMutableStateCopies(
+          destHashes,
+          [".squad/agents/scotty/history.md"],
+          hashFn,
+        ),
+      /process\.exit\(1\)/,
+    );
+    assert.equal(exitState.code, 1);
+    const output = errors.join("\n");
+    assert.match(output, /docs\/laundered\.md/);
+    assert.match(output, /\.squad\/agents\/scotty\/history\.md/);
+  });
+
+  it("does not flag a source matched against its own unchanged path", () => {
+    // Guard against a degenerate self-match: an ignored path should never
+    // be compared against itself even if it somehow appeared as a staged
+    // destination (e.g. a stale/forced entry already caught elsewhere).
+    const sha = "f".repeat(40);
+    const mutablePath = ".squad/agents/scotty/history.md";
+    const destHashes = new Map([[mutablePath, sha]]);
+    const hashFn = () => sha;
+    checkNoUntrackedMutableStateCopies(destHashes, [mutablePath], hashFn);
+    assert.equal(exitState.code, null);
+  });
+
+  it("ignores a source file whose hash cannot be computed (missing/unreadable)", () => {
+    const destHashes = new Map([["docs/new.md", "a".repeat(40)]]);
+    const hashFn = () => null;
+    checkNoUntrackedMutableStateCopies(destHashes, [".squad/agents/scotty/history.md"], hashFn);
+    assert.equal(exitState.code, null);
+  });
+});
+
 // ── #11 — Portable filenames ─────────────────────────────────────────
 
 describe("checkPortableFilenames", () => {
@@ -943,6 +1070,126 @@ describe("checkWorkflowPinningTests", () => {
           result.stderr + result.stdout,
           new RegExp(mutableSource.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")),
         );
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it("blocks a real staged copy of an UNTRACKED/IGNORED mutable-state file onto an ordinary tracked path", () => {
+      // Regression test for the follow-up copy-laundering gap (new Copilot
+      // review on e626f36): `--find-copies-harder` still only searches for
+      // copy sources among blobs that are part of the diff — i.e. TRACKED
+      // content. A mutable-state file excluded from tracking entirely by
+      // `.gitignore` (the normal, intended state for e.g.
+      // `.squad/agents/*/history.md`) was never part of any diff, so no
+      // combination of `-M -C --find-copies-harder` can ever report it as a
+      // copy source. This exercises the content-hash-based check
+      // (`parseRawDiffDestHashes` + `listUntrackedMutableStateFiles` +
+      // `checkNoUntrackedMutableStateCopies`) that closes that gap
+      // independently of Git's rename/copy detection.
+      const dir = mkdtempSync(join(tmpdir(), "stfc-pre-commit-untracked-copy-"));
+      const scriptsDir = join(dir, "scripts");
+      const binDir = join(dir, "bin");
+      const isolatedGitEnv = { ...process.env };
+      for (const key of Object.keys(isolatedGitEnv)) {
+        if (key.startsWith("GIT_")) delete isolatedGitEnv[key];
+      }
+
+      try {
+        mkdirSync(scriptsDir, { recursive: true });
+        mkdirSync(binDir);
+        writeFileSync(
+          join(scriptsDir, "pre-commit.mjs"),
+          readFileSync(resolve("scripts/pre-commit.mjs"), "utf8"),
+        );
+        writeFileSync(
+          join(scriptsDir, "pre-commit-checks.mjs"),
+          readFileSync(resolve("scripts/pre-commit-checks.mjs"), "utf8"),
+        );
+        writeFileSync(join(scriptsDir, "check-artifact-hygiene.mjs"), "process.exit(0);\n");
+
+        const pathKey = Object.keys(isolatedGitEnv).find((key) => key.toLowerCase() === "path") ?? "PATH";
+        const pathSeparator = process.platform === "win32" ? ";" : ":";
+        isolatedGitEnv[pathKey] = `${binDir}${pathSeparator}${isolatedGitEnv[pathKey] ?? ""}`;
+        if (process.platform === "win32") {
+          writeFileSync(join(binDir, "npm.cmd"), "@echo off\r\nexit /b 0\r\n");
+        } else {
+          writeFileSync(join(binDir, "npm"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+        }
+
+        // Minimal `.gitignore` so the mutable-state source is genuinely
+        // untracked AND ignored — the exact condition `git ls-files
+        // --others --ignored --exclude-standard` is designed to surface,
+        // and the one Git's copy detection can never see into.
+        writeFileSync(join(dir, ".gitignore"), ".squad/agents/*/history.md\n");
+
+        const body = "line\n".repeat(200);
+        const mutableSource = ".squad/agents/scotty/history.md";
+        mkdirSync(join(dir, ".squad", "agents", "scotty"), { recursive: true });
+        writeFileSync(join(dir, mutableSource), body);
+
+        execFileSync("git", ["init", "--quiet"], { cwd: dir, env: isolatedGitEnv });
+        execFileSync("git", ["config", "user.name", "Pre-commit test"], {
+          cwd: dir,
+          env: isolatedGitEnv,
+        });
+        execFileSync("git", ["config", "user.email", "pre-commit-test@example.invalid"], {
+          cwd: dir,
+          env: isolatedGitEnv,
+        });
+        execFileSync("git", ["add", ".gitignore"], { cwd: dir, env: isolatedGitEnv });
+        execFileSync("git", ["commit", "--quiet", "-m", "Add .gitignore"], {
+          cwd: dir,
+          env: isolatedGitEnv,
+        });
+
+        // Sanity-check the premise: the source is untracked and ignored,
+        // never staged, and git status confirms Git does not track it.
+        const statusBeforeCopy = execFileSync("git", ["status", "--porcelain", "--ignored"], {
+          cwd: dir,
+          encoding: "utf8",
+          env: isolatedGitEnv,
+        });
+        assert.match(
+          statusBeforeCopy,
+          /!! \.squad\//,
+          `expected the mutable source to show as ignored before copying, got:\n${statusBeforeCopy}`,
+        );
+
+        // Copy (not move) identical bytes into an ordinary path and stage
+        // ONLY the destination — the source stays on disk, untracked,
+        // unstaged, exactly as `.gitignore` intends.
+        const ordinaryDestination = "docs/laundered-from-ignored.md";
+        mkdirSync(join(dir, "docs"), { recursive: true });
+        writeFileSync(join(dir, ordinaryDestination), body);
+        execFileSync("git", ["add", ordinaryDestination], { cwd: dir, env: isolatedGitEnv });
+
+        const stagedStatus = execFileSync(
+          "git",
+          ["diff", "--cached", "--name-status", "-M", "-C", "--find-copies-harder"],
+          { cwd: dir, encoding: "utf8", env: isolatedGitEnv },
+        );
+        assert.match(
+          stagedStatus,
+          /^A\t/,
+          `expected git to report a plain add even with --find-copies-harder, since the source ` +
+            `was never tracked, got:\n${stagedStatus}`,
+        );
+
+        const result = spawnSync(process.execPath, [join(scriptsDir, "pre-commit.mjs")], {
+          cwd: dir,
+          encoding: "utf8",
+          env: isolatedGitEnv,
+        });
+        assert.equal(
+          result.status,
+          1,
+          `expected copying an untracked/ignored mutable-state file onto an ordinary path to be ` +
+            `rejected:\n${result.stdout}`,
+        );
+        const output = result.stderr + result.stdout;
+        assert.match(output, new RegExp(ordinaryDestination.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+        assert.match(output, new RegExp(mutableSource.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
       } finally {
         rmSync(dir, { recursive: true, force: true });
       }

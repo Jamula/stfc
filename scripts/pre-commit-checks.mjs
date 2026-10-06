@@ -7,12 +7,17 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import { execFileSync } from 'child_process';
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
 function fail(msg) {
   console.error(`\n❌  pre-commit: ${msg}\n`);
   process.exit(1);
+}
+
+function defaultExecFileSync(cmd, args, options) {
+  return execFileSync(cmd, args, options);
 }
 
 function defaultReadFile(p) {
@@ -237,6 +242,134 @@ export function checkSquadBoundary(staged, deleted = [], renamedFrom = []) {
     'Mutable Squad state must be persisted through the configured state backend, ' +
       'not staged or committed from the working tree.\n' +
       `  Offending files:\n${allViolations.map((f) => `    - ${f}`).join('\n')}`,
+  );
+}
+
+// ── Check #13 — Mutable Squad state copied from an untracked/ignored source ─
+//
+// `-C --find-copies-harder` (see the staged diff command in pre-commit.mjs)
+// still only considers copy *sources* among blobs that are part of the
+// diff — i.e. tracked content. An ignored/untracked mutable-state file
+// (e.g. `.squad/agents/*/history.md`, which `.gitignore` deliberately
+// excludes from tracking) was never part of any diff, so Git can never
+// report it as a copy source no matter which rename/copy flags are passed.
+// Copying its bytes into an ordinary tracked path is reported as a plain
+// `A`dd. This check closes that gap independently of Git's own rename/copy
+// detection, by comparing content hashes directly.
+
+/**
+ * Parse `git diff --cached --raw -z -M -C --find-copies-harder --abbrev=40`
+ * output into a map of staged destination path -> full post-image blob SHA.
+ *
+ * `--abbrev=40` (equivalently `--no-abbrev`) is required: the raw format
+ * abbreviates blob hashes by default, and an abbreviated hash cannot be
+ * compared reliably against the full hash `git hash-object` reports for a
+ * candidate source file.
+ *
+ * The raw format's header token is
+ * `:<old-mode> <new-mode> <old-sha> <new-sha> <status>`, followed by
+ * `\0<path>\0` (or `\0<old-path>\0<new-path>\0` for renames/copies).
+ * Deletions have no post-image and are excluded.
+ */
+export function parseRawDiffDestHashes(raw) {
+  const tokens = raw.split('\0');
+  if (tokens.length > 0 && tokens[tokens.length - 1] === '') tokens.pop();
+
+  const destHashes = new Map();
+  let i = 0;
+  while (i < tokens.length) {
+    const header = tokens[i++];
+    const fields = header.trim().split(/\s+/);
+    const newSha = fields[3];
+    const status = fields[4];
+    const kind = status[0];
+    if (kind === 'R' || kind === 'C') {
+      i++; // old path — unused here; parseNameStatus already covers sources
+      const newPath = tokens[i++];
+      destHashes.set(newPath, newSha);
+    } else if (kind === 'D') {
+      i++; // deleted path — no post-image blob to compare
+    } else {
+      const p = tokens[i++];
+      destHashes.set(p, newSha);
+    }
+  }
+
+  return destHashes;
+}
+
+/**
+ * List mutable-state files under `.squad/` that exist on disk but are not
+ * tracked by Git — either genuinely untracked or excluded via
+ * `.gitignore`. These are exactly the paths Git's own copy detection
+ * cannot see as copy sources.
+ */
+export function listUntrackedMutableStateFiles(exec = defaultExecFileSync) {
+  let raw;
+  try {
+    raw = exec(
+      'git',
+      ['ls-files', '--others', '--ignored', '--exclude-standard', '-z', '--', '.squad'],
+      { encoding: 'utf8' },
+    );
+  } catch {
+    return [];
+  }
+  return raw
+    .split('\0')
+    .filter(Boolean)
+    .filter((f) => MUTABLE_SQUAD_STATE_PATTERNS.some((re) => re.test(f)));
+}
+
+/**
+ * Compute the Git blob SHA Git would assign to `filePath`'s current
+ * on-disk content — applying the same clean filters/line-ending
+ * normalization `git add` would apply — without reading or printing that
+ * content ourselves.
+ */
+export function hashObjectForPath(filePath, exec = defaultExecFileSync) {
+  try {
+    return exec('git', ['hash-object', '--', filePath], { encoding: 'utf8' }).trim();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Reject a staged file whose content is byte-identical (by Git blob hash)
+ * to an untracked/ignored mutable-state source. Only an exact full-content
+ * match is treated as a violation — deliberately conservative, with no
+ * fuzzy/partial matching, to avoid false positives on merely similar files.
+ *
+ * `destHashes` is the result of `parseRawDiffDestHashes`; `ignoredMutableFiles`
+ * is the result of `listUntrackedMutableStateFiles`; `hashFn` defaults to
+ * `hashObjectForPath` and is injectable for testing.
+ */
+export function checkNoUntrackedMutableStateCopies(
+  destHashes,
+  ignoredMutableFiles,
+  hashFn = hashObjectForPath,
+) {
+  const violations = [];
+  for (const sourcePath of ignoredMutableFiles) {
+    const sourceHash = hashFn(sourcePath);
+    if (!sourceHash) continue;
+    for (const [destPath, destHash] of destHashes) {
+      if (destHash === sourceHash && destPath !== sourcePath) {
+        violations.push({ source: sourcePath, destination: destPath });
+      }
+    }
+  }
+
+  if (violations.length === 0) return;
+
+  fail(
+    'Staged file content is byte-identical to an untracked/ignored mutable Squad state file. ' +
+      'Mutable Squad state must be persisted through the configured state backend, not copied ' +
+      'into an ordinary tracked path.\n' +
+      `  Offending files:\n${violations
+        .map((v) => `    - ${v.destination} (matches ignored source ${v.source})`)
+        .join('\n')}`,
   );
 }
 
