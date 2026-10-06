@@ -20,8 +20,9 @@ Analyze conversations and propose improvements to squad knowledge based on what 
 **Reflect complements existing Squad knowledge systems:**
 
 1. **Governed runtime memory** — Durable observations and decisions persisted through configured state tools
-2. **Tracked governing source** — Coordinator prompts, skills, and other behavior-defining files changed through focused pull requests
-3. **`reflect` skill** — Identifies learnings that may warrant either runtime memory or an approved tracked behavior change
+2. Logical state key `decisions/decisions.md` — Team-wide decisions that all agents respect; local/worktree physical path: `.squad/decisions/decisions.md`
+3. **Tracked governing source** — Coordinator prompts, skills, and other behavior-defining files changed through focused pull requests
+4. **`reflect` skill** — Identifies learnings that may warrant either runtime memory or an approved tracked behavior change
 
 **Workflow:**
 - Use `reflect` during work to capture learnings
@@ -221,7 +222,7 @@ User: "Perfect! This is exactly the format I want for all PRs"
 ❌ **Don't use reflect when:**
 - Simple one-off questions with no pattern
 - User is just exploring ideas (no concrete decisions)
-- Learning is already captured in history.md/decisions.md
+- Learning is already captured in history.md/`decisions/decisions.md`
 
 ---
 
