@@ -252,7 +252,10 @@ describe("Scribe — semantic classification state path", () => {
     ["active coordinator prompt", squadAgent],
     ["generated coordinator template", coordinatorTemplate],
     ["Scribe charter template", scribeTemplate],
+    ["Scribe spawn template", spawnTemplates],
+    ["after-agent Scribe prompt", afterAgentReference],
     ["Squad command skill", squadCommands],
+    ["GitHub-facing Squad skill", githubSquadSkill],
   ] as const) {
     it(`${label} writes and verifies the review artifact through logical log state`, () => {
       const normalized = text.replace(/\r\n/g, "\n");
@@ -548,7 +551,7 @@ describe("GitHub-facing Squad — decision archive eligibility", () => {
     }
     assert.match(
       archiveCommand,
-      /dry-run classification against the live ledger.{0,300}durable tagging convention.{0,150}10.?15 entries.{0,150}future-inbox behavior/i,
+      /dry-run classification against the live ledger.{0,900}durable tagging convention.{0,150}10.?15 entries.{0,150}future-inbox behavior/i,
       "bulk tagging should require a documented dry-run against the live ledger",
     );
     assert.match(
