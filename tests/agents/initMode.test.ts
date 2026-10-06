@@ -10,12 +10,32 @@ const initSurfaces = [
   ".squad/templates/skills/init-mode/SKILL.md",
 ];
 
-function readInitSurface(path: string): string {
-  return readFileSync(resolve(process.cwd(), path), "utf-8")
+const canonicalEmptyLedger = `# .squad/decisions/ — Decision Registry
+
+**Updated:** {current UTC timestamp}
+**Session:** {initialization session name}
+
+This is the canonical local decision ledger at \`.squad/decisions/decisions.md\`.
+When runtime state tools are available, \`decisions/decisions.md\` is the logical
+state key; the runtime resolves it to the configured backend. The key does not
+name a second local file, and there is no \`.squad/decisions.md\` mirror.
+
+Older entries are kept in the tracked [decision archive](../decisions-archive.md).
+Append new accepted decisions without rewriting existing entries. When archiving,
+move complete entries without changing their meaning; do not keep duplicate
+ledger copies.`;
+
+function normalizeInitText(text: string): string {
+  return text
     .replace(/\r\n/g, "\n")
     .replace(/`/g, "")
     .replace(/\s+/g, " ")
+    .trim()
     .toLowerCase();
+}
+
+function readInitSurface(path: string): string {
+  return normalizeInitText(readFileSync(resolve(process.cwd(), path), "utf-8"));
 }
 
 describe("Init Mode state ownership guidance", () => {
@@ -106,6 +126,36 @@ describe("Init Mode state ownership guidance", () => {
       assert.match(text, /never commit the active ledger/);
     });
 
+    it(`${path} seeds a canonical empty ledger for local and worktree backends`, () => {
+      const text = readInitSurface(path);
+
+      assert.match(
+        text,
+        /for the local\/worktree backend, if \.squad\/decisions\/decisions\.md does not exist, create it with the canonical empty-ledger content below/,
+      );
+      assert.ok(
+        text.includes(normalizeInitText(canonicalEmptyLedger)),
+        `${path} should include the canonical empty-ledger header and content`,
+      );
+      assert.match(text, /do not copy any existing decision entries/);
+      assert.match(text, /if the file already exists, preserve it unchanged/);
+    });
+
+    it(`${path} seeds and verifies the logical ledger for non-local backends`, () => {
+      const text = readInitSurface(path);
+
+      assert.match(
+        text,
+        /for orphan, two-layer, or git-notes, use squad_state_read on decisions\/decisions\.md to determine whether the key already exists/,
+      );
+      assert.match(
+        text,
+        /if absent, initialize that logical key with squad_state_write using the same empty-ledger content, then immediately call squad_state_read and require the returned content to match the seed/,
+      );
+      assert.match(text, /preserve an existing ledger/);
+      assert.match(text, /never create, read, or write a checkout snapshot as fallback/);
+    });
+
     it(`${path} limits union merges to verified, tracked archives`, () => {
       const text = readInitSurface(path);
 
@@ -121,46 +171,52 @@ describe("Init Mode state ownership guidance", () => {
 });
 
 describe("Init Mode — memory ignore uses wildcard-plus-negation, backend init precedes mutable writes", () => {
-  for (const path of [
-    ".github/skills/coordinator-init-mode/SKILL.md",
-    ".squad/templates/skills/init-mode/SKILL.md",
-  ]) {
+  for (const path of initSurfaces) {
     it(`${path} fails closed when the non-local state bridge cannot verify seeding`, () => {
       const text = readInitSurface(path);
 
       assert.match(
         text,
-        /if the state-tool bridge is unavailable or readback does not confirm the writes, fail closed before proceeding/,
+        /for orphan, two-layer, or git-notes, call squad_state_health after writing the config and require a successful response before any mutable-state write; if the tool is unavailable or errors, fail closed before proceeding/,
       );
-      assert.match(text, /never fall back to checkout files/);
+      assert.match(
+        text,
+        /if the bridge is unavailable, the write fails, or readback is absent or does not match, fail closed before casting or agent seeding/,
+      );
+      assert.match(text, /never create, read, or write a checkout snapshot as fallback/);
     });
   }
 
-  const scopedSurfaces = [
-    ".squad/templates/init-mode.md",
-    ".squad/reference/init-detail.md",
-  ];
-
-  for (const path of scopedSurfaces) {
+  for (const path of initSurfaces) {
     it(`${path} initializes the state backend before the first mutable write`, () => {
       const rawText = readFileSync(resolve(process.cwd(), path), "utf-8").replace(
         /\r\n/g,
         "\n",
       );
       const backendIndex = rawText.search(/Initialize state ownership/i);
+      const healthIndex = rawText.indexOf("squad_state_health", backendIndex);
+      const ledgerIndex = rawText.search(/\*\*Decision ledger initialization:\*\*/i);
       const castingIndex = rawText.search(/Casting state initialization/i);
       const seedingIndex = rawText.search(/\*\*Seeding:\*\*/);
 
       assert.ok(backendIndex >= 0, `${path} should document state-backend initialization`);
+      assert.ok(
+        healthIndex > backendIndex,
+        `${path} should check non-local backend health after writing the config`,
+      );
+      assert.ok(
+        ledgerIndex > healthIndex,
+        `${path} should initialize the decision ledger after the backend handshake`,
+      );
       assert.ok(castingIndex >= 0, `${path} should document casting state initialization`);
       assert.ok(seedingIndex >= 0, `${path} should document agent seeding`);
       assert.ok(
-        backendIndex < castingIndex,
-        `${path} should initialize the state backend before casting state`,
+        ledgerIndex < castingIndex,
+        `${path} should initialize the decision ledger before casting state`,
       );
       assert.ok(
-        backendIndex < seedingIndex,
-        `${path} should initialize the state backend before seeding agents`,
+        ledgerIndex < seedingIndex,
+        `${path} should initialize the decision ledger before seeding agents`,
       );
     });
 

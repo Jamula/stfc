@@ -109,6 +109,32 @@ describe("swa-deploy.yml / contract pinning (T-SWA-001)", () => {
     assert.match(yaml, /subscription-id:\s*\$\{\{\s*secrets\.AZURE_SUBSCRIPTION_ID\s*\}\}/);
   });
 
+  it("validate-api-node-22 installs, builds, and smoke-tests the API before deploy", () => {
+    const normalizedYaml = yaml.replace(/\r\n/g, "\n");
+    const validationJob =
+      normalizedYaml.match(/^  validate-api-node-22:\n([\s\S]*?)(?=^  deploy:)/m)?.[1] ?? "";
+
+    assert.ok(validationJob, "validate-api-node-22 job must exist");
+    assert.match(
+      validationJob,
+      /^[ \t]+- name: Install API dependencies\n[ \t]+run: npm ci\n[ \t]+working-directory: api$/m,
+    );
+    assert.match(
+      validationJob,
+      /^[ \t]+- name: Build API\n[ \t]+run: npm run build\n[ \t]+working-directory: api$/m,
+    );
+    assert.match(validationJob, /- name: Smoke test built API modules/);
+    assert.match(
+      validationJob,
+      /run: node --input-type=module -e .*import\('\.\/dist\/_lib\/auth\.js'\).*import\('\.\/dist\/_lib\/respond\.js'\)/,
+    );
+    assert.match(
+      normalizedYaml,
+      /^  deploy:\n    needs:\n      - preflight\n      - validate-api-node-22$/m,
+      "deploy must wait for OIDC preflight and API validation",
+    );
+  });
+
   it("repo_token wired from secrets.GITHUB_TOKEN (PR comment support)", () => {
     assert.match(yaml, /repo_token:\s*\$\{\{\s*secrets\.GITHUB_TOKEN\s*\}\}/);
   });

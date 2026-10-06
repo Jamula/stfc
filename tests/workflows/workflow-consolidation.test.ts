@@ -43,6 +43,8 @@ const workflows = workflowSources.map(({ file, source }) => ({
       string,
       {
         name?: string;
+        needs?: string | string[];
+        if?: string;
         steps?: Array<{
           run?: string;
           uses?: string;
@@ -54,8 +56,8 @@ const workflows = workflowSources.map(({ file, source }) => ({
   },
 }));
 const workflowSteps = workflows.flatMap(({ file, workflow }) =>
-  Object.values(workflow.jobs ?? {}).flatMap((job) =>
-    (job.steps ?? []).map((step) => ({ file, step })),
+  Object.entries(workflow.jobs ?? {}).flatMap(([jobName, job]) =>
+    (job.steps ?? []).map((step) => ({ file, jobName, step })),
   ),
 );
 
@@ -752,25 +754,65 @@ describe("workflow consolidation", () => {
     }
   });
 
-  it("pins every setup-node step to node-version-file: .nvmrc (#214, #222, #242)", () => {
-    // Decision D4: every workflow resolves its Node version from `.nvmrc`.
-    // Forbidding `node-version` alone isn't enough — a step could omit
-    // version configuration entirely and silently fall back to whatever
-    // Node the runner image ships with, drifting from `.nvmrc` without any
-    // signal. Assert the exact value, not just the absence of the
-    // hardcoded-major key.
-    for (const { file, step } of workflowSteps) {
+  it("pins setup-node to the root version file except for the scoped SWA API validation job", () => {
+    // The API deployment runtime is Node 22; all other workflows remain on
+    // the repository's root Node version.
+    for (const { file, jobName, step } of workflowSteps) {
       if (!step.uses?.startsWith("actions/setup-node@")) continue;
+      const expectedVersionFile =
+        file === "swa-deploy.yml" && jobName === "validate-api-node-22"
+          ? "api/.nvmrc"
+          : ".nvmrc";
       assert.ok(
         !("node-version" in (step.with ?? {})),
-        `${file} must use node-version-file: .nvmrc, not a hardcoded node-version`,
+        `${file} must use a node-version-file, not a hardcoded node-version`,
       );
       assert.equal(
         step.with?.["node-version-file"],
-        ".nvmrc",
-        `${file}'s setup-node step must set node-version-file: .nvmrc`,
+        expectedVersionFile,
+        `${file}'s ${jobName} setup-node step must set node-version-file: ${expectedVersionFile}`,
       );
     }
+  });
+
+  it("validates the SWA API under Node 22 before deployment", () => {
+    const swa = workflows.find(({ file }) => file === "swa-deploy.yml");
+    assert.ok(swa, "swa-deploy.yml must exist");
+    const validation = swa.workflow.jobs?.["validate-api-node-22"];
+    assert.ok(validation, "swa-deploy.yml must validate the API under Node 22");
+    assert.equal(
+      validation.if,
+      "github.event_name != 'pull_request' || github.event.action != 'closed'",
+      "API validation should be skipped only when a pull request is closed",
+    );
+    const steps = validation.steps ?? [];
+    assert.ok(
+      steps.some((step) => step.run?.trim() === "npm ci" && step["working-directory"] === "api"),
+      "API validation must run npm ci in api/",
+    );
+    assert.ok(
+      steps.some(
+        (step) => step.run?.trim() === "npm run build" && step["working-directory"] === "api",
+      ),
+      "API validation must build in api/",
+    );
+    assert.ok(
+      steps.some(
+        (step) =>
+          step.run?.includes("import('./dist/_lib/auth.js')") &&
+          step.run.includes("import('./dist/_lib/respond.js')") &&
+          step["working-directory"] === "api",
+      ),
+      "API validation must smoke-test the built API modules",
+    );
+
+    const deploy = swa.workflow.jobs?.["deploy"];
+    assert.ok(deploy, "swa-deploy.yml must have a deploy job");
+    const dependencies = Array.isArray(deploy.needs) ? deploy.needs : [deploy.needs];
+    assert.ok(
+      dependencies.includes("validate-api-node-22"),
+      "SWA deployment must wait for Node 22 API validation",
+    );
   });
 
   it("runs the canonical suite entry point on push to main (#242, #222)", () => {

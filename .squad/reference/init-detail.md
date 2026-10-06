@@ -3,7 +3,31 @@
 <!-- Extracted from squad.agent.md to keep the agent file under github.com's size limit. -->
 <!-- Loaded on demand by the Squad coordinator; do not delete. -->
 
-**Initialize state ownership:** Create `.squad/config.json` with `version: 1` and `stateBackend` set to the explicitly selected backend; if there is no explicit backend choice, default `stateBackend` to `local` (for example, `{"version":1,"stateBackend":"local"}`). This is tracked configuration, not mutable state.
+**Initialize state ownership FIRST:** Create `.squad/config.json` with `version: 1` and `stateBackend` set to the explicitly selected backend; if there is no explicit backend choice, default `stateBackend` to `local` (for example, `{"version":1,"stateBackend":"local"}`). This is tracked configuration, not mutable state. For `orphan`, `two-layer`, or `git-notes`, call `squad_state_health` after writing the config and require a successful response before any mutable-state write; if the tool is unavailable or errors, fail closed before proceeding. `local` and `worktree` use their configured filesystem backend.
+
+**Decision ledger initialization:** Do this after creating `.squad/config.json` and completing the non-local `squad_state_health` handshake, and before casting state initialization or agent seeding.
+
+- For the `local`/`worktree` backend, if `.squad/decisions/decisions.md` does not exist, create it with the canonical empty-ledger content below, substituting the current UTC timestamp and initialization session name. Do not copy any existing decision entries. If the file already exists, preserve it unchanged.
+- For `orphan`, `two-layer`, or `git-notes`, use `squad_state_read` on `decisions/decisions.md` to determine whether the key already exists. Preserve an existing ledger. Treat only an explicit not-found result as absent; any other read failure is unconfirmed and must fail closed. If absent, initialize that logical key with `squad_state_write` using the same empty-ledger content, then immediately call `squad_state_read` and require the returned content to match the seed. If the bridge is unavailable, the write fails, or readback is absent or does not match, fail closed before casting or agent seeding. Never create, read, or write a checkout snapshot as fallback.
+
+Canonical empty-ledger content (no decision entries):
+
+```markdown
+# .squad/decisions/ — Decision Registry
+
+**Updated:** {current UTC timestamp}
+**Session:** {initialization session name}
+
+This is the canonical local decision ledger at `.squad/decisions/decisions.md`.
+When runtime state tools are available, `decisions/decisions.md` is the logical
+state key; the runtime resolves it to the configured backend. The key does not
+name a second local file, and there is no `.squad/decisions.md` mirror.
+
+Older entries are kept in the tracked [decision archive](../decisions-archive.md).
+Append new accepted decisions without rewriting existing entries. When archiving,
+move complete entries without changing their meaning; do not keep duplicate
+ledger copies.
+```
 
 Ensure the repository-root `.gitignore` excludes the local active ledger and runtime state:
 ```
