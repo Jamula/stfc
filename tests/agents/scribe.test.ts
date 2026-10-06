@@ -848,6 +848,42 @@ describe("Scribe — mutable-state persistence guidance", () => {
   }
 });
 
+describe("Coordinator — non-local runtime memory filesystem boundary", () => {
+  for (const [label, text] of [
+    ["active coordinator", squadAgent],
+    ["generated coordinator template", coordinatorTemplate],
+  ] as const) {
+    it(`${label} permits static memory config but forbids runtime memory file edits`, () => {
+      const normalized = text
+        .replace(/\r\n/g, "\n")
+        .replace(/`/g, "")
+        .replace(/\s+/g, " ");
+
+      assert.match(
+        normalized,
+        /backend-owned runtime files under \.squad\/memory\/\* \(excluding the static, constitution-tracked \.squad\/memory\/config\.json policy file\) via create \/ edit \/ write_file tools/,
+      );
+      assert.match(
+        normalized,
+        /\.squad\/memory\/config\.json is static tracked configuration, not runtime-managed memory/,
+      );
+      assert.match(
+        normalized,
+        /all other files under \.squad\/memory\/ remain runtime-owned and must not be directly edited for non-local backends/i,
+        "runtime memory files must remain filesystem-protected",
+      );
+      assert.match(
+        normalized,
+        /\.squad\/memory\/\*\* except \.squad\/memory\/config\.json/,
+      );
+      assert.match(
+        normalized,
+        /\.squad\/memory\/config\.json is static tracked policy configuration, not runtime state, and may be edited on disk under every backend/,
+      );
+    });
+  }
+});
+
 describe("Scribe — secret-handling active/template parity", () => {
   it("active and template secret-handling skills agree on the no-stage/no-commit policy", () => {
     for (const text of [secretHandling, secretHandlingTemplate]) {
