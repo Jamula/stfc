@@ -772,7 +772,7 @@ describe("checkWorkflowPinningTests", () => {
         .filter((line) => line.length > 0 && !line.startsWith("#") && /merge=union/.test(line));
 
       const offending = unionLines.filter((line) => {
-        const pattern = line.split(/\s+/)[0];
+        const pattern = line.split(/\s+/)[0] ?? "";
         // Turn a `.gitattributes` glob (e.g. `.squad/log/**`) into a
         // representative path to test against the guard patterns.
         const representative = pattern.replace(/\*\*/g, "x").replace(/\*/g, "x");
