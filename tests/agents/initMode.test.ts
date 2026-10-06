@@ -329,6 +329,85 @@ describe("Coordinator casting policy and registry are static across state backen
   });
 });
 
+describe("Casting history follows the configured state backend", () => {
+  const allocationSurfaces = [
+    ...coordinatorSurfaces,
+    ".squad/reference/members.md",
+  ];
+  const castingReferenceSurfaces = [
+    ".squad/reference/casting.md",
+    ".squad/templates/casting-reference.md",
+  ];
+
+  function memberAllocationInstruction(path: string): string {
+    const text = readInitSurface(path);
+    const start = text.indexOf("1. **allocate a name**");
+    const end = text.indexOf("2. **check plugin marketplaces.**", start);
+    assert.ok(start >= 0 && end > start, `${path} should describe name allocation`);
+    return text.slice(start, end);
+  }
+
+  function castingHistoryBackendContract(path: string): string {
+    const text = readInitSurface(path);
+    const contract = text.match(
+      /before lru scoring or recording an assignment snapshot, read and update history through the configured backend: .*?it may be stale\./,
+    );
+    assert.ok(contract, `${path} should define casting-history backend ownership`);
+    return contract[0];
+  }
+
+  it("reads allocation history from the configured backend and fails closed without stale fallback", () => {
+    for (const path of allocationSurfaces) {
+      const instruction = memberAllocationInstruction(path);
+
+      assert.match(
+        instruction,
+        /for "local"\/"worktree", read the physical \.squad\/casting\/history\.json/,
+        `${path} should read the physical history file only for local/worktree`,
+      );
+      assert.match(
+        instruction,
+        /for "orphan", "two-layer", or "git-notes", use squad_state_read for logical key casting\/history\.json/,
+        `${path} should read non-local history through its logical key`,
+      );
+      assert.match(
+        instruction,
+        /if the bridge is unavailable or the read fails, report the error and fail closed; never fall back to a stale checkout copy/,
+        `${path} should fail closed instead of reading stale checkout state`,
+      );
+    }
+  });
+
+  it("keeps allocation instructions identical across coordinator prompts and the members reference", () => {
+    const instructions = allocationSurfaces.map(memberAllocationInstruction);
+    assert.equal(instructions[0], instructions[1]);
+    assert.equal(instructions[0], instructions[2]);
+  });
+
+  it("keeps casting-reference backend reads and writes consistent", () => {
+    const contracts = castingReferenceSurfaces.map(castingHistoryBackendContract);
+    const contract = contracts[0]!;
+
+    assert.match(
+      contract,
+      /for "local"\/"worktree", read and update the physical \.squad\/casting\/history\.json file on the local state filesystem/,
+    );
+    assert.match(
+      contract,
+      /for "orphan", "two-layer", or "git-notes", read logical key casting\/history\.json with squad_state_read, write updates with squad_state_write, then verify with squad_state_read/,
+    );
+    assert.match(
+      contract,
+      /if the bridge is unavailable or any state call fails, report the error and fail closed\. never read or write a checkout copy for a non-local backend; it may be stale\./,
+    );
+    assert.equal(
+      contracts[0],
+      contracts[1],
+      "the casting reference and its template should describe identical history ownership",
+    );
+  });
+});
+
 describe("Init Mode config reruns", () => {
   it("preserves existing backend, worktree, model, and future settings without changing file contents", () => {
     const dir = mkdtempSync(join(tmpdir(), "stfc-init-config-rerun-"));

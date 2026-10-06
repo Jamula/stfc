@@ -28,8 +28,12 @@ After selecting a universe:
 5. **Rai is always "Rai"** — exempt from casting.
 6. **@copilot is always "@copilot"** — exempt from casting. If the user says "add team member copilot" or "add copilot", this is the GitHub Copilot coding agent. Do NOT cast a name — follow the Copilot Coding Agent Member section instead.
 7. Store the mapping in `.squad/casting/registry.json`.
-8. Record the assignment snapshot in `.squad/casting/history.json`.
+8. Read casting history and record the assignment snapshot through the configured backend; follow Casting History Backend Ownership below.
 9. Use the allocated name everywhere: charter.md, history.md, team.md, routing.md, spawn prompts.
+
+### Casting History Backend Ownership
+
+Before LRU scoring or recording an assignment snapshot, read and update history through the configured backend: for `"local"`/`"worktree"`, read and update the physical `.squad/casting/history.json` file on the local state filesystem; for `"orphan"`, `"two-layer"`, or `"git-notes"`, read logical key `casting/history.json` with `squad_state_read`, write updates with `squad_state_write`, then verify with `squad_state_read`. If the bridge is unavailable or any state call fails, report the error and fail closed. Never read or write a checkout copy for a non-local backend; it may be stale.
 
 ### Overflow Handling
 
