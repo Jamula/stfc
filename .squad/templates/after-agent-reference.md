@@ -67,6 +67,8 @@ prompt: |
      in plain text only. Do not write orchestration logs, session logs, specialist
      histories, archival records, or health reports to state.
 
+  HISTORY ARCHIVE PROCEDURE (backend-owned mutable state): If any `history.md` grows oversized, use the backend-aware procedure in the coordinator prompt. For local/worktree, archive through `.squad/agents/{agent}/history-archive.md` on the local state filesystem; for orphan, two-layer, or git-notes, use logical key `agents/{agent}/history-archive.md` through state tools. Verify archived entries and exact count growth before trimming. Never apply the tracked-destination rule or stage/commit history archives.
+
   Runtime state tools own persistence. Never switch branches, push note refs, reset
   `.squad/`, or commit mutable squad state from this prompt.
 

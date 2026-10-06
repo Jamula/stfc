@@ -397,7 +397,7 @@ describe("Agent history — logical state paths", () => {
         assert.ok(
           physicalHistoryReferences.length > 0 &&
             physicalHistoryReferences.every((line) =>
-              /local\/worktree(?:-only| physical)? fallback/i.test(line),
+              /local\/worktree(?:-only| physical)? fallback|for `local`\/`worktree`/i.test(line),
             ),
           `${label} should limit physical history paths to local/worktree fallback`,
         );
@@ -904,8 +904,9 @@ describe("Scribe — generated coordinator archive safeguards", () => {
     const normalized = coordinatorTemplate.replace(/\s+/g, " ");
     for (const safeguard of [
       /DESTINATION MUST BE TRACKED/,
-      /git ls-files --error-unmatch <destination>/,
-      /Moving content into an untracked destination is a DELETION/,
+      /A\. DECISION ARCHIVE DESTINATION MUST BE TRACKED/,
+      /git ls-files --error-unmatch \.squad\/decisions-archive\.md/,
+      /If it is not tracked, abort decision archival/,
       /APPEND FIRST, VERIFY, THEN DELETE/,
       /every moved heading is literally present/,
       /entry count grew by exactly the number moved/,
@@ -914,7 +915,7 @@ describe("Scribe — generated coordinator archive safeguards", () => {
       /File size is not a valid integrity signal/,
       /NEVER REPORT A GATE OUTCOME YOU DID NOT MEASURE/,
       /"No archival required" must come from an actual measurement/,
-      /If a state tool cannot perform these checks, STOP and report/,
+      /For non-local backends, if state tools cannot perform these checks, STOP and report/,
     ]) {
       assert.match(
         normalized,
@@ -923,6 +924,109 @@ describe("Scribe — generated coordinator archive safeguards", () => {
       );
     }
   });
+});
+
+describe("Scribe — backend-aware history archival", () => {
+  const extractHistoryArchiveProcedure = (text: string, label: string) => {
+    const normalized = text.replace(/\s+/g, " ");
+    const start = normalized.indexOf("HISTORY ARCHIVE PROCEDURE (backend-owned mutable state):");
+    const end = normalized.indexOf("Runtime state tools own persistence.", start);
+    assert.ok(start >= 0 && end > start, `${label} should define a separate history archive procedure`);
+    return normalized.slice(start, end);
+  };
+
+  it("keeps the tracked decision archive rule separate from backend-owned history archives", () => {
+    const activeProcedure = extractHistoryArchiveProcedure(squadAgent, "active coordinator");
+    const generatedProcedure = extractHistoryArchiveProcedure(
+      coordinatorTemplate,
+      "generated coordinator template",
+    );
+    assert.equal(activeProcedure, generatedProcedure, "active and generated procedures should match");
+
+    for (const [label, text] of [
+      ["active coordinator", squadAgent],
+      ["generated coordinator template", coordinatorTemplate],
+    ] as const) {
+      const normalized = text.replace(/\s+/g, " ");
+      assert.match(
+        normalized,
+        /ARCHIVAL SAFETY RULES \(Rule A applies only to decision archival; Rules B-E apply to every move\)/,
+        `${label} should scope the tracked-destination rule to decision archival`,
+      );
+      assert.match(
+        normalized,
+        /A\. DECISION ARCHIVE DESTINATION MUST BE TRACKED\. Before writing `\.squad\/decisions-archive\.md`, run `git ls-files --error-unmatch \.squad\/decisions-archive\.md`/,
+        `${label} should retain the tracked-destination check for the durable decision archive`,
+      );
+    }
+
+    assert.match(
+      activeProcedure,
+      /for `local`\/`worktree`, read `\.squad\/agents\/\{agent\}\/history\.md` and append the entries being summarized to `\.squad\/agents\/\{agent\}\/history-archive\.md` using the local state filesystem/i,
+    );
+    assert.match(
+      activeProcedure,
+      /verify every moved entry and that its entry count grew by exactly the number moved\. Only then trim the active history file/i,
+    );
+    assert.match(
+      activeProcedure,
+      /these paths are ignored\/untracked mutable state: never run Rule A for them and never stage or commit them/i,
+    );
+    assert.match(
+      activeProcedure,
+      /for `orphan`, `two-layer`, or `git-notes`, read logical key `agents\/\{agent\}\/history\.md` with `squad_state_read`, append to logical key `agents\/\{agent\}\/history-archive\.md` with `squad_state_append`/i,
+    );
+    assert.match(
+      activeProcedure,
+      /read the archive with `squad_state_read` and verify every moved entry and exact entry-count growth\. Only after that verification, write the trimmed active history with `squad_state_write` and read it back to verify/i,
+    );
+    assert.match(
+      activeProcedure,
+      /never create, read, or write a checkout copy\. If the bridge, append, readback, or count verification fails, fail closed and preserve the active source/i,
+    );
+    assert.doesNotMatch(
+      activeProcedure,
+      /DESTINATION MUST BE TRACKED|git ls-files --error-unmatch/i,
+      "history archives must not inherit the decision archive's tracked-destination requirement",
+    );
+  });
+
+  for (const [label, text] of [
+    ["live Scribe charter", charter],
+    ["Scribe charter template", scribeTemplate],
+    ["after-agent reference", afterAgentReference],
+    ["spawn-templates reference", spawnTemplates],
+  ] as const) {
+    it(`${label} routes history archives through the backend-aware mutable-state procedure`, () => {
+      const normalized = text.replace(/\s+/g, " ");
+
+      assert.match(
+        normalized,
+        /backend-aware (?:procedure|HISTORY ARCHIVE PROCEDURE)/i,
+        `${label} should reference backend-aware history archival`,
+      );
+      assert.match(
+        normalized,
+        /\.squad\/agents\/\{agent\}\/history-archive\.md/,
+        `${label} should identify the local/worktree history archive path`,
+      );
+      assert.match(
+        normalized,
+        /agents\/\{agent\}\/history-archive\.md/,
+        `${label} should identify the logical history archive key`,
+      );
+      assert.match(
+        normalized,
+        /verify (?:archived|moved) entries and exact (?:entry-)?count growth before trimming/i,
+        `${label} should verify archived entries and counts before trimming`,
+      );
+      assert.match(
+        normalized,
+        /never apply (?:the )?tracked-destination rule or stage\/commit history archives|never apply tracked-destination Rule A or stage\/commit history archives/i,
+        `${label} should keep history archives untracked and uncommitted`,
+      );
+    });
+  }
 });
 
 describe("Scribe — spawn template health reports use entry counts, not byte-size deltas", () => {

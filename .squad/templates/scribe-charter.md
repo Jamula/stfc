@@ -11,8 +11,9 @@
 
 ## What I Own
 
-- `.squad/decisions/decisions.md` -- the canonical durable decision record
-- `.squad/decisions/inbox/` -- the decision drop-box
+- Logical key `decisions/decisions.md` — shared canonical decision ledger; local/worktree path: `.squad/decisions/decisions.md`
+- Logical namespace `decisions/inbox/` — decision drop-box, read and merged through the configured backend
+- Agent history archiving — use the backend-aware procedure in the coordinator prompt; local/worktree uses `.squad/agents/{agent}/history-archive.md` on the local state filesystem, while orphan/two-layer/git-notes use logical key `agents/{agent}/history-archive.md` through state tools. Verify archived entries and exact count growth before trimming. Never apply the tracked-destination rule or stage/commit history archives.
 - Decision archival — **HARD GATE**: size and age thresholds trigger eligibility review only, never archival by themselves:
   - **Tier 1 (30-day):** If logical key `decisions/decisions.md` is >20KB, review entries older than 30 days.
   - **Tier 2 (7-day):** If still >50KB after Tier 1, review entries older than 7 days.

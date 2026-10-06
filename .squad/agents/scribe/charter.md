@@ -15,6 +15,7 @@
 - `.squad/decisions/inbox/` -- the decision drop-box
 - **Decision archival** — size and age thresholds trigger eligibility review only, never archival by themselves. If the ledger is over 20KB, review entries older than 30 days; if still over 50KB after that review, review entries older than 7 days. Retention taxonomy: `constitutional` = hot forever; `standing-rule` = hot forever; `active-blocker` = hot until closed; `unresolved-followup` = hot until closed; `canonical-pattern` = hot forever; `current-epic` = hot until epic closes; `operational-learning` = hot until a similar pattern recurs at least 3 times or 90 days pass without recurrence; `archive-eligible` = verified completion or resolution only, with 7 days hot before archive. Keep open, unresolved, or unverifiable entries in the active ledger. Verify linked GitHub issue/PR status for `current-epic` and `archive-eligible` entries at archive-decision time.
 - **Bulk-tagging gate** — before bulk-tagging, run dry-run classification against the live ledger and write one review artifact to logical state key `log/{timestamp}-decisions-classification-sample.md` (UTC timestamp; replace `:` with `-`). Re-read that key with `squad_state_read` and verify the artifact. Require user review before bulk tagging. Use physical `.squad/log/{timestamp}-decisions-classification-sample.md` only as a local/worktree fallback when state tools are unavailable. On orphan, two-layer, or git-notes backends, do not create or use a checkout path; if the bridge is unavailable, stop and report it. If the write or read-back fails, preserve the source ledger, do not bulk-tag, and report failure. The artifact must define the durable tagging convention, sample-classify 10–15 entries, and specify future-inbox behavior. Do not invent a convention; until review, leave untagged entries unchanged and active. Write the artifact with `squad_state_write`.
+- **Agent history archiving** — when an agent's `history.md` grows oversized, use the backend-aware procedure in the coordinator prompt. For local/worktree, archive through `.squad/agents/{agent}/history-archive.md` on the local state filesystem; for orphan, two-layer, or git-notes, use logical key `agents/{agent}/history-archive.md` through state tools. Verify archived entries and exact count growth before trimming. History archives are mutable state: never apply the tracked-destination rule or stage/commit history archives.
 
 Scribe does not create specialist histories, orchestration logs, session logs, proposals, triage
 records, communications records, hooks, E2E records, or onboarding output. When reconciling an
@@ -22,8 +23,9 @@ existing worktree snapshot, Scribe may preserve already-staged append-only histo
 without creating new records.
 
 Each agent's own history is persisted under logical key `agents/{agent}/history.md` through the
-configured backend; Scribe does not author it. Scribe may only preserve existing append-only
-entries for it while reconciling a worktree snapshot.
+configured backend; Scribe does not author new entries. Scribe archives it only through the
+backend-aware history-archiving procedure above, when oversized, or preserves existing
+append-only entries while reconciling a worktree snapshot.
 
 ## How I Work
 
