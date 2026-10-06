@@ -30,6 +30,8 @@ playwright-diagnostics/
 .squad/.scratch/
 .squad/.watch-pids
 .squad/ralph-circuit-breaker.json
+# Squad: two-layer/orphan backend worktree-inbox (backend-owned, never committed)
+.squad/worktree-inbox/
 # Squad: SubSquad activation file (local to this machine)
 .squad-workstream
 
@@ -46,7 +48,18 @@ summary.md
 .squad/decisions.md
 # Squad: local-only mutable decisions ledger; the archive remains tracked
 .squad/decisions/decisions.md
-.squad/memory/
+# Squad: memory directory is backend-owned runtime state, except the static
+# policy file config.json (constitution-tracked, safe to version — PR #314)
+.squad/memory/*
+!.squad/memory/config.json
 .squad/agents/*/history.md
 .squad/fact-checker/audit-trail.md
+# Squad: backend-owned mutable state migrated out of the index (PR #314);
+# physical copies are preserved on disk but no longer tracked
+.squad/identity/
+.squad/casting/history.json
+.squad/rai/audit-trail.md
+# Squad: bare and timestamped archive variants (e.g.
+# history-archive-2026-06-02.md, history-archive-20260602T044144Z.md)
+.squad/agents/*/history-archive*
 # /Squad: state owned by squad-state branch

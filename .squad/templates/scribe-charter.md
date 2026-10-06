@@ -20,7 +20,7 @@
   - **Tier 2 (7-day):** If still >50KB after Tier 1, review entries older than 7 days.
   - **Retention taxonomy:** `constitutional` = hot forever; `standing-rule` = hot forever; `active-blocker` = hot until closed; `unresolved-followup` = hot until closed; `canonical-pattern` = hot forever; `current-epic` = hot until epic closes; `operational-learning` = hot until a similar pattern recurs at least 3 times or 90 days pass without recurrence; `archive-eligible` = verified completion or resolution only, with 7 days hot before archive.
   - Keep open, unresolved, or unverifiable entries in the active ledger. At archive-decision time, verify linked GitHub issue/PR status for `current-epic` and `archive-eligible` entries; if status cannot be confirmed, retain the entry.
-  - **Bulk-tagging gate:** Before bulk-tagging, Scribe must dry-run classification against the live ledger and write one review artifact to `.squad/log/{ts}-decisions-classification-sample.md`. It must define the durable tagging convention, sample-classify 10–15 entries, and specify future-inbox behavior. Require user review of the artifact before bulk tagging. Do not invent a convention; until review, leave untagged entries unchanged and active.
+  - **Bulk-tagging gate:** Before bulk-tagging, Scribe must dry-run classification against the live ledger and write one review artifact to logical state key `log/{timestamp}-decisions-classification-sample.md` with `squad_state_write` (UTC timestamp; replace `:` with `-`). Re-read that key with `squad_state_read` and verify the artifact. Require user review of the artifact before bulk tagging. Use physical `.squad/log/{timestamp}-decisions-classification-sample.md` only as a local/worktree fallback when state tools are unavailable. On orphan, two-layer, or git-notes backends, do not create or use a checkout path; if the bridge is unavailable, stop and report it. If the write or read-back fails, preserve the source ledger, do not bulk-tag, and report failure. The artifact must define the durable tagging convention, sample-classify 10–15 entries, and specify future-inbox behavior. Do not invent a convention; until review, leave untagged entries unchanged and active.
   - Emit HEALTH REPORT to session log after archival reviews.
 
 ## How I Work
@@ -60,7 +60,7 @@ After every substantial work session:
    - Write the updated file back with `squad_state_write`. This handles duplicates and convergent decisions introduced by concurrent agent writes.
 
 4. **Propagate cross-agent updates:**
-   For any newly merged decision that affects other agents, append to their `agents/{agent}/history.md` with `squad_state_append`. Replace the parenthetical timestamp with the literal CURRENT_DATETIME value from your spawn prompt; do not write placeholder text.
+   For any newly merged decision that affects other agents, append to their logical state key `agents/{agent}/history.md` with `squad_state_append`, then re-read with `squad_state_read` and verify. Use physical `.squad/agents/{agent}/history.md` only as a local/worktree fallback when state tools are unavailable. On orphan, two-layer, or git-notes backends, fail closed and report a missing bridge instead of using a checkout snapshot. If the write or read-back fails, preserve the source update and report failure. Replace the parenthetical timestamp with the literal CURRENT_DATETIME value from your spawn prompt; do not write placeholder text.
    ```
    📌 Team update (<CURRENT_DATETIME value>): {summary} — decided by {Name}
    ```
