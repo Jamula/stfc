@@ -7,6 +7,7 @@ inserted at the top**, so the most recent run is always visible first.
 
 | Date (UTC) | Time (UTC) | Account | Gifts claimed |
 | --- | --- | --- | --- |
+| 2026-10-07 | 17:47 | main | Alliance Tournament Rewards Issue -  Compensation, 4 Hr Free Chest, 10 Min Free Chest, Officer Command Pass Points |
 | 2026-10-07 | 11:00 | main | 4 Hr Free Chest, Beyond the Threat Officers Gift, 10 Min Free Chest |
 | 2026-10-07 | 04:03 | main | 4 Hr Free Chest, 10 Min Free Chest |
 | 2026-10-06 | 23:52 | main | 10 Min Free Chest |
