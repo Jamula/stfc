@@ -7,6 +7,7 @@ inserted at the top**, so the most recent run is always visible first.
 
 | Date (UTC) | Time (UTC) | Account | Gifts claimed |
 | --- | --- | --- | --- |
+| 2026-10-08 | 02:03 | main | 10 Min Free Chest |
 | 2026-10-07 | 22:18 | main | Daily Mission Key Drop, 24 Hr Free Chest [BAJORAN FAVOR], Replicator Rations, Archive Data Shard, 4 Hr Free Chest, Trial Bells, Holo-Field Amplifiers, Fleet Commander Materials, Radioactive Titanite, 10 Min Free Chest, Optical Diodes, Nova Squadron Supply, Independent Archives Schematics, Nadion Supply |
 | 2026-10-07 | 17:47 | main | Alliance Tournament Rewards Issue -  Compensation, 4 Hr Free Chest, 10 Min Free Chest, Officer Command Pass Points |
 | 2026-10-07 | 11:00 | main | 4 Hr Free Chest, Beyond the Threat Officers Gift, 10 Min Free Chest |
