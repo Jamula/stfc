@@ -186,12 +186,12 @@ describe(".github/workflows/knowledge-rebuild.yml", () => {
     );
   });
 
-  it("uses actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 (v4.4.0 — matches sibling workflows)", () => {
+  it("uses actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 (v7.0.0 — matches sibling workflows)", () => {
     const setupNodeStep = usesSteps.find((s) => s.uses.startsWith("actions/setup-node@"));
     assert.ok(setupNodeStep, "expected an actions/setup-node step");
     assert.strictEqual(
       setupNodeStep.uses,
-      "actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020",
+      "actions/setup-node@820762786026740c76f36085b0efc47a31fe5020",
     );
   });
 });
