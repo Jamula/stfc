@@ -189,7 +189,9 @@ describe("Squad upgrade template regression coverage", () => {
       assert.ok(!document.includes("Post-research (auto"));
     }
     assert.ok(sourceOfTruth.includes("only mutable Squad state"));
-    assert.ok(sourceOfTruth.includes("Do not create or preserve specialist histories"));
+    assert.ok(sourceOfTruth.includes("Do not create specialist histories"));
+    assert.ok(sourceOfTruth.includes("Snapshot reconciliation may preserve existing append-only histories and logs"));
+    assert.ok(sourceOfTruth.includes("must not manufacture new records"));
   });
 
   it("preserves the pre-upgrade coordinator as the local backup", () => {

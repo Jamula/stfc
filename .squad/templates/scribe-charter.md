@@ -11,8 +11,8 @@
 
 ## What I Own
 
-- `.squad/decisions.md` — the canonical durable decision record
-- `.squad/decisions/inbox/` — the decision drop-box
+- `.squad/decisions.md` -- the canonical durable decision record
+- `.squad/decisions/inbox/` -- the decision drop-box
 
 Scribe does not create specialist histories, orchestration logs, session logs, proposals, triage
 records, communications records, hooks, E2E records, or onboarding output. When reconciling an
@@ -30,12 +30,15 @@ are unavailable, stop without mutating state and report the failure to the coord
 When accepted durable decisions exist:
 
 1. List and read `decisions/inbox/` through the configured state backend.
-2. Merge only accepted, current decisions into `decisions.md`; do not manufacture session records.
+2. Merge only accepted, current durable decisions into `decisions.md` with `squad_state_write`; do not manufacture session records.
 3. Demote inbox headings so the shallowest body heading lands at `####`, preserving relative
    hierarchy and fenced code blocks.
 4. Deduplicate exact duplicate decision headings without rewriting unrelated decisions.
-5. Re-read `decisions.md` and confirm each merged entry is present before deleting its inbox source.
-6. Run the state health check when available and report the merge result to the coordinator.
+5. Re-read `decisions.md` with `squad_state_read` and confirm every merged entry is present before
+   deleting its inbox source with `squad_state_delete`. If verification fails, leave the inbox source
+   intact and report the failure.
+6. Run the state health check when available and report the merge result and any non-state repo
+   changes to the coordinator in plain text only. Do not write health reports to state.
 
 ## Worktree Snapshot Inbox
 

@@ -23,6 +23,42 @@ const afterAgentTemplate = readFileSync(
   resolve(process.cwd(), ".squad/templates/after-agent-reference.md"),
   "utf-8",
 );
+const inlineScribePrompts = [
+  ["live coordinator", ".github/agents/squad.agent.md"],
+  ["coordinator template", ".squad/templates/squad.agent.md.template"],
+].map(([label, path]) => {
+  const text = readFileSync(resolve(process.cwd(), path!), "utf-8");
+  const section = text.replace(/\r\n/g, "\n").match(
+    /\*\*Scribe Spawn Template\*\*[\s\S]*?\n```\n[\s\S]*?\n```/,
+  )?.[0];
+  assert.ok(section, `${label} should contain the inline Scribe prompt`);
+  return [label!, section] as const;
+});
+const spawnReference = readFileSync(
+  resolve(process.cwd(), ".squad/templates/spawn-reference.md"), "utf-8",
+);
+const sourceOfTruth = readFileSync(
+  resolve(process.cwd(), ".github/skills/coordinator-source-of-truth/SKILL.md"), "utf-8",
+);
+const decisionSurfaces = [
+  ...inlineScribePrompts,
+  ["after-agent reference", afterAgentTemplate],
+  ["live charter", charter],
+  ["charter template", scribeTemplate],
+] as const;
+
+function assertSafeDecisionMerge(text: string, label: string): void {
+  const write = text.indexOf("`squad_state_write`");
+  const verify = text.indexOf("Re-read `decisions.md`", write);
+  const deletion = text.indexOf("`squad_state_delete`");
+  assert.ok(write >= 0 && verify > write && deletion > verify,
+    `${label}: write, re-read/verify, then delete must be ordered`);
+  assert.match(text.slice(verify, deletion), /confirm every merged entry is present before/,
+    `${label}: verify entry content before consuming its source`);
+  assert.match(text, /leave the inbox source\s+intact and report the failure/,
+    `${label}: verification failure must retain the source`);
+}
+
 const rules = readFileSync(
   resolve(process.cwd(), ".github/copilot-instructions.md"),
   "utf-8",
@@ -88,26 +124,25 @@ describe("Scribe — worktree snapshot ingestion", () => {
 });
 
 describe("Scribe — routing accuracy", () => {
-  it("routes session logging to Scribe", () => {
+  it("routes durable decision merging to Scribe", () => {
     const entry = routingEntries.find((e) =>
-      e.workType.toLowerCase().includes("session logging"),
+      e.workType.toLowerCase().includes("durable decision merging"),
     );
-    assert.ok(entry, "Routing table should have a Session logging entry");
+    assert.ok(entry, "Routing table should have a durable decision merging entry");
     assert.ok(
       entry.routeTo.toLowerCase().includes("scribe"),
-      "Session logging should route to Scribe",
+      "Durable decision merging should route to Scribe",
     );
   });
 
-  it("session logging is automatic — never needs routing", () => {
+  it("activation requires accepted durable decisions", () => {
     const entry = routingEntries.find((e) =>
       e.routeTo.toLowerCase().includes("scribe"),
     );
     assert.ok(entry, "Should find a Scribe routing entry");
     assert.ok(
-      entry.examples.toLowerCase().includes("automatic") ||
-        entry.examples.toLowerCase().includes("never needs routing"),
-      "Scribe routing should be automatic",
+      entry.examples.includes("Only when accepted durable decisions require merging"),
+      "Scribe routing should require accepted durable decisions",
     );
   });
 });
@@ -130,14 +165,14 @@ describe("Scribe — boundary declarations", () => {
 });
 
 describe("Scribe — team roster", () => {
-  it("Scribe appears in team.md as Session Logger", () => {
+  it("Scribe appears in team.md as Decision Merger", () => {
     assert.ok(
       teamMd.includes("Scribe"),
       "team.md should list Scribe",
     );
     assert.ok(
-      teamMd.toLowerCase().includes("session logger"),
-      "team.md should identify Scribe as Session Logger",
+      teamMd.toLowerCase().includes("decision merger"),
+      "team.md should identify Scribe as Decision Merger",
     );
   });
 
@@ -150,10 +185,10 @@ describe("Scribe — team roster", () => {
 });
 
 describe("Scribe — routing rules", () => {
-  it("Rule 2 in routing says Scribe always runs after substantial work", () => {
+  it("Rule 2 limits Scribe activation to accepted durable decisions", () => {
     assert.ok(
-      routing.includes("Scribe always runs"),
-      'Routing should say "Scribe always runs"',
+      routing.includes("Scribe runs only when accepted durable decisions require merging"),
+      "Routing should limit activation to accepted durable decisions",
     );
   });
 
@@ -169,20 +204,44 @@ describe("Scribe — routing rules", () => {
   });
 });
 
-describe("Scribe — post-agent spawn template", () => {
-  it("limits activation and tasks to accepted durable decision merging", () => {
-    assert.match(afterAgentTemplate, /Only when accepted durable decisions require merging/);
-    assert.match(afterAgentTemplate, /merge only accepted, current durable decisions/);
-    assert.match(afterAgentTemplate, /deduplicate exact duplicate decision headings/);
-    assert.match(afterAgentTemplate, /Preserve relative structure and fenced code blocks/);
-    assert.match(afterAgentTemplate, /confirm every merged entry is present before[\s\S]*deleting its inbox source/);
-    assert.match(afterAgentTemplate, /leave the inbox source intact and report the failure/);
-    assert.match(afterAgentTemplate, /in plain text only/);
+describe("Scribe - production decision contracts", () => {
+  for (const [label, text] of decisionSurfaces) {
+    it(`${label} limits activation and work to accepted durable decisions`, () => {
+      assert.match(text, /only when accepted durable decisions require merging/i);
+      assert.match(text, /[Mm]erge only accepted, current durable decisions/);
+      assert.match(text, /[Dd]eduplicate exact duplicate decision headings/);
+      assert.match(text, /[Pp]reserv(?:e|ing) relative\s+(?:structure|hierarchy) and fenced code blocks/);
+      assert.match(text, /in plain text only/);
+      assertSafeDecisionMerge(text, label);
+    });
+
+    it(`${label} rejects delete-before-verify regressions`, () => {
+      assert.ok(text.includes("`squad_state_write`"), `${label}: mutation target must exist`);
+      const mutated = text.replace("`squad_state_write`",
+        "`squad_state_write`, delete processed inbox entries with `squad_state_delete`");
+      assert.throws(() => assertSafeDecisionMerge(mutated, label),
+        /write, re-read\/verify, then delete must be ordered/);
+    });
+
+    it(`${label} does not assign logging, history, archival, or health-report writes`, () => {
+      assert.doesNotMatch(text, /(?:ORCHESTRATION LOG|SESSION LOG|CROSS-AGENT|HISTORY SUMMARIZATION|DECISIONS ARCHIVE|HEALTH REPORT):/);
+      assert.doesNotMatch(text, /squad_state_(?:write|append)[^\n]*(?:orchestration-log|history\.md|log\/)/);
+      assert.match(text, /(?:Do not write orchestration logs|does not create specialist histories)/);
+      assert.match(text, /(?:Do not write health reports to state|health reports to state)/);
+    });
+  }
+
+  it("generic spawn reference excludes Scribe from history and cleanup duties", () => {
+    assert.match(spawnReference, /Scribe exception:[\s\S]*decision-only Scribe prompt in `after-agent-reference.md`/);
+    assert.match(spawnReference, /Do not assign Scribe history appends, skill extraction/);
+    assert.match(spawnReference, /squad_state_delete` only after Scribe writes the merged decision, re-reads `decisions.md`, and verifies/);
+    assert.doesNotMatch(spawnReference, /Scribe handles (?:it|cleanup)|SKILL EXTRACTION is handled by Scribe/);
   });
 
-  it("does not assign logging, history, archival, or state health-report writes", () => {
-    assert.doesNotMatch(afterAgentTemplate, /(?:ORCHESTRATION LOG|SESSION LOG|CROSS-AGENT|HISTORY SUMMARIZATION|DECISIONS ARCHIVE|HEALTH REPORT):/);
-    assert.doesNotMatch(afterAgentTemplate, /squad_state_(?:write|append)[^\n]*(?:orchestration-log|history\.md|log\/)/);
-    assert.match(afterAgentTemplate, /Do not write orchestration logs, session logs, specialist[\s\S]*histories, archival records, or health reports to state/);
+  it("source-of-truth rules preserve existing snapshot records without creating new ones", () => {
+    assert.match(sourceOfTruth, /Snapshot reconciliation may preserve existing append-only histories and logs/);
+    assert.match(sourceOfTruth, /must not manufacture new records/);
+    assert.match(sourceOfTruth, /verifies the persisted merge before deleting inbox sources/);
+    assert.doesNotMatch(sourceOfTruth, /Do not create or preserve specialist histories/);
   });
 });

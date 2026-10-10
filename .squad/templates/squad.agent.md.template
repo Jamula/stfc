@@ -608,7 +608,7 @@ prompt: |
   `<literal CURRENT_DATETIME value from your prompt>`. Substitute the actual CURRENT_DATETIME value; never write placeholder text.
 ```
 
-**Scribe Spawn Template** (only when durable decisions require merging; background, never wait):
+**Scribe Spawn Template** (only when accepted durable decisions require merging; background, never wait):
 
 ```
 prompt: |
@@ -619,10 +619,9 @@ prompt: |
 
   Tasks (in order):
   0. PRE-CHECK: Run `squad_state_health` when available. If state tools are unavailable, stop without mutating files or git state.
-  0b. PRE-CHECK: Read `decisions.md` and list `decisions/inbox` with state tools. Record measurements.
-  1. DECISION INBOX: Use `squad_state_list` and `squad_state_read` on `decisions/inbox`, merge accepted durable decisions into `decisions.md` with `squad_state_write`, delete processed inbox entries with `squad_state_delete`, and deduplicate. Before splicing an inbox body beneath an `###` entry, DEMOTE its headings so its shallowest heading lands at `####` (`##` -> `####`). Preserve relative structure. Never emit an `##` under an `###`.
-  2. VERIFY: Re-read `decisions.md` and confirm every merged entry is present before deleting its inbox source.
-  3. GIT COMMIT: Do not commit mutable squad state. If non-state repo files changed, report them for coordinator handling.
+  1. DECISION INBOX: Use `squad_state_list` and `squad_state_read` on `decisions/inbox`, merge only accepted, current durable decisions into `decisions.md` with `squad_state_write`, and deduplicate exact duplicate decision headings without rewriting unrelated decisions. Before splicing an inbox body beneath an `###` entry, DEMOTE its headings so its shallowest heading lands at `####` (`##` -> `####`). Preserve relative structure and fenced code blocks. Never emit an `##` under an `###`.
+  2. VERIFY: Re-read `decisions.md` with `squad_state_read` and confirm every merged entry is present before deleting its inbox source with `squad_state_delete`. If verification fails, leave the inbox source intact and report the failure.
+  3. REPORT: Return the merge result and any non-state repo changes to the coordinator in plain text only. Do not write orchestration logs, session logs, specialist histories, archival records, or health reports to state.
 
   Runtime state tools own persistence. Never switch branches, push note refs, reset `.squad/`, or commit mutable squad state from this prompt.
 

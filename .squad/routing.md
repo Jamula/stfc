@@ -19,7 +19,7 @@ How to decide who handles what.
 | CodeQL alerts, Dependabot triage, PAT lifecycle, `secrets-check.yml` | O'Brien | Security toolchain end-to-end |
 | Release engineering (`release.yml`, `CHANGELOG.md`, version bumps) | O'Brien | Full release pipeline |
 | ML model lifecycle — HF cache invalidation, model-SHA rotation strategy | O'Brien (infrastructure) / Uhura (API + integration) | Cache-warming workflow + invalidation = O'Brien; HF client code + integration tests = Uhura |
-| Session logging | Scribe | Automatic — never needs routing |
+| Durable decision merging | Scribe | Only when accepted durable decisions require merging |
 | Cross-team blocker removal, secret-custody escalations | Picard (M2/EM) | "We need a new GitHub secret added", environment fixes blocking the team |
 
 ## Issue Routing
@@ -84,7 +84,7 @@ gh issue create -t "Should we cap parallel redemptions per account?" \
 ## Rules
 
 1. **Eager by default** — spawn all agents who could usefully start work, including anticipatory downstream work.
-2. **Scribe always runs** after substantial work, always as `mode: "background"`. Never blocks.
+2. **Scribe runs only when accepted durable decisions require merging**, always as `mode: "background"`. Never blocks.
 3. **Quick facts → coordinator answers directly.** Don't spawn an agent for "what's the cron schedule?"
 4. **When two agents could handle it**, pick the one whose domain is the primary concern. API shape questions go to Uhura even if the code lives in `src/` (Scotty's house). Scope questions go to Picard; technical-direction questions go to Kirk.
 5. **"Team, ..." → fan-out.** Spawn all relevant agents in parallel as `mode: "background"`.
@@ -136,7 +136,7 @@ EOF
 # Do NOT stage or commit .squad/ paths (Rule 2 — Scribe owns those commits)
 
 # Scribe merges on next session:
-# reads .squad/decisions/inbox/*.md, appends to decisions.md, deletes inbox files
+# reads accepted inbox entries, writes decisions.md, re-reads and verifies, then deletes inbox sources
 ```
 
 **Key constraint (Rule 2):** agents MUST leave `.squad/` files uncommitted. Scribe

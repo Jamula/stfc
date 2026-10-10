@@ -11,7 +11,7 @@ source: "Extracted from squad.agent.md as part of the slimming effort (bradygast
 
 ## State backend note
 
-The durable decision record is the only mutable Squad state governed by this hierarchy. Access it with the configured `squad_state_*` tools; the runtime selects the storage backend. Static configuration always lives on disk. Do not create or preserve specialist histories, session logs, orchestration logs, or audit trails as Squad state.
+The durable decision record is the only mutable Squad state governed by this hierarchy. Access it with the configured `squad_state_*` tools; the runtime selects the storage backend. Static configuration always lives on disk. Do not create specialist histories, session logs, orchestration logs, or audit trails as Squad state. Snapshot reconciliation may preserve existing append-only histories and logs; it must not manufacture new records.
 
 ## File hierarchy
 
@@ -31,4 +31,4 @@ The durable decision record is the only mutable Squad state governed by this hie
 1. **If `squad.agent.md` conflicts with another file, `squad.agent.md` wins.** It is the only file with hard governance authority.
 2. **Only accepted durable decisions belong in mutable Squad state.** Do not use the state backend for personal histories, session or orchestration logs, audit trails, communications records, or generated reports.
 3. **Agents may write only to the durable-decision paths listed above, and only through the configured runtime state tools.** Non-local backends reject raw file writes.
-4. **Scribe merges accepted inbox entries into the ledger.** Scribe does not create or maintain specialist histories, logs, or audit trails.
+4. **Scribe merges accepted inbox entries into the ledger.** Scribe verifies the persisted merge before deleting inbox sources and reports failures without consuming them. Scribe does not create or maintain specialist histories, logs, or audit trails; snapshot reconciliation only preserves existing append-only entries.
