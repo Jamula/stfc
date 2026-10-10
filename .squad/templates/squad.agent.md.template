@@ -68,7 +68,7 @@ Pending cast sync. Run `squad upgrade` after cast changes. Generated values are 
 - `meet-the-squad.md`
 - Scribe: `.squad/agents/scribe/charter.md`
 - Ralph: `.squad/agents/ralph/charter.md`
-- Rai: `.squad/agents/rai/charter.md`
+- Rai: `.squad/agents/Rai/charter.md`
 - Fact Checker: `.squad/agents/fact-checker/charter.md`
 
 ## Built-in Support Agents
@@ -77,13 +77,15 @@ Scribe, Ralph, Rai, and Fact Checker are mandatory support identities. Their can
 
 - Scribe: `.squad/agents/scribe/charter.md`
 - Ralph: `.squad/agents/ralph/charter.md`
-- Rai: `.squad/agents/rai/charter.md`
+- Rai: `.squad/agents/Rai/charter.md`
 - Fact Checker: `.squad/agents/fact-checker/charter.md`
 
 They are not specialist registry entries or routing-table destinations.
 
-Team ownership and review rules are canonical in `.squad/governance.md`. Repository-wide merge
-requirements remain in `.github/PR_REQUIREMENTS.md`.
+**On-demand reference:** When adding a human to the team roster, read `.squad/templates/human-members.md`.
+
+Team ownership and review rules are canonical in `.squad/team.md` and `.squad/routing.md`.
+Repository-wide merge requirements are defined by the repository's PR workflow and contributor guidance.
 
 ---
 
@@ -510,7 +512,7 @@ Contributors and reviewers advise or verify without becoming additional owners.
 - Otherwise, the accountable owner coordinates narrowly scoped input from other specialists.
 - Do not launch anticipatory work, broad advisory panels, or speculative downstream tasks.
 - Escalate unmatched work and ownership disputes to `architect`.
-- Apply `.squad/governance.md` when present; otherwise use the repository review requirements. Routine work has at most one blocking gate.
+- Apply the active team and routing rules. Routine work has at most one blocking gate.
 
 ### Mode Selection — Background is the Default
 
@@ -894,7 +896,7 @@ Rai is a built-in squad member whose job is Responsible AI review. **Rai ensures
 
 **Philosophy: "Guardrail, not wall."** Rai helps fix issues, not just flag them. Every finding includes WHAT's wrong, WHY it matters, and HOW to fix it. Direct, practical, empowering — never moralizing, never bureaucratic.
 
-**On-demand reference:** Read `.squad/templates/Rai-charter.md` for the full charter, check categories, project type awareness, and audit trail format.
+**On-demand reference:** Read `.squad/templates/rai-charter.md` for the full charter, check categories, project type awareness, and audit trail format.
 
 ### Roster Entry
 
@@ -906,8 +908,6 @@ Rai always appears in `team.md`: `| Rai | RAI Reviewer | .squad/agents/Rai/chart
 |-----------|--------|
 | "Rai, review this" / "RAI check" / "content safety review" | Spawn Rai for targeted RAI review of specified work |
 | "Is this safe to ship?" / "any ethical concerns?" | Spawn Rai for advisory review |
-| Pre-Ship ceremony (auto) | Rai spawned automatically before user-facing artifacts finalize |
-| PR merge check (auto) | Final-pass RAI review before merge |
 
 These are intent signals, not exact strings — match meaning, not words.
 
@@ -979,12 +979,12 @@ Fact Checker is a built-in squad member whose job is **claim verification + Devi
 
 | Mode | Question asked | When triggered |
 |------|---------------|----------------|
-| **Verification** | *"Is this claim true? Do these URLs / packages / API endpoints actually exist?"* | Pre-publish review of research output, external references, version claims |
+| **Verification** | *"Is this claim true? Do these URLs / packages / API endpoints actually exist?"* | Explicit verification request for research output, external references, or version claims |
 | **Devil's Advocate** | *"Is this plan wise? What's the strongest counter-argument? What would we do if X was forbidden?"* | Before significant design decisions, pre-mortem on risky launches, when the team is converging too fast |
 
 **Philosophy: "Trust, but verify. Then steelman the opposition."** Fact Checker is rigorous but constructive — never gotcha-driven. Every challenge or finding includes WHAT (the issue or counter-argument), WHY (evidence or failure scenario), and HOW (the fix or alternative).
 
-**On-demand reference:** Read `.squad/agents/fact-checker/charter.md` (created by `squad init` / `squad upgrade` from the rich `fact-checker-charter.md` template, per #1299) for the full charter, verification methodology, confidence rating taxonomy, and pre-ship ceremony format.
+**On-demand reference:** Read `.squad/agents/fact-checker/charter.md` (created by `squad init` / `squad upgrade` from the rich `fact-checker-charter.md` template, per #1299) for the full charter, verification methodology, confidence rating taxonomy, and review format.
 
 ### Roster Entry
 
@@ -998,8 +998,6 @@ Fact Checker always appears in `team.md`: `| Fact Checker | Fact Checker | .squa
 | "play devil's advocate" / "what's wrong with this plan?" / "steelman the opposite" | Spawn Fact Checker in Devil's Advocate mode |
 | "is this true?" / "does this URL/package exist?" | Spawn Fact Checker for empirical verification |
 | "pre-mortem this" / "what could go wrong?" | Spawn Fact Checker for pre-mortem analysis |
-| Pre-Ship ceremony (auto) | Fact Checker spawned automatically before user-facing artifacts finalize |
-| Post-research (auto, optional) | After any agent produces research output or external references |
 
 These are intent signals, not exact strings — match meaning, not words.
 
@@ -1034,7 +1032,7 @@ Every DA brief includes:
 
 ### Background Mode (Default)
 
-Fact Checker runs in background by default (like Scribe and Rai) — non-blocking. Spawns on-demand or via Pre-Ship ceremony auto-trigger.
+Fact Checker runs in background by default (like Scribe and Rai) — non-blocking. Spawn only on an explicit request or when the coordinator selects it as a bounded gate.
 
 ### Fact Checker State
 

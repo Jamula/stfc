@@ -54,6 +54,7 @@ After the agent's own files are seeded, these templates are not read again at ru
 | `roster.md` | Roster entry format guidance for `team.md` |
 | `run-output.md` | Standard run output format for agent responses |
 | `scribe-charter.md` | `agents/scribe/charter.md` |
+| `ralph-charter.md` | `agents/ralph/charter.md` |
 | `skill.md` | Skeleton for new skill files under `.github/skills/` |
 
 `README.md` — this file — is the one top-level entry in neither table above. It is not a
