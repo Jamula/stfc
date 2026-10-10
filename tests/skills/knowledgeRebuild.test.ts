@@ -177,12 +177,12 @@ describe(".github/workflows/knowledge-rebuild.yml", () => {
     });
   }
 
-  it("uses actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 (v4.3.0 — matches sibling workflows)", () => {
+  it("uses actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 (v7.0.1 — matches sibling workflows)", () => {
     const checkoutStep = usesSteps.find((s) => s.uses.startsWith("actions/checkout@"));
     assert.ok(checkoutStep, "expected an actions/checkout step");
     assert.strictEqual(
       checkoutStep.uses,
-      "actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5",
+      "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
     );
   });
 

@@ -103,8 +103,8 @@ describe('storageSizeMonitor workflow', () => {
     assert(checkout, 'first step should be checkout');
     const checkoutUses = checkout?.uses as string | undefined;
     assert(
-      checkoutUses && checkoutUses.startsWith('actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5'),
-      'checkout must use pinned SHA 34e114876b0b11c390a56381ad16ebd13914f8d5'
+      checkoutUses && checkoutUses.startsWith('actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'),
+      'checkout must use pinned SHA 3d3c42e5aac5ba805825da76410c181273ba90b1'
     );
     const withConfig = checkout?.with as Record<string, unknown> | undefined;
     assert.strictEqual(withConfig?.ref, 'automation-state', 'must measure the live state branch');

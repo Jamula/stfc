@@ -210,7 +210,7 @@ describe(".github/workflows/discord-register-commands.yml", () => {
     () => {
       assert.match(
         yaml!,
-        /actions\/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5/,
+        /actions\/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1/,
         "checkout SHA must match canonical pin used across this repo",
       );
     },
