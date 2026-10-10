@@ -74,8 +74,8 @@ test("deploy-cloudflare-worker.yml: pinning tests", async (t) => {
 
     const setupNodeStep = steps.find((s) => (s.uses as string)?.includes("actions/setup-node"));
     assert.ok(
-      (setupNodeStep?.uses as string)?.includes("49933ea5288caeca8642d1e84afbd3f7d6820020"),
-      "actions/setup-node pinned to SHA 49933ea5288caeca8642d1e84afbd3f7d6820020 (v4.4.0)"
+      (setupNodeStep?.uses as string)?.includes("820762786026740c76f36085b0efc47a31fe5020"),
+      "actions/setup-node pinned to SHA 820762786026740c76f36085b0efc47a31fe5020 (v7.0.0)"
     );
 
     const wranglerStep = steps.find((s) => (s.uses as string)?.includes("cloudflare/wrangler-action"));
