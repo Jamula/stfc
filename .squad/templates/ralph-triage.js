@@ -428,13 +428,10 @@ function findLeadFallback(roster) {
  * Issues are reachable via the REST API regardless of what a checkout
  * contains.
  *
- * Honesty boundary: this script has a shell (it can spawn
- * check-retro-overdue.mjs as a child process) and a GitHub token, but NO
- * MCP/state-tool access, so it can only evaluate `local`/`worktree`
- * backends end to end. For `orphan`/`two-layer`/`git-notes` it returns
- * `evaluated: false` with an explicit reason rather than fabricating a
- * result — per Garak's instruction not to claim execution where none
- * exists.
+ * Backend note: the retro signal is a GitHub Issue label, which is
+ * independent of the state backend, so every known backend (local,
+ * worktree, orphan, two-layer, git-notes) is evaluated from it. An unknown
+ * backend value fails closed with `evaluated: false`.
  */
 function readStateBackend(squadDir) {
   const configPath = path.join(squadDir, 'config.json');
@@ -454,7 +451,7 @@ function readStateBackend(squadDir) {
   return typeof config.stateBackend === 'string' ? config.stateBackend : 'local';
 }
 
-const RETRO_GATE_LOCAL_BACKENDS = new Set(['local', 'worktree']);
+const RETRO_GATE_KNOWN_BACKENDS = new Set(['local', 'worktree', 'orphan', 'two-layer', 'git-notes']);
 
 // The retro ceremony's postcondition marker: a dedicated label applied to a
 // GitHub Issue ONLY as the final step of a completed retrospective, after
@@ -553,16 +550,8 @@ async function evaluateRetroGate({
     return { evaluated: false, backend: 'unknown', overdue: false, reason: `could not determine stateBackend: ${err.message}` };
   }
 
-  if (!RETRO_GATE_LOCAL_BACKENDS.has(backend)) {
-    return {
-      evaluated: false,
-      backend,
-      overdue: false,
-      reason:
-        `stateBackend "${backend}" cannot be evaluated by this CI dispatcher (no squad_state_list/MCP access from ` +
-        'a plain GitHub Actions Node process) — round-start retro gate is honestly skipped, not fabricated. ' +
-        'See issue #245: this backend requires a coordinator-side evaluation path that does not yet exist.',
-    };
+  if (!RETRO_GATE_KNOWN_BACKENDS.has(backend)) {
+    return { evaluated: false, backend, overdue: false, reason: `unknown stateBackend "${backend}" - round-start retro gate cannot be evaluated (fail closed)` };
   }
 
   let signalDate;
