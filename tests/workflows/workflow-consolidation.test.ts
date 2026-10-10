@@ -43,7 +43,9 @@ const workflows = workflowSources.map(({ file, source }) => ({
       string,
       {
         name?: string;
+        "continue-on-error"?: boolean | string;
         steps?: Array<{
+          "continue-on-error"?: boolean | string;
           run?: string;
           uses?: string;
           "working-directory"?: string;
@@ -783,6 +785,19 @@ describe("workflow consolidation", () => {
       steps.some((step) => step.run?.trim() === "npm run typecheck"),
       "squad-release.yml must run npm run typecheck alongside npm test",
     );
+  });
+
+  it("does not suppress release validation failures after a Squad upgrade", () => {
+    const release = workflows.find(({ file }) => file === "squad-release.yml");
+    assert.ok(release, "squad-release.yml must exist");
+    for (const job of Object.values(release.workflow.jobs ?? {})) {
+      assert.ok(!job["continue-on-error"], "release job failures must propagate");
+      for (const step of job.steps ?? []) {
+        if (["npm ci", "npm test", "npm run typecheck"].includes(step.run?.trim() ?? "")) {
+          assert.ok(!step["continue-on-error"], `${step.run} failures must propagate`);
+        }
+      }
+    }
   });
 
   it("installs locked dependencies before release validation", () => {

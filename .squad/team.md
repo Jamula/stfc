@@ -22,7 +22,7 @@
 | Tuvok | Process Auditor / Editorial Specialist | `.squad/agents/tuvok/charter.md` | ✅ Active |
 | O'Brien | DevOps / Platform Engineer | `.squad/agents/obrien/charter.md` | ✅ Active |
 | @copilot | 🤖 Coding Agent — Autonomous Coding Agent (model: —) — see capability profile below | (GitHub Copilot coding agent — assigned via `gh issue edit --add-assignee Copilot`) | ✅ Active |
-| Scribe | Session Logger | `.squad/agents/scribe/charter.md` | 📋 Silent |
+| Scribe | Decision Merger | `.squad/agents/scribe/charter.md` | 📋 Silent |
 | Ralph | Work Monitor | `.squad/agents/ralph/charter.md` | 🔄 Monitor |
 
 ### @copilot capability profile

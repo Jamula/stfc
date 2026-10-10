@@ -1,16 +1,26 @@
 {
+  "schema": "squad-agent-provenance/v1",
+  "schema_version": 1,
+  "revision": 1,
+  "generated_at": "2026-10-10T20:30:26.035Z",
   "agents": {
     "picard": {
       "persistent_name": "Picard",
       "universe": "Star Trek",
       "role": "M2 / Engineering Manager",
       "previous_roles": [
-        { "role": "Lead", "from": "2026-05-08T21:09:39-07:00", "to": "2026-05-16T20:50:30-07:00" }
+        {
+          "role": "Lead",
+          "from": "2026-05-08T21:09:39-07:00",
+          "to": "2026-05-16T20:50:30-07:00"
+        }
       ],
       "role_change_reason": "User-requested role swap with Kirk for consistency with other squads where EM is above Lead",
       "created_at": "2026-05-08T21:09:39-07:00",
       "legacy_named": false,
-      "status": "active"
+      "status": "active",
+      "display_name": "Picard",
+      "updated_at": "2026-05-08T21:09:39-07:00"
     },
     "kirk": {
       "persistent_name": "Kirk",
@@ -20,7 +30,9 @@
       "legacy_named": false,
       "status": "active",
       "expansion_type": "diegetic",
-      "joined_reason": "User-requested role swap with Picard — Kirk takes technical Lead, Picard becomes M2/EM (boss)"
+      "joined_reason": "User-requested role swap with Picard — Kirk takes technical Lead, Picard becomes M2/EM (boss)",
+      "display_name": "Kirk",
+      "updated_at": "2026-05-16T20:50:30-07:00"
     },
     "scotty": {
       "persistent_name": "Scotty",
@@ -28,7 +40,9 @@
       "role": "Core Dev",
       "created_at": "2026-05-08T21:09:39-07:00",
       "legacy_named": false,
-      "status": "active"
+      "status": "active",
+      "display_name": "Scotty",
+      "updated_at": "2026-05-08T21:09:39-07:00"
     },
     "uhura": {
       "persistent_name": "Uhura",
@@ -36,7 +50,9 @@
       "role": "Integrations Dev",
       "created_at": "2026-05-08T21:09:39-07:00",
       "legacy_named": false,
-      "status": "active"
+      "status": "active",
+      "display_name": "Uhura",
+      "updated_at": "2026-05-08T21:09:39-07:00"
     },
     "bashir": {
       "persistent_name": "Bashir",
@@ -44,7 +60,9 @@
       "role": "Tester",
       "created_at": "2026-05-08T21:09:39-07:00",
       "legacy_named": false,
-      "status": "active"
+      "status": "active",
+      "display_name": "Bashir",
+      "updated_at": "2026-05-08T21:09:39-07:00"
     },
     "borg-queen": {
       "persistent_name": "Borg Queen",
@@ -55,7 +73,9 @@
       "retirement_reason": "User-requested swap with Garak — Critic seat transferred for consistency with other squads",
       "successor": "garak",
       "legacy_named": false,
-      "status": "retired"
+      "status": "retired",
+      "display_name": "Borg Queen",
+      "updated_at": "2026-05-16T20:55:00-07:00"
     },
     "garak": {
       "persistent_name": "Garak",
@@ -67,7 +87,9 @@
       "legacy_named": false,
       "status": "active",
       "expansion_type": "diegetic",
-      "joined_reason": "User-requested swap with Borg Queen — Critic seat transferred for consistency with cyrusj's other squad where Garak holds the Critic role"
+      "joined_reason": "User-requested swap with Borg Queen — Critic seat transferred for consistency with cyrusj's other squad where Garak holds the Critic role",
+      "display_name": "Garak",
+      "updated_at": "2026-05-16T20:55:00-07:00"
     },
     "tuvok": {
       "persistent_name": "Tuvok",
@@ -77,7 +99,9 @@
       "legacy_named": false,
       "status": "active",
       "expansion_type": "diegetic",
-      "joined_reason": "Editorial specialist recruited to break constitutional revision deadlock (Picard/Uhura/Scotty/Bashir locked out under reviewer-rejection protocol)"
+      "joined_reason": "Editorial specialist recruited to break constitutional revision deadlock (Picard/Uhura/Scotty/Bashir locked out under reviewer-rejection protocol)",
+      "display_name": "Tuvok",
+      "updated_at": "2026-05-08T21:29:58-07:00"
     },
     "scribe": {
       "persistent_name": "Scribe",
@@ -86,7 +110,9 @@
       "created_at": "2026-05-08T21:09:39-07:00",
       "legacy_named": true,
       "status": "active",
-      "notes": "Backfilled 2026-05-18 — audit flagged missing registry entry. Predates the Star Trek casting decision; role is mechanical (no character), kept legacy_named to avoid forcing a Trek rename on a pure-utility role."
+      "notes": "Backfilled 2026-05-18 — audit flagged missing registry entry. Predates the Star Trek casting decision; role is mechanical (no character), kept legacy_named to avoid forcing a Trek rename on a pure-utility role.",
+      "display_name": "Scribe",
+      "updated_at": "2026-05-08T21:09:39-07:00"
     },
     "ralph": {
       "persistent_name": "Ralph",
@@ -95,7 +121,9 @@
       "created_at": "2026-05-08T21:09:39-07:00",
       "legacy_named": true,
       "status": "active",
-      "notes": "Backfilled 2026-05-18 — audit flagged missing registry entry. Pure-monitor / scan-loop role, not LLM-driven in the usual sense; kept legacy_named for the same reason as Scribe."
+      "notes": "Backfilled 2026-05-18 — audit flagged missing registry entry. Pure-monitor / scan-loop role, not LLM-driven in the usual sense; kept legacy_named for the same reason as Scribe.",
+      "display_name": "Ralph",
+      "updated_at": "2026-05-08T21:09:39-07:00"
     },
     "obrien": {
       "persistent_name": "O'Brien",
@@ -105,7 +133,10 @@
       "legacy_named": false,
       "status": "active",
       "expansion_type": "diegetic",
-      "joined_reason": "Hired to consolidate four orphaned ownership concerns (workflow ownership ambiguity R7, Platform/Tooling vacuum R11, Security toolchain, Release engineering R13) into one accountable charter, per audit-resolution decisions on issues #65/#66 (2026-05-18 structured-form user responses). Chief-of-Operations archetype chosen for the literal DevOps fit."
+      "joined_reason": "Hired to consolidate four orphaned ownership concerns (workflow ownership ambiguity R7, Platform/Tooling vacuum R11, Security toolchain, Release engineering R13) into one accountable charter, per audit-resolution decisions on issues #65/#66 (2026-05-18 structured-form user responses). Chief-of-Operations archetype chosen for the literal DevOps fit.",
+      "display_name": "O'Brien",
+      "updated_at": "2026-05-18T00:57:58.675+00:00"
     }
-  }
+  },
+  "transaction_id": "3705a846-5734-4ff6-bc9d-4dc36500bd14"
 }

@@ -145,3 +145,58 @@ describe("Squad coordinator — MCP bridge configuration", () => {
     assert.deepEqual(server["tools"], ["*"]);
   });
 });
+
+
+describe("Squad upgrade template regression coverage", () => {
+  const coordinator = readFile(".github/agents/squad.agent.md");
+  const sourceOfTruth = readFile(
+    ".github/skills/coordinator-source-of-truth/SKILL.md",
+  );
+  const templateReadme = readFile(".squad/templates/README.md");
+  const coordinatorTemplate = readFile(
+    ".squad/templates/squad.agent.md.template",
+  );
+
+  it("keeps installed skills synchronized with their upgrade sources", () => {
+    for (const skill of [
+      "reflect",
+      "reviewer-protocol",
+      "test-discipline",
+      "tiered-memory",
+    ]) {
+      assert.equal(
+        readFile(`.github/skills/${skill}/SKILL.md`),
+        readFile(`.squad/templates/skills/${skill}/SKILL.md`),
+        `${skill} must remain synchronized with its upgrade template`,
+      );
+    }
+  });
+
+  it("uses tracked Rai paths and documented bootstrap sources", () => {
+    for (const document of [coordinator, coordinatorTemplate]) {
+      assert.ok(document.includes(".squad/agents/Rai/charter.md"));
+      assert.ok(!document.includes(".squad/agents/rai/charter.md"));
+      assert.ok(!document.includes(".squad/governance.md"));
+      assert.ok(!document.includes(".github/PR_REQUIREMENTS.md"));
+    }
+    assert.match(templateReadme, /\| `ralph-charter\.md` \| `agents\/ralph\/charter\.md` \|/);
+    assert.match(templateReadme, /\| `human-members\.md` \| Coordinator \| Adding a human to the team roster \|/);
+  });
+
+  it("keeps support-agent activation and state ownership bounded", () => {
+    for (const document of [coordinator, coordinatorTemplate]) {
+      assert.ok(!document.includes("Pre-Ship ceremony (auto)"));
+      assert.ok(!document.includes("Post-research (auto"));
+    }
+    assert.ok(sourceOfTruth.includes("only mutable Squad state"));
+    assert.ok(sourceOfTruth.includes("Do not create specialist histories"));
+    assert.ok(sourceOfTruth.includes("Snapshot reconciliation may preserve existing append-only histories and logs"));
+    assert.ok(sourceOfTruth.includes("must not manufacture new records"));
+  });
+
+  it("preserves the pre-upgrade coordinator as the local backup", () => {
+    const backup = readFile(".github/agents/squad.agent.md.local-backup");
+    assert.match(backup, /<!-- version: 0\.13\.1 -->/);
+    assert.notEqual(backup, coordinator);
+  });
+});

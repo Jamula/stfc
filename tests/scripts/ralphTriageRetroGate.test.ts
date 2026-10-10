@@ -93,6 +93,15 @@ describe("ralph-triage.js and squad-heartbeat.yml integration", () => {
     .readFileSync(path.join(repoRoot, ".github", "workflows", "squad-heartbeat.yml"), "utf8")
     .replace(/\r\n/g, "\n");
 
+  it("keeps the installed dispatcher API callable after a Squad upgrade", () => {
+    for (const name of [
+      "evaluateRetroGate", "buildTriageQueue", "runRound", "readStateBackend",
+      "fetchLatestRetroCompletionDate", "validateOverdueResult",
+    ] as const) {
+      assert.equal(typeof ralphTriage[name], "function", `${name} must remain exported`);
+    }
+  });
+
   it("uses the dispatcher's JSON artifact as a fail-closed retro-gate input", () => {
     assert.match(
       heartbeatWorkflow,
@@ -416,14 +425,33 @@ describe("ralph-triage.js: evaluateRetroGate — real spawn boundary, satisfiabl
     }
   });
 
-  it("honestly reports evaluated:false (never fabricated) for a non-local backend", async () => {
+  it("evaluates a governed backend (two-layer) from the backend-independent GitHub issue signal", async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "ralph-triage-"));
     try {
       const squadDir = makeSquadDir(root, "two-layer");
+      const result = await ralphTriage.evaluateRetroGate({
+        repoRoot,
+        squadDir,
+        owner: "o",
+        repo: "r",
+        token: "t",
+        fetchRetroSignalImpl: async () => new Date().toISOString().slice(0, 19) + "Z",
+      });
+      assert.equal(result.evaluated, true);
+      assert.equal(result.overdue, false);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("honestly reports evaluated:false (never fabricated) for an unknown backend", async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "ralph-triage-"));
+    try {
+      const squadDir = makeSquadDir(root, "bogus-backend");
       const result = await ralphTriage.evaluateRetroGate({ repoRoot, squadDir, owner: "o", repo: "r", token: "t" });
       assert.equal(result.evaluated, false);
-      assert.equal(result.overdue, false, "an unevaluated gate must never report overdue:true either — it must be visibly unevaluated");
-      assert.match(result.reason ?? "", /cannot be evaluated/);
+      assert.equal(result.overdue, false, "an unevaluated gate must never report overdue:true either - it must be visibly unevaluated");
+      assert.match(result.reason ?? "", /unknown stateBackend/);
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
     }
@@ -604,10 +632,10 @@ describe("ralph-triage.js: runRound — the REAL main()-level entry point, execu
     }
   });
 
-  it("fail-closed: an UNEVALUATED gate (non-local backend) also blocks the round via runRound — not just a confirmed overdue", async () => {
+  it("fail-closed: an UNEVALUATED gate (unknown backend) also blocks the round via runRound — not just a confirmed overdue", async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "ralph-round-"));
     try {
-      const squadDir = makeSquadDir(root, "two-layer");
+      const squadDir = makeSquadDir(root, "bogus-backend");
       setupTeamFiles(squadDir);
 
       let fetchSquadIssuesCalled = false;

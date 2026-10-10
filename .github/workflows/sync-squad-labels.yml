@@ -152,7 +152,18 @@ jobs:
               { name: 'priority:p2', color: 'FBCA04', description: 'Next sprint' }
             ];
 
-            function slugify(t) { return t.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''); }
+            function slugify(t) { return t.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, ''); }
+            function assertUniqueMemberSlugs(teamMembers) {
+              const memberBySlug = new Map();
+              for (const member of teamMembers) {
+                const slug = slugify(member.name);
+                if (memberBySlug.has(slug)) {
+                  throw new Error(`Squad member label slug "${slug}" is ambiguous: "${memberBySlug.get(slug)}" and "${member.name}"`);
+                }
+                memberBySlug.set(slug, member.name);
+              }
+            }
+            assertUniqueMemberSlugs(members);
 
             // Ensure the base "squad" triage label exists
             const labels = [
@@ -183,6 +194,14 @@ jobs:
             labels.push(...TYPE_LABELS);
             labels.push(...PRIORITY_LABELS);
             labels.push(...SIGNAL_LABELS);
+
+            // GitHub rejects label descriptions over 100 characters (HTTP 422)
+            const MAX_LABEL_DESCRIPTION = 100;
+            for (const label of labels) {
+              if (label.description && label.description.length > MAX_LABEL_DESCRIPTION) {
+                label.description = label.description.slice(0, MAX_LABEL_DESCRIPTION - 1) + '…';
+              }
+            }
 
             // Sync labels (create or update)
             for (const label of labels) {

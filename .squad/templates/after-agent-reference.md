@@ -7,9 +7,9 @@
      (2) "Server Error Retry Loop" — context overflow after fan-out. Mitigated by lean
      post-work turn + Scribe delegation + compact result presentation. -->
 
-**⚡ Keep the post-work turn LEAN.** Coordinator's job: (1) present compact results, (2) spawn Scribe. That's ALL. No orchestration logs, no decision consolidation, no heavy file I/O.
+**⚡ Keep the post-work turn LEAN.** Coordinator's job: (1) present compact results, (2) spawn Scribe only when accepted durable decisions require merging. That's ALL. No orchestration logs, no decision consolidation, no heavy file I/O.
 
-**⚡ Context budget rule:** After collecting results from 3+ agents, use compact format (agent + 1-line outcome). Full details go in orchestration log via Scribe.
+**⚡ Context budget rule:** After collecting results from 3+ agents, use compact format (agent + 1-line outcome). Report follow-up details to the coordinator without creating state records.
 
 After each batch of agent work:
 
@@ -22,14 +22,14 @@ After each batch of agent work:
 
 3. **Show compact results:** `{emoji} {Name} — {1-line summary of what they did}`
 
-4. **Spawn Scribe** (background, never wait). Only if agents ran or inbox has files:
+4. **Spawn Scribe** (background, never wait). Only when accepted durable decisions require merging:
 
 ```
 agent_type: "general-purpose"
 model: "claude-haiku-4.5"
 mode: "background"
 name: "scribe"
-description: "📋 Scribe: Log session & merge decisions"
+description: "📋 Scribe: Merge durable decisions"
 prompt: |
   You are the Scribe. Read .squad/agents/scribe/charter.md.
   TEAM ROOT: {team_root}
@@ -41,17 +41,19 @@ prompt: |
   Tasks (in order):
   0. PRE-CHECK: Run `squad_state_health` when available. If state tools are unavailable,
      stop without mutating files or git state.
-  0b. PRE-CHECK: Read `decisions.md` and list `decisions/inbox` with state tools.
-     Record measurements.
-  1. DECISIONS ARCHIVE [HARD GATE]: If decisions.md >= 20480 bytes, archive entries older than 30 days NOW. If >= 51200 bytes, archive entries older than 7 days. Do not skip this step.
-  2. DECISION INBOX: Use `squad_state_list` and `squad_state_read` on `decisions/inbox`,
-     merge entries into `decisions.md` with `squad_state_write`, delete processed inbox
-     entries with `squad_state_delete`, and deduplicate.
-  3. ORCHESTRATION LOG: Write `orchestration-log/{timestamp}-{agent}.md` with `squad_state_write` per agent. Use ISO 8601 UTC timestamp. Replace `:` with `-` in `{timestamp}` so filenames are valid on all platforms (e.g. `2026-06-02T21-15-30Z`).
-  4. SESSION LOG: Write `log/{timestamp}-{topic}.md` with `squad_state_write`. Brief. Use ISO 8601 UTC timestamp. Replace `:` with `-` in `{timestamp}` so filenames are valid on all platforms.
-  5. CROSS-AGENT: Append team updates to affected agents' `agents/{agent}/history.md` with `squad_state_append`.
-  6. HISTORY SUMMARIZATION [HARD GATE]: If any history.md >= 15360 bytes (15KB), summarize now.
-  7. HEALTH REPORT: Log decisions.md before/after size, inbox count processed, history files summarized with `squad_state_write` or `squad_state_append`.
+  1. DECISION INBOX: Use `squad_state_list` and `squad_state_read` on `decisions/inbox`,
+     merge only accepted, current durable decisions into `decisions.md` with
+     `squad_state_write`, and deduplicate exact duplicate decision headings without
+     rewriting unrelated decisions. Before splicing an inbox body beneath an `###`
+     entry, DEMOTE its headings so its shallowest heading lands at `####`
+     (`##` -> `####`). Preserve relative structure and fenced code blocks.
+     Never emit an `##` under an `###`.
+  2. VERIFY: Re-read `decisions.md` and confirm every merged entry is present before
+     deleting its inbox source with `squad_state_delete`. If verification fails,
+     leave the inbox source intact and report the failure.
+  3. REPORT: Return the merge result and any non-state repo changes to the coordinator
+     in plain text only. Do not write orchestration logs, session logs, specialist
+     histories, archival records, or health reports to state.
 
   Runtime state tools own persistence. Never switch branches, push note refs, reset
   `.squad/`, or commit mutable squad state from this prompt.

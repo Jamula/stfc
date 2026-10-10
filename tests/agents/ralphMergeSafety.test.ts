@@ -272,6 +272,16 @@ describe("Merge safety — ralph-reference.md (issue #220)", () => {
 });
 
 describe("Merge safety — issue-lifecycle.md (issue #220)", () => {
+  it("the PR Merge trigger is a current-conversation user request, not approval plus CI", () => {
+    const mergeSection = issueLifecycle.split("### 6. PR Merge")[1]?.split("### 7.")[0];
+    assert.ok(mergeSection, "PR Merge section must exist");
+    const trigger = mergeSection.split("\n").find((line) => line.startsWith("**Trigger:**"));
+    assert.ok(trigger, "PR Merge must declare its trigger");
+    assert.match(trigger, /The user explicitly asks, in the current conversation, for a specific PR to be merged/);
+    assert.match(trigger, /Reviewer approval and CI passing are prerequisites/);
+    assert.match(trigger, /they are never automatic triggers on their own/);
+  });
+
   it("PR Merge section requires an explicit user request, not just approval + CI", () => {
     assert.match(
       issueLifecycle,
@@ -788,5 +798,38 @@ describe("Merge safety — .squad/templates/copilot-instructions.md is pinned to
       extractBullet(copilotInstructions),
       "templates/copilot-instructions.md's merge-safety bullet must match .github/copilot-instructions.md exactly, so regeneration cannot drop or drift from the invariant",
     );
+  });
+});
+
+describe("Copilot instructions — repository Project Guide survives Squad upgrades", () => {
+  it("keeps repository facts and operational guidance below the Squad instructions", () => {
+    const guide = copilotInstructions.split("# Project Guide\n")[1];
+    assert.ok(guide, "Squad regeneration must not remove the repository Project Guide");
+    for (const heading of [
+      "## Repository facts",
+      "## Build, test, and typecheck",
+      "## Git hooks",
+      "## Architecture",
+      "## Conventions",
+    ]) {
+      assert.ok(guide.includes(heading), `Project Guide must retain ${heading}`);
+    }
+    for (const invariant of [
+      "Jamula/stfc",
+      ".nvmrc` (currently `24`)",
+      "`npm test` and `npm run typecheck` are **two independent gates**",
+      "tests/index.test.ts",
+      ".d.mts",
+      "**`src/`**",
+      "**`api/`**",
+      "**`web/`**",
+      "**`worker/`**",
+      "Never read `.env` or echo a token",
+      "**Cross-platform.**",
+      "shell: true",
+      "normalize CRLF",
+    ]) {
+      assert.ok(guide.includes(invariant), `Project Guide must retain: ${invariant}`);
+    }
   });
 });
