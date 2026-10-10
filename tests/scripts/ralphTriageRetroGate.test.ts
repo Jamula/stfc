@@ -93,6 +93,15 @@ describe("ralph-triage.js and squad-heartbeat.yml integration", () => {
     .readFileSync(path.join(repoRoot, ".github", "workflows", "squad-heartbeat.yml"), "utf8")
     .replace(/\r\n/g, "\n");
 
+  it("keeps the installed dispatcher API callable after a Squad upgrade", () => {
+    for (const name of [
+      "evaluateRetroGate", "buildTriageQueue", "runRound", "readStateBackend",
+      "fetchLatestRetroCompletionDate", "validateOverdueResult",
+    ] as const) {
+      assert.equal(typeof ralphTriage[name], "function", `${name} must remain exported`);
+    }
+  });
+
   it("uses the dispatcher's JSON artifact as a fail-closed retro-gate input", () => {
     assert.match(
       heartbeatWorkflow,

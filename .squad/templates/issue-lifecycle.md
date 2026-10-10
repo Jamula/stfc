@@ -171,7 +171,7 @@ git push -u origin squad/{issue-number}-{slug}
 **Trigger:** Agent completes implementation and is ready for review.
 
 **Actions:**
-1. Open PR from feature branch to base branch
+1. Open PR from feature branch to base branch — issue-session/Ralph/coordinator-initiated PRs open as `--draft` by default (defense in depth per issue #220; the `gh pr ready` handoff below still requires an explicit user request, since draft status alone was proven insufficient)
 2. Reference issue in PR description
 3. Apply labels if needed
 4. Transition issue to `needsReview` state
@@ -180,7 +180,7 @@ git push -u origin squad/{issue-number}-{slug}
 
 **GitHub:**
 ```bash
-gh pr create --title "{title}" \
+gh pr create --draft --title "{title}" \
   --body "Closes #{issue-number}\n\n{description}" \
   --head squad/{issue-number}-{slug} \
   --base main
@@ -241,10 +241,13 @@ git push
 ```bash
 gh pr ready {pr-number}
 ```
+**⚠️ Only run `gh pr ready` when the user has explicitly requested it in the current conversation (issue #220) — do not un-draft a PR automatically because review or CI state changed.**
 
 ### 6. PR Merge
 
-**Trigger:** PR is approved and CI passes.
+**⚠️ Merge safety (2026-08-24, issue #220):** Agents, Ralph, and the coordinator open and monitor PRs but never execute this section on their own initiative. `gh pr merge`, `gh pr merge --auto`, and `gh pr ready` on a PR opened by an issue session, Ralph, or the coordinator require an explicit user request in the current, active conversation. Reviewer approval and green CI make a PR eligible for merge — they do not authorize the merge by themselves. This is a hard invariant: four PRs (#215–#217, #219) were merged automatically before required CI could even start and before any review existed; draft-PR status alone was later proven insufficient to prevent this.
+
+**Trigger:** The user explicitly asks, in the current conversation, for a specific PR to be merged. Reviewer approval and CI passing are prerequisites a human checks before asking — they are never automatic triggers on their own.
 
 **Merge strategies:**
 
@@ -315,7 +318,7 @@ When spawning an agent to work on an issue, include this context block:
 2. Push branch
 3. Open PR using:
    ```
-   gh pr create --title "{title}" --body "Closes #{number}\n\n{description}" --head squad/{issue-number}-{slug} --base {base-branch}
+   gh pr create --draft --title "{title}" --body "Closes #{number}\n\n{description}" --head squad/{issue-number}-{slug} --base {base-branch}
    ```
 4. Report PR URL to coordinator
 ```
@@ -327,8 +330,8 @@ Ralph (the work monitor) continuously checks issue and PR state:
 1. **Triage:** Detects untriaged issues, assigns `squad:{member}` labels
 2. **Spawn:** Launches agents for assigned issues
 3. **Monitor:** Tracks PR state transitions (needsReview → changesRequested → readyToMerge)
-4. **Merge:** Automatically merges approved PRs
-5. **Cleanup:** Marks issues as done when PRs merge
+4. **Surface:** Reports approved + CI-green PRs as merge-ready; does **not** merge automatically (issue #220 — see PR Merge safety note above)
+5. **Cleanup:** Marks issues as done when PRs merge (after an explicit user merge request)
 
 **Ralph's work-check cycle:**
 ```
@@ -344,8 +347,8 @@ See `.squad/templates/ralph-reference.md` for Ralph's full lifecycle.
 If the project has no human reviewers configured:
 1. PR opens
 2. CI runs
-3. If CI passes, Ralph auto-merges
-4. Issue closes
+3. If CI passes, Ralph reports the PR as merge-ready and waits for an explicit user merge request (issue #220)
+4. Issue closes once the user requests the merge
 
 ### Human Review Required
 
@@ -353,7 +356,7 @@ If the project requires human approval:
 1. PR opens
 2. Human reviewer is notified (GitHub/ADO notifications)
 3. Reviewer approves or requests changes
-4. If approved + CI passes, Ralph merges
+4. If approved + CI passes, Ralph reports the PR as merge-ready and waits for an explicit user merge request (issue #220)
 5. If changes requested, agent addresses feedback
 
 ### Squad Member Review
@@ -368,14 +371,14 @@ If the issue was assigned to a squad member and they authored the PR:
 ### Pattern 1: Quick Fix (Single Agent, No Review)
 ```
 Issue created → Assigned to agent → Branch created → Code fixed → 
-PR opened → CI passes → Auto-merged → Issue closed
+PR opened → CI passes → User requests merge → Merged → Issue closed
 ```
 
 ### Pattern 2: Feature Development (Human Review)
 ```
 Issue created → Assigned to agent → Branch created → Feature implemented → 
 PR opened → Human reviews → Changes requested → Agent fixes → 
-Re-reviewed → Approved → Merged → Issue closed
+Re-reviewed → Approved → User requests merge → Merged → Issue closed
 ```
 
 ### Pattern 3: Research-Then-Implement
@@ -398,6 +401,7 @@ All PRs reviewed → All PRs merged → Epic closed
 - ❌ Committing without issue reference in message
 - ❌ Opening PRs without "Closes #{number}" in description
 - ❌ Merging PRs before CI passes
+- ❌ Merging PRs, enabling auto-merge, or marking a draft PR ready without an explicit user request in the current conversation (issue #220)
 - ❌ Leaving feature branches undeleted after merge
 - ❌ Using `checkout -b` when parallel agents are active (causes working directory conflicts)
 - ❌ Manually transitioning issue states — let the platform and Squad automation handle it

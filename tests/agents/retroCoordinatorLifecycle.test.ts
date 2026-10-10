@@ -114,6 +114,16 @@ describe("round-start retro gate — the real dispatcher (squad-heartbeat.yml �
     assert.match(content, /const canProceed = retroGate\.evaluated === true && retroGate\.overdue === false;/);
   });
 
+  it("keeps the active and installed heartbeat retro-gate implementation synchronized", () => {
+    const gateBlock = (workflow: string) => {
+      const start = workflow.indexOf("      - name: Ralph — Check retro gate");
+      const end = workflow.indexOf("      - name: Ralph — Apply triage decisions", start);
+      assert.ok(start >= 0 && end > start, "heartbeat must include its retro gate before applying triage");
+      return workflow.slice(start, end);
+    };
+    assert.equal(gateBlock(read(heartbeatWorkflowPath)), gateBlock(read(installedHeartbeatWorkflowPath)));
+  });
+
   it("squad-heartbeat.yml consumes the { retroGate, results, canProceed } shape (not a bare array) written by ralph-triage.js", () => {
     const workflow = read(heartbeatWorkflowPath);
     assert.match(workflow, /canProceed = data\.canProceed === true/);
