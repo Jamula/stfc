@@ -1,6 +1,6 @@
 ---
 name: "git-workflow"
-description: "Squad branch workflow for Jamula/stfc: main-only development"
+description: "Squad branching model: dev-first workflow with insiders preview channel"
 domain: "version-control"
 confidence: "high"
 source: "team-decision"
@@ -8,17 +8,13 @@ source: "team-decision"
 
 ## Context
 
-Jamula/stfc uses a **main-only** branch model. The repository does not have persistent `dev`, `preview`, `insider`, or `insiders` branches, and issue and pull-request work targets `main` directly.
+Squad uses a three-branch model. **All feature work starts from `dev`, not `main`.**
 
 | Branch | Purpose | Publishes |
 |--------|---------|-----------|
-| `main` | Default branch for feature work, fixes, scheduled workflows, and releases | Release workflows and scheduled automation run from main |
-
-## Recorded Decision
-
-- **Picard (scope):** Retire the dormant multi-branch promotion path for this repository and document `main` as the supported branch model.
-- **Kirk (technical):** Do not implement code or workflow paths that depend on persistent `dev`, `preview`, `insider`, or `insiders` refs unless a future architecture decision first defines branch creation, protection, validation, rollback, and ownership.
-- **O'Brien (operations):** Keep CI and release workflows aligned with the refs that actually exist on the remote. Retired promotion, preview, docs, insider, and legacy CI workflow templates must stay absent so operators cannot dispatch an unreachable release train.
+| `main` | Released, tagged, in-npm code only | `npm publish` on tag |
+| `dev` | Integration branch — all feature work lands here | `npm publish --tag preview` on merge |
+| `insiders` | Early-access channel — synced from dev | `npm publish --tag insiders` on sync |
 
 ## Branch Naming Convention
 
@@ -30,10 +26,10 @@ Examples:
 
 ## Workflow for Issue Work
 
-1. **Branch from main:**
+1. **Branch from dev:**
    ```bash
-   git checkout main
-   git pull origin main
+   git checkout dev
+   git pull origin dev
    git checkout -b squad/{issue-number}-{slug}
    ```
 
@@ -42,24 +38,23 @@ Examples:
    gh issue edit {number} --add-label "status:in-progress"
    ```
 
-3. **Create draft PR targeting main:**
+3. **Create draft PR targeting dev:**
    ```bash
-   gh pr create --base main --title "{description}" --body "Closes #{issue-number}" --draft
+   gh pr create --base dev --title "{description}" --body "Closes #{issue-number}" --draft
    ```
 
 4. **Do the work.** Make changes, write tests, commit with issue reference.
 
-5. **Push:**
+5. **Push and mark ready:**
    ```bash
    git push -u origin squad/{issue-number}-{slug}
+   gh pr ready
    ```
 
-5a. **Mark ready for review (explicit-request only, issue #220):** `gh pr ready` is a handoff action, not a normal workflow step. Do **not** run it automatically after pushing. Only run `gh pr ready` when the user explicitly requests that exact action in the current, active conversation — a prior turn, stale context, or an inference from CI/review status never authorizes it. Until that request happens, leave the PR in draft and report that it is ready for review.
-
-6. **After merge to main:**
+6. **After merge to dev:**
    ```bash
-   git checkout main
-   git pull origin main
+   git checkout dev
+   git pull origin dev
    git branch -d squad/{issue-number}-{slug}
    git push origin --delete squad/{issue-number}-{slug}
    ```
@@ -78,22 +73,22 @@ When the coordinator routes multiple issues simultaneously (e.g., "fix bugs X, Y
 
 ### Setup
 
-From the main clone:
+From the main clone (must be on dev or any branch):
 
 ```bash
-# Ensure main is current
-git fetch origin main
+# Ensure dev is current
+git fetch origin dev
 
 # Create a worktree per issue — siblings to the main clone
-git worktree add ../stfc-195 -b squad/195-fix-stamp-bug origin/main
-git worktree add ../stfc-193 -b squad/193-refactor-loader origin/main
+git worktree add ../squad-195 -b squad/195-fix-stamp-bug origin/dev
+git worktree add ../squad-193 -b squad/193-refactor-loader origin/dev
 ```
 
-**Naming convention:** `../{repo-name}-{issue-number}` (e.g., `../stfc-195`, `../stfc-pr-42`).
+**Naming convention:** `../{repo-name}-{issue-number}` (e.g., `../squad-195`, `../squad-pr-42`).
 
 Each worktree:
 - Has its own working directory and index
-- Is on its own `squad/{issue-number}-{slug}` branch from main
+- Is on its own `squad/{issue-number}-{slug}` branch from dev
 - Shares the same `.git` object store (disk-efficient)
 
 ### Per-Worktree Agent Workflow
@@ -101,87 +96,47 @@ Each worktree:
 Each agent operates inside its worktree exactly like the single-issue workflow:
 
 ```bash
-cd ../stfc-195
+cd ../squad-195
 
-# Work normally — commits, tests, pushes
-git add -A && git commit -m "fix: stamp bug (#195)"
+# Stage only the files changed for this issue, then inspect the commit contents
+git add -- path/to/intentionally-changed-file
+git diff --cached --stat
+git diff --cached
+git commit -m "fix: stamp bug (#195)"
 git push -u origin squad/195-fix-stamp-bug
 
-# Create PR targeting main
-gh pr create --base main --title "fix: stamp bug" --body "Closes #195" --draft
+# Create PR targeting dev
+gh pr create --base dev --title "fix: stamp bug" --body "Closes #195" --draft
 ```
 
-All PRs target `main` independently. Agents never interfere with each other's filesystem.
+All PRs target `dev` independently. Agents never interfere with each other's filesystem.
 
 ### .squad/ State in Worktrees
 
 The `.squad/` directory exists in each worktree as a copy. This is safe because:
 - `.gitattributes` declares `merge=union` on append-only files (history.md, decisions.md, logs)
-- Each agent appends to its own section; union merge reconciles on PR merge to main
+- Each agent appends to its own section; union merge reconciles on PR merge to dev
 - **Rule:** Never rewrite or reorder `.squad/` files in a worktree — append only
 
 ### Cleanup After Merge
 
-After a worktree's PR is merged to main:
-
-Before removing it, preserve any uncommitted `.squad/` state in a unique
-staging directory under `.squad/worktree-inbox/`. Stage a complete snapshot
-instead of copying over the main checkout's state, and never reuse an existing
-destination. Scribe consumes these snapshots before deleting them.
-
-On Linux or macOS:
+After a worktree's PR is merged to dev:
 
 ```bash
-source="../stfc-195/.squad"
-snapshot=".squad/worktree-inbox/stfc-195"
-set -e
-test -d "$source"
-test ! -e "$snapshot" || { echo "Choose a new snapshot path" >&2; exit 1; }
-head_sha=$(git -C ../stfc-195 rev-parse HEAD)
-mkdir -p "$snapshot/squad"
-cp -a "$source/." "$snapshot/squad/"
-printf '{"worktree_id":"stfc-195","head_sha":"%s"}\n' "$head_sha" > "$snapshot/manifest.json"
-diff -qr "$source" "$snapshot/squad"
-```
-
-On Windows PowerShell:
-
-```powershell
-$source = "..\stfc-195\.squad"
-$snapshot = ".squad\worktree-inbox\stfc-195"
-if (-not (Test-Path -LiteralPath $source)) { throw "Missing .squad source" }
-if (Test-Path -LiteralPath $snapshot) { throw "Choose a new snapshot path" }
-$headSha = git -C ..\stfc-195 rev-parse HEAD
-if ($LASTEXITCODE -ne 0 -or -not $headSha) { throw "Failed to read worktree HEAD" }
-$squadSnapshot = Join-Path $snapshot "squad"
-New-Item -ItemType Directory -Path $squadSnapshot -Force | Out-Null
-$manifest = @{ worktree_id = "stfc-195"; head_sha = $headSha } | ConvertTo-Json -Compress
-Set-Content -LiteralPath (Join-Path $snapshot "manifest.json") -Value $manifest -Encoding utf8
-robocopy $source $squadSnapshot /E /COPY:DAT /DCOPY:DAT
-if ($LASTEXITCODE -ge 8) { throw "Failed to preserve .squad artifacts" }
-robocopy $source $squadSnapshot /E /COPY:DAT /DCOPY:DAT /L /NJH /NJS /NDL /NFL
-if ($LASTEXITCODE -ne 0) { throw "Snapshot verification found differences" }
-```
-
-```bash
-# From the main clone. Preserve any non-.squad changes before force-removing.
-git -C ../stfc-195 status --short
-git worktree remove --force ../stfc-195
+# From the main clone
+git worktree remove ../squad-195
 git worktree prune          # clean stale metadata
 git branch -d squad/195-fix-stamp-bug
 git push origin --delete squad/195-fix-stamp-bug
 ```
 
-Do not force-remove a worktree until the snapshot is verified and any
-non-`.squad/` uncommitted changes are preserved separately. If a worktree was
-deleted manually, `git worktree prune` recovers the metadata but cannot
-recover its files.
+If a worktree was deleted manually (rm -rf), `git worktree prune` recovers the state.
 
 ---
 
 ## Multi-Repo Downstream Scenarios
 
-When work spans multiple repositories (for example, an external tool or app depends on Jamula/stfc):
+When work spans multiple repositories (e.g., squad-cli changes need squad-sdk changes, or a user's app depends on squad):
 
 ### Setup
 
@@ -189,8 +144,8 @@ Clone downstream repos as siblings to the main repo:
 
 ```
 ~/work/
-  stfc/              # main repo
-  downstream-sdk/    # downstream dependency
+  squad-pr/          # main repo
+  squad-sdk/         # downstream dependency
   user-app/          # consumer project
 ```
 
@@ -203,9 +158,9 @@ Each repo gets its own issue branch following its own naming convention. If the 
   ```
   Closes #42
 
-  **Depends on:** downstream-sdk PR #17 (downstream changes required for this feature)
+  **Depends on:** squad-sdk PR #17 (squad-sdk changes required for this feature)
   ```
-- Merge order: dependencies first, then dependents.
+- Merge order: dependencies first (e.g., squad-sdk), then dependents (e.g., squad-cli)
 
 ### Local Linking for Testing
 
@@ -213,15 +168,15 @@ Before pushing, verify cross-repo changes work together:
 
 ```bash
 # Node.js / npm
-cd ../downstream-sdk && npm link
-cd ../stfc && npm link downstream-sdk
+cd ../squad-sdk && npm link
+cd ../squad-pr && npm link squad-sdk
 
 # Go
 # Use replace directive in go.mod:
-# replace github.com/org/downstream-sdk => ../downstream-sdk
+# replace github.com/org/squad-sdk => ../squad-sdk
 
 # Python
-cd ../downstream-sdk && pip install -e .
+cd ../squad-sdk && pip install -e .
 ```
 
 **Important:** Remove local links before committing. `npm link` and `go replace` are dev-only — CI must use published packages or PR-specific refs.
@@ -237,16 +192,16 @@ These compose naturally. You can have:
 
 ## Anti-Patterns
 
-- ❌ Branching from missing persistent refs such as `dev`, `preview`, `insider`, or `insiders`
-- ❌ PRs targeting missing persistent refs instead of `main`
-- ❌ Non-conforming branch names (must be `squad/{number}-{slug}`)
-- ❌ Committing directly to main (use PRs)
+- ❌ Branching from main (branch from dev)
+- ❌ PR targeting main directly (target dev)
+- ❌ Non-conforming branch names (must be squad/{number}-{slug})
+- ❌ Committing directly to main or dev (use PRs)
 - ❌ Switching branches in the main clone while worktrees are active (use worktrees instead)
 - ❌ Using worktrees for cross-repo work (use separate clones)
 - ❌ Leaving stale worktrees after PR merge (clean up immediately)
 
-## Release and Promotion
+## Promotion Pipeline
 
-- There is no supported multi-branch promotion train in Jamula/stfc.
-- Release and scheduled workflows must be defined against branches that exist, primarily `main`.
-- A future multi-branch release train requires an explicit decision and specification before creating branches or changing workflow behavior.
+- dev → insiders: Automated sync on green build
+- dev → main: Manual merge when ready for stable release, then tag
+- Hotfixes: Branch from main as `hotfix/{slug}`, PR to dev, cherry-pick to main if urgent

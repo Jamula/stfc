@@ -65,22 +65,3 @@ After completing work on each issue:
 
 If you are blocked on an issue, comment on it explaining why, add a `status:blocked`
 label, and move to the next actionable item.  Do not halt the loop.
-
-### Merge Safety (hard constraint, issue #220)
-
-Ralph opens PRs, drafts PRs, and reports on PR/CI/review state. **Ralph must never
-call `gh pr merge`, enable auto-merge, or run `gh pr ready` on its own initiative** —
-not on CI-green alone, not on reviewer-approval alone, not on both together.
-
-The only sanctioned merge path: the user, in this same active conversation,
-explicitly asks for a specific PR to be merged or marked ready (e.g. "merge PR #42",
-"mark #42 ready"). Absent that explicit instruction, treat every PR — including
-reviewer-approved, CI-green ones — as **report-only**: summarize its state and move
-on to the next item in the loop.
-
-This safeguard exists because four PRs (#215, #216, #217, #219) were merged by an
-automated session before required CI could even start (account-billing block,
-issue #218) and before any review existed. Draft-PR status alone was proven
-insufficient — external automation still merged already-drafted PRs. Treat this as
-fail-loud: if you are ever unsure whether the user asked for a merge in *this*
-conversation, do not merge — surface the PR and ask instead.
