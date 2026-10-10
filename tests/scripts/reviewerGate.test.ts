@@ -74,6 +74,28 @@ describe("reviewer gate policy", () => {
     assert.match(result.errors.join("\n"), /declare at least one/);
   });
 
+  it("does not require Squad reviewer lanes for Dependabot pull requests", () => {
+    const result = evaluateReviewerGate({
+      prBody: "# Automated dependency update",
+      headSha: HEAD,
+      comments: [],
+      pullRequestAuthor: "dependabot[bot]",
+    });
+    assert.equal(result.ok, true);
+    assert.equal(result.state, "success");
+    assert.deepEqual(result.requiredLanes, []);
+  });
+
+  it("does not extend the Dependabot exemption to other authors", () => {
+    const result = evaluateReviewerGate({
+      prBody: "# Automated dependency update",
+      headSha: HEAD,
+      comments: [],
+      pullRequestAuthor: "dependabot",
+    });
+    assert.equal(result.ok, false);
+  });
+
   it("passes only when every required lane approves the current head", () => {
     const result = evaluateReviewerGate({
       prBody: prBody("Kirk", "Garak"),
@@ -222,6 +244,50 @@ describe("reviewer gate policy", () => {
 });
 
 describe("reviewer gate GitHub adapter", () => {
+  it("publishes success for Dependabot pull requests without reviewer lanes", async () => {
+    const requests: Array<{ url: string; method: string; body: unknown }> = [];
+    const fetchImpl: typeof fetch = async (input, init) => {
+      const url = String(input);
+      requests.push({
+        url,
+        method: init?.method ?? "GET",
+        body: init?.body ? JSON.parse(String(init.body)) : null,
+      });
+      if (url.endsWith("/pulls/220")) {
+        return new Response(
+          JSON.stringify({
+            body: "Automated dependency update",
+            head: { sha: HEAD },
+            user: { login: "dependabot[bot]" },
+          }),
+          { status: 200 },
+        );
+      }
+      if (url.includes("/issues/220/comments")) {
+        return new Response("[]", { status: 200 });
+      }
+      if (url.endsWith(`/statuses/${HEAD}`)) {
+        return new Response("{}", { status: 201 });
+      }
+      return new Response("not found", { status: 404 });
+    };
+
+    const result = await runReviewerGate({
+      eventPayload: { pull_request: { number: 220 } },
+      token: "fake-token",
+      repository: "Jamula/stfc",
+      fetchImpl,
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.state, "success");
+    assert.deepEqual(requests.at(-1)?.body, {
+      state: "success",
+      context: REVIEW_GATE_CONTEXT,
+      description: result.description,
+    });
+  });
+
   it("publishes failure on the exact current head SHA", async () => {
     const requests: Array<{ url: string; method: string; body: unknown }> = [];
     const fetchImpl: typeof fetch = async (input, init) => {
@@ -336,6 +402,10 @@ describe("reviewer gate documentation contract", () => {
   it("requires reviewer lanes in the PR template", () => {
     assert.match(template, /## Reviewer lanes/);
     assert.match(template, /\*\*<Reviewer>\*\*/);
+    assert.match(
+      runbook,
+      /Dependabot pull requests do not require Squad reviewer lanes/,
+    );
   });
 
   it("documents SHA binding, trust limits, break glass, and deferred ruleset mutation", () => {

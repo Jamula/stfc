@@ -78,13 +78,29 @@ function compareVerdicts(left, right) {
   return left.commentId.localeCompare(right.commentId);
 }
 
-export function evaluateReviewerGate({ prBody, headSha, comments }) {
+export function evaluateReviewerGate({
+  prBody,
+  headSha,
+  comments,
+  pullRequestAuthor,
+}) {
   const normalizedHead = String(headSha ?? "").toLowerCase();
   if (!/^[0-9a-f]{40}$/.test(normalizedHead)) {
     throw new Error("Reviewer gate requires the PR's full 40-character head SHA.");
   }
   if (!Array.isArray(comments)) {
     throw new Error("Reviewer gate requires an issue-comment array.");
+  }
+  if (pullRequestAuthor === "dependabot[bot]") {
+    return {
+      ok: true,
+      state: "success",
+      description: "Reviewer verdicts are not required for Dependabot pull requests.",
+      headSha: normalizedHead,
+      requiredLanes: [],
+      laneResults: [],
+      errors: [],
+    };
   }
 
   const requiredLanes = extractReviewerLanes(prBody);
@@ -262,6 +278,7 @@ export async function runReviewerGate({
       prBody: pull?.body ?? "",
       headSha,
       comments,
+      pullRequestAuthor: pull?.user?.login,
     });
   } catch (error) {
     if (/^[0-9a-f]{40}$/i.test(headSha ?? "")) {

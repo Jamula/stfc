@@ -6,7 +6,7 @@ or identity security boundary.
 
 ## Verdict contract
 
-Every pull request must declare its required reviewers:
+Every non-Dependabot pull request must declare its required reviewers:
 
 ```markdown
 ## Reviewer lanes
@@ -36,6 +36,10 @@ verdict; post a new verdict comment when the decision changes.
 Missing reviewer lanes, placeholder lane names, malformed verdict comments,
 stale SHAs, missing verdicts, and latest `CHANGES_REQUESTED` verdicts all fail
 closed.
+
+Dependabot pull requests do not require Squad reviewer lanes and receive a
+successful gate status. This exemption is limited to pull requests whose
+GitHub API author login is exactly `dependabot[bot]`.
 
 ## Trusted execution path
 

@@ -38,6 +38,7 @@ export function evaluateReviewerGate(input: {
   prBody: string | null | undefined;
   headSha: string;
   comments: IssueComment[];
+  pullRequestAuthor?: string | null;
 }): ReviewerGateResult;
 export function getPullRequestNumber(eventPayload: unknown): number;
 export function runReviewerGate(input: {
