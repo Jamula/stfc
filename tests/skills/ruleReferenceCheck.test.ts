@@ -23,7 +23,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 
 // SHA pinned in workflow — must match bit-for-bit.
-const CHECKOUT_SHA = "34e114876b0b11c390a56381ad16ebd13914f8d5";
+const CHECKOUT_SHA = "3d3c42e5aac5ba805825da76410c181273ba90b1";
 
 const yamlPath = path.resolve(
   import.meta.dirname,

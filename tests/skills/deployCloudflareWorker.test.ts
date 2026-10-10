@@ -68,8 +68,8 @@ test("deploy-cloudflare-worker.yml: pinning tests", async (t) => {
 
     const checkoutStep = steps.find((s) => (s.uses as string)?.includes("actions/checkout"));
     assert.ok(
-      (checkoutStep?.uses as string)?.includes("34e114876b0b11c390a56381ad16ebd13914f8d5"),
-      "actions/checkout pinned to SHA 34e114876b0b11c390a56381ad16ebd13914f8d5 (v4.3.0)"
+      (checkoutStep?.uses as string)?.includes("3d3c42e5aac5ba805825da76410c181273ba90b1"),
+      "actions/checkout pinned to SHA 3d3c42e5aac5ba805825da76410c181273ba90b1 (v7.0.1)"
     );
 
     const setupNodeStep = steps.find((s) => (s.uses as string)?.includes("actions/setup-node"));
