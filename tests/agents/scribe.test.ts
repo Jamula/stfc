@@ -19,6 +19,10 @@ const scribeTemplate = readFileSync(
   resolve(process.cwd(), ".squad/templates/scribe-charter.md"),
   "utf-8",
 );
+const afterAgentTemplate = readFileSync(
+  resolve(process.cwd(), ".squad/templates/after-agent-reference.md"),
+  "utf-8",
+);
 const rules = readFileSync(
   resolve(process.cwd(), ".github/copilot-instructions.md"),
   "utf-8",
@@ -162,5 +166,23 @@ describe("Scribe — routing rules", () => {
       routing.includes("Never blocks"),
       'Routing should say Scribe "Never blocks"',
     );
+  });
+});
+
+describe("Scribe — post-agent spawn template", () => {
+  it("limits activation and tasks to accepted durable decision merging", () => {
+    assert.match(afterAgentTemplate, /Only when accepted durable decisions require merging/);
+    assert.match(afterAgentTemplate, /merge only accepted, current durable decisions/);
+    assert.match(afterAgentTemplate, /deduplicate exact duplicate decision headings/);
+    assert.match(afterAgentTemplate, /Preserve relative structure and fenced code blocks/);
+    assert.match(afterAgentTemplate, /confirm every merged entry is present before[\s\S]*deleting its inbox source/);
+    assert.match(afterAgentTemplate, /leave the inbox source intact and report the failure/);
+    assert.match(afterAgentTemplate, /in plain text only/);
+  });
+
+  it("does not assign logging, history, archival, or state health-report writes", () => {
+    assert.doesNotMatch(afterAgentTemplate, /(?:ORCHESTRATION LOG|SESSION LOG|CROSS-AGENT|HISTORY SUMMARIZATION|DECISIONS ARCHIVE|HEALTH REPORT):/);
+    assert.doesNotMatch(afterAgentTemplate, /squad_state_(?:write|append)[^\n]*(?:orchestration-log|history\.md|log\/)/);
+    assert.match(afterAgentTemplate, /Do not write orchestration logs, session logs, specialist[\s\S]*histories, archival records, or health reports to state/);
   });
 });
