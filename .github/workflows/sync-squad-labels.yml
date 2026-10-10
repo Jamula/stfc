@@ -195,6 +195,14 @@ jobs:
             labels.push(...PRIORITY_LABELS);
             labels.push(...SIGNAL_LABELS);
 
+            // GitHub rejects label descriptions over 100 characters (HTTP 422)
+            const MAX_LABEL_DESCRIPTION = 100;
+            for (const label of labels) {
+              if (label.description && label.description.length > MAX_LABEL_DESCRIPTION) {
+                label.description = label.description.slice(0, MAX_LABEL_DESCRIPTION - 1) + '…';
+              }
+            }
+
             // Sync labels (create or update)
             for (const label of labels) {
               try {
