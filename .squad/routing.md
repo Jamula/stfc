@@ -83,14 +83,14 @@ gh issue create -t "Should we cap parallel redemptions per account?" \
 
 ## Rules
 
-1. **Eager by default** — spawn all agents who could usefully start work, including anticipatory downstream work.
+1. **One accountable owner per outcome** — route each work item to exactly one specialist; split only for independently deliverable outcomes with distinct owners. No anticipatory or speculative spawns.
 2. **Scribe runs only when accepted durable decisions require merging**, always as `mode: "background"`. Never blocks.
 3. **Quick facts → coordinator answers directly.** Don't spawn an agent for "what's the cron schedule?"
 4. **When two agents could handle it**, pick the one whose domain is the primary concern. API shape questions go to Uhura even if the code lives in `src/` (Scotty's house). Scope questions go to Picard; technical-direction questions go to Kirk.
-5. **"Team, ..." → fan-out.** Spawn all relevant agents in parallel as `mode: "background"`.
-6. **Anticipate downstream work.** If Uhura is changing an API contract, spawn Bashir to update fixtures simultaneously.
+5. **"Team, ..." requests** — decompose into independently deliverable outcomes and route each to its own owner; run in parallel as `mode: "background"` only when the outcomes are independent.
+6. **Bounded collaboration.** The owner may request a contributor for a concrete subproblem (for example Bashir for fixtures after an Uhura API contract change) once that need exists; do not pre-spawn.
 7. **Issue-labeled work** — when a `squad:{member}` label is applied to an issue, route to that member. Picard (M2/EM) handles all `squad` (base label) triage; he may delegate technical sub-triage to Kirk.
-8. **Garak as default critique** — for non-trivial proposals, spawn Garak alongside the implementer to challenge assumptions in parallel. The team decides; he informs. (Seat previously held by Borg Queen through 2026-05-16.)
+8. **Garak critique on request or gate** — spawn Garak when a user asks for critique or a gate below requires it, not by default alongside the implementer. The team decides; he informs. (Seat previously held by Borg Queen through 2026-05-16.)
 9. **Garak hard-gate (2026-05-18, audit #64)** — every `feat(*)` PR that touches `src/` MUST include a Garak adversarial review BEFORE merge. Garak's verdict is recorded via `gh pr comment` with the `**APPROVE** ✅` / `**CHANGES_REQUESTED** ⚠️` header per Rule 9b. Kirk's technical review and Garak's adversarial review are **independent gates — both required**. A `feat(*) src/` PR does not become **merge-ready** until both verdicts are posted as APPROVE and CI is green — and merge-ready is not merged: merging still requires an explicit user request in the current, active conversation under #220. No numbered "Rule 7" merge-authorization rule exists in this repo; do not imply one.
 10. **Bashir reviewer-gate escalation (2026-05-18, audit #63)** — when Bashir rejects a PR on coverage grounds (per `bashir/charter.md:17`), the Coordinator routes the revision to a **different** agent per the Reviewer Rejection Protocol. If the coverage gap is in product code → Scotty/Uhura; if it's in test infrastructure (workflows, test runner config, pin tests) → O'Brien. The original author does not get to "just add the tests themselves" — that defeats the reviewer-lockout.
 11. **Discord direction precedence (2026-05-18, audit #67)** — for work under `src/discord/`: architecture and refactor decisions route to **Kirk** (module boundaries, contract shapes, dependency choices); integration / protocol / Discord-API-shape work routes to **Uhura** (auth flow, message-format parsing, rate-limit handling). When in doubt, Kirk decides whose work it is; Picard handles cross-cutting scope.

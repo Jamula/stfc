@@ -11,7 +11,7 @@ source: "Extracted from squad.agent.md as part of the slimming effort (bradygast
 
 ## State backend note
 
-The durable decision record is the only mutable Squad state governed by this hierarchy. Access it with the configured `squad_state_*` tools; the runtime selects the storage backend. Static configuration always lives on disk. Do not create specialist histories, session logs, orchestration logs, or audit trails as Squad state. Snapshot reconciliation may preserve existing append-only histories and logs; it must not manufacture new records.
+The durable decision record is the only mutable Squad state written through the state bridge. Casting registry files are CLI-owned configuration (see the table), not bridge state. Access it with the configured `squad_state_*` tools; the runtime selects the storage backend. Static configuration always lives on disk. Do not create specialist histories, session logs, orchestration logs, or audit trails as Squad state. Snapshot reconciliation may preserve existing append-only histories and logs; it must not manufacture new records.
 
 ## File hierarchy
 
@@ -24,6 +24,7 @@ The durable decision record is the only mutable Squad state governed by this hie
 | `.squad/decisions.md` | **Authoritative durable decision ledger.** Accepted scope, architecture, and process decisions. | Scribe through runtime state tools, after coordinator acceptance | All agents |
 | `.squad/agents/{name}/charter.md` | **Authoritative agent identity.** Per-agent role and boundaries. | Squad (Coordinator) at creation; agents may not self-modify | Squad (Coordinator) and owning agent |
 | `.squad/templates/` | **Reference.** Bootstrap and on-demand format guides; not authoritative for enforcement. | Squad (Coordinator) at init | Squad (Coordinator) |
+| `.squad/casting/registry.json`, `policy.json`, `history.json` | **Authoritative cast registry.** Persistent agent names and status. Not decision state: changed only by `squad` CLI commands (`squad upgrade`, add/remove member flows), never by hand-written raw writes from agents. | Squad CLI on behalf of Squad (Coordinator) | Squad (Coordinator) |
 | `.squad/plugins/marketplaces.json` | **Authoritative plugin config.** Registered marketplace sources. | Squad CLI (`squad plugin marketplace`) | Squad (Coordinator) |
 
 ## Rules
