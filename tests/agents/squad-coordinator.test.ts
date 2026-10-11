@@ -189,8 +189,14 @@ describe("Squad upgrade template regression coverage", () => {
       assert.ok(!document.includes("Pre-Ship ceremony (auto)"));
       assert.ok(!document.includes("Post-research (auto"));
     }
-    assert.ok(sourceOfTruth.includes("only mutable Squad state"));
-    assert.ok(sourceOfTruth.includes("Do not create specialist histories"));
+    // PR #314 review (comment 4239919415): the skill previously claimed the
+    // decision ledger was the *only* mutable Squad state, contradicting
+    // squad.agent.md and .squad/reference/source-of-truth.md, which also
+    // route casting history and agent history archives through state tools.
+    // The corrected text scopes mutable state to the full table instead of
+    // decisions alone, while still forbidding ad hoc new categories.
+    assert.ok(sourceOfTruth.includes("Mutable Squad state is not limited to the decision ledger"));
+    assert.ok(sourceOfTruth.includes("Do not invent new specialist histories"));
     assert.ok(sourceOfTruth.includes("Snapshot reconciliation may preserve existing append-only histories and logs"));
     assert.ok(sourceOfTruth.includes("must not manufacture new records"));
   });
