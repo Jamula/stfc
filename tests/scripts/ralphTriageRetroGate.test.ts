@@ -93,6 +93,13 @@ describe("ralph-triage.js and squad-heartbeat.yml integration", () => {
     .readFileSync(path.join(repoRoot, ".github", "workflows", "squad-heartbeat.yml"), "utf8")
     .replace(/\r\n/g, "\n");
 
+  it("surfaces guarded assignment and discovery failures as failed workflow results (#220)", () => {
+    const assignment = heartbeatWorkflow.slice(heartbeatWorkflow.indexOf("      - name: Ralph — Assign @copilot issues"));
+    assert.match(assignment, /core\.setFailed\(`Guarded assignment failed/);
+    assert.match(assignment, /core\.setFailed\(`Could not evaluate @copilot assignments/);
+    assert.doesNotMatch(assignment, /No squad:copilot label found or error/);
+  });
+
   it("keeps the installed dispatcher API callable after a Squad upgrade", () => {
     for (const name of [
       "evaluateRetroGate", "buildTriageQueue", "runRound", "readStateBackend",

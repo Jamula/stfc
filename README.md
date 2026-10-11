@@ -165,6 +165,11 @@ explicit user request is still required. See [the verdict contract and
 enforcement limits](docs/REVIEWER-GATE.md) for the exact comment format and
 break-glass runbook.
 
+For issue-session and Ralph operation while the unidentified landing path in
+[#220](https://github.com/Jamula/stfc/issues/220) remains unresolved, follow the
+[PR landing safety runbook](docs/PR-LANDING-SAFETY.md). Assignment prompts are
+guarded; host-side enforcement and post-idle acceptance still need owner evidence.
+
 ---
 
 The CI workflow runs:

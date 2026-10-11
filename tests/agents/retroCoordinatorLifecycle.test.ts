@@ -87,6 +87,16 @@ describe("round-start retro gate — honest scoping of the interactive coordinat
 });
 
 describe("round-start retro gate — the real dispatcher (squad-heartbeat.yml → ralph-triage.js)", () => {
+  it("keeps open-PR-only assignment instructions behind the retro gate in both copies (#220)", () => {
+    for (const workflowPath of [heartbeatWorkflowPath, installedHeartbeatWorkflowPath]) {
+      const workflow = read(workflowPath);
+      const assignment = workflow.slice(workflow.indexOf("      - name: Ralph — Assign @copilot issues"));
+      assert.match(assignment, /steps\.retro-gate\.outputs\.can_proceed == 'true'/);
+      assert.match(assignment, /custom_instructions: \[[\s\S]*Open a draft PR and stop \(#220\)/);
+      assert.doesNotMatch(assignment, /addAssignees/);
+    }
+  });
+
   it("ralph-triage.js exists, is not a symlink, and exports the gate/queue/round functions", () => {
     assert.ok(fs.existsSync(ralphTriagePath));
     const st = fs.lstatSync(ralphTriagePath);
