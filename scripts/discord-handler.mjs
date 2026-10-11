@@ -8,7 +8,7 @@ import path from "node:path";
 import net from "node:net";
 import { createHash, createHmac } from "node:crypto";
 import { fileURLToPath } from "node:url";
-import { reconcileAutomationStateAfterPushFailure } from "./automation-state-retry.mjs";
+import { isAutomationStateCommitPublished, reconcileAutomationStateAfterPushFailure } from "./automation-state-retry.mjs";
 
 const execFileAsync = promisify(execFile);
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -393,13 +393,16 @@ export async function updateDailyIndexAtomic({
   return doc;
 }
 
-async function readDailyManifest(manifestPath, readFileImpl) {
+async function readDailyManifest(manifestPath, readFileImpl, bucket) {
+  if (typeof bucket !== "string" || bucket.length === 0) {
+    throw new Error("daily manifest requires a non-empty bucket");
+  }
   let raw;
   try {
     raw = await readFileImpl(manifestPath, "utf8");
   } catch (error) {
     if (error?.code === "ENOENT") {
-      return { version: 1, bucket: GAME_STATE_R2_BUCKET, files: [] };
+      return { version: 1, bucket, files: [] };
     }
     throw error;
   }
@@ -424,9 +427,13 @@ async function readDailyManifest(manifestPath, readFileImpl) {
   if (parsed.bucket !== undefined && typeof parsed.bucket !== "string") {
     throw new Error("daily manifest is malformed: invalid bucket");
   }
+  const manifestBucket = parsed.bucket ?? parsed.files[0]?.r2_bucket ?? bucket;
+  if (manifestBucket !== bucket || parsed.files.some((file) => file.r2_bucket !== manifestBucket)) {
+    throw new Error("daily manifest bucket mismatch: keep the existing bucket for this day; migrate objects explicitly before changing it");
+  }
   return {
     version: parsed.version ?? 1,
-    bucket: parsed.bucket ?? GAME_STATE_R2_BUCKET,
+    bucket: manifestBucket,
     files: parsed.files,
   };
 }
@@ -438,7 +445,7 @@ export async function updateDailyManifestAtomic({
   writeFileImpl = writeFile,
   renameImpl = rename,
 }) {
-  const doc = await readDailyManifest(manifestPath, readFileImpl);
+  const doc = await readDailyManifest(manifestPath, readFileImpl, entry.r2_bucket);
   doc.files.push(entry);
   await writeDailyJsonAtomic(manifestPath, doc, writeFileImpl, renameImpl);
   return doc;
@@ -620,7 +627,7 @@ export async function handleGameStateCommand({
       size_bytes: Number(attachment.size),
     },
   );
-  const manifestDoc = await readDailyManifest(manifestPath, readFileImpl);
+  const manifestDoc = await readDailyManifest(manifestPath, readFileImpl, r2Config.bucket);
 
   await mkdirImpl(outDir, { recursive: true });
   const { buffer, responseContentType } = await downloadDiscordAttachment({ attachment, fetchImpl });
@@ -659,6 +666,7 @@ export async function handleGameStateCommand({
   };
 
   let commitPushed = false;
+  let publicationUncertain = false;
   try {
     await writeFileImpl(lineagePath, `${JSON.stringify(lineage, null, 2)}\n`, "utf8");
     await writeDailyJsonAtomic(indexPath, indexDoc, writeFileImpl, renameImpl);
@@ -698,12 +706,32 @@ export async function handleGameStateCommand({
     await runGit(["commit", "--no-verify", "-F", "-"], { stdin: `${commitMessage}\n` });
 
     const doPush = async () => {
-      await runGit(["push", "--no-verify", "origin", `HEAD:${ref}`]);
+      const commit = (await runGit(["rev-parse", "HEAD"])).trim();
+      try {
+        await runGit(["push", "--no-verify", "origin", `HEAD:${ref}`]);
+      } catch (error) {
+        try {
+          commitPushed = await isAutomationStateCommitPublished({
+            stateDir: process.cwd(),
+            ref,
+            commit,
+            runGitImpl: runGit,
+          });
+        } catch (confirmationError) {
+          publicationUncertain = true;
+          throw new Error(
+            `Game-state publication uncertain; preserved R2 object ${upload.bucket}/${upload.key}: ${confirmationError instanceof Error ? confirmationError.message : String(confirmationError)}`,
+            { cause: new AggregateError([error, confirmationError]) },
+          );
+        }
+        if (!commitPushed) throw error;
+      }
     };
 
     try {
       await doPush();
     } catch (error) {
+      if (publicationUncertain) throw error;
       const message = error instanceof Error ? error.message : String(error);
       if (/non-fast-forward|fetch first|rejected/i.test(message)) {
         await reconcileAutomationStateImpl({
@@ -718,7 +746,7 @@ export async function handleGameStateCommand({
     }
     commitPushed = true;
   } catch (error) {
-    if (!commitPushed) {
+    if (!commitPushed && !publicationUncertain) {
       try {
         await deleteR2Object({ config: r2Config, key: r2Key, fetchImpl, now: nowFn() });
       } catch (cleanupError) {
@@ -920,7 +948,7 @@ function runCommand(command, args, { stdin } = {}) {
         resolve(stdout);
       } else {
         const suffix = stderr.trim() ? `: ${stderr.trim()}` : "";
-        reject(new Error(`${command} ${args.join(" ")} failed${suffix}`));
+        reject(Object.assign(new Error(`${command} ${args.join(" ")} failed${suffix}`), { code }));
       }
     });
 

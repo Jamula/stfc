@@ -704,7 +704,7 @@ can resolve to `stfc-gift-redeemer` omits `queue: max`, leaves the default
 `single`, or pairs `queue: max` with `cancel-in-progress: true`.
 
 **Game-state storage.** `/game-state` stores the binary attachment in the
-Cloudflare R2 bucket `stfc-game-state` using R2's auto-region S3-compatible
+Cloudflare R2 bucket `stfc-game-state` (or `STFC_GAME_STATE_R2_BUCKET`) using R2's auto-region S3-compatible
 endpoint. The repository keeps only small, diff-friendly metadata under each
 daily `data/discord/game-state/YYYY-MM-DD/` folder:
 
@@ -718,6 +718,18 @@ daily `data/discord/game-state/YYYY-MM-DD/` folder:
 Game-state blobs are not staged into git after the R2 upload succeeds. Access is
 recorded as `signed-url-required`; if R2 spend becomes undesirable, the existing
 LFS fallback remains a Plan B rather than the active path.
+
+Each daily manifest declares the effective bucket, and every entry must match
+that bucket. Changing buckets within a day fails before download/upload or
+metadata writes; existing objects are never relabeled. Keep that day's bucket
+or explicitly migrate its objects and metadata before switching. A missing
+legacy bucket field is inferred only from consistent entry locations.
+
+After a failed git push, the handler fetches the remote state and checks whether
+it contains the attempted commit. A lost acknowledgement of a published commit
+counts as success. Confirmed unpublished uploads may be rolled back; if remote
+publication cannot be determined, the object is preserved and the handler
+reports its bucket/key and fails loudly for operator reconciliation.
 
 `discord-monitor.yml` additionally never stages `data/discord/game-state`
 (`scripts/discord-monitor-state.mjs` copies only its own allowlisted files),

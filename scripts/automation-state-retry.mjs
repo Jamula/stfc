@@ -100,16 +100,35 @@ async function hasStagedChanges(stateDir) {
   }
 }
 
+async function fetchAutomationState(stateDir, remote, ref, gitImpl) {
+  await gitImpl(["-C", stateDir, "fetch", remote, `refs/heads/${ref}:refs/remotes/${remote}/${ref}`]);
+  return `${remote}/${ref}`;
+}
+
+export async function isAutomationStateCommitPublished({
+  stateDir,
+  ref,
+  commit,
+  remote = "origin",
+  runGitImpl = runGit,
+}) {
+  const remoteRef = await fetchAutomationState(stateDir, remote, ref, runGitImpl);
+  try {
+    await runGitImpl(["-C", stateDir, "merge-base", "--is-ancestor", commit, remoteRef]);
+    return true;
+  } catch (error) {
+    if (error?.code === 1) return false;
+    throw error;
+  }
+}
+
 export async function reconcileAutomationStateAfterPushFailure({
   stateDir,
   ref,
   relativePaths,
   remote = "origin",
 }) {
-  const remoteRef = `${remote}/${ref}`;
-  await runGit(
-    ["-C", stateDir, "fetch", remote, `refs/heads/${ref}:refs/remotes/${remote}/${ref}`],
-  );
+  const remoteRef = await fetchAutomationState(stateDir, remote, ref, runGit);
 
   const headLine = await runGit(["-C", stateDir, "rev-list", "--parents", "-n", "1", "HEAD"]);
   const isRootCommit = headLine.split(/\s+/).length === 1;
