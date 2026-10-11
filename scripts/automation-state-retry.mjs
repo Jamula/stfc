@@ -38,7 +38,6 @@ async function runGit(args, { cwd } = {}) {
     cwd,
     env: gitEnvironment(),
     encoding: "utf8",
-    env: gitEnvironment(),
   });
   return stdout.trim();
 }
@@ -93,11 +92,32 @@ async function hasStagedChanges(stateDir) {
     await execFileAsync("git", ["-C", stateDir, "diff", "--cached", "--quiet"], {
       env: gitEnvironment(),
       encoding: "utf8",
-      env: gitEnvironment(),
     });
     return false;
   } catch (error) {
     if (typeof error === "object" && error && "code" in error && error.code === 1) return true;
+    throw error;
+  }
+}
+
+async function fetchAutomationState(stateDir, remote, ref, gitImpl) {
+  await gitImpl(["-C", stateDir, "fetch", remote, `refs/heads/${ref}:refs/remotes/${remote}/${ref}`]);
+  return `${remote}/${ref}`;
+}
+
+export async function isAutomationStateCommitPublished({
+  stateDir,
+  ref,
+  commit,
+  remote = "origin",
+  runGitImpl = runGit,
+}) {
+  const remoteRef = await fetchAutomationState(stateDir, remote, ref, runGitImpl);
+  try {
+    await runGitImpl(["-C", stateDir, "merge-base", "--is-ancestor", commit, remoteRef]);
+    return true;
+  } catch (error) {
+    if (error?.code === 1) return false;
     throw error;
   }
 }
@@ -108,10 +128,7 @@ export async function reconcileAutomationStateAfterPushFailure({
   relativePaths,
   remote = "origin",
 }) {
-  const remoteRef = `${remote}/${ref}`;
-  await runGit(
-    ["-C", stateDir, "fetch", remote, `refs/heads/${ref}:refs/remotes/${remote}/${ref}`],
-  );
+  const remoteRef = await fetchAutomationState(stateDir, remote, ref, runGit);
 
   const headLine = await runGit(["-C", stateDir, "rev-list", "--parents", "-n", "1", "HEAD"]);
   const isRootCommit = headLine.split(/\s+/).length === 1;

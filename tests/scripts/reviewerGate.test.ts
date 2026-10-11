@@ -208,24 +208,25 @@ describe("reviewer gate policy", () => {
       ],
     });
 
-    it("uses numeric comment IDs to break equal-timestamp ties", () => {
-      const result = evaluateReviewerGate({
-        prBody: prBody("Kirk"),
-        headSha: HEAD,
-        comments: [
-          verdict({ id: 9, reviewer: "Kirk" }),
-          verdict({
-            id: 10,
-            reviewer: "Kirk",
-            kind: "CHANGES_REQUESTED",
-          }),
-        ],
-      });
-      assert.equal(result.ok, false);
-      assert.match(result.laneResults[0]!.reason, /CHANGES_REQUESTED/);
-    });
     assert.equal(result.ok, false);
     assert.equal(result.errors.length, 1);
+  });
+
+  it("uses numeric comment IDs to break equal-timestamp ties", () => {
+    const result = evaluateReviewerGate({
+      prBody: prBody("Kirk"),
+      headSha: HEAD,
+      comments: [
+        verdict({ id: 9, reviewer: "Kirk" }),
+        verdict({
+          id: 10,
+          reviewer: "Kirk",
+          kind: "CHANGES_REQUESTED",
+        }),
+      ],
+    });
+    assert.equal(result.ok, false);
+    assert.match(result.laneResults[0]!.reason, /CHANGES_REQUESTED/);
   });
 
   it("accepts only pull-request event payloads", () => {

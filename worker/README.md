@@ -28,7 +28,7 @@ Discord API  ──POST──►  Cloudflare Worker (this)
 
 ## Secrets
 
-Four bindings are required. Set the secrets with wrangler — **never** commit values to source:
+Three Worker bindings are required. Set the secrets with wrangler — **never** commit values to source:
 
 ```bash
 # Ed25519 hex public key from Discord Developer Portal > your app > General Information
@@ -48,6 +48,19 @@ wrangler secret put ALLOWED_GUILD_IDS
 
 The non-secret `GH_REPO` variable (`Jamula/stfc`) is already set in `wrangler.toml`.
 
+The `/game-state` GitHub Actions handler also needs repository secrets for R2
+uploads:
+
+```bash
+gh secret set CLOUDFLARE_ACCOUNT_ID --repo Jamula/stfc
+gh secret set CLOUDFLARE_R2_ACCESS_KEY_ID --repo Jamula/stfc
+gh secret set CLOUDFLARE_R2_SECRET_ACCESS_KEY --repo Jamula/stfc
+```
+
+Provision the R2 bucket as `stfc-game-state` with Cloudflare's automatic region
+placement. Game-state objects are private; committed manifests record
+`access: "signed-url-required"` and default `retention: "forever"`.
+
 ## Deploy
 
 ```bash
@@ -60,6 +73,7 @@ wrangler deploy
 # Set secrets (prompted for value; nothing echoed to terminal)
 wrangler secret put DISCORD_PUBLIC_KEY
 wrangler secret put GH_DISPATCH_TOKEN
+wrangler secret put ALLOWED_GUILD_IDS
 ```
 
 After deploy, copy the Worker URL (`https://stfc-discord-bridge.<your-subdomain>.workers.dev`) and paste it into:

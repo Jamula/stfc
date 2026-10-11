@@ -6,16 +6,26 @@ import { promisify } from "node:util";
 import process from "node:process";
 import path from "node:path";
 import net from "node:net";
+import { createHash, createHmac } from "node:crypto";
 import { fileURLToPath } from "node:url";
-import { reconcileAutomationStateAfterPushFailure } from "./automation-state-retry.mjs";
+import { isAutomationStateCommitPublished, reconcileAutomationStateAfterPushFailure } from "./automation-state-retry.mjs";
 
 const execFileAsync = promisify(execFile);
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const DISCORD_API_BASE = "https://discord.com/api/v10";
 const GAME_STATE_BASE_DIR = "data/discord/game-state";
+const GAME_STATE_R2_BUCKET = "stfc-game-state";
+const R2_ENV_NAMES = {
+  accountId: "CLOUDFLARE_ACCOUNT_ID",
+  accessKeyId: "CLOUDFLARE_R2_ACCESS_KEY_ID",
+  secretAccessKey: "CLOUDFLARE_R2_SECRET_ACCESS_KEY",
+};
 const MAX_ATTACHMENT_BYTES = 50 * 1024 * 1024;
 const MAX_DAILY_BYTES = 100 * 1024 * 1024;
 const MAX_DAILY_FILES = 20;
+const R2_REQUEST_TIMEOUT_MS = 30_000;
+
+class R2UploadFailureError extends Error {}
 
 export function validatePayload(payload) {
   if (!payload || typeof payload !== "object") {
@@ -81,7 +91,7 @@ export function sanitizeFilename(input) {
   return value;
 }
 
-export function sanitizeLine(input, fallback = "unknown") {
+export function sanitizeLine(input, fallback = "unknown", maxLength = 120) {
   const raw = typeof input === "string" ? input : "";
   const clean = raw
     .normalize("NFKC")
@@ -89,7 +99,7 @@ export function sanitizeLine(input, fallback = "unknown") {
     .replace(/[@`$<>\\]/g, "")
     .replace(/\s+/g, " ")
     .trim()
-    .slice(0, 120);
+    .slice(0, maxLength);
   return clean.length > 0 ? clean : fallback;
 }
 
@@ -318,13 +328,7 @@ export async function downloadDiscordAttachment({ attachment, fetchImpl = fetch,
   }
 }
 
-export async function updateDailyIndexAtomic({
-  indexPath,
-  entry,
-  readFileImpl = readFile,
-  writeFileImpl = writeFile,
-  renameImpl = rename,
-}) {
+async function readDailyIndex(indexPath, readFileImpl) {
   let doc;
   try {
     const raw = await readFileImpl(indexPath, "utf8");
@@ -345,14 +349,21 @@ export async function updateDailyIndexAtomic({
     !file
     || typeof file !== "object"
     || Array.isArray(file)
+    || typeof file.filename !== "string"
     || !Number.isSafeInteger(file.size_bytes)
     || file.size_bytes < 0
   )) {
     throw new Error("daily index is malformed: invalid file entry");
   }
-  const existingBytes = existingFiles.reduce((sum, file) => sum + file.size_bytes, 0);
+  return doc;
+}
 
-  if (existingFiles.length >= MAX_DAILY_FILES) {
+function appendDailyIndexEntry(doc, entry) {
+  if (!Number.isSafeInteger(entry.size_bytes) || entry.size_bytes <= 0) {
+    throw new Error("daily index entry has an invalid size_bytes value");
+  }
+  const existingBytes = doc.files.reduce((sum, file) => sum + file.size_bytes, 0);
+  if (doc.files.length >= MAX_DAILY_FILES) {
     throw new Error(`daily file cap exceeded (${MAX_DAILY_FILES} files)`);
   }
   if (existingBytes + Number(entry.size_bytes) > MAX_DAILY_BYTES) {
@@ -360,12 +371,234 @@ export async function updateDailyIndexAtomic({
   }
 
   doc.files.push(entry);
-
-  const tempPath = `${indexPath}.tmp`;
-  await writeFileImpl(tempPath, `${JSON.stringify(doc, null, 2)}\n`, "utf8");
-  await renameImpl(tempPath, indexPath);
-
   return doc;
+}
+
+async function writeDailyJsonAtomic(filePath, doc, writeFileImpl, renameImpl) {
+  const tempPath = `${filePath}.tmp`;
+  await writeFileImpl(tempPath, `${JSON.stringify(doc, null, 2)}\n`, "utf8");
+  await renameImpl(tempPath, filePath);
+}
+
+export async function updateDailyIndexAtomic({
+  indexPath,
+  entry,
+  readFileImpl = readFile,
+  writeFileImpl = writeFile,
+  renameImpl = rename,
+}) {
+  const doc = appendDailyIndexEntry(
+    await readDailyIndex(indexPath, readFileImpl),
+    entry,
+  );
+  await writeDailyJsonAtomic(indexPath, doc, writeFileImpl, renameImpl);
+  return doc;
+}
+
+async function readDailyManifest(manifestPath, readFileImpl, bucket) {
+  if (typeof bucket !== "string" || bucket.length === 0) {
+    throw new Error("daily manifest requires a non-empty bucket");
+  }
+  let raw;
+  try {
+    raw = await readFileImpl(manifestPath, "utf8");
+  } catch (error) {
+    if (error?.code === "ENOENT") {
+      return { version: 1, bucket, files: [] };
+    }
+    throw error;
+  }
+
+  const parsed = JSON.parse(raw);
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed) || !Array.isArray(parsed.files)) {
+    throw new Error("daily manifest is malformed: expected a files array");
+  }
+  if (parsed.files.some((file) =>
+    !file
+    || typeof file !== "object"
+    || Array.isArray(file)
+    || typeof file.filename !== "string"
+    || typeof file.r2_bucket !== "string"
+    || typeof file.r2_key !== "string"
+  )) {
+    throw new Error("daily manifest is malformed: invalid file entry");
+  }
+  if (parsed.version !== undefined && (!Number.isSafeInteger(parsed.version) || parsed.version < 1)) {
+    throw new Error("daily manifest is malformed: invalid version");
+  }
+  if (parsed.version !== undefined && parsed.version !== 1) {
+    throw new Error(`daily manifest version ${parsed.version} is unsupported; supported version is 1`);
+  }
+  if (parsed.bucket !== undefined && typeof parsed.bucket !== "string") {
+    throw new Error("daily manifest is malformed: invalid bucket");
+  }
+  const manifestBucket = parsed.bucket ?? parsed.files[0]?.r2_bucket ?? bucket;
+  if (manifestBucket !== bucket || parsed.files.some((file) => file.r2_bucket !== manifestBucket)) {
+    throw new Error("daily manifest bucket mismatch: keep the existing bucket for this day; migrate objects explicitly before changing it");
+  }
+  return {
+    ...parsed,
+    version: parsed.version ?? 1,
+    bucket: manifestBucket,
+    files: parsed.files,
+  };
+}
+
+export async function updateDailyManifestAtomic({
+  manifestPath,
+  entry,
+  readFileImpl = readFile,
+  writeFileImpl = writeFile,
+  renameImpl = rename,
+}) {
+  const doc = await readDailyManifest(manifestPath, readFileImpl, entry.r2_bucket);
+  doc.files.push(entry);
+  await writeDailyJsonAtomic(manifestPath, doc, writeFileImpl, renameImpl);
+  return doc;
+}
+
+export function r2ConfigFromEnv(env) {
+  const config = {
+    accountId: env.CLOUDFLARE_ACCOUNT_ID,
+    accessKeyId: env.CLOUDFLARE_R2_ACCESS_KEY_ID,
+    secretAccessKey: env.CLOUDFLARE_R2_SECRET_ACCESS_KEY,
+    bucket: env.STFC_GAME_STATE_R2_BUCKET || GAME_STATE_R2_BUCKET,
+  };
+  const missing = Object.entries(config)
+    .filter(([key, value]) => key !== "bucket" && (typeof value !== "string" || value.length === 0))
+    .map(([key]) => R2_ENV_NAMES[key] || key);
+  if (missing.length > 0) {
+    throw new Error(`Missing required R2 env var(s): ${missing.join(", ")}`);
+  }
+  return config;
+}
+
+async function signedR2Request({
+  config,
+  method,
+  key,
+  buffer = Buffer.alloc(0),
+  contentType,
+  fetchImpl = fetch,
+  now = new Date(),
+  timeoutMs = R2_REQUEST_TIMEOUT_MS,
+}) {
+  const host = `${config.accountId}.r2.cloudflarestorage.com`;
+  const encodedKey = key.split("/").map(encodeURIComponent).join("/");
+  const pathname = `/${config.bucket}/${encodedKey}`;
+  const url = `https://${host}${pathname}`;
+  const amzDate = now.toISOString().replace(/[:-]|\.\d{3}/g, "");
+  const shortDate = amzDate.slice(0, 8);
+  const payloadHash = sha256Hex(buffer);
+  const credentialScope = `${shortDate}/auto/s3/aws4_request`;
+  const signedHeaders = "host;x-amz-content-sha256;x-amz-date";
+  const canonicalHeaders = [
+    `host:${host}`,
+    `x-amz-content-sha256:${payloadHash}`,
+    `x-amz-date:${amzDate}`,
+    "",
+  ].join("\n");
+  const canonicalRequest = [
+    method,
+    pathname,
+    "",
+    canonicalHeaders,
+    signedHeaders,
+    payloadHash,
+  ].join("\n");
+  const stringToSign = [
+    "AWS4-HMAC-SHA256",
+    amzDate,
+    credentialScope,
+    sha256Hex(canonicalRequest),
+  ].join("\n");
+  const signingKey = getSignatureKey(config.secretAccessKey, shortDate, "auto", "s3");
+  const signature = createHmac("sha256", signingKey).update(stringToSign).digest("hex");
+  const authorization = [
+    "AWS4-HMAC-SHA256 ",
+    `Credential=${config.accessKeyId}/${credentialScope}, `,
+    `SignedHeaders=${signedHeaders}, `,
+    `Signature=${signature}`,
+  ].join("");
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    let response;
+    try {
+      response = await fetchImpl(url, {
+        method,
+        headers: {
+          Authorization: authorization,
+          ...(contentType ? { "Content-Type": contentType } : {}),
+          "User-Agent": "stfc-discord-handler/1.0",
+          "x-amz-content-sha256": payloadHash,
+          "x-amz-date": amzDate,
+        },
+        body: method === "PUT" ? buffer : undefined,
+        signal: controller.signal,
+      });
+    } catch (error) {
+      const action = method === "PUT" ? "upload" : "cleanup";
+      if (controller.signal.aborted || (error instanceof Error && error.name === "AbortError")) {
+        const failure = `R2 ${action} failed: request timed out`;
+        if (method === "PUT") {
+          throw new R2UploadFailureError(
+            `${failure}; outcome uncertain; possible object at ${config.bucket}/${key}`,
+            { cause: error },
+          );
+        }
+        throw new Error(failure, { cause: error });
+      }
+      if (method === "PUT") {
+        const reason = error instanceof Error ? error.message : String(error);
+        throw new R2UploadFailureError(
+          `R2 upload failed: ${reason}; outcome uncertain; possible object at ${config.bucket}/${key}`,
+          { cause: error },
+        );
+      }
+      throw error;
+    }
+
+    if (response.status === 404 && method === "DELETE") {
+      return { bucket: config.bucket, key, sha256: payloadHash, size: 0 };
+    }
+    if (!response.ok) {
+      const body = typeof response.text === "function" ? await response.text() : "";
+      const action = method === "PUT" ? "upload" : "cleanup";
+      const failure = `R2 ${action} failed: status ${response.status}${body ? ` ${body.slice(0, 200)}` : ""}`;
+      if (method === "PUT") {
+        const location = response.status >= 500
+          ? `outcome uncertain; possible object at ${config.bucket}/${key}`
+          : `object location: ${config.bucket}/${key}`;
+        throw new R2UploadFailureError(`${failure}; ${location}`);
+      }
+      throw new Error(failure);
+    }
+
+    return { bucket: config.bucket, key, sha256: payloadHash, size: buffer.byteLength };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+export async function uploadR2Object(options) {
+  return signedR2Request({ ...options, method: "PUT" });
+}
+
+export async function deleteR2Object(options) {
+  return signedR2Request({ ...options, method: "DELETE" });
+}
+
+function sha256Hex(value) {
+  return createHash("sha256").update(value).digest("hex");
+}
+
+function getSignatureKey(secretAccessKey, dateStamp, regionName, serviceName) {
+  const kDate = createHmac("sha256", `AWS4${secretAccessKey}`).update(dateStamp).digest();
+  const kRegion = createHmac("sha256", kDate).update(regionName).digest();
+  const kService = createHmac("sha256", kRegion).update(serviceName).digest();
+  return createHmac("sha256", kService).update("aws4_request").digest();
 }
 
 export async function handleGameStateCommand({
@@ -373,6 +606,7 @@ export async function handleGameStateCommand({
   repo,
   ref,
   serverUrl,
+  r2Config,
   fetchImpl = fetch,
   runGit = defaultRunGit,
   readFileImpl = readFile,
@@ -384,6 +618,9 @@ export async function handleGameStateCommand({
   reconcileAutomationStateImpl = reconcileAutomationStateAfterPushFailure,
 }) {
   validateGameStatePayload(payload);
+  if (!r2Config) {
+    throw new Error("R2 config is required for game-state uploads");
+  }
 
   const attachment = payload.attachment;
   const now = nowFn();
@@ -403,21 +640,38 @@ export async function handleGameStateCommand({
     throw new Error("resolved output path escapes data/discord/game-state");
   }
 
-  const { buffer, responseContentType } = await downloadDiscordAttachment({ attachment, fetchImpl });
-
-  await mkdirImpl(outDir, { recursive: true });
-  const partFile = `${outFile}.part`;
-  try {
-    await writeFileImpl(partFile, buffer);
-    await renameImpl(partFile, outFile);
-  } catch (error) {
-    await rmImpl(partFile, { force: true }).catch(() => {});
-    throw error;
-  }
-
   const safeNote = sanitizeLine(payload.note, "no note");
   const safeUploaderHandle = sanitizeLine(payload.uploader_handle || payload.member || "unknown", "unknown");
   const safeUploader = sanitizeLine(payload.uploader || payload.member || "unknown", "unknown");
+  const r2Key = `${today}/${path.basename(outFile)}`;
+  const lineagePath = `${outFile}.lineage.json`;
+  const indexPath = `${outDir}/_index.json`;
+  const manifestPath = `${outDir}/manifest.json`;
+  const indexDoc = appendDailyIndexEntry(
+    await readDailyIndex(indexPath, readFileImpl),
+    {
+      filename: path.basename(outFile),
+      captured_at: capturedAtUtc,
+      uploader: safeUploaderHandle,
+      note: safeNote,
+      size_bytes: Number(attachment.size),
+    },
+  );
+  const manifestDoc = await readDailyManifest(manifestPath, readFileImpl, r2Config.bucket);
+
+  await mkdirImpl(outDir, { recursive: true });
+  const { buffer, responseContentType } = await downloadDiscordAttachment({ attachment, fetchImpl });
+  const contentType = typeof attachment.content_type === "string" && attachment.content_type.length > 0
+    ? attachment.content_type
+    : responseContentType;
+  const upload = await uploadR2Object({
+    config: r2Config,
+    key: r2Key,
+    buffer,
+    contentType,
+    fetchImpl,
+    now,
+  });
 
   const sourceUrl = typeof payload.jumplink === "string" && payload.jumplink.length > 0
     ? payload.jumplink
@@ -432,82 +686,122 @@ export async function handleGameStateCommand({
     captured_at_utc: capturedAtUtc,
     note: safeNote,
     source_url: sourceUrl,
-    content_type: typeof attachment.content_type === "string" && attachment.content_type.length > 0
-      ? attachment.content_type
-      : responseContentType,
+    content_type: contentType,
     size_bytes: Number(attachment.size),
+    sha256: upload.sha256,
+    r2_bucket: upload.bucket,
+    r2_key: upload.key,
     filename_original: String(attachment.filename),
     filename_stored: cleanName,
   };
 
-  const lineagePath = `${outFile}.lineage.json`;
-  await writeFileImpl(lineagePath, `${JSON.stringify(lineage, null, 2)}\n`, "utf8");
-
-  const indexPath = `${outDir}/_index.json`;
-  await updateDailyIndexAtomic({
-    indexPath,
-    entry: {
+  let commitPushed = false;
+  let publicationUncertain = false;
+  try {
+    await writeFileImpl(lineagePath, `${JSON.stringify(lineage, null, 2)}\n`, "utf8");
+    await writeDailyJsonAtomic(indexPath, indexDoc, writeFileImpl, renameImpl);
+    manifestDoc.files.push({
       filename: path.basename(outFile),
+      r2_bucket: upload.bucket,
+      r2_key: upload.key,
+      sha256: upload.sha256,
+      size_bytes: upload.size,
+      content_type: contentType,
       captured_at: capturedAtUtc,
       uploader: safeUploaderHandle,
       note: safeNote,
-      size_bytes: Number(attachment.size),
-    },
-    readFileImpl,
-    writeFileImpl,
-    renameImpl,
-  });
+      access: "signed-url-required",
+      retention: "forever",
+    });
+    await writeDailyJsonAtomic(manifestPath, manifestDoc, writeFileImpl, renameImpl);
 
-  await runGit(["config", "user.email", "actions@github.com"]);
-  await runGit(["config", "user.name", "github-actions[bot]"]);
-  await runGit(["add", "--", outFile]);
-  await runGit(["add", "--", lineagePath]);
-  await runGit(["add", "--", indexPath]);
-  await runCommand(
-    process.execPath,
-    [path.join(SCRIPT_DIR, "check-artifact-hygiene.mjs"), "--staged"],
-  );
+    await runGit(["config", "user.email", "actions@github.com"]);
+    await runGit(["config", "user.name", "github-actions[bot]"]);
+    await runGit(["add", "--", lineagePath]);
+    await runGit(["add", "--", indexPath]);
+    await runGit(["add", "--", manifestPath]);
+    await runCommand(
+      process.execPath,
+      [path.join(SCRIPT_DIR, "check-artifact-hygiene.mjs"), "--staged"],
+    );
 
-  const commitMessage = [
-    `data(game-state): ${safeNote || "no note"}`,
-    "",
-    `File: ${outFile}`,
-    `Uploader: ${safeUploaderHandle}`,
-    `Source: ${sourceUrl}`,
-  ].join("\n");
-  await runGit(["commit", "--no-verify", "-F", "-"], { stdin: `${commitMessage}\n` });
+    const commitMessage = [
+      `data(game-state): ${safeNote || "no note"}`,
+      "",
+      `Manifest: ${manifestPath}`,
+      `R2: ${upload.bucket}/${upload.key}`,
+      `Uploader: ${safeUploaderHandle}`,
+      `Source: ${sourceUrl}`,
+    ].join("\n");
+    await runGit(["commit", "--no-verify", "-F", "-"], { stdin: `${commitMessage}\n` });
 
-  const doPush = async () => {
-    await runGit(["push", "--no-verify", "origin", `HEAD:${ref}`]);
-  };
+    const doPush = async () => {
+      const commit = (await runGit(["rev-parse", "HEAD"])).trim();
+      try {
+        await runGit(["push", "--no-verify", "origin", `HEAD:${ref}`]);
+      } catch (error) {
+        try {
+          commitPushed = await isAutomationStateCommitPublished({
+            stateDir: process.cwd(),
+            ref,
+            commit,
+            runGitImpl: runGit === defaultRunGit ? undefined : runGit,
+          });
+        } catch (confirmationError) {
+          publicationUncertain = true;
+          throw new Error(
+            `Game-state publication uncertain; preserved R2 object ${upload.bucket}/${upload.key}: ${confirmationError instanceof Error ? confirmationError.message : String(confirmationError)}`,
+            { cause: new AggregateError([error, confirmationError]) },
+          );
+        }
+        if (!commitPushed) throw error;
+      }
+    };
 
-  try {
-    await doPush();
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    if (/non-fast-forward|fetch first|rejected/i.test(message)) {
-      await reconcileAutomationStateImpl({
-        stateDir: process.cwd(),
-        ref,
-        relativePaths: [outFile, lineagePath, indexPath],
-      });
+    try {
       await doPush();
-    } else {
-      throw error;
+    } catch (error) {
+      if (publicationUncertain) throw error;
+      const message = error instanceof Error ? error.message : String(error);
+      if (/non-fast-forward|fetch first|rejected/i.test(message)) {
+        await reconcileAutomationStateImpl({
+          stateDir: process.cwd(),
+          ref,
+          relativePaths: [lineagePath, indexPath, manifestPath],
+        });
+        await doPush();
+      } else {
+        throw error;
+      }
     }
+    commitPushed = true;
+  } catch (error) {
+    if (!commitPushed && !publicationUncertain) {
+      try {
+        await deleteR2Object({ config: r2Config, key: r2Key, fetchImpl, now: nowFn() });
+      } catch (cleanupError) {
+        const failure = error instanceof Error ? error.message : String(error);
+        const cleanupFailure = cleanupError instanceof Error ? cleanupError.message : String(cleanupError);
+        throw new Error(
+          `Game-state save failed (${failure}); R2 object cleanup also failed (${cleanupFailure})`,
+          { cause: new AggregateError([error, cleanupError]) },
+        );
+      }
+    }
+    throw error;
   }
 
   const sha = (await runGit(["rev-parse", "HEAD"])) .trim();
-  const fileUrl = `${serverUrl}/${repo}/blob/${sha}/${outFile}`;
+  const manifestUrl = `${serverUrl}/${repo}/blob/${sha}/${manifestPath}`;
 
   return {
-    responseText: `📁 Saved ${fileUrl}`,
-    outFile,
-    fileUrl,
+    responseText: `📁 Saved ${manifestUrl} (R2 key: ${upload.key})`,
+    outFile: manifestPath,
+    fileUrl: manifestUrl,
   };
 }
 
-export async function resolveResponseText({ payload, repo, workflowRef, stateRef, serverUrl, historyPath, runGh, runGit, readFileImpl, writeFileImpl, mkdirImpl, renameImpl, rmImpl, fetchImpl, nowFn, reconcileAutomationStateImpl }) {
+export async function resolveResponseText({ payload, repo, workflowRef, stateRef, serverUrl, historyPath, r2Config, runGh, runGit, readFileImpl, writeFileImpl, mkdirImpl, renameImpl, rmImpl, fetchImpl, nowFn, reconcileAutomationStateImpl }) {
   const command = payload.command;
 
   if (command === "redeem-status") {
@@ -532,6 +826,7 @@ export async function resolveResponseText({ payload, repo, workflowRef, stateRef
       repo,
       ref: stateRef,
       serverUrl,
+      r2Config,
       fetchImpl,
       runGit,
       readFileImpl,
@@ -583,6 +878,7 @@ export async function runCli({
     const stateRef = env.STFC_STATE_BRANCH || "automation-state";
     const serverUrl = env.GITHUB_SERVER_URL || "https://github.com";
     const historyPath = env.REDEEM_HISTORY_PATH || "docs/redeem-history.md";
+    const r2Config = payload.command === "game-state" ? r2ConfigFromEnv(env) : undefined;
 
     const responseText = await resolveResponseText({
       payload,
@@ -591,6 +887,7 @@ export async function runCli({
       stateRef,
       serverUrl,
       historyPath,
+      r2Config,
       runGh,
       runGit,
       fetchImpl,
@@ -623,7 +920,11 @@ export async function runCli({
         await postDiscordFollowup({
           applicationId: payload.application_id,
           interactionToken: payload.interaction_token,
-          content: `❌ ${sanitizeLine(message, "command failed")}`,
+          content: `❌ ${sanitizeLine(
+            message,
+            "command failed",
+            error instanceof R2UploadFailureError ? 1800 : 120,
+          )}`,
           botToken: env.DISCORD_BOT_TOKEN,
           fetchImpl,
           allowedMentions: { parse: [] },
@@ -681,7 +982,7 @@ function runCommand(command, args, { stdin } = {}) {
         resolve(stdout);
       } else {
         const suffix = stderr.trim() ? `: ${stderr.trim()}` : "";
-        reject(new Error(`${command} ${args.join(" ")} failed${suffix}`));
+        reject(Object.assign(new Error(`${command} ${args.join(" ")} failed${suffix}`), { code }));
       }
     });
 

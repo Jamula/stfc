@@ -9,7 +9,7 @@ import {
 } from "node:fs";
 import path from "node:path";
 import { execFileSync, spawnSync } from "node:child_process";
-import { reconcileAutomationStateAfterPushFailure } from "../../scripts/automation-state-retry.mjs";
+import { isAutomationStateCommitPublished, reconcileAutomationStateAfterPushFailure } from "../../scripts/automation-state-retry.mjs";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..", "..");
 const SCRATCH_ROOT = path.resolve(REPO_ROOT, "..");
@@ -47,7 +47,7 @@ function resolveGitCommonDir(cwd: string): string {
 
 describe("automation-state linked-worktree bootstrap", () => {
   it("inherits checkout-local auth config and creates an allowlisted root commit", () => {
-    const scratch = mkdtempSync(path.join(REPO_ROOT, ".automation-state-git-test-"));
+    const scratch = mkdtempSync(path.join(SCRATCH_ROOT, "automation-state-git-test-"));
     try {
       const repo = path.join(scratch, "repo");
       const state = path.join(scratch, "state");
@@ -96,7 +96,7 @@ describe("automation-state linked-worktree bootstrap", () => {
   });
 
   it("replays a losing orphan bootstrap onto the winning remote root", async () => {
-    const scratch = mkdtempSync(path.join(REPO_ROOT, ".automation-state-git-test-"));
+    const scratch = mkdtempSync(path.join(SCRATCH_ROOT, "automation-state-git-test-"));
     try {
       const remote = path.join(scratch, "remote.git");
       const seed = path.join(scratch, "seed");
@@ -147,6 +147,9 @@ describe("automation-state linked-worktree bootstrap", () => {
 
       git(stateA, "push", "origin", "HEAD:automation-state");
       assert.throws(() => git(stateB, "push", "origin", "HEAD:automation-state"));
+      assert.equal(await isAutomationStateCommitPublished({
+        stateDir: stateB, ref: "automation-state", commit: git(stateB, "rev-parse", "HEAD"),
+      }), false, "the losing orphan commit is confirmed unpublished");
 
       git(stateB, "config", "--local", "--unset-all", "user.name");
       git(stateB, "config", "--local", "--unset-all", "user.email");
@@ -158,9 +161,11 @@ describe("automation-state linked-worktree bootstrap", () => {
           "GIT_CONFIG_VALUE_0",
           "GIT_CONFIG_KEY_1",
           "GIT_CONFIG_VALUE_1",
+          "GIT_INDEX_FILE",
         ].map((key) => [key, process.env[key]]),
       );
       process.env.GIT_DIR = remote;
+      process.env.GIT_INDEX_FILE = path.join(stateB, ".git", "index");
       process.env.GIT_CONFIG_COUNT = "2";
       process.env.GIT_CONFIG_KEY_0 = "user.name";
       process.env.GIT_CONFIG_VALUE_0 = "Retry Bot";
@@ -182,6 +187,12 @@ describe("automation-state linked-worktree bootstrap", () => {
       assert.equal(mode, "replayed");
       assert.equal(git(stateB, "show", "-s", "--format=%an <%ae>", "HEAD"), "Retry Bot <retry@example.invalid>");
       git(stateB, "push", "origin", "HEAD:automation-state");
+      assert.equal(await isAutomationStateCommitPublished({
+        stateDir: stateB, ref: "automation-state", commit: git(stateB, "rev-parse", "HEAD"),
+      }), true, "the replayed commit is published");
+      await assert.rejects(isAutomationStateCommitPublished({
+        stateDir: stateB, ref: "automation-state", commit: git(stateB, "rev-parse", "HEAD"), remote: "missing-remote",
+      }), /missing-remote/, "transport failures must not masquerade as confirmed absence");
       git(writerA, "fetch", "origin", "refs/heads/automation-state:refs/remotes/origin/automation-state");
 
       assert.deepEqual(

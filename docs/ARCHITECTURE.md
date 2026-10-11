@@ -653,12 +653,14 @@ game-state. `storage-size-monitor.yml` checks out that live ref directly.
 `stfc-gift-redeemer` concurrency group (`cancel-in-progress: false`) so their
 pushes to `automation-state` never interleave.
 `discord-command-handler.yml`'s concurrency group is
-command-dependent: `/game-state` — the only Discord command that commits and
-pushes to `automation-state` directly (`scripts/discord-handler.mjs`) — joins
-that same `stfc-gift-redeemer` lock, because the exact interleaving that let a
-monitor run silently delete a handler upload (fetch the tip *after* a handler
-push landed, then fast-forward a wholesale replace of `data/discord` — a
-non-conflicting commit the push-retry loop never notices) applies to it too.
+command-dependent: `/game-state` — the only Discord command that uploads game
+state to Cloudflare R2 and commits the small `manifest.json`, `.lineage.json`,
+and `_index.json` metadata to `automation-state` directly
+(`scripts/discord-handler.mjs`) — joins that same `stfc-gift-redeemer` lock,
+because the exact interleaving that let a monitor run silently delete a handler
+upload (fetch the tip *after* a handler push landed, then fast-forward a
+wholesale replace of `data/discord` — a non-conflicting commit the push-retry
+loop never notices) applies to it too.
 `/redeem-status` (read-only) and `/trigger-redeem` (only dispatches
 `redeem.yml`, itself already serialized) never touch git directly, so each
 gets an isolated per-command group instead of queuing behind scheduled runs —
@@ -700,6 +702,45 @@ therefore declares `queue: max`:
 `concurrency:` block under `.github/workflows/` and fails if any workflow that
 can resolve to `stfc-gift-redeemer` omits `queue: max`, leaves the default
 `single`, or pairs `queue: max` with `cancel-in-progress: true`.
+
+**Game-state storage.** For new captures, `/game-state` stores the binary attachment in the
+Cloudflare R2 bucket `stfc-game-state` (or `STFC_GAME_STATE_R2_BUCKET`) using R2's auto-region S3-compatible
+endpoint. The handler commits only small, diff-friendly metadata for new uploads under each
+daily `data/discord/game-state/YYYY-MM-DD/` folder:
+
+- `manifest.json` — R2 bucket/key, SHA-256, size, content type, signed-access
+  requirement, and retention (`forever` for this slice). The 90-day archive
+  option tracked by issue #164 is not implemented, so this PR leaves that issue open.
+- `<filename>.lineage.json` — Discord source, uploader, note, capture time, and
+  the same R2 integrity fields.
+- `_index.json` — the daily query index used for lightweight browsing.
+
+Existing binaries already stored in git are not migrated or removed by this
+slice; historical migration remains deferred under #164.
+
+Game-state blobs are not staged into git after the R2 upload succeeds. Access is
+recorded as `signed-url-required`; if R2 spend becomes undesirable, the existing
+LFS fallback remains a Plan B rather than the active path.
+
+Each daily manifest declares the effective bucket, and every entry must match
+that bucket. Changing buckets within a day fails before download/upload or
+metadata writes; existing objects are never relabeled. Keep that day's bucket
+or explicitly migrate its objects and metadata before switching. A missing
+legacy bucket field is inferred only from consistent entry locations. The
+handler supports manifest version 1; a missing legacy version is treated as
+version 1, while any explicit unsupported version is rejected before download,
+upload, or metadata writes. Unknown fields on supported version 1 manifests are
+preserved when a capture is appended.
+
+After a failed git push, the handler fetches the remote state and checks whether
+it contains the attempted commit. A lost acknowledgement of a published commit
+counts as success. Confirmed unpublished uploads may be rolled back; if remote
+publication cannot be determined, the object is preserved and the handler
+reports its bucket/key and fails loudly for operator reconciliation. A PUT
+timeout, network failure, or server error is also an uncertain outcome: its
+failure follow-up includes the possible object's bucket/key, and operators
+must inspect that location before retrying or deleting anything. Other PUT
+errors also include the bucket/key for diagnosis.
 
 `discord-monitor.yml` additionally never stages `data/discord/game-state`
 (`scripts/discord-monitor-state.mjs` copies only its own allowlisted files),
