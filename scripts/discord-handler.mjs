@@ -25,6 +25,8 @@ const MAX_DAILY_BYTES = 100 * 1024 * 1024;
 const MAX_DAILY_FILES = 20;
 const R2_REQUEST_TIMEOUT_MS = 30_000;
 
+class R2UploadFailureError extends Error {}
+
 export function validatePayload(payload) {
   if (!payload || typeof payload !== "object") {
     throw new Error("client_payload must be a JSON object");
@@ -89,7 +91,7 @@ export function sanitizeFilename(input) {
   return value;
 }
 
-export function sanitizeLine(input, fallback = "unknown") {
+export function sanitizeLine(input, fallback = "unknown", maxLength = 120) {
   const raw = typeof input === "string" ? input : "";
   const clean = raw
     .normalize("NFKC")
@@ -97,7 +99,7 @@ export function sanitizeLine(input, fallback = "unknown") {
     .replace(/[@`$<>\\]/g, "")
     .replace(/\s+/g, " ")
     .trim()
-    .slice(0, 120);
+    .slice(0, maxLength);
   return clean.length > 0 ? clean : fallback;
 }
 
@@ -424,6 +426,9 @@ async function readDailyManifest(manifestPath, readFileImpl, bucket) {
   if (parsed.version !== undefined && (!Number.isSafeInteger(parsed.version) || parsed.version < 1)) {
     throw new Error("daily manifest is malformed: invalid version");
   }
+  if (parsed.version !== undefined && parsed.version !== 1) {
+    throw new Error(`daily manifest version ${parsed.version} is unsupported; supported version is 1`);
+  }
   if (parsed.bucket !== undefined && typeof parsed.bucket !== "string") {
     throw new Error("daily manifest is malformed: invalid bucket");
   }
@@ -432,6 +437,7 @@ async function readDailyManifest(manifestPath, readFileImpl, bucket) {
     throw new Error("daily manifest bucket mismatch: keep the existing bucket for this day; migrate objects explicitly before changing it");
   }
   return {
+    ...parsed,
     version: parsed.version ?? 1,
     bucket: manifestBucket,
     files: parsed.files,
@@ -518,18 +524,41 @@ async function signedR2Request({
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const response = await fetchImpl(url, {
-      method,
-      headers: {
-        Authorization: authorization,
-        ...(contentType ? { "Content-Type": contentType } : {}),
-        "User-Agent": "stfc-discord-handler/1.0",
-        "x-amz-content-sha256": payloadHash,
-        "x-amz-date": amzDate,
-      },
-      body: method === "PUT" ? buffer : undefined,
-      signal: controller.signal,
-    });
+    let response;
+    try {
+      response = await fetchImpl(url, {
+        method,
+        headers: {
+          Authorization: authorization,
+          ...(contentType ? { "Content-Type": contentType } : {}),
+          "User-Agent": "stfc-discord-handler/1.0",
+          "x-amz-content-sha256": payloadHash,
+          "x-amz-date": amzDate,
+        },
+        body: method === "PUT" ? buffer : undefined,
+        signal: controller.signal,
+      });
+    } catch (error) {
+      const action = method === "PUT" ? "upload" : "cleanup";
+      if (controller.signal.aborted || (error instanceof Error && error.name === "AbortError")) {
+        const failure = `R2 ${action} failed: request timed out`;
+        if (method === "PUT") {
+          throw new R2UploadFailureError(
+            `${failure}; outcome uncertain; possible object at ${config.bucket}/${key}`,
+            { cause: error },
+          );
+        }
+        throw new Error(failure, { cause: error });
+      }
+      if (method === "PUT") {
+        const reason = error instanceof Error ? error.message : String(error);
+        throw new R2UploadFailureError(
+          `R2 upload failed: ${reason}; outcome uncertain; possible object at ${config.bucket}/${key}`,
+          { cause: error },
+        );
+      }
+      throw error;
+    }
 
     if (response.status === 404 && method === "DELETE") {
       return { bucket: config.bucket, key, sha256: payloadHash, size: 0 };
@@ -537,16 +566,17 @@ async function signedR2Request({
     if (!response.ok) {
       const body = typeof response.text === "function" ? await response.text() : "";
       const action = method === "PUT" ? "upload" : "cleanup";
-      throw new Error(`R2 ${action} failed: status ${response.status}${body ? ` ${body.slice(0, 200)}` : ""}`);
+      const failure = `R2 ${action} failed: status ${response.status}${body ? ` ${body.slice(0, 200)}` : ""}`;
+      if (method === "PUT") {
+        const location = response.status >= 500
+          ? `outcome uncertain; possible object at ${config.bucket}/${key}`
+          : `object location: ${config.bucket}/${key}`;
+        throw new R2UploadFailureError(`${failure}; ${location}`);
+      }
+      throw new Error(failure);
     }
 
     return { bucket: config.bucket, key, sha256: payloadHash, size: buffer.byteLength };
-  } catch (error) {
-    if (controller.signal.aborted || (error instanceof Error && error.name === "AbortError")) {
-      const action = method === "PUT" ? "upload" : "cleanup";
-      throw new Error(`R2 ${action} failed: request timed out`);
-    }
-    throw error;
   } finally {
     clearTimeout(timer);
   }
@@ -890,7 +920,11 @@ export async function runCli({
         await postDiscordFollowup({
           applicationId: payload.application_id,
           interactionToken: payload.interaction_token,
-          content: `❌ ${sanitizeLine(message, "command failed")}`,
+          content: `❌ ${sanitizeLine(
+            message,
+            "command failed",
+            error instanceof R2UploadFailureError ? 1800 : 120,
+          )}`,
           botToken: env.DISCORD_BOT_TOKEN,
           fetchImpl,
           allowedMentions: { parse: [] },

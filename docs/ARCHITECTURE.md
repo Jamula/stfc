@@ -726,13 +726,21 @@ Each daily manifest declares the effective bucket, and every entry must match
 that bucket. Changing buckets within a day fails before download/upload or
 metadata writes; existing objects are never relabeled. Keep that day's bucket
 or explicitly migrate its objects and metadata before switching. A missing
-legacy bucket field is inferred only from consistent entry locations.
+legacy bucket field is inferred only from consistent entry locations. The
+handler supports manifest version 1; a missing legacy version is treated as
+version 1, while any explicit unsupported version is rejected before download,
+upload, or metadata writes. Unknown fields on supported version 1 manifests are
+preserved when a capture is appended.
 
 After a failed git push, the handler fetches the remote state and checks whether
 it contains the attempted commit. A lost acknowledgement of a published commit
 counts as success. Confirmed unpublished uploads may be rolled back; if remote
 publication cannot be determined, the object is preserved and the handler
-reports its bucket/key and fails loudly for operator reconciliation.
+reports its bucket/key and fails loudly for operator reconciliation. A PUT
+timeout, network failure, or server error is also an uncertain outcome: its
+failure follow-up includes the possible object's bucket/key, and operators
+must inspect that location before retrying or deleting anything. Other PUT
+errors also include the bucket/key for diagnosis.
 
 `discord-monitor.yml` additionally never stages `data/discord/game-state`
 (`scripts/discord-monitor-state.mjs` copies only its own allowlisted files),
