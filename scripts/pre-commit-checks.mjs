@@ -388,13 +388,44 @@ export function hashObjectForPath(sourcePath, destinationPath, exec = defaultExe
 }
 
 /**
- * Approximate command-line character budget for one batched `git hash-object`
- * invocation. Windows caps a process command line near 32767 characters, so
+ * Approximate command-line character budget for one batched invocation of a
+ * Git subcommand whose only unbounded-growth argument is a trailing list of
+ * pathspecs. Windows caps a process command line near 32767 characters, so
  * stay well under that: a repository with many (or deeply nested)
- * mutable-state files must still hash successfully rather than failing closed
- * on an `E2BIG`-style spawn error.
+ * mutable-state files must still complete successfully rather than failing
+ * closed on an `E2BIG`-style spawn error. Shared by every call site below
+ * that appends an unbounded path list to a Git invocation (`git
+ * hash-object`, and both the worktree/index and HEAD `git check-attr`
+ * lookups used to resolve clean-filter attributes).
  */
-const HASH_BATCH_CHAR_BUDGET = 24000;
+const PATH_BATCH_CHAR_BUDGET = 24000;
+
+/**
+ * Split `paths` into ordered, contiguous chunks whose total pathspec cost
+ * (each path's length plus one separator byte) stays within `budget`. A
+ * chunk always holds at least one path, even when that single path alone
+ * exceeds the budget, so an unusually long path is still handed to Git
+ * rather than silently dropped — Git itself will reject it if it truly
+ * cannot be passed, instead of this guard failing closed before even
+ * trying. Concatenating the chunks in order reconstructs the original
+ * `paths` array.
+ */
+function chunkPathsByCharBudget(paths, budget) {
+  const chunks = [];
+  for (let start = 0; start < paths.length; ) {
+    let end = start;
+    let used = 0;
+    while (end < paths.length) {
+      const cost = paths[end].length + 1;
+      if (end > start && used + cost > budget) break;
+      used += cost;
+      end += 1;
+    }
+    chunks.push(paths.slice(start, end));
+    start = end;
+  }
+  return chunks;
+}
 
 /**
  * Batched counterpart to `hashObjectForPath`: hash every path in
@@ -417,17 +448,7 @@ const HASH_BATCH_CHAR_BUDGET = 24000;
 export function hashObjectsForPath(sourcePaths, destinationPath, exec = defaultExecFileSync) {
   const hashes = [];
 
-  for (let start = 0; start < sourcePaths.length; ) {
-    let end = start;
-    let used = 0;
-    while (end < sourcePaths.length) {
-      const cost = sourcePaths[end].length + 1;
-      if (end > start && used + cost > HASH_BATCH_CHAR_BUDGET) break;
-      used += cost;
-      end += 1;
-    }
-
-    const chunk = sourcePaths.slice(start, end);
+  for (const chunk of chunkPathsByCharBudget(sourcePaths, PATH_BATCH_CHAR_BUDGET)) {
     const raw = exec(
       'git',
       ['hash-object', '--filters', `--path=${destinationPath}`, '--', ...chunk],
@@ -444,7 +465,6 @@ export function hashObjectsForPath(sourcePaths, destinationPath, exec = defaultE
     }
 
     hashes.push(...chunkHashes);
-    start = end;
   }
 
   return hashes;
@@ -473,6 +493,36 @@ function parseCheckAttrOutput(raw) {
   return valuesByPath;
 }
 
+/**
+ * Batched counterpart to a single `git check-attr -z` invocation: resolve
+ * `paths` under the fixed `argsPrefix` (e.g. `['check-attr', '--all',
+ * '-z']` or `['check-attr', '--source', 'HEAD', '--all', '-z']`), splitting
+ * the `--` pathspec list across however many subprocess invocations
+ * `PATH_BATCH_CHAR_BUDGET` requires, and merging each chunk's NUL-delimited
+ * output into one path -> attribute-values map.
+ *
+ * Each chunk only ever contains paths unique to itself, so merging chunk
+ * results into one `Map` cannot drop or overwrite an entry from another
+ * chunk; parsing happens per-chunk (not after concatenating raw output)
+ * so a `-z`-delimited triple can never be split across a chunk boundary,
+ * which keeps this safe for arbitrary path bytes (long names, Unicode,
+ * embedded structural characters) the same way the unbatched call was.
+ *
+ * Deliberately does NOT catch/swallow errors — propagates like
+ * `hashObjectsForPath`, so the caller fails closed on the first chunk that
+ * fails rather than silently treating a partial result as complete.
+ */
+function runCheckAttrBatched(argsPrefix, paths, exec) {
+  const valuesByPath = new Map();
+  for (const chunk of chunkPathsByCharBudget(paths, PATH_BATCH_CHAR_BUDGET)) {
+    const raw = exec('git', [...argsPrefix, '--', ...chunk], { encoding: 'utf8' });
+    for (const [filePath, values] of parseCheckAttrOutput(raw)) {
+      valuesByPath.set(filePath, values);
+    }
+  }
+  return valuesByPath;
+}
+
 function hashFilterSignature(values) {
   return JSON.stringify(HASH_FILTER_ATTRS.map((attr) => values[attr] ?? 'unspecified'));
 }
@@ -495,10 +545,12 @@ function hashFilterSignature(values) {
 export function checkAttrSignatures(paths, exec = defaultExecFileSync) {
   if (paths.length === 0) return new Map();
 
-  const parseAttributes = (args) =>
-    parseCheckAttrOutput(exec('git', args, { encoding: 'utf8' }));
-  const worktreeValues = parseAttributes(['check-attr', '--all', '-z', '--', ...paths]);
-  const indexValues = parseAttributes(['check-attr', '--cached', '--all', '-z', '--', ...paths]);
+  const worktreeValues = runCheckAttrBatched(['check-attr', '--all', '-z'], paths, exec);
+  const indexValues = runCheckAttrBatched(
+    ['check-attr', '--cached', '--all', '-z'],
+    paths,
+    exec,
+  );
 
   // `check-attr --all` omits attributes whose value is the reserved
   // "unspecified" state, which is indistinguishable there from an absent
@@ -693,12 +745,10 @@ export function checkNoUntrackedMutableStateCopies(
   if (hasStagedAttributeFile) {
     let headSignatures;
     try {
-      const headValues = parseCheckAttrOutput(
-        defaultExecFileSync(
-          'git',
-          ['check-attr', '--source', 'HEAD', '--all', '-z', '--', ...destPaths],
-          { encoding: 'utf8' },
-        ),
+      const headValues = runCheckAttrBatched(
+        ['check-attr', '--source', 'HEAD', '--all', '-z'],
+        destPaths,
+        defaultExecFileSync,
       );
       headSignatures = new Map(
         destPaths.map((destPath) => [

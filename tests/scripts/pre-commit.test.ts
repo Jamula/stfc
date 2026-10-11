@@ -1081,6 +1081,99 @@ describe("checkAttrSignatures", () => {
     assert.throws(() => checkAttrSignatures(["docs/a.md"], exec), /boom/);
   });
 
+  it("chunks a huge path list across both the worktree and cached/index queries, preserving per-path order and results", () => {
+    // Regression test for the bounded `git check-attr` batching added to
+    // `runCheckAttrBatched`: a repository with enough staged destinations
+    // (long names, deep nesting, or simply many files) must not regress to
+    // a single oversized `git check-attr` invocation that can blow the
+    // Windows ~32767-character command-line limit.
+    const paths: string[] = [];
+    for (let i = 0; i < 900; i++) {
+      const padding = "x".repeat(40 + (i % 5) * 5);
+      paths.push(`docs/batch/idx${String(i).padStart(5, "0")}-${padding}.md`);
+    }
+    // A non-ASCII path, plus one path so long it alone exceeds the chunk
+    // budget — the implementation must still send it (as a lone operand in
+    // its own chunk) rather than silently drop it.
+    const unicodeIndex = paths.length;
+    paths.push(`docs/batch/idx${String(unicodeIndex).padStart(5, "0")}-件名-☃-${"あ".repeat(60)}.md`);
+    const oversizedIndex = paths.length;
+    paths.push(`docs/batch/idx${String(oversizedIndex).padStart(5, "0")}-${"z".repeat(25000)}.md`);
+
+    const totalChars = paths.reduce((sum, p) => sum + p.length + 1, 0);
+    assert.ok(totalChars > 24000, "fixture bug: input must exceed the documented chunk budget");
+
+    const indexOf = (p: string) => Number(p.match(/idx(\d+)-/)?.[1]);
+
+    type RecordedCall = { kind: "worktree" | "index" | "config"; operands: string[] };
+    const calls: RecordedCall[] = [];
+    const exec = (_cmd: string, args: string[]) => {
+      if (args[0] === "config") {
+        calls.push({ kind: "config", operands: [] });
+        return "";
+      }
+      const dashIndex = args.indexOf("--");
+      const operands = args.slice(dashIndex + 1);
+      const kind: RecordedCall["kind"] = args.includes("--cached") ? "index" : "worktree";
+      calls.push({ kind, operands });
+      const tokens: string[] = [];
+      for (const p of operands) {
+        const i = indexOf(p);
+        tokens.push(p, "text", i % 2 === 0 ? "set" : "unset");
+      }
+      return tokens.length ? tokens.join("\0") + "\0" : "";
+    };
+
+    const signatures = checkAttrSignatures(paths, exec);
+
+    const worktreeCalls = calls.filter((c) => c.kind === "worktree");
+    const indexCalls = calls.filter((c) => c.kind === "index");
+    assert.ok(worktreeCalls.length > 1, "expected the worktree query to be split into multiple invocations");
+    assert.ok(indexCalls.length > 1, "expected the cached/index query to be split into multiple invocations");
+    assert.equal(
+      worktreeCalls.length,
+      indexCalls.length,
+      "worktree and index queries must chunk identically for the same input",
+    );
+
+    for (const call of [...worktreeCalls, ...indexCalls]) {
+      const commandLineLength = call.operands.reduce((sum, p) => sum + p.length + 1, 0);
+      assert.ok(
+        commandLineLength <= 24000 || call.operands.length === 1,
+        `chunk exceeded the documented budget with more than one path: ${commandLineLength} chars ` +
+          `across ${call.operands.length} paths`,
+      );
+    }
+
+    assert.deepEqual(
+      worktreeCalls.flatMap((c) => c.operands),
+      paths,
+      "every path must appear exactly once, in input order, across the worktree chunks",
+    );
+    assert.deepEqual(
+      indexCalls.flatMap((c) => c.operands),
+      paths,
+      "every path must appear exactly once, in input order, across the index chunks",
+    );
+
+    for (const p of paths) {
+      const textValue = indexOf(p) % 2 === 0 ? "set" : "unset";
+      assert.deepEqual(signatures.get(p), {
+        signature: JSON.stringify([
+          textValue,
+          "unspecified",
+          "unspecified",
+          "unspecified",
+          "unspecified",
+          "unspecified",
+        ]),
+        pathIndependent: true,
+        hasCustomFilter: false,
+        matchesIndex: true,
+      });
+    }
+  });
+
   it("real git: assigns different signatures to paths governed by different .gitattributes rules", () => {
     const dir = mkdtempSync(join(tmpdir(), "stfc-checkattr-real-"));
     const isolatedGitEnv = { ...process.env };
@@ -1649,6 +1742,160 @@ describe("checkNoUntrackedMutableStateCopies", () => {
 
       assert.throws(() => listUntrackedMutableStateFiles(exec));
     } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("checkNoUntrackedMutableStateCopies: batched HEAD check-attr lookup (real git)", () => {
+  // The `--source HEAD` lookup used when a `.gitattributes` change is staged
+  // (see `checkNoUntrackedMutableStateCopies`) always runs through the real
+  // `defaultExecFileSync`, not the injectable `exec` used elsewhere in this
+  // module — there is no test seam for it, and one must not be added only
+  // to make it testable. This exercises it against a real temporary
+  // repository instead, with every other collaborator stubbed so the only
+  // real git subprocess work left is that batched HEAD lookup.
+  it("chunks the --source HEAD lookup for a huge, interleaved destination list and preserves each group's real attributes across chunk boundaries", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "stfc-checkattr-head-batch-"));
+    const isolatedGitEnv = { ...process.env };
+    for (const key of Object.keys(isolatedGitEnv)) {
+      if (key.startsWith("GIT_")) delete isolatedGitEnv[key];
+    }
+    const originalCwd = process.cwd();
+    const exitState = captureExit();
+    const errors: string[] = [];
+    mock.method(console, "error", (msg: string) => errors.push(msg));
+
+    try {
+      execFileSync("git", ["init", "--quiet"], { cwd: dir, env: isolatedGitEnv });
+      execFileSync("git", ["config", "user.name", "Pre-commit test"], { cwd: dir, env: isolatedGitEnv });
+      execFileSync("git", ["config", "user.email", "pre-commit-test@example.invalid"], {
+        cwd: dir,
+        env: isolatedGitEnv,
+      });
+      execFileSync("git", ["config", "core.autocrlf", "false"], { cwd: dir, env: isolatedGitEnv });
+      writeFileSync(
+        join(dir, ".gitattributes"),
+        ["groupA/*.md text", "groupB/*.md -text", ""].join("\n"),
+      );
+      execFileSync("git", ["add", ".gitattributes"], { cwd: dir, env: isolatedGitEnv });
+      execFileSync("git", ["commit", "--quiet", "-m", "Add baseline attributes"], {
+        cwd: dir,
+        env: isolatedGitEnv,
+      });
+
+      // Confirm the fixture's real `--source HEAD` attribute values before
+      // relying on them, rather than assuming git's boolean-attribute output.
+      const probe = execFileSync(
+        "git",
+        ["check-attr", "--source", "HEAD", "--all", "-z", "--", "groupA/probe.md", "groupB/probe.md"],
+        { cwd: dir, encoding: "utf8", env: isolatedGitEnv },
+      );
+      assert.deepEqual(
+        probe.split("\0").filter(Boolean),
+        ["groupA/probe.md", "text", "set", "groupB/probe.md", "text", "unset"],
+        "fixture bug: expected the committed .gitattributes to resolve plain 'text'/'-text' values",
+      );
+
+      const groupASignature = JSON.stringify([
+        "set",
+        "unspecified",
+        "unspecified",
+        "unspecified",
+        "unspecified",
+        "unspecified",
+      ]);
+      const groupBSignature = JSON.stringify([
+        "unset",
+        "unspecified",
+        "unspecified",
+        "unspecified",
+        "unspecified",
+        "unspecified",
+      ]);
+
+      // Interleave the two groups so chunk boundaries (driven purely by the
+      // running character budget) cannot line up with the group boundary —
+      // a merge bug that dropped or cross-attributed a chunk's results would
+      // then corrupt at least one path's signature.
+      const padding = "p".repeat(55);
+      const destPaths: string[] = [];
+      let pairIndex = 0;
+      while (destPaths.reduce((sum, p) => sum + p.length + 1, 0) < 45000) {
+        destPaths.push(`groupA/file${String(pairIndex).padStart(5, "0")}-${padding}.md`);
+        destPaths.push(`groupB/file${String(pairIndex).padStart(5, "0")}-${padding}.md`);
+        pairIndex += 1;
+      }
+      const totalChars = destPaths.reduce((sum, p) => sum + p.length + 1, 0);
+      assert.ok(totalChars > 24000, "fixture bug: destination list must exceed the chunk budget");
+
+      const signatures = new Map(
+        destPaths.map((p) => [
+          p,
+          {
+            signature: p.startsWith("groupA/") ? groupASignature : groupBSignature,
+            pathIndependent: true,
+            hasCustomFilter: false,
+            matchesIndex: true,
+          },
+        ]),
+      );
+      const destHashes = new Map(destPaths.map((p) => [p, "dest-hash"]));
+      const ignoredSource = ".squad/agents/scotty/history.md";
+      let hashFnCalls = 0;
+      const hashFn = (sourcePaths: string[]) => {
+        hashFnCalls += 1;
+        return sourcePaths.map(() => "non-matching-hash");
+      };
+
+      const mod = await import("../../scripts/pre-commit-checks.mjs");
+      process.chdir(dir);
+      try {
+        mod.checkNoUntrackedMutableStateCopies(
+          destHashes,
+          () => [ignoredSource],
+          hashFn,
+          () => signatures,
+          () => true,
+          () => ({ size: 1 }),
+        );
+      } finally {
+        process.chdir(originalCwd);
+      }
+
+      assert.equal(
+        exitState.code,
+        null,
+        `expected the chunked HEAD lookup to resolve every path's real committed attribute ` +
+          `without flagging a spurious attribute change:\n${errors.join("\n")}`,
+      );
+      // Both signature groups must have reached the grouping/hash step —
+      // if the merge had dropped a group's real attributes, that group
+      // would instead have fallen into the (untested here) "attributes
+      // changed" branch and this would stay at 1 or 0.
+      assert.equal(hashFnCalls, 2, "expected one grouped hash comparison per signature group");
+
+      if (process.platform === "win32") {
+        // The same pathspec, sent as a single unchunked invocation, must
+        // exceed Windows' ~32767-character command-line limit — confirming
+        // the production code above really did split this into multiple
+        // `git check-attr` subprocesses rather than merely tolerating a
+        // list that happened to fit.
+        assert.throws(
+          () =>
+            execFileSync(
+              "git",
+              ["check-attr", "--source", "HEAD", "--all", "-z", "--", ...destPaths],
+              { cwd: dir, encoding: "utf8", env: isolatedGitEnv },
+            ),
+          /ENAMETOOLONG|spawnSync/i,
+          "fixture bug: expected an unchunked invocation of this size to fail on Windows, which is " +
+            "exactly the regression the batching in runCheckAttrBatched fixes",
+        );
+      }
+    } finally {
+      process.chdir(originalCwd);
+      mock.restoreAll();
       rmSync(dir, { recursive: true, force: true });
     }
   });
