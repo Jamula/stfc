@@ -145,19 +145,25 @@ Every non-Dependabot PR must list required reviewers under `## Reviewer lanes`
 in its body. Kirk provides technical review; Garak's independent co-review is
 also required for `feat(*)` PRs touching `src/` and implementations of
 Kirk-authored designs. Each declared reviewer posts a new PR comment beginning
-with `**APPROVE** ✅`, followed by `**Reviewer:** Name` and `**Head:**` with the
-full current 40-character SHA in backticks. The latest verdict by comment
-creation time wins; editing an older comment does not renew it. Pushes make
-prior-head approvals stale. Missing lanes/verdicts, malformed verdict comments,
-stale approvals, or a latest `**CHANGES_REQUESTED** ⚠️` fail the status.
+with `**APPROVE**` (the ✅ emoji is conventional, not required), followed by
+`**Reviewer:** Name` and `**Head:**` with the full current 40-character SHA in
+backticks. The latest valid verdict by comment creation time wins; numeric
+comment ID breaks equal-timestamp ties. Editing an older comment does not renew
+it. Pushes make prior-head approvals stale. Missing lanes/verdicts, malformed
+verdict comments, stale approvals, or a latest `**CHANGES_REQUESTED**` (⚠️ is
+conventional, not required) fail the status.
 PRs authored by `dependabot[bot]` are exempt.
 
 Reactivation does **not** clear old failures or prove that branch protection
-requires this status. [Issue #345](https://github.com/Jamula/stfc/issues/345)
-remains open pending a successful new PR-triggered run. Green checks and
-reviewer approvals do not authorize merging: an explicit user request is still
-required. See [the verdict contract and enforcement limits](docs/REVIEWER-GATE.md)
-for the exact comment format and break-glass runbook.
+requires this status. A successful PR-triggered run has completed
+([run #38109821087](https://github.com/Jamula/stfc/actions/runs/38109821087)),
+but it was for a Dependabot PR, whose successful status is exempt from
+reviewer-verdict evaluation. The successful-run condition listed in [Issue
+#345](https://github.com/Jamula/stfc/issues/345) is therefore met; the issue
+remains open. Green checks and reviewer approvals do not authorize merging: an
+explicit user request is still required. See [the verdict contract and
+enforcement limits](docs/REVIEWER-GATE.md) for the exact comment format and
+break-glass runbook.
 
 ---
 
