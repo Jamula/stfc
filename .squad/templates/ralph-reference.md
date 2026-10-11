@@ -81,6 +81,11 @@ After every 3-5 rounds, pause and report before continuing:
 
 ### Watch Mode (`squad watch`)
 
+**#220 hold:** Until host-side landing enforcement is proven, use supervised,
+report-only rounds instead of the implementation/watch modes below. Plain watch
+and heartbeat can assign work; they are not read-only alternatives. Follow
+`docs/PR-LANDING-SAFETY.md` for the owner acceptance procedure.
+
 Ralph's in-session loop processes work while it exists, then idles. For **persistent polling** between sessions or when you're away from the keyboard, use the `squad watch` CLI command:
 
 ```bash

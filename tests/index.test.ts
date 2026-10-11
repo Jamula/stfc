@@ -109,6 +109,7 @@ import "./api/auth.test.ts";
 import "./ci/check-api-auth.test.ts";
 import "./skills/ruleReferenceCheck.test.ts";
 import "./skills/enforcementSkillCheck.test.ts";
+import "./skills/squadAssignmentSafety.test.ts";
 import "./scripts/checkRetroOverdue.test.ts";
 import "./scripts/checkRetroOverdueCli.test.ts";
 import "./scripts/ralphTriageRetroGate.test.ts";

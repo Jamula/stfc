@@ -215,14 +215,18 @@ jobs:
                     agent_assignment: {
                       target_repo: `${context.repo.owner}/${context.repo.repo}`,
                       base_branch: repoData.default_branch,
-                      custom_instructions: `Read .squad/team.md (or .ai-team/team.md) for team context and .squad/routing.md (or .ai-team/routing.md) for routing rules.`
+                      custom_instructions: [
+                        'Read .squad/team.md (or .ai-team/team.md) for team context and .squad/routing.md (or .ai-team/routing.md) for routing rules.',
+                        'Open a draft PR and stop (#220). Never merge, enable auto-merge, or mark a PR ready without an explicit user request in the current, active conversation.',
+                        'Keep the PR open even when CI is red, unavailable, or has not started, and when required reviews are absent.'
+                      ].join('\n')
                     }
                   });
                   core.info(`Assigned copilot-swe-agent[bot] to #${issue.number}`);
                 } catch (e) {
-                  core.warning(`Failed to assign @copilot to #${issue.number}: ${e.message}`);
+                  core.setFailed(`Guarded assignment failed for issue #${issue.number}: ${e.message}`);
                 }
               }
             } catch (e) {
-              core.info(`No squad:copilot label found or error: ${e.message}`);
+              core.setFailed(`Could not evaluate @copilot assignments: ${e.message}`);
             }
