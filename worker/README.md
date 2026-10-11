@@ -112,15 +112,11 @@ This Worker is automatically deployed to Cloudflare via GitHub Actions when `wor
 **Required secrets (set once per repo, persists):**
 - `CLOUDFLARE_API_TOKEN` — Cloudflare API token with **Workers Scripts:Edit** permission (create at https://dash.cloudflare.com/profile/api-tokens)
 - `CLOUDFLARE_ACCOUNT_ID` — Your Cloudflare account ID (find at https://dash.cloudflare.com — bottom-left sidebar)
-- `CLOUDFLARE_R2_ACCESS_KEY_ID` — R2 access key with write access to `stfc-game-state`
-- `CLOUDFLARE_R2_SECRET_ACCESS_KEY` — Matching R2 secret access key
 
 Set both from your local terminal using `gh`:
 ```bash
 gh secret set CLOUDFLARE_API_TOKEN --repo Jamula/stfc
 gh secret set CLOUDFLARE_ACCOUNT_ID --repo Jamula/stfc
-gh secret set CLOUDFLARE_R2_ACCESS_KEY_ID --repo Jamula/stfc
-gh secret set CLOUDFLARE_R2_SECRET_ACCESS_KEY --repo Jamula/stfc
 ```
 
 **After deploy:**

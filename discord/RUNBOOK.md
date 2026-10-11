@@ -301,7 +301,7 @@ GH_DISPATCH_TOKEN
 ### Cloudflare R2 Game-State Keys (`CLOUDFLARE_R2_ACCESS_KEY_ID`, `CLOUDFLARE_R2_SECRET_ACCESS_KEY`)
 - **Bucket:** `stfc-game-state` (private, automatic region placement)
 - **Rotation schedule:** Annually, or when team membership changes
-- **Retention:** Forever by default; a 90-day archive tier can be enabled later if storage cost warrants it
+- **Retention:** Forever for this slice. A 90-day archive tier is not implemented; keep issue #164 open until its lifecycle policy is provisioned.
 - **Procedure:**
   1. Generate an R2 API token/key pair scoped to write the `stfc-game-state` bucket
   2. Update GitHub repo secrets:
