@@ -75,59 +75,27 @@ az staticwebapp appsettings set \
   --output none
 info "App settings applied"
 
-# ── 5. Deployment token (token-mode fallback) ─────────────────────────────────
-step "Retrieving deployment token (store as AZURE_STATIC_WEB_APPS_API_TOKEN if using token-mode fallback)"
-DEPLOY_TOKEN=$(az staticwebapp secrets list \
-  --name "${SWA_NAME}" \
-  --resource-group "${RESOURCE_GROUP}" \
-  --query "properties.apiKey" -o tsv 2>/dev/null || echo "unavailable")
+# ── 5. Deployment-token next steps ────────────────────────────────────────────
+step "Next steps for the SWA deployment token"
+cat <<EOF
 
-if [[ "${DEPLOY_TOKEN}" != "unavailable" ]]; then
-  info "Deployment token retrieved (shown once — copy now if needed for fallback mode):"
-  echo
-  echo "    AZURE_STATIC_WEB_APPS_API_TOKEN=${DEPLOY_TOKEN}"
-  echo
-else
-  warn "Could not retrieve deployment token — check portal manually if needed"
-fi
+  1. Pipe the deployment token directly into GitHub CLI; do not print it:
+       set -o pipefail
+       az staticwebapp secrets list \
+         --name "${SWA_NAME}" \
+         --resource-group "${RESOURCE_GROUP}" \
+         --query properties.apiKey -o tsv \
+         | gh secret set AZURE_STATIC_WEB_APPS_API_TOKEN --repo Jamula/stfc
 
-# ── 6. OIDC next steps ────────────────────────────────────────────────────────
-step "Next steps for OIDC federation (primary auth method)"
-cat <<'EOF'
+  2. Verify the secret name only:
+       gh secret list --repo Jamula/stfc --json name
 
-  1. Create a Service Principal:
-       az ad sp create-for-rbac \
-         --name stfc-control-panel-deploy \
-         --skip-assignment \
-         --output json
-
-     Note the appId (CLIENT_ID) and tenant (TENANT_ID) from the output.
-
-  2. Assign Website Contributor role on the SWA:
-       az role assignment create \
-         --assignee <CLIENT_ID> \
-         --role "Website Contributor" \
-         --scope /subscriptions/<SUBSCRIPTION_ID>/resourceGroups/<RG>/providers/Microsoft.Web/staticSites/<SWA_NAME>
-
-  3. Add federated credentials via Azure Portal or CLI:
-       az ad app federated-credential create \
-         --id <APP_OBJECT_ID> \
-         --parameters '{"name":"stfc-main","issuer":"https://token.actions.githubusercontent.com","subject":"repo:Jamula/stfc:ref:refs/heads/main","audiences":["api://AzureADTokenExchange"]}'
-
-       az ad app federated-credential create \
-         --id <APP_OBJECT_ID> \
-         --parameters '{"name":"stfc-pr","issuer":"https://token.actions.githubusercontent.com","subject":"repo:Jamula/stfc:pull_request","audiences":["api://AzureADTokenExchange"]}'
-
-  4. Add repo secrets in GitHub Settings → Secrets → Actions:
-       AZURE_TENANT_ID     = <tenant from step 1>
-       AZURE_CLIENT_ID     = <appId from step 1>
-       AZURE_SUBSCRIPTION_ID = $(az account show --query id -o tsv)
-
-  5. Invite first operator via Azure Portal:
+  3. Invite first operator via Azure Portal:
        Portal → Static Web Apps → stfc-control-panel
        → Role Management → Invite → GitHub → role: stfc_operator
 
-  See docs/SWA-SETUP.md for the full illustrated runbook.
+  The official Azure/static-web-apps-deploy action requires this token input.
+  Never print or paste the deployment token into a terminal transcript or chat.
 
 EOF
 

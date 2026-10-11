@@ -15,7 +15,6 @@ import { parse as parseYaml } from "yaml";
 
 // SHA from deploy-contract.md §2 — must match workflow bit-for-bit.
 const SWA_DEPLOY_ACTION_SHA = "1a947af9992250f3bc2e68ad0754c0b0c11566c9";
-const AZURE_LOGIN_ACTION_SHA = "a641126d1b8aa4d1fa005f4f92df94a3a4c4c906";
 
 const yamlPath = path.resolve(
   import.meta.dirname,
@@ -49,12 +48,8 @@ describe("swa-deploy.yml / contract pinning (T-SWA-001)", () => {
     assert.match(yaml, /- closed/, "closed action missing — preview teardown won't fire");
   });
 
-  it("permissions include id-token: write (OIDC)", () => {
-    assert.match(
-      yaml,
-      /id-token:\s*write/,
-      "id-token: write required for OIDC federated credential auth",
-    );
+  it("does not grant id-token: write because SWA deployment uses its required token input", () => {
+    assert.doesNotMatch(yaml, /id-token:\s*write/);
   });
 
   it("permissions include contents: read", () => {
@@ -86,14 +81,6 @@ describe("swa-deploy.yml / contract pinning (T-SWA-001)", () => {
     );
   });
 
-  it(`azure/login is pinned to contract SHA (${AZURE_LOGIN_ACTION_SHA})`, () => {
-    assert.match(
-      yaml,
-      new RegExp(`azure/login@${AZURE_LOGIN_ACTION_SHA}`),
-      `expected azure/login@${AZURE_LOGIN_ACTION_SHA} — update deploy-contract.md and this test together`,
-    );
-  });
-
   it("DISABLE_WRITES: \"1\" is set in the deploy env block (kill switch, Phase 1 default)", () => {
     assert.match(
       yaml,
@@ -102,12 +89,25 @@ describe("swa-deploy.yml / contract pinning (T-SWA-001)", () => {
     );
   });
 
-  it("AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_SUBSCRIPTION_ID are wired from secrets (OIDC)", () => {
-    // azure/login uses kebab-case input names (tenant-id, client-id, subscription-id)
-    // not screaming-snake env vars — match the actual YAML keys.
-    assert.match(yaml, /tenant-id:\s*\$\{\{\s*secrets\.AZURE_TENANT_ID\s*\}\}/);
-    assert.match(yaml, /client-id:\s*\$\{\{\s*secrets\.AZURE_CLIENT_ID\s*\}\}/);
-    assert.match(yaml, /subscription-id:\s*\$\{\{\s*secrets\.AZURE_SUBSCRIPTION_ID\s*\}\}/);
+  it("passes the required deployment token to upload and close actions", () => {
+    const workflow = parseYaml(yaml) as {
+      jobs: Record<string, {
+        steps: { uses?: string; with?: Record<string, string> }[];
+      }>;
+    };
+    for (const [job, action] of [["deploy", "upload"], ["teardown", "close"]]) {
+      const step = workflow.jobs[job!]!.steps.find(
+        (step) => step.uses === `Azure/static-web-apps-deploy@${SWA_DEPLOY_ACTION_SHA}`,
+      );
+      assert.equal(step?.with?.action, action, `${job} must perform ${action}`);
+      assert.equal(
+        step?.with?.azure_static_web_apps_api_token,
+        "${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}",
+        `${job} must pass the repository deployment token`,
+      );
+    }
+    assert.doesNotMatch(yaml, /azure\/login@/);
+    assert.doesNotMatch(yaml, /secrets\.AZURE_(CLIENT_ID|TENANT_ID|SUBSCRIPTION_ID)/);
   });
 
   it("validate-api-node-22 installs, builds, and smoke-tests the API before deploy", () => {
@@ -132,7 +132,7 @@ describe("swa-deploy.yml / contract pinning (T-SWA-001)", () => {
     assert.match(
       normalizedYaml,
       /^  deploy:\n    needs:\n      - preflight\n      - validate-api-node-22$/m,
-      "deploy must wait for OIDC preflight and API validation",
+      "deploy must wait for token preflight and API validation",
     );
   });
 
@@ -158,34 +158,34 @@ describe("swa-deploy.yml / contract pinning (T-SWA-001)", () => {
     assert.match(yaml, /config_file_location:\s*\./);
   });
 
-  it("deploy and teardown jobs are gated on AZURE_CLIENT_ID being set (secret-presence guard)", () => {
-    // Both jobs must skip gracefully when OIDC secrets are not yet provisioned,
+  it("deploy and teardown jobs are gated on the SWA deployment token (secret-presence guard)", () => {
+    // Both jobs must skip gracefully when the deployment token is not provisioned,
     // so a missing-secret state produces `skipped` rather than `failure`.
     //
     // The `secrets` context is NOT available in a job-level `if:` — using it
     // there makes the whole workflow fail to start (startup_failure), not skip.
     // So the guard is implemented as a `preflight` job that probes the secret in
-    // a step and exposes a `has-oidc` output; deploy/teardown gate on it via
-    // `needs.preflight.outputs.has-oidc`. See fix(deploy) commit.
+    // a step and exposes a `has-token` output; deploy/teardown gate on it via
+    // `needs.preflight.outputs.has-token`.
     assert.match(
       yaml,
-      /has-oidc:\s*\$\{\{\s*steps\.probe\.outputs\.has-oidc\s*\}\}/,
-      "preflight job must expose a has-oidc output probed from secrets.AZURE_CLIENT_ID",
+      /has-token:\s*\$\{\{\s*steps\.probe\.outputs\.has-token\s*\}\}/,
+      "preflight job must expose a has-token output probed from the SWA secret",
     );
     assert.match(
       yaml,
-      /AZURE_CLIENT_ID:\s*\$\{\{\s*secrets\.AZURE_CLIENT_ID\s*\}\}/,
-      "preflight probe must read secrets.AZURE_CLIENT_ID via an env var (the only place secrets are allowed)",
+      /SWA_DEPLOY_TOKEN:\s*\$\{\{\s*secrets\.AZURE_STATIC_WEB_APPS_API_TOKEN\s*\}\}/,
+      "preflight probe must read the deployment token via an env var",
     );
-    const gateMatches = yaml.match(/needs\.preflight\.outputs\.has-oidc\s*==\s*'true'/g) ?? [];
+    const gateMatches = yaml.match(/needs\.preflight\.outputs\.has-token\s*==\s*'true'/g) ?? [];
     assert.ok(
       gateMatches.length >= 2,
-      "deploy AND teardown jobs must gate on needs.preflight.outputs.has-oidc == 'true' so unprovisioned secrets skip rather than fail",
+      "deploy AND teardown jobs must gate on needs.preflight.outputs.has-token == 'true' so an unprovisioned secret skips rather than fails",
     );
     // The forbidden pattern must NOT reappear in any job-level `if:`.
     assert.doesNotMatch(
       yaml,
-      /if:[^\n]*secrets\.AZURE_CLIENT_ID/,
+      /if:[^\n]*secrets\.AZURE_STATIC_WEB_APPS_API_TOKEN/,
       "secrets.* must never appear in a job-level if: — it causes a workflow startup failure",
     );
   });

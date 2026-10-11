@@ -4,9 +4,8 @@
 # Preview: fires on pull_request open/sync/reopen targeting main;
 #           tears down on PR close.
 #
-# Auth: OIDC federation — no long-lived deploy secret.
-# Fallback: swap OIDC steps for azure_static_web_apps_api_token input
-#           if the tenant blocks workload-identity federation.
+# Auth: Azure Static Web Apps deployment token. The pinned official deploy
+# action requires this input; azure/login OIDC does not replace it.
 #
 # Contract: specs/005-web-control-panel/deploy-contract.md
 name: Deploy SWA
@@ -25,7 +24,6 @@ on:
       - main
 
 permissions:
-  id-token: write      # OIDC token for Azure federated credential
   contents: read       # checkout
   pull-requests: write # preview-URL comment on PRs
 
@@ -39,22 +37,22 @@ concurrency:
 
 jobs:
   # The `secrets` context cannot be used in a job-level `if:` (doing so makes the
-  # whole workflow fail to start). Probe for the OIDC secret in a step here and
+  # whole workflow fail to start). Probe for the deploy token in a step here and
   # expose the result as an output that downstream jobs can gate on via `needs`.
   preflight:
     runs-on: ubuntu-latest
     timeout-minutes: 2
     outputs:
-      has-oidc: ${{ steps.probe.outputs.has-oidc }}
+      has-token: ${{ steps.probe.outputs.has-token }}
     steps:
       - id: probe
         env:
-          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          SWA_DEPLOY_TOKEN: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
         run: |
-          if [ -n "${AZURE_CLIENT_ID:-}" ]; then
-            echo "has-oidc=true" >> "$GITHUB_OUTPUT"
+          if [ -n "${SWA_DEPLOY_TOKEN:-}" ]; then
+            echo "has-token=true" >> "$GITHUB_OUTPUT"
           else
-            echo "has-oidc=false" >> "$GITHUB_OUTPUT"
+            echo "has-token=false" >> "$GITHUB_OUTPUT"
           fi
 
   validate-api-node-22:
@@ -90,27 +88,20 @@ jobs:
       - validate-api-node-22
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    # Skip when OIDC secrets are not yet provisioned (probed in preflight).
+    # Skip when the SWA deployment token is not provisioned (probed in preflight).
     # Also skip for closed-PR events (teardown job handles those).
     if: >-
-      needs.preflight.outputs.has-oidc == 'true' &&
+      needs.preflight.outputs.has-token == 'true' &&
       (github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.action != 'closed'))
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           submodules: false
 
-      - name: Log in to Azure (OIDC)
-        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906  # v3.1.0
-        with:
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-
       - name: Deploy to SWA
         uses: Azure/static-web-apps-deploy@1a947af9992250f3bc2e68ad0754c0b0c11566c9  # v1
         with:
-          azure_static_web_apps_api_token: ""  # intentionally empty — OIDC auth via azure/login above
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           action: upload
           app_location: web
@@ -124,22 +115,15 @@ jobs:
     needs: preflight
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    # Skip teardown too when OIDC secrets are absent — no SWA environment was created.
-    if: needs.preflight.outputs.has-oidc == 'true' && github.event_name == 'pull_request' && github.event.action == 'closed'
+    # Skip teardown too when the deploy token is absent — no SWA environment was created.
+    if: needs.preflight.outputs.has-token == 'true' && github.event_name == 'pull_request' && github.event.action == 'closed'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
-
-      - name: Log in to Azure (OIDC)
-        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906  # v3.1.0
-        with:
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Close preview environment
         uses: Azure/static-web-apps-deploy@1a947af9992250f3bc2e68ad0754c0b0c11566c9  # v1
         with:
-          azure_static_web_apps_api_token: ""
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
           action: close
         env:
           DISABLE_WRITES: "1"

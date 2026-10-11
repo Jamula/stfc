@@ -4,9 +4,9 @@
 // (swa-deploy.yml app_location/api_location/output_location) and by Wave 3
 // agents (Scotty #119/#120, Uhura #117) are present and have the right shape.
 //
-// Note: swa-deploy.yml gates deploy/teardown on a `preflight` job's has-oidc
-// output (probed from secrets.AZURE_CLIENT_ID) so it skips rather than fails
-// when OIDC secrets are not yet provisioned. (`secrets` can't be used in a
+// Note: swa-deploy.yml gates deploy/teardown on a `preflight` job's has-token
+// output (probed from AZURE_STATIC_WEB_APPS_API_TOKEN) so it skips rather than
+// fails when the deployment token is not yet provisioned. (`secrets` can't be used in a
 // job-level `if:` — that would be a startup failure, not a skip.)
 // Contract pinning for that guard lives in tests/skills/swaDeploy.test.ts.
 //
@@ -330,6 +330,35 @@ describe("SWA project structure (T-SWA-002)", () => {
         sh,
         /DISABLE_WRITES=1/,
         "create-swa.sh must apply DISABLE_WRITES=1 app setting (kill switch)",
+      );
+    });
+
+    it("bootstrap does not create client passwords or print deployment tokens", () => {
+      const sh = read("scripts/azure/create-swa.sh");
+      const executable = sh.replace(/cat <<EOF\r?\n[\s\S]*?\r?\nEOF/g, "");
+      assert.doesNotMatch(
+        executable,
+        /create-for-rbac|DEPLOY_TOKEN|staticwebapp secrets list|properties\.apiKey/,
+        "bootstrap must leave credential retrieval to the operator, not execute it",
+      );
+      assert.match(
+        sh,
+        /\|\s*gh secret set AZURE_STATIC_WEB_APPS_API_TOKEN --repo Jamula\/stfc/,
+        "bootstrap must show a direct pipe, never a token value",
+      );
+    });
+
+    it("GitHub SWA-token setup pipes the value to gh instead of using a command-line argument", () => {
+      const setup = read("docs/SWA-SETUP.md");
+      assert.match(
+        setup,
+        /az staticwebapp secrets list[\s\S]*?--query properties\.apiKey -o tsv\s*\\?\r?\n\s*\|\s*gh secret set AZURE_STATIC_WEB_APPS_API_TOKEN --repo Jamula\/stfc/,
+        "missing deployment-token setup command",
+      );
+      assert.doesNotMatch(
+        setup,
+        /gh secret set AZURE_STATIC_WEB_APPS_API_TOKEN\s+--body/,
+        "secret values must not be passed on command lines",
       );
     });
   });

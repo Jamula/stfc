@@ -826,6 +826,17 @@ describe("workflow consolidation", () => {
       dependencies.includes("validate-api-node-22"),
       "SWA deployment must wait for Node 22 API validation",
     );
+    assert.ok(
+      dependencies.includes("preflight"),
+      "SWA deployment must also wait for the deployment-token presence probe",
+    );
+    for (const jobName of ["deploy", "teardown"]) {
+      assert.match(
+        swa.workflow.jobs?.[jobName]?.if ?? "",
+        /needs\.preflight\.outputs\.has-token == 'true'/,
+        `${jobName} must skip when the SWA deployment token is absent (#127)`,
+      );
+    }
   });
 
   it("runs the canonical suite entry point on push to main (#242, #222)", () => {
