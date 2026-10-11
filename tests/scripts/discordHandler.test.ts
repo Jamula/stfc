@@ -1,6 +1,12 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+import path from "node:path";
+import { tmpdir } from "node:os";
+
+const execFileAsync = promisify(execFile);
 
 // @ts-ignore - untyped .mjs module imported in tests.
 const mod = await import("../../scripts/discord-handler.mjs") as {
@@ -33,7 +39,7 @@ const mod = await import("../../scripts/discord-handler.mjs") as {
   }) => Promise<{ files: Array<{ filename: string }> }>;
   updateDailyManifestAtomic: (opts: {
     manifestPath: string;
-    entry: { filename: string; r2_bucket?: string; r2_key: string; sha256: string; size_bytes: number };
+    entry: { filename: string; r2_bucket: string; r2_key: string; sha256: string; size_bytes: number };
     readFileImpl: (path: string, enc: string) => Promise<string>;
     writeFileImpl: (path: string, data: string, enc?: string) => Promise<void>;
     renameImpl: (from: string, to: string) => Promise<void>;
@@ -448,6 +454,181 @@ describe("scripts/discord-handler.mjs", () => {
       ["2026-06-02/064800000-state.png", "2026-06-02/064800001-state.png"],
     );
   });
+
+  it("game-state honors a bucket override in upload, manifest and lineage", async () => {
+    const mem = createMemFs();
+    const urls: string[] = [];
+    const code = await mod.runCli({
+      env: { ...baseEnv(gameStatePayload()), STFC_GAME_STATE_R2_BUCKET: "custom-game-state" },
+      nowFn: () => new Date("2026-06-02T06:48:00Z"),
+      readFileImpl: mem.readFile,
+      writeFileImpl: mem.writeFile,
+      mkdirImpl: mem.mkdir,
+      renameImpl: mem.rename,
+      runGit: async (args) => args[0] === "rev-parse" ? "abc123" : "",
+      fetchImpl: async (url: string) => {
+        urls.push(url);
+        return {
+          ok: true, status: 200, url,
+          headers: createHeaders({ "content-length": "5" }),
+          arrayBuffer: async () => Buffer.from("abcde"),
+          text: async () => "{}",
+        };
+      },
+      stdout: makeStdout().stream,
+      stderr: makeStdout().stream,
+    });
+    assert.equal(code, 0);
+    const manifest = JSON.parse(await mem.readFile("data/discord/game-state/2026-06-02/manifest.json", "utf8"));
+    const lineage = JSON.parse(await mem.readFile("data/discord/game-state/2026-06-02/064800000-state.png.lineage.json", "utf8"));
+    assert.equal(manifest.bucket, "custom-game-state");
+    assert.equal(manifest.files[0].r2_bucket, manifest.bucket);
+    assert.equal(lineage.r2_bucket, manifest.bucket);
+    assert.ok(urls.includes(`https://account123.r2.cloudflarestorage.com/${manifest.bucket}/${manifest.files[0].r2_key}`));
+  });
+
+  for (const manifest of [
+    { bucket: "old-bucket", files: [{ filename: "old.png", r2_bucket: "old-bucket", r2_key: "old.png" }] },
+    { bucket: "stfc-game-state", files: [{ filename: "old.png", r2_bucket: "other-bucket", r2_key: "old.png" }] },
+    { files: [
+      { filename: "old.png", r2_bucket: "stfc-game-state", r2_key: "old.png" },
+      { filename: "other.png", r2_bucket: "other-bucket", r2_key: "other.png" },
+    ] },
+  ]) {
+    it(`game-state rejects conflicting daily buckets before any side effects: ${JSON.stringify(manifest)}`, async () => {
+      const manifestPath = "data/discord/game-state/2026-06-02/manifest.json";
+      const original = JSON.stringify(manifest);
+      const mem = createMemFs({ [manifestPath]: original });
+      let effects = 0;
+      const stderr = makeStdout();
+      const code = await mod.runCli({
+        env: baseEnv(gameStatePayload()),
+        nowFn: () => new Date("2026-06-02T06:48:00Z"),
+        readFileImpl: mem.readFile,
+        writeFileImpl: async () => { effects++; },
+        mkdirImpl: async () => { effects++; },
+        runGit: async () => { effects++; return ""; },
+        fetchImpl: async (url: string, init: any) => {
+          if (isHost(url, "discord.com")) {
+            assert.match(String(init.body), /daily manifest bucket mismatch/);
+            return { ok: true, status: 200, text: async () => "{}" };
+          }
+          effects++;
+          throw new Error("unexpected upload");
+        },
+        stdout: makeStdout().stream,
+        stderr: stderr.stream,
+      });
+      assert.equal(code, 1);
+      assert.match(stderr.text(), /daily manifest bucket mismatch/);
+      assert.equal(effects, 0);
+      assert.equal(await mem.readFile(manifestPath, "utf8"), original);
+      await assert.rejects(mod.updateDailyManifestAtomic({
+        manifestPath,
+        entry: { filename: "new.png", r2_bucket: "stfc-game-state", r2_key: "new.png", sha256: "abc", size_bytes: 5 },
+        readFileImpl: mem.readFile,
+        writeFileImpl: async () => { effects++; },
+        renameImpl: async () => { effects++; },
+      }), /daily manifest bucket mismatch/);
+      assert.equal(effects, 0);
+    });
+  }
+
+  for (const scenario of ["lost-ack", "uncertain", "not-published", "retry-lost-ack", "retry-uncertain"]) {
+    it(`game-state push outcome ${scenario} preserves potentially published R2 objects`, async () => {
+      const scratch = mkdtempSync(path.join(tmpdir(), "stfc-push-outcome-"));
+      try {
+        const remote = path.join(scratch, "remote.git");
+        const writer = path.join(scratch, "writer");
+        mkdirSync(writer);
+        const git = async (cwd: string, args: string[], stdin?: string) => {
+          const env = { ...process.env };
+          for (const key of Object.keys(env)) {
+            if (key.startsWith("GIT_")) delete env[key];
+          }
+          const execution = execFileAsync("git", args, { cwd, env, encoding: "utf8" });
+          execution.child.stdin?.end(stdin);
+          return (await execution).stdout.trim();
+        };
+        await git(scratch, ["init", "--bare", remote]);
+        await git(writer, ["init", "-b", "automation-state"]);
+        await git(writer, ["config", "user.name", "Test"]);
+        await git(writer, ["config", "user.email", "test@example.invalid"]);
+        writeFileSync(path.join(writer, "seed.txt"), "seed");
+        await git(writer, ["add", "."]);
+        await git(writer, ["commit", "--no-verify", "-m", "seed"]);
+        await git(writer, ["remote", "add", "origin", remote]);
+        await git(writer, ["push", "--no-verify", "origin", "HEAD:automation-state"]);
+        const mem = createMemFs();
+        const methods: string[] = [];
+        const stderr = makeStdout();
+        let attempts = 0;
+        let reconciliations = 0;
+        let response = "";
+        const code = await mod.runCli({
+          env: baseEnv(gameStatePayload()),
+          nowFn: () => new Date("2026-06-02T06:48:00Z"),
+          readFileImpl: mem.readFile,
+          writeFileImpl: mem.writeFile,
+          mkdirImpl: mem.mkdir,
+          renameImpl: mem.rename,
+          runGit: async (args, opts) => {
+            if (args[0] === "commit") {
+              for (const [name, content] of mem.files) {
+                const target = path.join(writer, name);
+                mkdirSync(path.dirname(target), { recursive: true });
+                writeFileSync(target, content);
+              }
+              await git(writer, ["add", "data"]);
+            }
+            if (args[0] === "add") return "";
+            if (args[0] === "push") {
+              attempts++;
+              if (scenario.startsWith("retry") && attempts === 1) throw new Error("non-fast-forward");
+              if (scenario.endsWith("lost-ack") || scenario.endsWith("uncertain")) await git(writer, args);
+              throw new Error("push acknowledgement lost");
+            }
+            if (args[0] === "-C") {
+              if (scenario.endsWith("uncertain") && (!scenario.startsWith("retry") || attempts === 2)) throw new Error("remote unavailable");
+              try {
+                return await git(writer, args.slice(2));
+              } catch (error) {
+                if (args[2] === "merge-base" && (error as { code?: number }).code === 1) throw Object.assign(new Error("not published"), { code: 1 });
+                throw error;
+              }
+            }
+            return git(writer, args, opts?.stdin);
+          },
+          reconcileAutomationStateImpl: async () => { reconciliations++; return "rebased"; },
+          fetchImpl: async (url: string, init: any) => {
+            if (isHost(url, "account123.r2.cloudflarestorage.com")) methods.push(init.method);
+            if (isHost(url, "discord.com")) response = String(init.body);
+            return {
+              ok: true, status: 200, url,
+              headers: createHeaders({ "content-length": "5" }),
+              arrayBuffer: async () => Buffer.from("abcde"), text: async () => "{}",
+            };
+          },
+          stdout: makeStdout().stream, stderr: stderr.stream,
+        });
+        assert.equal(code, scenario.endsWith("lost-ack") ? 0 : 1, stderr.text());
+        assert.deepEqual(methods, scenario === "not-published" ? ["PUT", "DELETE"] : ["PUT"]);
+        assert.equal(attempts, scenario.startsWith("retry") ? 2 : 1);
+        assert.equal(reconciliations, scenario.startsWith("retry") ? 1 : 0);
+        if (scenario !== "not-published") {
+          const manifest = JSON.parse(await git(scratch, ["--git-dir", remote, "show", "refs/heads/automation-state:data/discord/game-state/2026-06-02/manifest.json"]));
+          assert.equal(manifest.files[0].r2_key, "2026-06-02/064800000-state.png");
+          assert.equal(manifest.files[0].r2_bucket, "stfc-game-state");
+        }
+        if (scenario.endsWith("uncertain")) {
+          assert.match(stderr.text(), /publication uncertain; preserved R2 object stfc-game-state\/2026-06-02\/064800000-state.png/);
+          assert.match(response, /publication uncertain; preserved R2 object/);
+        }
+      } finally {
+        rmSync(scratch, { recursive: true, force: true });
+      }
+    });
+  }
 
   it("game-state path traversal filename is sanitized and stays under target folder", async () => {
     const mem = createMemFs();
@@ -1212,6 +1393,7 @@ describe("scripts/discord-handler.mjs", () => {
       runGh: async () => "",
       runGit: async (args) => {
         calls.push(args);
+        if (args[2] === "merge-base") throw Object.assign(new Error("not published"), { code: 1 });
         if (args[0] === "push") {
           pushAttempts += 1;
           if (pushAttempts === 1) throw new Error("git push failed: non-fast-forward");
