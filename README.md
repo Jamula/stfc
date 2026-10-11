@@ -134,6 +134,37 @@ Full operator guide: **[docs/CREW-OPTIMIZER.md](docs/CREW-OPTIMIZER.md)**.
 
 Built with help from [the Squad](docs/squad.md) — an AI team that lives under `.squad/`, managing the roadmap, code review, testing, and documentation. Read the squad page to understand who does what and how to route work.
 
+### Squad Reviewer Gate (Recommended)
+
+The **Squad Reviewer Gate** workflow has been reactivated (Actions state
+`active`, verified 2026-10-10). It evaluates PR events and PR comments using
+default-branch code, then publishes the **`Squad reviewer gate`** commit status
+on the PR's current head SHA.
+
+Every non-Dependabot PR must list required reviewers under `## Reviewer lanes`
+in its body. Kirk provides technical review; Garak's independent co-review is
+also required for `feat(*)` PRs touching `src/` and implementations of
+Kirk-authored designs. Each declared reviewer posts a new PR comment beginning
+with `**APPROVE**` (the ✅ emoji is conventional, not required), followed by
+`**Reviewer:** Name` and `**Head:**` with the full current 40-character SHA in
+backticks. The latest valid verdict by comment creation time wins; numeric
+comment ID breaks equal-timestamp ties. Editing an older comment does not renew
+it. Pushes make prior-head approvals stale. Missing lanes/verdicts, malformed
+verdict comments, stale approvals, or a latest `**CHANGES_REQUESTED**` (⚠️ is
+conventional, not required) fail the status.
+PRs authored by `dependabot[bot]` are exempt.
+
+Reactivation does **not** clear old failures or prove that branch protection
+requires this status. A successful PR-triggered run has completed
+([run #38109821087](https://github.com/Jamula/stfc/actions/runs/38109821087)),
+but it was for a Dependabot PR, whose successful status is exempt from
+reviewer-verdict evaluation. The successful-run condition listed in [Issue
+#345](https://github.com/Jamula/stfc/issues/345) is therefore met; the issue
+remains open. Green checks and reviewer approvals do not authorize merging: an
+explicit user request is still required. See [the verdict contract and
+enforcement limits](docs/REVIEWER-GATE.md) for the exact comment format and
+break-glass runbook.
+
 ---
 
 The CI workflow runs:
@@ -166,7 +197,8 @@ For local diagnostics you can run individual steps:
 │       ├── redeem.yml              # scheduled gift redemption (every 10 min, 144/day)
 │       ├── discord-monitor.yml     # optional: harvest codes & tips from Discord (every 4 hours)
 │       ├── refresh-token.yml       # weekly JWT refresh via Playwright auto-login
-│       └── squad-test-gate.yml      # required typecheck + test gate on PRs
+│       ├── squad-test-gate.yml      # required typecheck + test gate on PRs
+│       └── squad-reviewer-gate.yml  # current-head reviewer-verdict status
 ├── docs/
 │   ├── SETUP.md                    # end-to-end setup guide
 │   ├── squad.md                    # AI team members, capabilities, and how they work
