@@ -363,7 +363,7 @@ it routes work and enforces handoffs. Heavy templates live on-demand in
 | **Garak** | Critic (hostile fact-check, pre-mortem) — inherited from Borg Queen 2026-05-16 |
 | **Tuvok** | Process Auditor / Editorial Specialist |
 | **O'Brien** | DevOps / Platform Engineer (workflows, secrets toolchain, releases) |
-| **Scribe** | Session Logger (silent — `.squad/` commits are Scribe-owned) |
+| **Scribe** | Session Logger (silent — persists `.squad/` state through the configured state backend) |
 | **Ralph** | Work Monitor (heartbeat-driven) |
 | **@copilot** | GitHub Copilot coding agent (full 🟢🟡🔴 tier per 2026-05-18 user decision) |
 
@@ -380,23 +380,28 @@ runbook. Issue #220 Phase 1 does not add this context to the live ruleset:
 comment-derived status is operational governance, not a security boundary
 against a session acting with the repository owner's identity.
 
-**Decisions.** Append-only ledger at `.squad/decisions.md` (live) with
-roll-over to `.squad/decisions-archive.md`. Drop-box pattern: agents
-write to `.squad/decisions/inbox/` and Scribe merges into the ledger.
+**Decisions.** The append-only ledger uses logical key `decisions/decisions.md` (live),
+with roll-over to `.squad/decisions-archive.md`. Agents submit decisions via
+`squad_state_write` to logical key `decisions/inbox/{agent}-{slug}.md`; the
+Coordinator appends accepted items to `decisions/decisions.md`. Physical paths
+`.squad/decisions/decisions.md` and `.squad/decisions/inbox/` apply only to
+local/worktree. Governed backends fail closed if the state bridge is unavailable.
 
 **Agent memory.** Per-agent `.squad/agents/{name}/history.md` (private
 learning, max ~15 KB before Scribe rotates to
 `history-archive.md`).
 
-**Squad commit boundaries** (repo Rule 2). The following paths are
-**Scribe-only** commits:
+**Squad mutable state.** Persist the following state through the configured
+state-backend tools; no agent, including Scribe, stages or commits it directly.
+These are the corresponding paths in local/worktree checkouts:
 
 - `.squad/agents/{name}/history.md`
 - `.squad/decisions/inbox/*`
-- `.squad/decisions.md`
+- `.squad/decisions/decisions.md`
 - `.squad/log/*`, `.squad/orchestration-log/*`
 
-Non-Scribe agents must NEVER `git add .squad/` broadly. Always
+For other `.squad/` artifacts that are intentionally committed, non-Scribe
+agents must NEVER `git add .squad/` broadly. Always
 `git add -- <specific path>`.
 
 **Worktrees.** `.squad/config.json: "worktrees": true` — each issue
@@ -442,9 +447,20 @@ The core application and required-check workflows are grouped by purpose:
 **Pre-commit.** `scripts/pre-commit.mjs` (installed by `simple-git-hooks`):
 
 1. Runs `check-artifact-hygiene.mjs --staged` on staged content.
-2. Reads staged files (`git diff --cached --name-only`).
-3. Runs `checkSquadBoundary` — rejects mixed-author `.squad/` commits
-   (Rule 2).
+2. Parses staged changes via `git diff --cached --name-status -z -M -C`
+   (`parseNameStatus` in `scripts/pre-commit-checks.mjs`). `-z` emits
+   NUL-delimited records so filenames with spaces, unicode, or characters
+   Git would otherwise quote parse safely; `-M -C` enable explicit
+   rename/copy detection rather than relying on the repo's `diff.renames`
+   config. Renames/copies emit `<status>\0<old>\0<new>\0`; every other
+   status emits `<status>\0<path>\0`. The parser derives `staged` (every
+   touched path, including deletions and rename/copy destinations — this
+   matches the old `--name-only` behavior other checks depend on),
+   `deleted` (paths removed outright, for the `git rm --cached` migration
+   allowlist), and `renamedFrom` (rename/copy source paths, so a rename
+   out of a mutable-state path can't bypass the boundary check).
+3. Runs `checkSquadBoundary` — rejects mutable `.squad/` state paths for
+   every actor; direct commits of mutable state are not supported.
 4. Runs `checkPortableFilenames` — blocks filenames illegal on Windows.
 5. Runs `checkWorkflowPinningTests` — if `.github/workflows/*.yml` is
    staged, asserts the matching `tests/skills/*` literal-pin test was
@@ -452,8 +468,8 @@ The core application and required-check workflows are grouped by purpose:
 6. Runs `npm test` (~2-3 s, 900+ tests via `node:test` + `tsx`).
 
 **Bypass.** `--no-verify` is **forbidden** per repo rules. Fix the
-failure instead. `SQUAD_SCRIBE=1` allows the boundary check to pass for
-Scribe-only commits.
+failure instead. Mutable `.squad/` state paths are rejected for every
+actor; direct commits of mutable state are not supported.
 
 **Test discipline.** `npm test` + `npm run typecheck` are the gates.
 Validate at `package.json:20,28`.
@@ -473,7 +489,9 @@ Validate at `package.json:20,28`.
 `concurrency.group`, permission scopes). Any edit to the workflow
 ships in the same commit as the pinning-test update (Rule 3).
 Canonical pattern is **structural parse + assert on object graph**, not
-substring grep — see `.squad/decisions.md` (Uhura PR #102).
+substring grep. The live decision ledger uses logical key `decisions/decisions.md`; its
+physical path `.squad/decisions/decisions.md` applies only to local/worktree.
+See `.squad/decisions-archive.md` (Uhura PR #102).
 
 **Deploy auth.** OIDC federation, no long-lived secrets. Workflow skips
 deploy gracefully when `AZURE_CLIENT_ID` is unset (commits `434e996`
@@ -779,7 +797,7 @@ paths, and prove `main`'s tip SHA is unchanged while state commits land on
 | Scheduled gift redemption flow | §4.1 + `redeem.yml` |
 | Web panel request auth flow | §4.3 + `api/src/_lib/auth.ts` |
 | Exit-code semantics | §3.1 + `src/skills/runAll.ts:399-407` |
-| Decisions ledger | `.squad/decisions.md` (live), `.squad/decisions-archive.md` |
+| Decisions ledger | `.squad/decisions/decisions.md` (live), `.squad/decisions-archive.md` |
 | Coordinator file | `.github/agents/squad.agent.md` |
 | Global repo rules (22 of them) | `.github/copilot-instructions.md` |
 | Squad roster + role hierarchy | `.squad/team.md` + `docs/squad.md` |

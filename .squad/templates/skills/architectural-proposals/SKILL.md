@@ -7,7 +7,10 @@ source: "earned (2026-02-21 interactive shell proposal)"
 tools:
   - name: "view"
     description: "Read existing codebase, prior decisions, and team context before proposing changes"
-    when: "Always read .squad/decisions.md, relevant PRDs, and current architecture docs before writing proposal"
+    when: "Read relevant PRDs and current architecture docs before writing a proposal; read decisions/decisions.md via squad_state_read when available"
+  - name: "squad_state_read"
+    description: "Read Squad mutable state by logical key"
+    when: "Read the decisions/decisions.md logical key before writing a proposal; do not substitute a checkout snapshot on governed backends"
   - name: "create"
     description: "Create proposal in docs/proposals/ with structured format"
     when: "After gathering context, before any implementation work begins"
@@ -20,6 +23,13 @@ Proposals create alignment before code is written. Cheaper to change a doc than 
 - Product direction changes require new foundation
 - Multiple waves/milestones will be affected by a decision
 - External dependencies (Copilot CLI, SDK APIs) change
+
+### Decision State Source
+
+Read logical key `decisions/decisions.md` through `squad_state_read` when available.
+If state tools are unavailable, read `.squad/decisions/decisions.md` only for
+local/worktree backends. For orphan, two-layer, or git-notes backends, stop and
+report the missing state bridge; do not inspect a checkout snapshot.
 
 ## Patterns
 
@@ -116,7 +126,7 @@ When a proposal invalidates existing wave structure:
 **File references from interactive shell proposal:**
 - Full proposal: `docs/proposals/squad-interactive-shell.md`
 - User directive: `.squad/decisions/inbox/copilot-directive-2026-02-21T202535Z.md`
-- Team decisions: `.squad/decisions.md`
+- Team decisions: logical key `decisions/decisions.md` via `squad_state_read`
 - Current architecture: `docs/architecture/module-map.md`, `docs/prd-23-release-readiness.md`
 
 **Key patterns demonstrated:**

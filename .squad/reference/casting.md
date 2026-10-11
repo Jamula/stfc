@@ -27,9 +27,13 @@ After selecting a universe:
 4. **Ralph is always "Ralph"** — exempt from casting.
 5. **Rai is always "Rai"** — exempt from casting.
 6. **@copilot is always "@copilot"** — exempt from casting. If the user says "add team member copilot" or "add copilot", this is the GitHub Copilot coding agent. Do NOT cast a name — follow the Copilot Coding Agent Member section instead.
-7. Store the mapping in `.squad/casting/registry.json`.
-8. Record the assignment snapshot in `.squad/casting/history.json`.
+7. Store the mapping in the authoritative static `.squad/casting/registry.json` checkout file for every backend.
+8. Read casting history and record the assignment snapshot through the configured backend; follow Casting History Backend Ownership below.
 9. Use the allocated name everywhere: charter.md, history.md, team.md, routing.md, spawn prompts.
+
+### Casting History Backend Ownership
+
+The policy and registry are authoritative static checkout files for every backend and are not state-tool keys. Before LRU scoring or recording an assignment snapshot, read and update history through the configured backend: for `"local"`/`"worktree"`, read and update the physical `.squad/casting/history.json` file on the local state filesystem; for `"orphan"`, `"two-layer"`, or `"git-notes"`, read logical key `casting/history.json` with `squad_state_read`, write updates with `squad_state_write`, then verify with `squad_state_read`. If the bridge is unavailable or any state call fails, report the error and fail closed. Never read or write a checkout copy for a non-local backend; it may be stale.
 
 ### Overflow Handling
 
@@ -45,15 +49,19 @@ Existing agents are NEVER renamed during overflow.
 
 **On-demand reference:** Read `.squad/templates/casting-reference.md` for the full JSON schemas of policy.json, registry.json, and history.json.
 
-The casting system maintains state in `.squad/casting/` with three files: `policy.json` (config), `registry.json` (persistent name registry), and `history.json` (universe usage history + snapshots).
+The casting system uses three files: `.squad/casting/policy.json` and `.squad/casting/registry.json` are authoritative static checkout files for every backend; `history.json` is mutable state stored at the physical path only for `local`/`worktree` and at logical key `casting/history.json` for other backends.
 
 ### Migration — Already-Squadified Repos
 
-When `.squad/team.md` exists but `.squad/casting/` does not:
+When `.squad/team.md` exists and either static casting file is missing from the checkout or history is absent from the configured backend:
 
-1. **Do NOT rename existing agents.** Mark every existing agent as `legacy_named: true` in the registry.
-2. Initialize `.squad/casting/` with default policy.json, a registry.json populated from existing agents, and empty history.json.
-3. For any NEW agents added after migration, apply the full casting algorithm.
-4. Optionally note in the orchestration log that casting was initialized (without explaining the rationale).
+1. **Do NOT rename existing agents.** Preserve existing registry mappings. If the registry is absent, create it from existing agents and mark their entries `legacy_named: true`; if it exists, preserve its mappings and add only missing existing agents as legacy entries.
+2. For every backend, keep `.squad/casting/policy.json` and `.squad/casting/registry.json` as authoritative static checkout files. If policy is absent, copy `.squad/templates/casting-policy.json` (or use defaults). If the registry is absent, initialize it from the existing team. Preserve existing static files and mappings; never send either file through state tools.
+3. Initialize mutable history only when absent in the configured backend. This migration-only seed is for existing squads; fresh new-team initialization must continue using the empty `.squad/templates/casting-history.json`.
+   - For `local`/`worktree`, preserve an existing `.squad/casting/history.json`. If it is absent, create the physical file from the tracked `.squad/templates/casting-history-migration.json` and verify the resulting snapshot content and record counts against the seed.
+   - For `orphan`, `two-layer`, or `git-notes`, first read logical key `casting/history.json` with `squad_state_read` and preserve it when present. Treat only the exact response `State key not found: casting/history.json` as absence. Only then read the tracked `.squad/templates/casting-history-migration.json`, initialize the logical key with `squad_state_write`, and immediately read it back with `squad_state_read`. Verify the full snapshot content and the `universe_usage_history` entry count and `assignment_cast_snapshots` key count against the seed.
+   - If the seed cannot be read, the bridge is unavailable, any other state read fails, the write fails, or readback content/counts do not match, fail closed. Never create, read, or write a checkout history copy for a non-local backend.
+4. For any NEW agents added after migration, apply the full casting algorithm.
+5. Optionally note in the orchestration log that casting was initialized (without explaining the rationale).
 
 ---

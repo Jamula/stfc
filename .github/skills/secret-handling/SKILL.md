@@ -8,7 +8,7 @@ source: earned (issue #267 — credential leak incident)
 
 ## Context
 
-Spawned agents have read access to the entire repository, including `.env` files containing live credentials. If an agent reads secrets and writes them to `.squad/` files (decisions, logs, history), Scribe auto-commits them to git, exposing them in remote history. This skill codifies absolute prohibitions and safe alternatives.
+Spawned agents have read access to the entire repository, including `.env` files containing live credentials. If an agent reads secrets and writes them to mutable Squad state (decisions, logs, history), those credentials may be exposed to other state consumers and accidentally persisted. This skill codifies absolute prohibitions and safe alternatives.
 
 ## Patterns
 
@@ -55,33 +55,36 @@ Spawned agents have read access to the entire repository, including `.env` files
 - Architecture notes: "App uses JWT auth — token stored in session"
 - Schema documentation: "Requires OPENAI_API_KEY, GITHUB_TOKEN (see .env.example for format)"
 
-### Scribe Pre-Commit Validation
+### Secret Scanning Before Authorized Commits
 
-**Before committing `.squad/` changes, Scribe MUST:**
+**Scribe never stages or commits mutable `.squad/` state.** Persist mutable state through the configured state backend. Filesystem fallback is permitted only at canonical `.squad/` paths when the configured backend is local/worktree and fallback is allowed; it is not permission to stage or commit that state.
+
+For repository changes that an authorized owner is preparing to commit, scan staged files before the commit:
 
 1. **Scan all staged files** for secret patterns (use regex table above)
 2. **Check for prohibited file names** (don't commit `.env` even if manually staged)
 3. **If secrets detected:**
    - STOP the commit (do NOT proceed)
-   - Remove the file from staging: `git reset HEAD <file>`
-   - Report to user:
+   - Abort the commit. The authorized committer must unstage and remediate the affected file; Scribe must not stage, unstage, or commit mutable state.
+   - Report without echoing matched secret content:
      ```
      🚨 SECRET DETECTED — commit blocked
 
-     File: .squad/decisions/inbox/river-db-config.md
-     Pattern: DATABASE_URL=postgres://user:password@localhost:5432/prod
+     File: <affected file>
+     Pattern: DATABASE_URL=******localhost:5432/prod
 
-     This file contains credentials and MUST NOT be committed.
-     Please remove the secret, replace with placeholder, and try again.
+     This file may contain credentials and MUST NOT be committed.
+     The authorized committer must remove the secret or replace it with a placeholder.
      ```
    - Exit with error (never silently skip)
 
 4. **If no secrets detected:**
-   - Proceed with commit as normal
+   - The authorized committer may proceed with their commit
 
-**Implementation note for Scribe:**
-- Run validation AFTER staging files, BEFORE calling `git commit`
+**Implementation note:**
+- Run validation AFTER the authorized committer stages files, BEFORE they call `git commit`
 - Use PowerShell `Select-String` or `git diff --cached` to scan staged content
+- Never print the matched value while reporting a finding
 - Fail loud — secret leaks are unacceptable, blocking the commit is correct behavior
 
 ### Remediation — If a Secret Was Already Committed
@@ -121,7 +124,8 @@ Agent: "What environment variables does this app need?"
     DATABASE_URL=postgres://user:pass@localhost:5432/db
     REDIS_URL=redis://localhost:6379
 
-→ Writes to .squad/decisions/inbox/river-env-setup.md:
+→ Writes with state tools in logical namespace `decisions/inbox/` as `river-env-setup.md`
+  (physical `.squad/decisions/inbox/river-env-setup.md` fallback only for local/worktree):
     "App requires three environment variables:
     - OPENAI_API_KEY (OpenAI API key, format: sk-...)
     - DATABASE_URL (Postgres connection string)
@@ -137,10 +141,8 @@ Agent: "What environment variables does this app need?"
 Agent: (reads .env)
     DATABASE_URL=postgres://admin:super_secret_pw@prod.example.com:5432/appdb
 
-→ Writes to .squad/decisions/inbox/river-db-schema.md:
-    "Database connection: postgres://admin:super_secret_pw@prod.example.com:5432/appdb"
 
-🚨 VIOLATION: Live credential written to committed file
+🚨 VIOLATION: Live credential written to mutable Squad state
 ```
 
 **Correct approach:**
@@ -148,20 +150,18 @@ Agent: (reads .env)
 Agent: (reads .env.example OR asks user)
 User: "It's a Postgres database, schema is in migrations/"
 
-→ Writes to .squad/decisions/inbox/river-db-schema.md:
+→ Writes with state tools in logical namespace `decisions/inbox/` as `river-db-schema.md`
+  (physical `.squad/decisions/inbox/river-db-schema.md` fallback only for local/worktree):
     "Database: Postgres (connection configured in .env). Schema defined in db/migrations/."
 ```
 
-### ✓ Correct: Scribe Pre-Commit Validation
+### ✓ Correct: Secret Scan for an Authorized Commit
 
-**Scribe is about to commit:**
+**An authorized committer is preparing a repository commit.** The files are already staged by that committer; this scan does not authorize Scribe to stage or commit mutable state.
 
 ```powershell
-# Stage files
-git add .squad/
-
 # Scan staged content for secrets
-$stagedContent = git diff --cached
+$stagedContent = git diff --cached --no-ext-diff
 $secretPatterns = @(
     '[A-Z_]+(?:KEY|TOKEN|SECRET)=[^\s]+',
     '(?:PASSWORD|PASS|PWD)[:=]\s*["'']?[^\s"'']+',
@@ -172,20 +172,18 @@ $detected = $false
 foreach ($pattern in $secretPatterns) {
     if ($stagedContent -match $pattern) {
         $detected = $true
-        Write-Host "🚨 SECRET DETECTED: $($matches[0])"
+        Write-Error "🚨 SECRET DETECTED: matched content withheld"
         break
     }
 }
 
 if ($detected) {
-    # Remove from staging, report, exit
-    git reset HEAD .squad/
+    # Stop; the authorized committer must unstage and remediate the affected file.
     Write-Error "Commit blocked — secret detected in staged files"
     exit 1
 }
 
-# Safe to commit
-git commit -F $msgFile
+# The authorized committer may proceed; Scribe does not run git commit.
 ```
 
 ## Anti-Patterns
@@ -196,5 +194,5 @@ git commit -F $msgFile
 - ❌ Committing first, scanning later — validation MUST happen before commit
 - ❌ Silently skipping secret detection — fail loud, never silent
 - ❌ Trusting agents to "know better" — enforce at multiple layers (prompt, hook, architecture)
-- ❌ Writing secrets to "temporary" files in `.squad/` — Scribe commits ALL `.squad/` changes
+- ❌ Writing secrets to "temporary" files in `.squad/` — mutable state is still persisted and may be exposed
 - ❌ Extracting "just the host" from a connection string — still leaks infrastructure topology

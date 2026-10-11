@@ -136,10 +136,11 @@ prompt: |
   note refs, or write mutable `.squad/` state files by hand. Static config (charters,
   team.md, routing.md, skills) remains on disk and may be read with normal file tools.
 
-  Read `agents/{name}/history.md` with `squad_state_read` when state tools are available; otherwise fall back to `.squad/agents/{name}/history.md`.
-  Read `decisions.md` with `squad_state_read` when state tools are available; otherwise fall back to `.squad/decisions.md`.
-  If .squad/identity/wisdom.md exists, read it before starting work.
-  If .squad/identity/now.md exists, read it at spawn time.
+  Read logical key `agents/{name}/history.md` with `squad_state_read` when state tools are available. If that key is unavailable or not found, read `.squad/agents/{name}/history.md` only for `local`/`worktree` backends; for `orphan`, `two-layer`, or `git-notes`, follow the state-backend handshake and report a missing bridge instead of reading a checkout copy.
+  Read logical state key `decisions/decisions.md` with `squad_state_read` when state tools are available. If that key is unavailable or not found, read `.squad/decisions/decisions.md` only for `local`/`worktree` backends; for `orphan`, `two-layer`, or `git-notes`, follow the state-backend handshake and report a missing bridge.
+  Optional identity context `identity/wisdom.md` and `identity/now.md` is not required. Read each logical key with `squad_state_read`. The runtime's specific response `State key not found: <logical-key>` for either key is ordinary absence; continue without that context. For `local`/`worktree`, when state tools are unavailable or return that key-not-found response, read the physical file only if it exists; if it does not, continue without context. Any other state-tool read error must be surfaced, not treated as absence. For `orphan`, `two-layer`, or `git-notes`, a missing state tool/bridge or any other read error is a failure; fail closed and never read a checkout copy.
+  Read logical key `identity/wisdom.md` with `squad_state_read` before starting work if it exists.
+  Read logical key `identity/now.md` with `squad_state_read` at spawn time if it exists.
   Check project skill directories (.squad/skills/, .github/skills/, .copilot/skills/, .claude/skills/, .agents/skills/) for any SKILL.md the coordinator attached to your prompt.
   Read any relevant SKILL.md files before working.
 

@@ -272,20 +272,20 @@ Proceed? (yes / no)
 ### Show Recent Decisions
 
 - **intent:** show decisions, recent decisions, what decisions were made, decision log
-- **summary:** Display recent entries from .squad/decisions.md
+- **summary:** Display recent entries from the logical `decisions/decisions.md` state key
 - **action:** coordinator
-- **command:** Direct Mode — read decisions.md, answer
+- **command:** Treat `decisions/decisions.md` as the logical source key; `.squad/decisions/decisions.md` is only its local/worktree file path. Read it with `squad_state_read` for key `decisions/decisions.md` when state tools are available, and answer from that result. Fall back to reading `.squad/decisions/decisions.md` directly only for local/worktree. For orphan, two-layer, or git-notes backends, never read the checkout file — if the state bridge is unavailable, fail closed and report the missing bridge instead of showing stale or empty results.
 - **args:** (none)
 - **confirm:** false
 
 ### Archive Old Decisions
 
 - **intent:** archive decisions, clean up decisions, move old decisions, compact decisions
-- **summary:** Move old decisions from decisions.md to decisions-archive.md
+- **summary:** Review semantic eligibility, verify the archive append, then trim the active decisions source
 - **action:** coordinator
-- **command:** Move entries older than threshold from .squad/decisions.md → .squad/decisions-archive.md
+- **command:** Treat `decisions/decisions.md` as the logical source key; `.squad/decisions/decisions.md` is only its local/worktree file path. Size and age thresholds trigger eligibility review only, never archival by themselves. If the ledger is at least 20,480 bytes, review entries older than 30 days; if it is at least 51,200 bytes, review entries older than 7 days. Retention taxonomy: `constitutional` = hot forever; `standing-rule` = hot forever; `active-blocker` = hot until closed; `unresolved-followup` = hot until closed; `canonical-pattern` = hot forever; `current-epic` = hot until the epic closes; `operational-learning` = hot until a similar pattern recurs at least 3 times or 90 days pass without recurrence; `archive-eligible` = verified completion or resolution only, with 7 days hot before archive. Keep open, unresolved, or unverifiable entries active. At archive-decision time, verify linked GitHub issue/PR status for `current-epic` and `archive-eligible` entries; if status cannot be confirmed, retain the entry. Before bulk-tagging, dry-run classification against the live ledger and write one review artifact to logical state key `log/{timestamp}-decisions-classification-sample.md` with `squad_state_write` (UTC timestamp; replace `:` with `-`). Re-read that key with `squad_state_read` and verify the artifact. Require user review of the artifact before bulk-tagging. Use physical `.squad/log/{timestamp}-decisions-classification-sample.md` only as a local/worktree fallback when state tools are unavailable. On orphan, two-layer, or git-notes backends, do not create or use a checkout path; if the bridge is unavailable, stop and report it. If the write or read-back fails, preserve the source ledger, do not bulk-tag, and report failure. The artifact must define the durable tagging convention, sample-classify 10–15 entries, and specify future-inbox behavior. Until then, leave untagged entries unchanged and active and never infer archive eligibility from age alone. For local/worktree, use state tools for active-ledger reads and writes when available; if unavailable, the physical active ledger is a permitted fallback. For orphan, two-layer, or git-notes, read the active ledger with `squad_state_read` for `decisions/decisions.md`; if the bridge is unavailable or the read fails, fail closed, and never consult a stale checkout copy. For every backend, append eligible entries to the already tracked `.squad/decisions-archive.md` with normal repository file operations, not mutable-state tools. Before appending, verify the destination with `git ls-files --error-unmatch .squad/decisions-archive.md`. Re-read the archive and confirm every moved heading is literally present and its entry count grew by exactly the number moved. Only after those checks pass may the active source be trimmed. For orphan, two-layer, or git-notes, write the trimmed ledger to logical key `decisions/decisions.md` with `squad_state_write`, then read it back with `squad_state_read` to verify the trim. If archive tracking, append/readback, or entry-count verification fails, leave the active source intact and report the failure; if a non-local state-tool write or readback fails, fail closed.
 - **args:**
-  - `olderThan`: Archive decisions older than how many days? | default: 30
+  - `olderThan`: Review decisions older than how many days for semantic eligibility? | default: 30
 - **confirm:** true
 
 ### Summarize Agent History

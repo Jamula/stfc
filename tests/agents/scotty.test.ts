@@ -93,7 +93,7 @@ describe("Scotty — model preference", () => {
 });
 
 describe("Scotty — collaboration pattern", () => {
-  it("references .squad/decisions.md as first-read", () => {
+  it("references .squad/decisions/decisions.md as first-read", () => {
     assertDecisionsReference(charter);
   });
 

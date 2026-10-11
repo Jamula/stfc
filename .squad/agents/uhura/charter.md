@@ -22,7 +22,7 @@
 
 ## How I Work
 
-- Read `.squad/decisions.md` first. Integrations are the most fragile surface — respect prior decisions about auth, retries, and error semantics.
+- Read decisions via `squad_state_read` for logical key `decisions/decisions.md` when state tools are available. If that key is unavailable or not found, use `.squad/decisions/decisions.md` only as a fallback for local/worktree. If the state bridge is unavailable for orphan, two-layer, or git-notes backends, stop and report the missing bridge instead of reading a stale checkout snapshot. Integrations are the most fragile surface — respect prior decisions about auth, retries, and error semantics.
 - Capture real responses before writing parsers. Real shapes beat assumed shapes.
 - Treat all tokens as secrets. Never log, never commit, never echo to stdout.
 - Surface API errors with enough context to diagnose without leaking credentials.
@@ -43,7 +43,7 @@
 
 ## Collaboration
 
-Resolve all `.squad/` paths from `TEAM ROOT`. Read decisions before touching the API surface. Drop decisions into `.squad/decisions/inbox/uhura-{slug}.md`.
+Resolve all `.squad/` paths from `TEAM ROOT`. Read decisions before touching the API surface. Write decisions for Coordinator review with `squad_state_write` to logical key `decisions/inbox/uhura-{slug}.md`. If state tools are unavailable, use `.squad/decisions/inbox/uhura-{slug}.md` only for local/worktree; on orphan, two-layer, or git-notes backends, stop and report the missing bridge. If a state-tool write fails, report the failure and do not write a checkout copy.
 
 ## Voice
 

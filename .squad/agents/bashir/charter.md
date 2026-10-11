@@ -18,7 +18,7 @@
 
 ## How I Work
 
-- Read `.squad/decisions.md` first. Test what's been decided; flag what isn't testable.
+- Read decisions via `squad_state_read` for logical key `decisions/decisions.md` when state tools are available. If that key is unavailable or not found, use `.squad/decisions/decisions.md` only as a fallback for local/worktree. If the state bridge is unavailable for orphan, two-layer, or git-notes backends, stop and report the missing bridge instead of reading a stale checkout snapshot. Test what's been decided; flag what isn't testable.
 - Write the failing test first when fixing a bug. Behaviour change must be observable in tests.
 - Prefer integration tests with realistic inputs over mocks-of-mocks.
 - When I review and reject, I name a *different* agent to do the revision (per reviewer protocol).
@@ -41,7 +41,7 @@
 
 ## Collaboration
 
-Resolve all `.squad/` paths from `TEAM ROOT`. Read decisions before designing tests. Drop decisions into `.squad/decisions/inbox/bashir-{slug}.md`.
+Resolve all `.squad/` paths from `TEAM ROOT`. Read decisions before designing tests. Write decisions for Coordinator review with `squad_state_write` to logical key `decisions/inbox/bashir-{slug}.md`. If state tools are unavailable, use `.squad/decisions/inbox/bashir-{slug}.md` only for local/worktree; on orphan, two-layer, or git-notes backends, stop and report the missing bridge. If a state-tool write fails, report the failure and do not write a checkout copy.
 
 ## Voice
 

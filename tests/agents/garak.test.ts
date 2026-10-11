@@ -147,22 +147,38 @@ describe("Garak — model preference", () => {
 });
 
 describe("Garak — collaboration", () => {
-  it("references .squad/decisions.md as first-read", () => {
+  it("references .squad/decisions/decisions.md as first-read", () => {
     assertDecisionsReference(charter);
   });
 
-  it("drops decisions to .squad/decisions/inbox/garak-{slug}.md", () => {
-    assertDecisionInbox(charter, "garak");
-  });
-
-  it("never commits .squad/ paths — Scribe owns those commits", () => {
+  it("routes findings through the backend-aware logical inbox key", () => {
+    const normalized = charter.toLowerCase().replace(/`/g, "").replace(/\s+/g, " ");
     assert.ok(
-      charter.includes("Never commit"),
-      'Charter should say "Never commit .squad/ paths"',
+      normalized.includes("squad_state_write"),
+      "Charter should use squad_state_write for findings",
     );
     assert.ok(
-      charter.includes("Scribe owns those commits"),
-      'Charter should say "Scribe owns those commits"',
+      normalized.includes("logical key decisions/inbox/garak-{slug}.md"),
+      "Charter should route findings through the logical inbox key",
+    );
+  });
+
+  it("allows the physical inbox path only as a local/worktree fallback", () => {
+    assertDecisionInbox(charter, "garak");
+    const normalized = charter.toLowerCase().replace(/`/g, "").replace(/\s+/g, " ");
+    assert.ok(
+      normalized.includes(
+        "use .squad/decisions/inbox/garak-{slug}.md only for local/worktree",
+      ),
+      "Charter should limit the physical inbox path to the local/worktree fallback",
+    );
+  });
+
+  it("never manually commits mutable .squad/ state", () => {
+    const normalized = charter.toLowerCase().replace(/`/g, "").replace(/\s+/g, " ");
+    assert.ok(
+      normalized.includes("never commit mutable .squad/ state"),
+      "Charter should prohibit manual commits of mutable .squad/ state",
     );
   });
 });

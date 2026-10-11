@@ -57,8 +57,37 @@ jobs:
             echo "has-oidc=false" >> "$GITHUB_OUTPUT"
           fi
 
+  validate-api-node-22:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    if: github.event_name != 'pull_request' || github.event.action != 'closed'
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.0
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4.4.0
+        with:
+          node-version-file: api/.nvmrc
+          cache: npm
+          cache-dependency-path: api/package-lock.json
+
+      - name: Install API dependencies
+        run: npm ci
+        working-directory: api
+
+      - name: Build API
+        run: npm run build
+        working-directory: api
+
+      - name: Smoke test built API modules
+        run: node --input-type=module -e "await Promise.all([import('./dist/_lib/auth.js'), import('./dist/_lib/respond.js')])"
+        working-directory: api
+
   deploy:
-    needs: preflight
+    needs:
+      - preflight
+      - validate-api-node-22
     runs-on: ubuntu-latest
     timeout-minutes: 15
     # Skip when OIDC secrets are not yet provisioned (probed in preflight).

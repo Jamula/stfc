@@ -122,7 +122,7 @@ describe("Bashir — model preference", () => {
 });
 
 describe("Bashir — collaboration", () => {
-  it("references .squad/decisions.md as first-read", () => {
+  it("references .squad/decisions/decisions.md as first-read", () => {
     assertDecisionsReference(charter);
   });
 
