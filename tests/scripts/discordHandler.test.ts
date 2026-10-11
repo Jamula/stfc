@@ -1,6 +1,12 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+import path from "node:path";
+import { tmpdir } from "node:os";
+
+const execFileAsync = promisify(execFile);
 
 // @ts-ignore - untyped .mjs module imported in tests.
 const mod = await import("../../scripts/discord-handler.mjs") as {
@@ -31,6 +37,22 @@ const mod = await import("../../scripts/discord-handler.mjs") as {
     writeFileImpl: (path: string, data: string, enc?: string) => Promise<void>;
     renameImpl: (from: string, to: string) => Promise<void>;
   }) => Promise<{ files: Array<{ filename: string }> }>;
+  updateDailyManifestAtomic: (opts: {
+    manifestPath: string;
+    entry: { filename: string; r2_bucket: string; r2_key: string; sha256: string; size_bytes: number };
+    readFileImpl: (path: string, enc: string) => Promise<string>;
+    writeFileImpl: (path: string, data: string, enc?: string) => Promise<void>;
+    renameImpl: (from: string, to: string) => Promise<void>;
+  }) => Promise<{ files: Array<{ filename: string; r2_key: string }> }>;
+  uploadR2Object: (opts: {
+    config: { accountId: string; accessKeyId: string; secretAccessKey: string; bucket: string };
+    key: string;
+    buffer: Buffer;
+    contentType?: string;
+    fetchImpl: (url: string, init: any) => Promise<any>;
+    now: Date;
+    timeoutMs?: number;
+  }) => Promise<{ bucket: string; key: string; sha256: string; size: number }>;
 };
 
 function makeStdout() {
@@ -50,6 +72,9 @@ function baseEnv(payload: Record<string, unknown>): Record<string, string> {
     STFC_STATE_BRANCH: "automation-state",
     GITHUB_SERVER_URL: "https://github.com",
     ALLOWED_GUILD_IDS: "g1,g2",
+    CLOUDFLARE_ACCOUNT_ID: "account123",
+    CLOUDFLARE_R2_ACCESS_KEY_ID: "r2-access-key",
+    CLOUDFLARE_R2_SECRET_ACCESS_KEY: "r2-secret-key",
   };
 }
 
@@ -63,6 +88,10 @@ function createHeaders(values: Record<string, string>) {
       return values[name.toLowerCase()] ?? values[name] ?? null;
     },
   };
+}
+
+function isHost(rawUrl: string, hostname: string): boolean {
+  return new URL(rawUrl).hostname === hostname;
 }
 
 function createMemFs(initial: Record<string, string> = {}) {
@@ -265,6 +294,7 @@ describe("scripts/discord-handler.mjs", () => {
     const mem = createMemFs();
     const gitCalls: Array<{ args: string[]; stdin?: string }> = [];
     let discordPatch = "";
+    let r2Put: { url: string; init: any } | undefined;
 
     const code = await mod.runCli({
       env: baseEnv(gameStatePayload()),
@@ -281,7 +311,7 @@ describe("scripts/discord-handler.mjs", () => {
         return "";
       },
       fetchImpl: async (url: string, init: any) => {
-        if (url.includes("cdn.discordapp.com")) {
+        if (isHost(url, "cdn.discordapp.com")) {
           assert.equal(init.redirect, "manual");
           return {
             ok: true,
@@ -292,6 +322,10 @@ describe("scripts/discord-handler.mjs", () => {
             text: async () => "",
           };
         }
+        if (isHost(url, "account123.r2.cloudflarestorage.com")) {
+          r2Put = { url, init };
+          return { ok: true, status: 200, text: async () => "" };
+        }
         discordPatch = String(init.body ?? "");
         return { ok: true, status: 200, text: async () => "{}" };
       },
@@ -300,13 +334,50 @@ describe("scripts/discord-handler.mjs", () => {
     });
 
     assert.equal(code, 0, stderr.text());
-    assert.match(discordPatch, /📁 Saved https:\/\/github.com\/Jamula\/stfc\/blob\/abc123\/data\/discord\/game-state\/2026-06-02\/064800000-state.png/);
-    assert.equal(mem.files.has("data/discord/game-state/2026-06-02/064800000-state.png"), true);
+    assert.match(discordPatch, /📁 Saved https:\/\/github.com\/Jamula\/stfc\/blob\/abc123\/data\/discord\/game-state\/2026-06-02\/manifest.json/);
+    assert.match(discordPatch, /R2 key: 2026-06-02\/064800000-state.png/);
+    assert.equal(r2Put?.url, "https://account123.r2.cloudflarestorage.com/stfc-game-state/2026-06-02/064800000-state.png");
+    assert.equal(r2Put?.init.method, "PUT");
+    assert.equal(
+      r2Put?.init.headers.Authorization,
+      "AWS4-HMAC-SHA256 Credential=r2-access-key/20260602/auto/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature=fc43e1fe994eeb2aef0c73efdfa716df2e383b0b45aba1630e849e5ae7271cea",
+    );
+    assert.equal(r2Put?.init.headers["x-amz-date"], "20260602T064800Z");
+    assert.equal(
+      r2Put?.init.headers["x-amz-content-sha256"],
+      "36bbe50ed96841d10443bcb670d6554f0a34b761be67ec9c4a8ad2c0c44ca42c",
+    );
+    assert.ok(r2Put?.init.signal instanceof AbortSignal);
+    assert.equal(mem.files.has("data/discord/game-state/2026-06-02/064800000-state.png"), false);
     assert.equal(mem.files.has("data/discord/game-state/2026-06-02/064800000-state.png.lineage.json"), true);
     assert.equal(mem.files.has("data/discord/game-state/2026-06-02/_index.json"), true);
+    assert.equal(mem.files.has("data/discord/game-state/2026-06-02/manifest.json"), true);
+    const manifest = JSON.parse(await mem.readFile("data/discord/game-state/2026-06-02/manifest.json", "utf8"));
+    assert.equal(manifest.bucket, "stfc-game-state");
+    assert.equal(manifest.files[0].r2_key, "2026-06-02/064800000-state.png");
+    assert.equal(manifest.files[0].sha256, "36bbe50ed96841d10443bcb670d6554f0a34b761be67ec9c4a8ad2c0c44ca42c");
+    assert.equal(manifest.files[0].access, "signed-url-required");
+    const lineage = JSON.parse(await mem.readFile("data/discord/game-state/2026-06-02/064800000-state.png.lineage.json", "utf8"));
+    assert.equal(lineage.r2_key, "2026-06-02/064800000-state.png");
+    assert.equal(lineage.sha256, manifest.files[0].sha256);
+    assert.equal(
+      gitCalls.some((c) => c.args[0] === "add" && c.args[2] === "data/discord/game-state/2026-06-02/064800000-state.png"),
+      false,
+      "binary blob must not be staged",
+    );
+    assert.deepEqual(
+      gitCalls.filter((c) => c.args[0] === "add").map((c) => c.args[2]).sort(),
+      [
+        "data/discord/game-state/2026-06-02/064800000-state.png.lineage.json",
+        "data/discord/game-state/2026-06-02/_index.json",
+        "data/discord/game-state/2026-06-02/manifest.json",
+      ],
+    );
     const commit = gitCalls.find((c) => c.args[0] === "commit");
     assert.ok(commit?.args.includes("--no-verify"));
     assert.ok(commit?.stdin?.includes("data(game-state): after raid"));
+    assert.ok(commit?.stdin?.includes("Manifest: data/discord/game-state/2026-06-02/manifest.json"));
+    assert.ok(commit?.stdin?.includes("R2: stfc-game-state/2026-06-02/064800000-state.png"));
     assert.ok(commit?.stdin?.includes("Source: https://discord.com/channels/g1/c1/..."));
     assert.deepEqual(
       gitCalls.find((c) => c.args[0] === "push")?.args,
@@ -337,7 +408,7 @@ describe("scripts/discord-handler.mjs", () => {
           return "";
         },
         fetchImpl: async (url: string) => {
-          if (url.includes("cdn.discordapp.com")) {
+          if (isHost(url, "cdn.discordapp.com")) {
             return {
               ok: true,
               status: 200,
@@ -346,6 +417,9 @@ describe("scripts/discord-handler.mjs", () => {
               arrayBuffer: async () => Buffer.from("abcde"),
               text: async () => "",
             };
+          }
+          if (isHost(url, "account123.r2.cloudflarestorage.com")) {
+            return { ok: true, status: 200, text: async () => "" };
           }
           return { ok: true, status: 200, text: async () => "{}" };
         },
@@ -360,9 +434,9 @@ describe("scripts/discord-handler.mjs", () => {
     assert.equal(code1, 0);
     assert.equal(code2, 0);
 
-    // Both blob files exist — no overwrite
-    assert.equal(mem.files.has("data/discord/game-state/2026-06-02/064800000-state.png"), true);
-    assert.equal(mem.files.has("data/discord/game-state/2026-06-02/064800001-state.png"), true);
+    // Binary blobs are not committed locally — R2 keys differ, so no overwrite.
+    assert.equal(mem.files.has("data/discord/game-state/2026-06-02/064800000-state.png"), false);
+    assert.equal(mem.files.has("data/discord/game-state/2026-06-02/064800001-state.png"), false);
 
     // Both lineage files exist
     assert.equal(mem.files.has("data/discord/game-state/2026-06-02/064800000-state.png.lineage.json"), true);
@@ -374,7 +448,230 @@ describe("scripts/discord-handler.mjs", () => {
     const names = indexContent.files.map((f: { filename: string }) => f.filename);
     assert.ok(names.includes("064800000-state.png"), `expected 064800000-state.png in index, got: ${JSON.stringify(names)}`);
     assert.ok(names.includes("064800001-state.png"), `expected 064800001-state.png in index, got: ${JSON.stringify(names)}`);
+    const manifestContent = JSON.parse(await mem.readFile("data/discord/game-state/2026-06-02/manifest.json", "utf8"));
+    assert.deepEqual(
+      manifestContent.files.map((f: { r2_key: string }) => f.r2_key),
+      ["2026-06-02/064800000-state.png", "2026-06-02/064800001-state.png"],
+    );
   });
+
+  it("game-state honors a bucket override in upload, manifest and lineage", async () => {
+    const mem = createMemFs();
+    const urls: string[] = [];
+    const code = await mod.runCli({
+      env: { ...baseEnv(gameStatePayload()), STFC_GAME_STATE_R2_BUCKET: "custom-game-state" },
+      nowFn: () => new Date("2026-06-02T06:48:00Z"),
+      readFileImpl: mem.readFile,
+      writeFileImpl: mem.writeFile,
+      mkdirImpl: mem.mkdir,
+      renameImpl: mem.rename,
+      runGit: async (args) => args[0] === "rev-parse" ? "abc123" : "",
+      fetchImpl: async (url: string) => {
+        urls.push(url);
+        return {
+          ok: true, status: 200, url,
+          headers: createHeaders({ "content-length": "5" }),
+          arrayBuffer: async () => Buffer.from("abcde"),
+          text: async () => "{}",
+        };
+      },
+      stdout: makeStdout().stream,
+      stderr: makeStdout().stream,
+    });
+    assert.equal(code, 0);
+    const manifest = JSON.parse(await mem.readFile("data/discord/game-state/2026-06-02/manifest.json", "utf8"));
+    const lineage = JSON.parse(await mem.readFile("data/discord/game-state/2026-06-02/064800000-state.png.lineage.json", "utf8"));
+    assert.equal(manifest.bucket, "custom-game-state");
+    assert.equal(manifest.files[0].r2_bucket, manifest.bucket);
+    assert.equal(lineage.r2_bucket, manifest.bucket);
+    assert.ok(urls.includes(`https://account123.r2.cloudflarestorage.com/${manifest.bucket}/${manifest.files[0].r2_key}`));
+  });
+
+  for (const manifest of [
+    { bucket: "old-bucket", files: [{ filename: "old.png", r2_bucket: "old-bucket", r2_key: "old.png" }] },
+    { bucket: "stfc-game-state", files: [{ filename: "old.png", r2_bucket: "other-bucket", r2_key: "old.png" }] },
+    { files: [
+      { filename: "old.png", r2_bucket: "stfc-game-state", r2_key: "old.png" },
+      { filename: "other.png", r2_bucket: "other-bucket", r2_key: "other.png" },
+    ] },
+  ]) {
+    it(`game-state rejects conflicting daily buckets before any side effects: ${JSON.stringify(manifest)}`, async () => {
+      const manifestPath = "data/discord/game-state/2026-06-02/manifest.json";
+      const original = JSON.stringify(manifest);
+      const mem = createMemFs({ [manifestPath]: original });
+      let effects = 0;
+      const stderr = makeStdout();
+      const code = await mod.runCli({
+        env: baseEnv(gameStatePayload()),
+        nowFn: () => new Date("2026-06-02T06:48:00Z"),
+        readFileImpl: mem.readFile,
+        writeFileImpl: async () => { effects++; },
+        mkdirImpl: async () => { effects++; },
+        runGit: async () => { effects++; return ""; },
+        fetchImpl: async (url: string, init: any) => {
+          if (isHost(url, "discord.com")) {
+            assert.match(String(init.body), /daily manifest bucket mismatch/);
+            return { ok: true, status: 200, text: async () => "{}" };
+          }
+          effects++;
+          throw new Error("unexpected upload");
+        },
+        stdout: makeStdout().stream,
+        stderr: stderr.stream,
+      });
+      assert.equal(code, 1);
+      assert.match(stderr.text(), /daily manifest bucket mismatch/);
+      assert.equal(effects, 0);
+      assert.equal(await mem.readFile(manifestPath, "utf8"), original);
+      await assert.rejects(mod.updateDailyManifestAtomic({
+        manifestPath,
+        entry: { filename: "new.png", r2_bucket: "stfc-game-state", r2_key: "new.png", sha256: "abc", size_bytes: 5 },
+        readFileImpl: mem.readFile,
+        writeFileImpl: async () => { effects++; },
+        renameImpl: async () => { effects++; },
+      }), /daily manifest bucket mismatch/);
+      assert.equal(effects, 0);
+    });
+  }
+
+  it("game-state rejects unsupported manifest versions before side effects", async () => {
+    const manifestPath = "data/discord/game-state/2026-06-02/manifest.json";
+    const original = JSON.stringify({
+      version: 2,
+      bucket: "stfc-game-state",
+      files: [{ filename: "old.png", r2_bucket: "stfc-game-state", r2_key: "old.png" }],
+      future_metadata: { retain: true },
+    });
+    const mem = createMemFs({ [manifestPath]: original });
+    const effects: string[] = [];
+    const gitCalls: string[][] = [];
+    let discordPatch = "";
+
+    const code = await mod.runCli({
+      env: baseEnv(gameStatePayload()),
+      nowFn: () => new Date("2026-06-02T06:48:00Z"),
+      readFileImpl: mem.readFile,
+      writeFileImpl: async (filePath) => { effects.push(`write:${filePath}`); },
+      mkdirImpl: async (dirPath) => { effects.push(`mkdir:${dirPath}`); },
+      runGit: async (args) => { gitCalls.push(args); return ""; },
+      fetchImpl: async (url: string, init: any) => {
+        if (isHost(url, "cdn.discordapp.com")) {
+          effects.push("download");
+          throw new Error("unsupported manifest must reject before download");
+        }
+        if (isHost(url, "account123.r2.cloudflarestorage.com")) {
+          effects.push(`r2:${init.method}`);
+          throw new Error("unsupported manifest must reject before R2 access");
+        }
+        discordPatch = String(init.body ?? "");
+        return { ok: true, status: 200, text: async () => "{}" };
+      },
+      stdout: makeStdout().stream,
+      stderr: makeStdout().stream,
+    });
+
+    assert.equal(code, 1);
+    assert.match(discordPatch, /daily manifest version 2 is unsupported; supported version is 1/);
+    assert.deepEqual(effects, []);
+    assert.deepEqual(gitCalls, []);
+    assert.equal(await mem.readFile(manifestPath, "utf8"), original);
+  });
+
+  for (const scenario of ["lost-ack", "uncertain", "not-published", "retry-lost-ack", "retry-uncertain"]) {
+    it(`game-state push outcome ${scenario} preserves potentially published R2 objects`, async () => {
+      const scratch = mkdtempSync(path.join(tmpdir(), "stfc-push-outcome-"));
+      try {
+        const remote = path.join(scratch, "remote.git");
+        const writer = path.join(scratch, "writer");
+        mkdirSync(writer);
+        const git = async (cwd: string, args: string[], stdin?: string) => {
+          const env = { ...process.env };
+          for (const key of Object.keys(env)) {
+            if (key.startsWith("GIT_")) delete env[key];
+          }
+          const execution = execFileAsync("git", args, { cwd, env, encoding: "utf8" });
+          execution.child.stdin?.end(stdin);
+          return (await execution).stdout.trim();
+        };
+        await git(scratch, ["init", "--bare", remote]);
+        await git(writer, ["init", "-b", "automation-state"]);
+        await git(writer, ["config", "user.name", "Test"]);
+        await git(writer, ["config", "user.email", "test@example.invalid"]);
+        writeFileSync(path.join(writer, "seed.txt"), "seed");
+        await git(writer, ["add", "."]);
+        await git(writer, ["commit", "--no-verify", "-m", "seed"]);
+        await git(writer, ["remote", "add", "origin", remote]);
+        await git(writer, ["push", "--no-verify", "origin", "HEAD:automation-state"]);
+        const mem = createMemFs();
+        const methods: string[] = [];
+        const stderr = makeStdout();
+        let attempts = 0;
+        let reconciliations = 0;
+        let response = "";
+        const code = await mod.runCli({
+          env: baseEnv(gameStatePayload()),
+          nowFn: () => new Date("2026-06-02T06:48:00Z"),
+          readFileImpl: mem.readFile,
+          writeFileImpl: mem.writeFile,
+          mkdirImpl: mem.mkdir,
+          renameImpl: mem.rename,
+          runGit: async (args, opts) => {
+            if (args[0] === "commit") {
+              for (const [name, content] of mem.files) {
+                const target = path.join(writer, name);
+                mkdirSync(path.dirname(target), { recursive: true });
+                writeFileSync(target, content);
+              }
+              await git(writer, ["add", "data"]);
+            }
+            if (args[0] === "add") return "";
+            if (args[0] === "push") {
+              attempts++;
+              if (scenario.startsWith("retry") && attempts === 1) throw new Error("non-fast-forward");
+              if (scenario.endsWith("lost-ack") || scenario.endsWith("uncertain")) await git(writer, args);
+              throw new Error("push acknowledgement lost");
+            }
+            if (args[0] === "-C") {
+              if (scenario.endsWith("uncertain") && (!scenario.startsWith("retry") || attempts === 2)) throw new Error("remote unavailable");
+              try {
+                return await git(writer, args.slice(2));
+              } catch (error) {
+                if (args[2] === "merge-base" && (error as { code?: number }).code === 1) throw Object.assign(new Error("not published"), { code: 1 });
+                throw error;
+              }
+            }
+            return git(writer, args, opts?.stdin);
+          },
+          reconcileAutomationStateImpl: async () => { reconciliations++; return "rebased"; },
+          fetchImpl: async (url: string, init: any) => {
+            if (isHost(url, "account123.r2.cloudflarestorage.com")) methods.push(init.method);
+            if (isHost(url, "discord.com")) response = String(init.body);
+            return {
+              ok: true, status: 200, url,
+              headers: createHeaders({ "content-length": "5" }),
+              arrayBuffer: async () => Buffer.from("abcde"), text: async () => "{}",
+            };
+          },
+          stdout: makeStdout().stream, stderr: stderr.stream,
+        });
+        assert.equal(code, scenario.endsWith("lost-ack") ? 0 : 1, stderr.text());
+        assert.deepEqual(methods, scenario === "not-published" ? ["PUT", "DELETE"] : ["PUT"]);
+        assert.equal(attempts, scenario.startsWith("retry") ? 2 : 1);
+        assert.equal(reconciliations, scenario.startsWith("retry") ? 1 : 0);
+        if (scenario !== "not-published") {
+          const manifest = JSON.parse(await git(scratch, ["--git-dir", remote, "show", "refs/heads/automation-state:data/discord/game-state/2026-06-02/manifest.json"]));
+          assert.equal(manifest.files[0].r2_key, "2026-06-02/064800000-state.png");
+          assert.equal(manifest.files[0].r2_bucket, "stfc-game-state");
+        }
+        if (scenario.endsWith("uncertain")) {
+          assert.match(stderr.text(), /publication uncertain; preserved R2 object stfc-game-state\/2026-06-02\/064800000-state.png/);
+          assert.match(response, /publication uncertain; preserved R2 object/);
+        }
+      } finally {
+        rmSync(scratch, { recursive: true, force: true });
+      }
+    });
+  }
 
   it("game-state path traversal filename is sanitized and stays under target folder", async () => {
     const mem = createMemFs();
@@ -395,7 +692,7 @@ describe("scripts/discord-handler.mjs", () => {
         return "";
       },
       fetchImpl: async (url: string) => {
-        if (url.includes("cdn.discordapp.com")) {
+        if (isHost(url, "cdn.discordapp.com")) {
           return {
             ok: true,
             status: 200,
@@ -405,6 +702,9 @@ describe("scripts/discord-handler.mjs", () => {
             text: async () => "",
           };
         }
+        if (isHost(url, "account123.r2.cloudflarestorage.com")) {
+          return { ok: true, status: 200, text: async () => "" };
+        }
         return { ok: true, status: 200, text: async () => "{}" };
       },
       stdout: { write: () => {} },
@@ -412,7 +712,7 @@ describe("scripts/discord-handler.mjs", () => {
     });
 
     assert.equal(code, 0);
-    const stagedFile = staged.find((p) => p.endsWith("etcpasswd"));
+    const stagedFile = staged.find((p) => p.endsWith("etcpasswd.lineage.json"));
     assert.ok(stagedFile && stagedFile.startsWith("data/discord/game-state/"));
     assert.equal(staged.some((p) => p.includes("..")), false);
   });
@@ -446,6 +746,35 @@ describe("scripts/discord-handler.mjs", () => {
     assert.match(discordPatch, /❌ attachment exceeds 50MB limit/);
   });
 
+  it("game-state missing R2 secrets rejects before download, upload, or git", async () => {
+    const env = baseEnv(gameStatePayload());
+    delete env.CLOUDFLARE_R2_SECRET_ACCESS_KEY;
+    const gitCalls: string[] = [];
+    const fetchedHosts: string[] = [];
+    let discordPatch = "";
+
+    const code = await mod.runCli({
+      env,
+      runGh: async () => "",
+      runGit: async (args) => {
+        gitCalls.push(args[0]!);
+        return "";
+      },
+      fetchImpl: async (url: string, init: any) => {
+        fetchedHosts.push(new URL(url).hostname);
+        discordPatch = String(init.body ?? "");
+        return { ok: true, status: 200, text: async () => "{}" };
+      },
+      stdout: { write: () => {} },
+      stderr: { write: () => {} },
+    });
+
+    assert.equal(code, 1);
+    assert.deepEqual(gitCalls, []);
+    assert.deepEqual(fetchedHosts, ["discord.com"]);
+    assert.match(discordPatch, /❌ Missing required R2 env var\(s\): CLOUDFLARE_R2_SECRET_ACCESS_KEY/);
+  });
+
   it("game-state mismatched Content-Length rejects with follow-up and no commit", async () => {
     const gitCalls: string[] = [];
     let discordPatch = "";
@@ -458,7 +787,7 @@ describe("scripts/discord-handler.mjs", () => {
         return "";
       },
       fetchImpl: async (url: string, init: any) => {
-        if (url.includes("cdn.discordapp.com")) {
+        if (isHost(url, "cdn.discordapp.com")) {
           return {
             ok: true,
             status: 200,
@@ -478,6 +807,253 @@ describe("scripts/discord-handler.mjs", () => {
     assert.equal(code, 1);
     assert.equal(gitCalls.length, 0);
     assert.match(discordPatch, /❌ download failed: Content-Length does not match attachment.size/);
+  });
+
+  it("game-state R2 upload failures reject with follow-up and no commit", async () => {
+    const gitCalls: string[] = [];
+    let discordPatch = "";
+
+    const code = await mod.runCli({
+      env: baseEnv(gameStatePayload()),
+      nowFn: () => new Date("2026-06-02T06:48:00Z"),
+      runGh: async () => "",
+      runGit: async (args) => {
+        gitCalls.push(args[0]!);
+        return "";
+      },
+      fetchImpl: async (url: string, init: any) => {
+        if (isHost(url, "cdn.discordapp.com")) {
+          return {
+            ok: true,
+            status: 200,
+            url,
+            headers: createHeaders({ "content-length": "5", "content-type": "image/png" }),
+            arrayBuffer: async () => Buffer.from("abcde"),
+            text: async () => "",
+          };
+        }
+        if (isHost(url, "account123.r2.cloudflarestorage.com")) {
+          return { ok: false, status: 403, text: async () => "forbidden" };
+        }
+        discordPatch = String(init.body ?? "");
+        return { ok: true, status: 200, text: async () => "{}" };
+      },
+      stdout: { write: () => {} },
+      stderr: { write: () => {} },
+    });
+
+    assert.equal(code, 1);
+    assert.equal(gitCalls.length, 0);
+    assert.match(discordPatch, /❌ R2 upload failed: status 403 forbidden/);
+    assert.match(discordPatch, /object location: stfc-game-state\/2026-06-02\/064800000-state\.png/);
+  });
+
+  it("game-state reports the R2 location after an accepted PUT times out without cleanup", async () => {
+    const gitCalls: string[][] = [];
+    const r2Methods: string[] = [];
+    const acceptedObjects = new Set<string>();
+    let discordPatch = "";
+    const code = await mod.runCli({
+      env: baseEnv(gameStatePayload()),
+      nowFn: () => new Date("2026-06-02T06:48:00Z"),
+      readFileImpl: createMemFs().readFile,
+      writeFileImpl: async () => { throw new Error("metadata must not be written"); },
+      runGit: async (args) => { gitCalls.push(args); return ""; },
+      fetchImpl: async (url: string, init: any) => {
+        if (isHost(url, "cdn.discordapp.com")) {
+          return {
+            ok: true,
+            status: 200,
+            url,
+            headers: createHeaders({ "content-length": "5", "content-type": "image/png" }),
+            arrayBuffer: async () => Buffer.from("abcde"),
+            text: async () => "",
+          };
+        }
+        if (isHost(url, "account123.r2.cloudflarestorage.com")) {
+          r2Methods.push(init.method);
+          const location = new URL(url).pathname.slice(1);
+          acceptedObjects.add(location);
+          const error = new Error("response was lost after the object was accepted");
+          error.name = "AbortError";
+          throw error;
+        }
+        discordPatch = String(init.body ?? "");
+        return { ok: true, status: 200, text: async () => "{}" };
+      },
+      stdout: makeStdout().stream,
+      stderr: makeStdout().stream,
+    });
+
+    assert.equal(code, 1);
+    assert.deepEqual(r2Methods, ["PUT"], "the possibly persisted object must not be deleted");
+    assert.deepEqual([...acceptedObjects], [
+      "stfc-game-state/2026-06-02/064800000-state.png",
+    ]);
+    assert.deepEqual(gitCalls, []);
+    assert.match(
+      discordPatch,
+      /R2 upload failed: request timed out; outcome uncertain; possible object at stfc-game-state\/2026-06-02\/064800000-state\.png/,
+    );
+    assert.doesNotMatch(discordPatch, /r2-(?:access|secret)-key/);
+  });
+
+  it("game-state daily caps are checked before downloading or uploading", async () => {
+    const indexPath = "data/discord/game-state/2026-06-02/_index.json";
+    const mem = createMemFs({
+      [indexPath]: JSON.stringify({
+        files: Array.from({ length: 20 }, (_, index) => ({
+          filename: `existing-${index}.png`,
+          size_bytes: 1,
+        })),
+      }),
+    });
+    let r2Requests = 0;
+    let discordPatch = "";
+
+    const code = await mod.runCli({
+      env: baseEnv(gameStatePayload()),
+      nowFn: () => new Date("2026-06-02T06:48:00Z"),
+      readFileImpl: mem.readFile,
+      writeFileImpl: mem.writeFile,
+      mkdirImpl: mem.mkdir,
+      renameImpl: mem.rename,
+      rmImpl: mem.rm,
+      runGit: async () => "",
+      fetchImpl: async (url: string, init: any) => {
+        if (isHost(url, "cdn.discordapp.com")) {
+          throw new Error("attachment must not be downloaded after cap rejection");
+        }
+        if (isHost(url, "account123.r2.cloudflarestorage.com")) {
+          r2Requests += 1;
+          return { ok: true, status: 200, text: async () => "" };
+        }
+        discordPatch = String(init.body ?? "");
+        return { ok: true, status: 200, text: async () => "{}" };
+      },
+      stdout: { write: () => {} },
+      stderr: { write: () => {} },
+    });
+
+    assert.equal(code, 1);
+    assert.equal(r2Requests, 0);
+    assert.match(discordPatch, /daily file cap exceeded \(20 files\)/);
+  });
+
+  it("game-state removes an uploaded R2 object if metadata persistence fails", async () => {
+    const mem = createMemFs();
+    const methods: string[] = [];
+    let discordPatch = "";
+    const gitCalls: string[][] = [];
+
+    const code = await mod.runCli({
+      env: baseEnv(gameStatePayload()),
+      nowFn: () => new Date("2026-06-02T06:48:00Z"),
+      readFileImpl: mem.readFile,
+      writeFileImpl: async (filePath, data) => {
+        if (filePath.endsWith(".lineage.json")) {
+          throw fsError("EIO", "disk write failed");
+        }
+        await mem.writeFile(filePath, data);
+      },
+      mkdirImpl: mem.mkdir,
+      renameImpl: mem.rename,
+      rmImpl: mem.rm,
+      runGit: async (args) => {
+        gitCalls.push(args);
+        return "";
+      },
+      fetchImpl: async (url: string, init: any) => {
+        if (isHost(url, "cdn.discordapp.com")) {
+          return {
+            ok: true,
+            status: 200,
+            url,
+            headers: createHeaders({ "content-length": "5", "content-type": "image/png" }),
+            arrayBuffer: async () => Buffer.from("abcde"),
+            text: async () => "",
+          };
+        }
+        if (isHost(url, "account123.r2.cloudflarestorage.com")) {
+          methods.push(init.method);
+          return { ok: true, status: init.method === "DELETE" ? 204 : 200, text: async () => "" };
+        }
+        discordPatch = String(init.body ?? "");
+        return { ok: true, status: 200, text: async () => "{}" };
+      },
+      stdout: { write: () => {} },
+      stderr: { write: () => {} },
+    });
+
+    assert.equal(code, 1);
+    assert.deepEqual(methods, ["PUT", "DELETE"]);
+    assert.deepEqual(gitCalls, []);
+    assert.match(discordPatch, /❌ disk write failed/);
+  });
+
+  it("game-state reports both persistence and R2 cleanup failures", async () => {
+    let discordPatch = "";
+    const code = await mod.runCli({
+      env: baseEnv(gameStatePayload()),
+      nowFn: () => new Date("2026-06-02T06:48:00Z"),
+      readFileImpl: createMemFs().readFile,
+      writeFileImpl: async (filePath) => {
+        if (filePath.endsWith(".lineage.json")) throw fsError("EIO", "disk write failed");
+      },
+      mkdirImpl: async () => {},
+      runGit: async () => "",
+      fetchImpl: async (url: string, init: any) => {
+        if (isHost(url, "cdn.discordapp.com")) {
+          return {
+            ok: true,
+            status: 200,
+            url,
+            headers: createHeaders({ "content-length": "5", "content-type": "image/png" }),
+            arrayBuffer: async () => Buffer.from("abcde"),
+            text: async () => "",
+          };
+        }
+        if (isHost(url, "account123.r2.cloudflarestorage.com")) {
+          return init.method === "DELETE"
+            ? { ok: false, status: 403, text: async () => "delete denied" }
+            : { ok: true, status: 200, text: async () => "" };
+        }
+        discordPatch = String(init.body ?? "");
+        return { ok: true, status: 200, text: async () => "{}" };
+      },
+      stdout: { write: () => {} },
+      stderr: { write: () => {} },
+    });
+
+    assert.equal(code, 1);
+    assert.match(discordPatch, /disk write failed/);
+    assert.match(discordPatch, /R2 cleanup failed: status 403 delete denied/);
+  });
+
+  it("game-state R2 uploads time out and abort their network request", async () => {
+    await assert.rejects(
+      mod.uploadR2Object({
+        config: {
+          accountId: "account123",
+          accessKeyId: "r2-access-key",
+          secretAccessKey: "r2-secret-key",
+          bucket: "stfc-game-state",
+        },
+        key: "2026-06-02/state.png",
+        buffer: Buffer.from("abcde"),
+        contentType: "image/png",
+        now: new Date("2026-06-02T06:48:00Z"),
+        timeoutMs: 5,
+        fetchImpl: async (_url, init) => new Promise((_resolve, reject) => {
+          init.signal.addEventListener("abort", () => {
+            const error = new Error("request aborted");
+            error.name = "AbortError";
+            reject(error);
+          }, { once: true });
+        }),
+      }),
+      /R2 upload failed: request timed out/,
+    );
   });
 
   it("game-state rejects non-Discord CDN URL", async () => {
@@ -588,6 +1164,163 @@ describe("scripts/discord-handler.mjs", () => {
       to: "data/discord/game-state/2026-06-02/_index.json",
     }]);
     assert.deepEqual(JSON.parse(tempContent), { files: [entry] });
+  });
+
+  it("game-state manifest starts fresh only when the manifest is missing", async () => {
+    let tempContent = "";
+    const entry = {
+      filename: "064800-state.png",
+      r2_bucket: "stfc-game-state",
+      r2_key: "2026-06-02/064800-state.png",
+      sha256: "abc123",
+      size_bytes: 5,
+    };
+    const out = await mod.updateDailyManifestAtomic({
+      manifestPath: "data/discord/game-state/2026-06-02/manifest.json",
+      entry,
+      readFileImpl: async () => {
+        throw fsError("ENOENT");
+      },
+      writeFileImpl: async (_path, data) => {
+        tempContent = data;
+      },
+      renameImpl: async () => {},
+    });
+
+    assert.deepEqual(out.files, [entry]);
+    assert.deepEqual(JSON.parse(tempContent), {
+      version: 1,
+      bucket: "stfc-game-state",
+      files: [entry],
+    });
+  });
+
+  it("game-state manifest rejects unsupported versions without rewriting future fields", async () => {
+    const manifestPath = "data/discord/game-state/2026-06-02/manifest.json";
+    const original = JSON.stringify({
+      version: 2,
+      bucket: "stfc-game-state",
+      files: [],
+      future_metadata: { retain: true },
+    });
+    const writes: string[] = [];
+    const renames: string[] = [];
+
+    await assert.rejects(mod.updateDailyManifestAtomic({
+      manifestPath,
+      entry: {
+        filename: "064800-state.png",
+        r2_bucket: "stfc-game-state",
+        r2_key: "2026-06-02/064800-state.png",
+        sha256: "abc123",
+        size_bytes: 5,
+      },
+      readFileImpl: async () => original,
+      writeFileImpl: async (filePath) => { writes.push(filePath); },
+      renameImpl: async (from, to) => { renames.push(`${from}:${to}`); },
+    }), /daily manifest version 2 is unsupported; supported version is 1/);
+
+    assert.deepEqual(writes, []);
+    assert.deepEqual(renames, []);
+    assert.equal(original, JSON.stringify({
+      version: 2,
+      bucket: "stfc-game-state",
+      files: [],
+      future_metadata: { retain: true },
+    }));
+  });
+
+  it("game-state manifest preserves unknown fields in supported version 1 documents", async () => {
+    const entry = {
+      filename: "064800-state.png",
+      r2_bucket: "stfc-game-state",
+      r2_key: "2026-06-02/064800-state.png",
+      sha256: "abc123",
+      size_bytes: 5,
+    };
+    const original = {
+      version: 1,
+      bucket: "stfc-game-state",
+      files: [{ filename: "old.png", r2_bucket: "stfc-game-state", r2_key: "old.png", future_file_field: true }],
+      future_metadata: { retain: true },
+    };
+    let tempContent = "";
+
+    await mod.updateDailyManifestAtomic({
+      manifestPath: "data/discord/game-state/2026-06-02/manifest.json",
+      entry,
+      readFileImpl: async () => JSON.stringify(original),
+      writeFileImpl: async (_path, data) => { tempContent = data; },
+      renameImpl: async () => {},
+    });
+
+    assert.deepEqual(JSON.parse(tempContent), {
+      ...original,
+      files: [...original.files, entry],
+    });
+  });
+
+  it("game-state manifest preserves malformed content and propagates read errors", async () => {
+    const manifestPath = "data/discord/game-state/2026-06-02/manifest.json";
+    const original = "{ malformed";
+    const writes: string[] = [];
+    const renames: string[] = [];
+    const entry = {
+      filename: "064800-state.png",
+      r2_bucket: "stfc-game-state",
+      r2_key: "2026-06-02/064800-state.png",
+      sha256: "abc123",
+      size_bytes: 5,
+    };
+
+    await assert.rejects(mod.updateDailyManifestAtomic({
+      manifestPath,
+      entry,
+      readFileImpl: async () => original,
+      writeFileImpl: async (filePath) => {
+        writes.push(filePath);
+      },
+      renameImpl: async (from, to) => {
+        renames.push(`${from}:${to}`);
+      },
+    }), SyntaxError);
+    await assert.rejects(mod.updateDailyManifestAtomic({
+      manifestPath,
+      entry,
+      readFileImpl: async () => {
+        throw fsError("EIO", "manifest read failed");
+      },
+      writeFileImpl: async (filePath) => {
+        writes.push(filePath);
+      },
+      renameImpl: async (from, to) => {
+        renames.push(`${from}:${to}`);
+      },
+    }), /manifest read failed/);
+
+    assert.deepEqual(writes, []);
+    assert.deepEqual(renames, []);
+  });
+
+  it("game-state manifest rejects a document without a files array", async () => {
+    const writes: string[] = [];
+    await assert.rejects(mod.updateDailyManifestAtomic({
+      manifestPath: "data/discord/game-state/2026-06-02/manifest.json",
+      entry: {
+        filename: "064800-state.png",
+        r2_bucket: "stfc-game-state",
+        r2_key: "2026-06-02/064800-state.png",
+        sha256: "abc123",
+        size_bytes: 5,
+      },
+      readFileImpl: async () => JSON.stringify({ entries: [] }),
+      writeFileImpl: async (filePath) => {
+        writes.push(filePath);
+      },
+      renameImpl: async () => {},
+    }), /daily manifest is malformed: expected a files array/);
+
+    assert.deepEqual(writes, []);
   });
 
   it("game-state index preserves malformed JSON without writing", async () => {
@@ -819,6 +1552,7 @@ describe("scripts/discord-handler.mjs", () => {
       runGh: async () => "",
       runGit: async (args) => {
         calls.push(args);
+        if (args[2] === "merge-base") throw Object.assign(new Error("not published"), { code: 1 });
         if (args[0] === "push") {
           pushAttempts += 1;
           if (pushAttempts === 1) throw new Error("git push failed: non-fast-forward");
@@ -831,7 +1565,7 @@ describe("scripts/discord-handler.mjs", () => {
         return "replayed";
       },
       fetchImpl: async (url: string) => {
-        if (url.includes("cdn.discordapp.com")) {
+        if (isHost(url, "cdn.discordapp.com")) {
           return {
             ok: true,
             status: 200,
@@ -840,6 +1574,9 @@ describe("scripts/discord-handler.mjs", () => {
             arrayBuffer: async () => Buffer.from("abcde"),
             text: async () => "",
           };
+        }
+        if (isHost(url, "account123.r2.cloudflarestorage.com")) {
+          return { ok: true, status: 200, text: async () => "" };
         }
         return { ok: true, status: 200, text: async () => "{}" };
       },
@@ -852,9 +1589,9 @@ describe("scripts/discord-handler.mjs", () => {
     assert.equal(reconcileCalls.length, 1);
     assert.equal(reconcileCalls[0]?.ref, "automation-state");
     assert.deepEqual(reconcileCalls[0]?.relativePaths.sort(), [
-      "data/discord/game-state/2026-06-02/064800000-state.png",
       "data/discord/game-state/2026-06-02/064800000-state.png.lineage.json",
       "data/discord/game-state/2026-06-02/_index.json",
+      "data/discord/game-state/2026-06-02/manifest.json",
     ]);
   });
 

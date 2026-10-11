@@ -97,7 +97,7 @@ async function seedBaseline(scratch: string, origin: string): Promise<void> {
   await git(seed, "push", "-q", "origin", "HEAD:automation-state");
 }
 
-/** Simulates discord-command-handler.yml pushing a NEW game-state upload, advancing the tip. */
+/** Simulates discord-command-handler.yml pushing a NEW game-state manifest, advancing the tip. */
 async function pushHandlerUpload(scratch: string, origin: string): Promise<void> {
   const handlerDir = path.join(scratch, "handler");
   await git(scratch, "clone", "-q", "--branch", "automation-state", origin, handlerDir);
@@ -106,12 +106,12 @@ async function pushHandlerUpload(scratch: string, origin: string): Promise<void>
 
   await mkdir(path.join(handlerDir, "data", "discord", "game-state", "2026-08-23"), { recursive: true });
   await writeFile(
-    path.join(handlerDir, "data", "discord", "game-state", "2026-08-23", "120000-new-upload.png"),
-    "new-upload-bytes",
-  );
-  await writeFile(
     path.join(handlerDir, "data", "discord", "game-state", "2026-08-23", "_index.json"),
     '{"files":[{"filename":"120000-new-upload.png"}]}\n',
+  );
+  await writeFile(
+    path.join(handlerDir, "data", "discord", "game-state", "2026-08-23", "manifest.json"),
+    '{"version":1,"bucket":"custom-game-state","files":[{"filename":"120000-new-upload.png","r2_bucket":"custom-game-state","r2_key":"2026-08-23/120000-new-upload.png"}]}\n',
   );
   await git(handlerDir, "add", "--", "data/discord/game-state/2026-08-23");
   await git(handlerDir, "commit", "--no-verify", "-m", "data(game-state): handler upload");
@@ -170,7 +170,7 @@ describe("automation-state writer race (Garak, PR #250 review)", () => {
 
       // Sanity: the fresh fetch already contains the handler's newer upload.
       assert.ok(
-        existsSync(path.join(stateDir, "data", "discord", "game-state", "2026-08-23", "120000-new-upload.png")),
+        existsSync(path.join(stateDir, "data", "discord", "game-state", "2026-08-23", "manifest.json")),
         "precondition: the freshly fetched tip must already contain the handler's push",
       );
 
@@ -196,11 +196,11 @@ describe("automation-state writer race (Garak, PR #250 review)", () => {
 
       assert.equal(
         await readFile(
-          path.join(checkDir, "data", "discord", "game-state", "2026-08-23", "120000-new-upload.png"),
+          path.join(checkDir, "data", "discord", "game-state", "2026-08-23", "manifest.json"),
           "utf8",
         ),
-        "new-upload-bytes",
-        "the handler's newer upload must survive the monitor's commit",
+        '{"version":1,"bucket":"custom-game-state","files":[{"filename":"120000-new-upload.png","r2_bucket":"custom-game-state","r2_key":"2026-08-23/120000-new-upload.png"}]}\n',
+        "the handler's newer manifest must survive the monitor's commit",
       );
       assert.equal(
         await readFile(
@@ -258,10 +258,10 @@ describe("automation-state writer race (Garak, PR #250 review)", () => {
 
       assert.equal(
         existsSync(
-          path.join(checkDir, "data", "discord", "game-state", "2026-08-23", "120000-new-upload.png"),
+          path.join(checkDir, "data", "discord", "game-state", "2026-08-23", "manifest.json"),
         ),
         false,
-        "documents the bug: the pre-fix pattern silently deletes the newer handler upload",
+        "documents the bug: the pre-fix pattern silently deletes the newer handler manifest",
       );
     } finally {
       await rm(scratch, { recursive: true, force: true });
