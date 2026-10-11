@@ -1,6 +1,7 @@
 import { describe, it } from "node:test";
-import { readFileSync } from "fs";
+import { existsSync, readFileSync } from "fs";
 import { resolve } from "path";
+import { execFileSync } from "node:child_process";
 import assert from "node:assert/strict";
 
 /**
@@ -188,15 +189,52 @@ describe("Squad upgrade template regression coverage", () => {
       assert.ok(!document.includes("Pre-Ship ceremony (auto)"));
       assert.ok(!document.includes("Post-research (auto"));
     }
-    assert.ok(sourceOfTruth.includes("only mutable Squad state"));
-    assert.ok(sourceOfTruth.includes("Do not create specialist histories"));
+    // PR #314 review (comment 4239919415): the skill previously claimed the
+    // decision ledger was the *only* mutable Squad state, contradicting
+    // squad.agent.md and .squad/reference/source-of-truth.md, which also
+    // route casting history and agent history archives through state tools.
+    // The corrected text scopes mutable state to the full table instead of
+    // decisions alone, while still forbidding ad hoc new categories.
+    assert.ok(sourceOfTruth.includes("Mutable Squad state is not limited to the decision ledger"));
+    assert.ok(sourceOfTruth.includes("Do not invent new specialist histories"));
     assert.ok(sourceOfTruth.includes("Snapshot reconciliation may preserve existing append-only histories and logs"));
     assert.ok(sourceOfTruth.includes("must not manufacture new records"));
   });
 
-  it("preserves the pre-upgrade coordinator as the local backup", () => {
-    const backup = readFile(".github/agents/squad.agent.md.local-backup");
-    assert.match(backup, /<!-- version: 0\.13\.1 -->/);
-    assert.notEqual(backup, coordinator);
+  it("live coordinator carries a current version marker", () => {
+    // Replaces the old backup-diffing assertion now that the stale
+    // .local-backup artifact is gone; the live coordinator is still
+    // required to be a valid, versioned upgrade target.
+    assert.match(coordinator, /<!-- version: \d+\.\d+\.\d+ -->/);
+  });
+
+  it("does not resurrect the stale squad.agent.md.local-backup artifact", () => {
+    // squad.agent.md.local-backup was removed because it had drifted behind
+    // the live agent and still carried stale .squad/decisions.md
+    // references, making it unsafe to restore. Nothing loads a
+    // .md.local-backup file, and the merge-authority scanner only ever
+    // reads .md paths, so it was an unguarded shadow copy of the repo's
+    // most safety-critical prompt. It must stay both absent from disk and
+    // untracked in git — a future Squad upgrade must not re-create it.
+    const backupPath = resolve(
+      process.cwd(),
+      ".github/agents/squad.agent.md.local-backup",
+    );
+    assert.equal(
+      existsSync(backupPath),
+      false,
+      "squad.agent.md.local-backup must not exist on disk",
+    );
+
+    const tracked = execFileSync(
+      "git",
+      ["ls-files", "--", ".github/agents/squad.agent.md.local-backup"],
+      { cwd: process.cwd(), encoding: "utf-8" },
+    ).trim();
+    assert.equal(
+      tracked,
+      "",
+      "squad.agent.md.local-backup must not be a tracked file in git",
+    );
   });
 });

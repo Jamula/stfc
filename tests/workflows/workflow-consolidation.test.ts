@@ -44,6 +44,9 @@ const workflows = workflowSources.map(({ file, source }) => ({
       {
         name?: string;
         "continue-on-error"?: boolean | string;
+        needs?: string | string[];
+        if?: string;
+        permissions?: Record<string, string>;
         steps?: Array<{
           "continue-on-error"?: boolean | string;
           run?: string;
@@ -56,8 +59,8 @@ const workflows = workflowSources.map(({ file, source }) => ({
   },
 }));
 const workflowSteps = workflows.flatMap(({ file, workflow }) =>
-  Object.values(workflow.jobs ?? {}).flatMap((job) =>
-    (job.steps ?? []).map((step) => ({ file, step })),
+  Object.entries(workflow.jobs ?? {}).flatMap(([jobName, job]) =>
+    (job.steps ?? []).map((step) => ({ file, jobName, step })),
   ),
 );
 
@@ -617,10 +620,21 @@ describe("workflow consolidation", () => {
         /\bmain-only\b/,
         `${skillPath} must explicitly describe the main-only model`,
       );
+      const normalizedSkill = skill.replace(/\s+/g, " ");
       assert.match(
-        skill.replace(/\s+/g, " "),
-        /Before removing (?:it|a worktree), preserve (?:any )?(?:its )?uncommitted `\.squad\/` (?:state|artifacts)/i,
-        `${skillPath} must preserve uncommitted .squad state before worktree removal`,
+        normalizedSkill,
+        /For `local`\/`worktree` backends using the \*\*worktree-local\*\* strategy, branch-local `\.squad\/` state exists only inside that worktree and is lost when the worktree is removed; snapshot and verify it into the main checkout using the procedure below regardless of state-tool availability\./i,
+        `${skillPath} must require the worktree-local snapshot regardless of state-tool availability`,
+      );
+      assert.match(
+        normalizedSkill,
+        /Skip the snapshot only when the worktree uses the \*\*main-checkout\*\* strategy, where `\.squad\/` state already lives in the main checkout and nothing is isolated\./i,
+        `${skillPath} must only skip the snapshot for the shared main-checkout strategy`,
+      );
+      assert.match(
+        normalizedSkill,
+        /For `orphan`, `two-layer`, or `git-notes` backends, reconcile and clean mutable state only through the configured state tools using canonical logical paths.{0,300}Never read or copy a worktree `\.squad\/` checkout snapshot for these backends\. If any required state tool is unavailable for these backends, fail closed/i,
+        `${skillPath} must fail closed and avoid checkout snapshots for non-local backends`,
       );
       for (const lane of ["scope", "technical", "operations"]) {
         assert.match(
@@ -748,25 +762,70 @@ describe("workflow consolidation", () => {
     }
   });
 
-  it("pins every setup-node step to node-version-file: .nvmrc (#214, #222, #242)", () => {
-    // Decision D4: every workflow resolves its Node version from `.nvmrc`.
-    // Forbidding `node-version` alone isn't enough — a step could omit
-    // version configuration entirely and silently fall back to whatever
-    // Node the runner image ships with, drifting from `.nvmrc` without any
-    // signal. Assert the exact value, not just the absence of the
-    // hardcoded-major key.
-    for (const { file, step } of workflowSteps) {
+  it("pins setup-node to the root version file except for the scoped SWA API validation job", () => {
+    // The API deployment runtime is Node 22; all other workflows remain on
+    // the repository's root Node version.
+    for (const { file, jobName, step } of workflowSteps) {
       if (!step.uses?.startsWith("actions/setup-node@")) continue;
+      const expectedVersionFile =
+        file === "swa-deploy.yml" && jobName === "validate-api-node-22"
+          ? "api/.nvmrc"
+          : ".nvmrc";
       assert.ok(
         !("node-version" in (step.with ?? {})),
-        `${file} must use node-version-file: .nvmrc, not a hardcoded node-version`,
+        `${file} must use a node-version-file, not a hardcoded node-version`,
       );
       assert.equal(
         step.with?.["node-version-file"],
-        ".nvmrc",
-        `${file}'s setup-node step must set node-version-file: .nvmrc`,
+        expectedVersionFile,
+        `${file}'s ${jobName} setup-node step must set node-version-file: ${expectedVersionFile}`,
       );
     }
+  });
+
+  it("validates the SWA API under Node 22 before deployment", () => {
+    const swa = workflows.find(({ file }) => file === "swa-deploy.yml");
+    assert.ok(swa, "swa-deploy.yml must exist");
+    const validation = swa.workflow.jobs?.["validate-api-node-22"];
+    assert.ok(validation, "swa-deploy.yml must validate the API under Node 22");
+    assert.equal(
+      validation.if,
+      "github.event_name != 'pull_request' || github.event.action != 'closed'",
+      "API validation should be skipped only when a pull request is closed",
+    );
+    assert.deepEqual(
+      validation.permissions,
+      { contents: "read" },
+      "API validation must use only job-level contents: read permissions",
+    );
+    const steps = validation.steps ?? [];
+    assert.ok(
+      steps.some((step) => step.run?.trim() === "npm ci" && step["working-directory"] === "api"),
+      "API validation must run npm ci in api/",
+    );
+    assert.ok(
+      steps.some(
+        (step) => step.run?.trim() === "npm run build" && step["working-directory"] === "api",
+      ),
+      "API validation must build in api/",
+    );
+    assert.ok(
+      steps.some(
+        (step) =>
+          step.run?.includes("import('./dist/_lib/auth.js')") &&
+          step.run.includes("import('./dist/_lib/respond.js')") &&
+          step["working-directory"] === "api",
+      ),
+      "API validation must smoke-test the built API modules",
+    );
+
+    const deploy = swa.workflow.jobs?.["deploy"];
+    assert.ok(deploy, "swa-deploy.yml must have a deploy job");
+    const dependencies = Array.isArray(deploy.needs) ? deploy.needs : [deploy.needs];
+    assert.ok(
+      dependencies.includes("validate-api-node-22"),
+      "SWA deployment must wait for Node 22 API validation",
+    );
   });
 
   it("runs the canonical suite entry point on push to main (#242, #222)", () => {

@@ -164,7 +164,7 @@ describe("Tuvok — model preference", () => {
 });
 
 describe("Tuvok — collaboration", () => {
-  it("references .squad/decisions.md as first-read", () => {
+  it("references .squad/decisions/decisions.md as first-read", () => {
     assertDecisionsReference(charter);
   });
 

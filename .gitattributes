@@ -4,11 +4,10 @@
 *.ico binary
 
 # Squad: union merge for append-only team state files
-.squad/decisions.md merge=union
-.squad/agents/*/history.md merge=union
-.squad/log/** merge=union
-.squad/orchestration-log/** merge=union
-# Squad: union merge for append-only team state files
-.squad/rai/audit-trail.md merge=union
-# Squad: union merge for append-only team state files
-.squad/fact-checker/audit-trail.md merge=union
+# NOTE: all rules here were removed because those paths are backend-owned
+# mutable state migrated out of the tracked tree (see
+# MUTABLE_SQUAD_STATE_DELETION_ALLOWLIST in scripts/pre-commit-checks.mjs).
+# .squad/log/** and .squad/orchestration-log/** were migrated as part of
+# PR #314 after Scribe's audit and the coordinator's explicit go-ahead;
+# their durable content already lives in tracked .squad/decisions-archive.md.
+# A merge driver for untracked paths is a no-op, so no rules remain here.

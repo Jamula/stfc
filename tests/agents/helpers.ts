@@ -193,11 +193,65 @@ export function assertModelPreference(
   );
 }
 
-/** Assert charter references decisions.md (in any section). */
+/** Assert charter follows the backend-aware decisions ledger contract. */
 export function assertDecisionsReference(charter: string): void {
   assert.ok(
-    charter.includes(".squad/decisions.md"),
-    "Charter should reference .squad/decisions.md",
+    charter.includes(".squad/decisions/decisions.md"),
+    "Charter should reference .squad/decisions/decisions.md",
+  );
+  assertBackendAwareDecisionsReference(charter);
+}
+
+/** Assert a charter reads decisions through the backend-aware state contract. */
+export function assertBackendAwareDecisionsReference(charter: string): void {
+  const normalized = charter.toLowerCase().replace(/`/g, "").replace(/\s+/g, " ");
+  const stateReadIndex = normalized.indexOf("squad_state_read");
+  assert.ok(stateReadIndex >= 0, "Charter should use squad_state_read for decisions");
+
+  const stateReadGuidance = normalized.slice(
+    Math.max(0, stateReadIndex - 80),
+    stateReadIndex + 180,
+  );
+  assert.match(stateReadGuidance, /\blogical key\b/, "State read should name a logical key");
+  assert.match(
+    stateReadGuidance,
+    /\blogical(?: state)? key decisions\/decisions\.md\b/,
+    "State read should use logical key decisions/decisions.md",
+  );
+  assert.match(stateReadGuidance, /\bstate tools?\b/, "State read should be conditional on state tools");
+  assert.match(stateReadGuidance, /\bavailable\b/, "State read should be used when available");
+
+  const localPath = ".squad/decisions/decisions.md";
+  const localPathIndex = normalized.indexOf(localPath);
+  assert.ok(localPathIndex >= 0, `Charter should reference ${localPath}`);
+  const fallbackGuidance = normalized.slice(
+    Math.max(0, localPathIndex - 80),
+    localPathIndex + localPath.length + 120,
+  );
+  assert.match(fallbackGuidance, /\bfallback\b/, "Local ledger path should be a fallback");
+  assert.match(fallbackGuidance, /\b(?:local|worktree)\b/, "Local ledger fallback should be local/worktree-only");
+  assert.match(fallbackGuidance, /\bonly\b/, "Local ledger fallback should be explicitly limited");
+
+  const staleIndex = normalized.indexOf("stale");
+  assert.ok(staleIndex >= 0, "Charter should guard against stale decision snapshots");
+  const bridgeGuard = normalized.slice(Math.max(0, staleIndex - 260), staleIndex + 120);
+  assert.match(bridgeGuard, /\bbridge\b/, "Stale-snapshot guard should identify the state bridge");
+  assert.match(
+    bridgeGuard,
+    /\b(?:unavailable|missing)\b/,
+    "Stale-snapshot guard should cover an unavailable or missing bridge",
+  );
+  assert.match(
+    bridgeGuard,
+    /\b(?:orphan|two-layer|git-notes|missing bridge)\b/,
+    "Stale-snapshot guard should identify the bridge/backend migration case",
+  );
+  assert.match(bridgeGuard, /\b(?:stop|halt)\b/, "Charter should stop when the bridge is unavailable");
+  assert.match(bridgeGuard, /\b(?:report|surface|alert)\b/, "Charter should report the missing bridge");
+  assert.match(
+    bridgeGuard,
+    /\b(?:rather than|instead of)\b.{0,100}\b(?:read\w*|use|fall back|fallback)\b.{0,80}\b(?:stale|snapshot|checkout)\b|\b(?:do not|don't|must not|never)\b.{0,80}\b(?:read\w*|use|fall back|fallback)\b.{0,80}\b(?:stale|snapshot|checkout)\b/,
+    "Charter should not read or fall back to a stale checkout snapshot",
   );
 }
 

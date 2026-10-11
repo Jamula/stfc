@@ -82,7 +82,7 @@ Fast:     claude-haiku-4.5 → gpt-5.4-mini → gpt-5-mini → (omit model)
 
 **Call-outs:**
 
-- **`claude-haiku-4.5`** — Scribe's permanent model. Mechanical file ops, append-only writes, JSON manipulation, git commits. **Never bump.** Cost constraint is non-negotiable: Scribe runs on every session boundary; accumulating sonnet-class cost here compounds rapidly.
+- **`claude-haiku-4.5`** — Scribe's permanent model. Mechanical file ops, append-only writes, JSON manipulation, state-backend persistence. **Never bump.** Cost constraint is non-negotiable: Scribe runs on every session boundary; accumulating sonnet-class cost here compounds rapidly.
 
 ---
 
@@ -241,7 +241,7 @@ These 2026-05-17 decisions explain the prior configuration and are retained as h
 | 4 | Garak diversity model? | **gpt-5.5** (Claude-family alternative) |
 | 5 | squad.agent.md drift? | **File issue** — tracked as #21 |
 
-All resolutions captured in `.squad/decisions.md` (via inbox → Scribe merge).
+All resolutions captured in `.squad/decisions-archive.md` (via inbox → Scribe merge).
 
 ---
 

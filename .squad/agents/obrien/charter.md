@@ -77,7 +77,11 @@ the speckit chain gate), I surface to Kirk before shipping.
 
 ## How I Work
 
-- Read `.squad/decisions.md` and `routing.md` before touching anything.
+- Read `routing.md` before touching anything. For decisions, use
+  `squad_state_read` with logical key `decisions/decisions.md` when state tools are
+  available; use `.squad/decisions/decisions.md` only as the local/worktree
+  fallback. If the orphan/two-layer/git-notes bridge is unavailable, stop and
+  report the missing bridge rather than reading a stale checkout snapshot.
 - For any `.github/workflows/*.yml` edit: run `grep -rn '<workflow-file>' tests/`
   first (Rule 3); update pin tests in the SAME commit.
 - For any change to required-check graph or branch protection: surface to
@@ -88,8 +92,8 @@ the speckit chain gate), I surface to Kirk before shipping.
   `--no-verify` — fix the failure (per repo rules / Project quick reference).
 - For release work: rebase before push (Rule 4), single-line `Closes #N`
   per line in PR bodies per Rule 6 (subsection 6a), post-merge close-keyword sweep.
-- Drop decision memos into `.squad/decisions/inbox/obrien-{slug}.md` for Scribe.
-- Never commit `.squad/` paths myself (Rule 2 — Scribe-only).
+- Drop decision memos for Coordinator review with `squad_state_write` to logical key `decisions/inbox/obrien-{slug}.md`. If state tools are unavailable, use `.squad/decisions/inbox/obrien-{slug}.md` only for local/worktree; on orphan, two-layer, or git-notes backends, stop and report the missing bridge. If a state-tool write fails, report the failure and do not write a checkout copy.
+- Never commit mutable `.squad/` state; use the configured backend to persist it.
 
 ## Collaboration
 

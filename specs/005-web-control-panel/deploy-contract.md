@@ -41,6 +41,16 @@ to deployment-token mode: swap the OIDC `az login` steps for
 `azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}`
 in the action call.  Document the downgrade in `.squad/decisions/inbox/`.
 
+### Managed API runtime
+
+`staticwebapp.config.json` selects `node:22` for the SWA-managed Functions API,
+and `api/package.json` requires Node.js 22 or newer. Node 22 is the newest
+runtime currently listed for SWA-managed APIs in Microsoft's
+[supported languages and runtimes](https://learn.microsoft.com/en-us/azure/static-web-apps/languages-runtimes).
+The repository build and workflow toolchain remains on Node 24 via `.nvmrc`;
+revisit the API runtime when Static Web Apps supports Node 24, so the managed
+API matches the toolchain target rather than trailing it.
+
 ---
 
 ## 2. SHA-pinned action

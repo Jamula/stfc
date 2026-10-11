@@ -16,6 +16,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { parse as parseYaml } from "yaml";
 
 const ROOT = path.resolve(import.meta.dirname, "..", "..");
 
@@ -41,6 +42,18 @@ describe("SWA project structure (T-SWA-002)", () => {
     assert.match(
       read(".github/workflows/swa-deploy.yml"),
       /config_file_location:\s*\./,
+    );
+  });
+
+  it("limits the Node 22 API validation job to contents: read", () => {
+    const workflow = parseYaml(read(".github/workflows/swa-deploy.yml")) as {
+      jobs?: Record<string, { permissions?: Record<string, string> }>;
+    };
+
+    assert.deepEqual(
+      workflow.jobs?.["validate-api-node-22"]?.permissions,
+      { contents: "read" },
+      "API validation must not inherit workflow-level write permissions",
     );
   });
 
@@ -191,6 +204,24 @@ describe("SWA project structure (T-SWA-002)", () => {
         apiRoute.allowedRoles?.includes("stfc_operator"),
         "'/api/*' route must include 'stfc_operator' in allowedRoles",
       );
+    });
+
+    it("aligns the SWA API runtime and package engine with api/.nvmrc", () => {
+      const config = JSON.parse(read("staticwebapp.config.json")) as {
+        platform?: { apiRuntime?: string };
+      };
+      const apiPackage = JSON.parse(read("api/package.json")) as {
+        engines?: { node?: string };
+      };
+      const apiLock = JSON.parse(read("api/package-lock.json")) as {
+        packages?: Record<string, { engines?: { node?: string } }>;
+      };
+      const apiNodeVersion = read("api/.nvmrc").trim();
+
+      assert.equal(apiNodeVersion, "22");
+      assert.equal(config.platform?.apiRuntime, `node:${apiNodeVersion}`);
+      assert.equal(apiPackage.engines?.node, `>=${apiNodeVersion}`);
+      assert.equal(apiLock.packages?.[""]?.engines?.node, apiPackage.engines?.node);
     });
   });
 

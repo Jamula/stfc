@@ -64,9 +64,9 @@
   `git add -- .github/workflows/<file>.yml`.
 - Don't `git commit --no-verify`. The pre-commit hook runs `npm test`;
   if it fails, fix the failure rather than bypass the hook.
-- Don't commit `.squad/` paths from this skill's session — Scribe
-  owns those commits. History/decision/skill files you write in this
-  session should stay uncommitted.
+- Don't commit `.squad/` mutable state from this skill's session — it is
+  persisted through the configured state backend, not git. History and
+  decision files you write in this session should stay uncommitted.
 
 ## Provenance
 

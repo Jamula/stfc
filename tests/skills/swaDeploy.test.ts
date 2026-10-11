@@ -11,6 +11,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { parse as parseYaml } from "yaml";
 
 // SHA from deploy-contract.md §2 — must match workflow bit-for-bit.
 const SWA_DEPLOY_ACTION_SHA = "1a947af9992250f3bc2e68ad0754c0b0c11566c9";
@@ -107,6 +108,44 @@ describe("swa-deploy.yml / contract pinning (T-SWA-001)", () => {
     assert.match(yaml, /tenant-id:\s*\$\{\{\s*secrets\.AZURE_TENANT_ID\s*\}\}/);
     assert.match(yaml, /client-id:\s*\$\{\{\s*secrets\.AZURE_CLIENT_ID\s*\}\}/);
     assert.match(yaml, /subscription-id:\s*\$\{\{\s*secrets\.AZURE_SUBSCRIPTION_ID\s*\}\}/);
+  });
+
+  it("validate-api-node-22 installs, builds, and smoke-tests the API before deploy", () => {
+    const normalizedYaml = yaml.replace(/\r\n/g, "\n");
+    const validationJob =
+      normalizedYaml.match(/^  validate-api-node-22:\n([\s\S]*?)(?=^  deploy:)/m)?.[1] ?? "";
+
+    assert.ok(validationJob, "validate-api-node-22 job must exist");
+    assert.match(
+      validationJob,
+      /^[ \t]+- name: Install API dependencies\n[ \t]+run: npm ci\n[ \t]+working-directory: api$/m,
+    );
+    assert.match(
+      validationJob,
+      /^[ \t]+- name: Build API\n[ \t]+run: npm run build\n[ \t]+working-directory: api$/m,
+    );
+    assert.match(validationJob, /- name: Smoke test built API modules/);
+    assert.match(
+      validationJob,
+      /run: node --input-type=module -e .*import\('\.\/dist\/_lib\/auth\.js'\).*import\('\.\/dist\/_lib\/respond\.js'\)/,
+    );
+    assert.match(
+      normalizedYaml,
+      /^  deploy:\n    needs:\n      - preflight\n      - validate-api-node-22$/m,
+      "deploy must wait for OIDC preflight and API validation",
+    );
+  });
+
+  it("limits validate-api-node-22 to contents: read", () => {
+    const workflow = parseYaml(yaml) as {
+      jobs?: Record<string, { permissions?: Record<string, string> }>;
+    };
+
+    assert.deepEqual(
+      workflow.jobs?.["validate-api-node-22"]?.permissions,
+      { contents: "read" },
+      "API validation must not inherit workflow-level write permissions",
+    );
   });
 
   it("repo_token wired from secrets.GITHUB_TOKEN (PR comment support)", () => {

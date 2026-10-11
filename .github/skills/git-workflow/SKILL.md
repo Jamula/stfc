@@ -115,19 +115,39 @@ All PRs target `main` independently. Agents never interfere with each other's fi
 
 ### .squad/ State in Worktrees
 
-The `.squad/` directory exists in each worktree as a copy. This is safe because:
-- `.gitattributes` declares `merge=union` on append-only files (history.md, decisions.md, logs)
-- Each agent appends to its own section; union merge reconciles on PR merge to main
-- **Rule:** Never rewrite or reorder `.squad/` files in a worktree — append only
+The `.squad/` directory exists in each worktree, but Git merge does not reconcile its mutable state:
+- Mutable `.squad/` state (history, decisions, logs) is owned by the configured state backend and addressed through logical keys (e.g. `agents/{agent}/history.md`, `decisions/decisions.md`). A worktree's physical `.squad/` path is a local/worktree-backend fallback only, never a cross-branch reconciliation mechanism.
+- Do not rely on `.gitattributes` `merge=union` to reconcile `.squad/` runtime state across worktrees or branches — union merge is not a persistence mechanism for backend-owned state.
+- **Rule:** Never rewrite or reorder `.squad/` files in a worktree — append only. Persist mutable state through the configured backend; see `.squad/templates/worktree-reference.md` for backend resolution.
 
 ### Cleanup After Merge
 
 After a worktree's PR is merged to main:
 
-Before removing it, preserve any uncommitted `.squad/` state in a unique
-staging directory under `.squad/worktree-inbox/`. Stage a complete snapshot
-instead of copying over the main checkout's state, and never reuse an existing
-destination. Scribe consumes these snapshots before deleting them.
+Before removing a worktree, resolve its configured state backend and
+team-root strategy. For `local`/`worktree` backends using the
+**worktree-local** strategy, branch-local `.squad/` state exists only inside
+that worktree and is lost when the worktree is removed; snapshot and verify
+it into the main checkout using the procedure below regardless of
+state-tool availability. Skip the snapshot only when the worktree uses the
+**main-checkout** strategy, where `.squad/` state already lives in the main
+checkout and nothing is isolated. For `orphan`, `two-layer`, or `git-notes`
+backends, reconcile and clean mutable state only through the configured
+state tools using canonical logical paths (for example,
+`agents/{agent}/history.md`, `decisions/decisions.md`, `identity/now.md`, and
+`log/{timestamp}-{topic}.md`). Never read or copy a worktree `.squad/`
+checkout snapshot for these backends. If any required state tool is
+unavailable for these backends, fail closed, leave the worktree in place, and
+report the missing bridge.
+
+#### Local/worktree checkout-snapshot transfer (required for the worktree-local strategy)
+
+Use a unique staging directory under `.squad/worktree-inbox/`; never overwrite
+the main checkout's state or reuse an existing destination. Scribe consumes and
+verifies each snapshot before deleting it. The commands below apply to
+`local`/`worktree` backends using the worktree-local strategy — run them
+regardless of state-tool availability, and skip them when the worktree used
+the main-checkout strategy.
 
 On Linux or macOS:
 
