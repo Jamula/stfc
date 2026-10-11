@@ -109,6 +109,14 @@ const handler = loadWorkflow(".github/workflows/discord-command-handler.yml");
 const refreshToken = loadWorkflow(".github/workflows/refresh-token.yml");
 const storage = loadWorkflow(".github/workflows/storage-size-monitor.yml");
 
+describe("game-state effective bucket wiring", () => {
+  it("passes the optional non-secret bucket override to the state-worktree handler", () => {
+    const route = namedStep(handler, "Route command and post Discord follow-up");
+    assert.equal(route.env?.STFC_GAME_STATE_R2_BUCKET, "${{ vars.STFC_GAME_STATE_R2_BUCKET }}");
+    assert.equal(route["working-directory"], "${{ steps.state_worktree.outputs.state_dir }}");
+  });
+});
+
 const scheduled = [
   {
     name: "redeem",

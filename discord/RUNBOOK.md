@@ -425,7 +425,7 @@ When you save the Interactions Endpoint URL in the Developer Portal (step E), Di
 - If Worker doesn't respond or times out, Discord shows error in the portal
 
 
-### `/game-state` — capture game state to the repo
+### `/game-state` — capture game state to R2 with repository metadata
 
 Use Discord's slash-command picker to attach one file and optionally add a caption:
 
@@ -437,10 +437,11 @@ Use Discord's slash-command picker to attach one file and optionally add a capti
 
 The `file` option is required; `note` is optional and is truncated to 200 characters by the Worker. The handler sanitizes and truncates the persisted note to 120 characters. The command is registered with `default_member_permissions: "8"` (Administrator) as Discord's default command permission. Server administrators can override that permission for other users or roles; the Worker checks the guild allowlist, not the invoking user's permissions. Both the Worker and the handler fail closed unless the server's guild ID is in `ALLOWED_GUILD_IDS`. The attachment URL must use `cdn.discordapp.com` or `media.discordapp.net`; the handler downloads it without a Bot authorization header. Although the command description advertises images and videos, the current Worker and handler do not enforce a MIME-type allowlist.
 
-The Worker acknowledges the interaction, then dispatches it to GitHub Actions. The handler stores the capture on the `automation-state` branch (not `main`) and replies with a link to the saved file's commit:
+The Worker acknowledges the interaction, then dispatches it to GitHub Actions. For new captures, the handler uploads the binary to private Cloudflare R2 and commits only metadata on the `automation-state` branch (not `main`). The reply links to the daily manifest at the saved commit and includes the object's R2 key:
 
 ```text
-data/discord/game-state/YYYY-MM-DD/HHMMSSmmm-<sanitized-filename>
+R2 key: YYYY-MM-DD/HHMMSSmmm-<sanitized-filename>
+data/discord/game-state/YYYY-MM-DD/manifest.json
 data/discord/game-state/YYYY-MM-DD/HHMMSSmmm-<sanitized-filename>.lineage.json
 data/discord/game-state/YYYY-MM-DD/_index.json
 ```
@@ -461,6 +462,9 @@ Each companion `.lineage.json` currently has this shape:
   "source_url": "https://discord.com/channels/<guild>/<channel>/...",
   "content_type": "<Discord attachment type or downloaded response type>",
   "size_bytes": 0,
+  "sha256": "<attachment SHA-256>",
+  "r2_bucket": "<effective R2 bucket>",
+  "r2_key": "YYYY-MM-DD/HHMMSSmmm-<sanitized-filename>",
   "filename_original": "<original Discord filename>",
   "filename_stored": "<sanitized stored filename>"
 }
@@ -468,15 +472,19 @@ Each companion `.lineage.json` currently has this shape:
 
 `_index.json` contains a `files` array with one entry per capture: `filename`, `captured_at`, `uploader`, `note`, and `size_bytes`. It is updated through a temporary file and rename. There are two lineage discrepancies versus the intended #161 shape: the Worker does not send a Discord message ID, so `discord_message_id` is `null` and `source_url` ends in `/...`; it sends `member_handle`, while the handler reads `uploader_handle`, so the stored handle currently falls back to the user ID. The handler also names the filename fields `filename_original` and `filename_stored`.
 
+`manifest.json` declares the effective `bucket` and a `files` array with R2 bucket/key, SHA-256, size, content type, capture metadata, `access: "signed-url-required"` and `retention: "forever"`. Access requires signed URLs; the manifest URL does not expose a public binary URL. The default bucket is `stfc-game-state`; set the non-secret repository variable `STFC_GAME_STATE_R2_BUCKET` to override it (an unset/empty value uses the default). All entries in a daily manifest must use that bucket. A same-day bucket change or mixed-bucket manifest fails before download/upload or metadata writes; keep the day's existing bucket or explicitly migrate its objects and metadata.
+
+After an R2 upload, metadata-save failures attempt object cleanup. A failed git push first triggers a remote publication check: an accepted commit with a lost acknowledgement counts as success. If remote publication cannot be confirmed, the handler preserves the object, reports its bucket/key through the failure follow-up and exits nonzero. Operators should inspect `automation-state` and the reported R2 object before reconciling; never delete an object referenced by published metadata.
+
 **Size limits and alerts**
 
 - One attachment may be at most **50 MiB (52,428,800 bytes)**. The handler rejects larger files before download/write; there is no warning-only oversized-upload path and no oversized warning in the commit message. This differs from the behavior described in #161.
-- The handler also caps each UTC day at 20 files and 100 MiB of indexed attachment bytes. A capture that exceeds either daily cap is rejected.
+- The handler also caps each UTC day at 20 files and 100 MiB of indexed attachment bytes. A capture that exceeds either daily cap is rejected before downloading or uploading.
 - `storage-size-monitor.yml` checks the total `data/discord/game-state` directory on `automation-state` daily at 06:00 UTC. At **100 MiB total**, it opens an issue titled `[storage] data/discord/game-state exceeds threshold`; later checks comment on that open alert. The monitor does not migrate data to R2 or close the issue automatically.
 
-**Deferred R2 plan:** The alert is the activation trigger for the deferred Slice 2 migration in #164 (or the operator may explicitly request migration). Issue creation is only an alert; it does not start a migration. The migration is not active on `main`. Although #164 lists Git LFS as a possible fallback, the current `.gitattributes` has no game-state LFS filter rules, so that fallback is not pre-staged.
+**Deferred historical migration and lifecycle:** New captures use R2; this slice does not migrate binaries already present in git or rewrite their history. The storage alert does not automatically migrate them. Historical migration and the 90-day archive-tier option in #164 remain unimplemented, so that issue stays open. New R2 objects retain `forever` retention for this slice. Although #164 lists Git LFS as a possible fallback, the current `.gitattributes` has no game-state LFS filter rules, so that fallback is not pre-staged.
 
-**Security and privilege scope:** `/game-state` is a repo-write operation. Discord's default permission is Administrator, but server administrators can override it; the Worker and handler enforce the guild allowlist, not the invoking user's role. Restrict any Discord permission overrides to trusted operators and only enable the command in an allowlisted server. The `discord-command-handler.yml` workflow grants `contents: write` and `actions: write`; its game-state handler commits the capture, lineage, and index to `automation-state`.
+**Security and privilege scope:** `/game-state` is a repo-write and R2-write operation. Discord's default permission is Administrator, but server administrators can override it; the Worker and handler enforce the guild allowlist, not the invoking user's role. Restrict any Discord permission overrides to trusted operators and only enable the command in an allowlisted server. The `discord-command-handler.yml` workflow grants `contents: write` and `actions: write`; its game-state handler commits the manifest, lineage, and index to `automation-state`, never the new binary.
 
 ### Testing Commands Locally (without Discord)
 

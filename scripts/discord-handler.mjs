@@ -715,7 +715,7 @@ export async function handleGameStateCommand({
             stateDir: process.cwd(),
             ref,
             commit,
-            runGitImpl: runGit,
+            runGitImpl: runGit === defaultRunGit ? undefined : runGit,
           });
         } catch (confirmationError) {
           publicationUncertain = true;

@@ -703,9 +703,9 @@ therefore declares `queue: max`:
 can resolve to `stfc-gift-redeemer` omits `queue: max`, leaves the default
 `single`, or pairs `queue: max` with `cancel-in-progress: true`.
 
-**Game-state storage.** `/game-state` stores the binary attachment in the
+**Game-state storage.** For new captures, `/game-state` stores the binary attachment in the
 Cloudflare R2 bucket `stfc-game-state` (or `STFC_GAME_STATE_R2_BUCKET`) using R2's auto-region S3-compatible
-endpoint. The repository keeps only small, diff-friendly metadata under each
+endpoint. The handler commits only small, diff-friendly metadata for new uploads under each
 daily `data/discord/game-state/YYYY-MM-DD/` folder:
 
 - `manifest.json` — R2 bucket/key, SHA-256, size, content type, signed-access
@@ -714,6 +714,9 @@ daily `data/discord/game-state/YYYY-MM-DD/` folder:
 - `<filename>.lineage.json` — Discord source, uploader, note, capture time, and
   the same R2 integrity fields.
 - `_index.json` — the daily query index used for lightweight browsing.
+
+Existing binaries already stored in git are not migrated or removed by this
+slice; historical migration remains deferred under #164.
 
 Game-state blobs are not staged into git after the R2 upload succeeds. Access is
 recorded as `signed-url-required`; if R2 spend becomes undesirable, the existing

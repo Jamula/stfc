@@ -111,7 +111,7 @@ async function pushHandlerUpload(scratch: string, origin: string): Promise<void>
   );
   await writeFile(
     path.join(handlerDir, "data", "discord", "game-state", "2026-08-23", "manifest.json"),
-    '{"version":1,"bucket":"stfc-game-state","files":[{"filename":"120000-new-upload.png","r2_key":"2026-08-23/120000-new-upload.png"}]}\n',
+    '{"version":1,"bucket":"custom-game-state","files":[{"filename":"120000-new-upload.png","r2_bucket":"custom-game-state","r2_key":"2026-08-23/120000-new-upload.png"}]}\n',
   );
   await git(handlerDir, "add", "--", "data/discord/game-state/2026-08-23");
   await git(handlerDir, "commit", "--no-verify", "-m", "data(game-state): handler upload");
@@ -199,7 +199,7 @@ describe("automation-state writer race (Garak, PR #250 review)", () => {
           path.join(checkDir, "data", "discord", "game-state", "2026-08-23", "manifest.json"),
           "utf8",
         ),
-        '{"version":1,"bucket":"stfc-game-state","files":[{"filename":"120000-new-upload.png","r2_key":"2026-08-23/120000-new-upload.png"}]}\n',
+        '{"version":1,"bucket":"custom-game-state","files":[{"filename":"120000-new-upload.png","r2_bucket":"custom-game-state","r2_key":"2026-08-23/120000-new-upload.png"}]}\n',
         "the handler's newer manifest must survive the monitor's commit",
       );
       assert.equal(

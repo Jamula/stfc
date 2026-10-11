@@ -87,6 +87,13 @@ describe(".github/workflows/discord-command-handler.yml", () => {
     assert.doesNotMatch(yaml!, /echo\s+\"?\$CLOUDFLARE_R2_/);
   });
 
+  it("exports the optional repository bucket variable in the handler step", { skip: yaml === undefined }, () => {
+    const handlerStep = yaml!.split("- name: Route command and post Discord follow-up")[1]?.split("- name:")[0];
+    assert.ok(handlerStep, "handler step must exist");
+    assert.match(handlerStep, /STFC_GAME_STATE_R2_BUCKET:\s*\$\{\{\s*vars\.STFC_GAME_STATE_R2_BUCKET\s*\}\}/);
+    assert.doesNotMatch(handlerStep, /STFC_GAME_STATE_R2_BUCKET:\s*\$\{\{\s*secrets\./);
+  });
+
   it("does not print the bot token variable in run commands", { skip: yaml === undefined }, () => {
     assert.doesNotMatch(yaml!, /echo\s+\"?\$DISCORD_BOT_TOKEN/);
     assert.doesNotMatch(yaml!, /set\s+-x/);
