@@ -23,6 +23,7 @@ const R2_ENV_NAMES = {
 const MAX_ATTACHMENT_BYTES = 50 * 1024 * 1024;
 const MAX_DAILY_BYTES = 100 * 1024 * 1024;
 const MAX_DAILY_FILES = 20;
+const R2_REQUEST_TIMEOUT_MS = 30_000;
 
 export function validatePayload(payload) {
   if (!payload || typeof payload !== "object") {
@@ -325,13 +326,7 @@ export async function downloadDiscordAttachment({ attachment, fetchImpl = fetch,
   }
 }
 
-export async function updateDailyIndexAtomic({
-  indexPath,
-  entry,
-  readFileImpl = readFile,
-  writeFileImpl = writeFile,
-  renameImpl = rename,
-}) {
+async function readDailyIndex(indexPath, readFileImpl) {
   let doc;
   try {
     const raw = await readFileImpl(indexPath, "utf8");
@@ -352,14 +347,21 @@ export async function updateDailyIndexAtomic({
     !file
     || typeof file !== "object"
     || Array.isArray(file)
+    || typeof file.filename !== "string"
     || !Number.isSafeInteger(file.size_bytes)
     || file.size_bytes < 0
   )) {
     throw new Error("daily index is malformed: invalid file entry");
   }
-  const existingBytes = existingFiles.reduce((sum, file) => sum + file.size_bytes, 0);
+  return doc;
+}
 
-  if (existingFiles.length >= MAX_DAILY_FILES) {
+function appendDailyIndexEntry(doc, entry) {
+  if (!Number.isSafeInteger(entry.size_bytes) || entry.size_bytes <= 0) {
+    throw new Error("daily index entry has an invalid size_bytes value");
+  }
+  const existingBytes = doc.files.reduce((sum, file) => sum + file.size_bytes, 0);
+  if (doc.files.length >= MAX_DAILY_FILES) {
     throw new Error(`daily file cap exceeded (${MAX_DAILY_FILES} files)`);
   }
   if (existingBytes + Number(entry.size_bytes) > MAX_DAILY_BYTES) {
@@ -367,12 +369,66 @@ export async function updateDailyIndexAtomic({
   }
 
   doc.files.push(entry);
-
-  const tempPath = `${indexPath}.tmp`;
-  await writeFileImpl(tempPath, `${JSON.stringify(doc, null, 2)}\n`, "utf8");
-  await renameImpl(tempPath, indexPath);
-
   return doc;
+}
+
+async function writeDailyJsonAtomic(filePath, doc, writeFileImpl, renameImpl) {
+  const tempPath = `${filePath}.tmp`;
+  await writeFileImpl(tempPath, `${JSON.stringify(doc, null, 2)}\n`, "utf8");
+  await renameImpl(tempPath, filePath);
+}
+
+export async function updateDailyIndexAtomic({
+  indexPath,
+  entry,
+  readFileImpl = readFile,
+  writeFileImpl = writeFile,
+  renameImpl = rename,
+}) {
+  const doc = appendDailyIndexEntry(
+    await readDailyIndex(indexPath, readFileImpl),
+    entry,
+  );
+  await writeDailyJsonAtomic(indexPath, doc, writeFileImpl, renameImpl);
+  return doc;
+}
+
+async function readDailyManifest(manifestPath, readFileImpl) {
+  let raw;
+  try {
+    raw = await readFileImpl(manifestPath, "utf8");
+  } catch (error) {
+    if (error?.code === "ENOENT") {
+      return { version: 1, bucket: GAME_STATE_R2_BUCKET, files: [] };
+    }
+    throw error;
+  }
+
+  const parsed = JSON.parse(raw);
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed) || !Array.isArray(parsed.files)) {
+    throw new Error("daily manifest is malformed: expected a files array");
+  }
+  if (parsed.files.some((file) =>
+    !file
+    || typeof file !== "object"
+    || Array.isArray(file)
+    || typeof file.filename !== "string"
+    || typeof file.r2_bucket !== "string"
+    || typeof file.r2_key !== "string"
+  )) {
+    throw new Error("daily manifest is malformed: invalid file entry");
+  }
+  if (parsed.version !== undefined && (!Number.isSafeInteger(parsed.version) || parsed.version < 1)) {
+    throw new Error("daily manifest is malformed: invalid version");
+  }
+  if (parsed.bucket !== undefined && typeof parsed.bucket !== "string") {
+    throw new Error("daily manifest is malformed: invalid bucket");
+  }
+  return {
+    version: parsed.version ?? 1,
+    bucket: parsed.bucket ?? GAME_STATE_R2_BUCKET,
+    files: parsed.files,
+  };
 }
 
 export async function updateDailyManifestAtomic({
@@ -382,27 +438,9 @@ export async function updateDailyManifestAtomic({
   writeFileImpl = writeFile,
   renameImpl = rename,
 }) {
-  let doc = { version: 1, bucket: GAME_STATE_R2_BUCKET, files: [] };
-  try {
-    const raw = await readFileImpl(manifestPath, "utf8");
-    const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed?.files)) {
-      doc = {
-        version: Number(parsed.version) || 1,
-        bucket: typeof parsed.bucket === "string" ? parsed.bucket : GAME_STATE_R2_BUCKET,
-        files: parsed.files,
-      };
-    }
-  } catch {
-    doc = { version: 1, bucket: GAME_STATE_R2_BUCKET, files: [] };
-  }
-
+  const doc = await readDailyManifest(manifestPath, readFileImpl);
   doc.files.push(entry);
-
-  const tempPath = `${manifestPath}.tmp`;
-  await writeFileImpl(tempPath, `${JSON.stringify(doc, null, 2)}\n`, "utf8");
-  await renameImpl(tempPath, manifestPath);
-
+  await writeDailyJsonAtomic(manifestPath, doc, writeFileImpl, renameImpl);
   return doc;
 }
 
@@ -422,13 +460,15 @@ export function r2ConfigFromEnv(env) {
   return config;
 }
 
-export async function uploadR2Object({
+async function signedR2Request({
   config,
+  method,
   key,
-  buffer,
+  buffer = Buffer.alloc(0),
   contentType,
   fetchImpl = fetch,
   now = new Date(),
+  timeoutMs = R2_REQUEST_TIMEOUT_MS,
 }) {
   const host = `${config.accountId}.r2.cloudflarestorage.com`;
   const encodedKey = key.split("/").map(encodeURIComponent).join("/");
@@ -446,7 +486,7 @@ export async function uploadR2Object({
     "",
   ].join("\n");
   const canonicalRequest = [
-    "PUT",
+    method,
     pathname,
     "",
     canonicalHeaders,
@@ -468,24 +508,49 @@ export async function uploadR2Object({
     `Signature=${signature}`,
   ].join("");
 
-  const response = await fetchImpl(url, {
-    method: "PUT",
-    headers: {
-      Authorization: authorization,
-      "Content-Type": contentType,
-      "User-Agent": "stfc-discord-handler/1.0",
-      "x-amz-content-sha256": payloadHash,
-      "x-amz-date": amzDate,
-    },
-    body: buffer,
-  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetchImpl(url, {
+      method,
+      headers: {
+        Authorization: authorization,
+        ...(contentType ? { "Content-Type": contentType } : {}),
+        "User-Agent": "stfc-discord-handler/1.0",
+        "x-amz-content-sha256": payloadHash,
+        "x-amz-date": amzDate,
+      },
+      body: method === "PUT" ? buffer : undefined,
+      signal: controller.signal,
+    });
 
-  if (!response.ok) {
-    const body = typeof response.text === "function" ? await response.text() : "";
-    throw new Error(`R2 upload failed: status ${response.status}${body ? ` ${body.slice(0, 200)}` : ""}`);
+    if (response.status === 404 && method === "DELETE") {
+      return { bucket: config.bucket, key, sha256: payloadHash, size: 0 };
+    }
+    if (!response.ok) {
+      const body = typeof response.text === "function" ? await response.text() : "";
+      const action = method === "PUT" ? "upload" : "cleanup";
+      throw new Error(`R2 ${action} failed: status ${response.status}${body ? ` ${body.slice(0, 200)}` : ""}`);
+    }
+
+    return { bucket: config.bucket, key, sha256: payloadHash, size: buffer.byteLength };
+  } catch (error) {
+    if (controller.signal.aborted || (error instanceof Error && error.name === "AbortError")) {
+      const action = method === "PUT" ? "upload" : "cleanup";
+      throw new Error(`R2 ${action} failed: request timed out`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
   }
+}
 
-  return { bucket: config.bucket, key, sha256: payloadHash, size: buffer.byteLength };
+export async function uploadR2Object(options) {
+  return signedR2Request({ ...options, method: "PUT" });
+}
+
+export async function deleteR2Object(options) {
+  return signedR2Request({ ...options, method: "DELETE" });
 }
 
 function sha256Hex(value) {
@@ -538,14 +603,30 @@ export async function handleGameStateCommand({
     throw new Error("resolved output path escapes data/discord/game-state");
   }
 
-  const { buffer, responseContentType } = await downloadDiscordAttachment({ attachment, fetchImpl });
   const safeNote = sanitizeLine(payload.note, "no note");
   const safeUploaderHandle = sanitizeLine(payload.uploader_handle || payload.member || "unknown", "unknown");
   const safeUploader = sanitizeLine(payload.uploader || payload.member || "unknown", "unknown");
+  const r2Key = `${today}/${path.basename(outFile)}`;
+  const lineagePath = `${outFile}.lineage.json`;
+  const indexPath = `${outDir}/_index.json`;
+  const manifestPath = `${outDir}/manifest.json`;
+  const indexDoc = appendDailyIndexEntry(
+    await readDailyIndex(indexPath, readFileImpl),
+    {
+      filename: path.basename(outFile),
+      captured_at: capturedAtUtc,
+      uploader: safeUploaderHandle,
+      note: safeNote,
+      size_bytes: Number(attachment.size),
+    },
+  );
+  const manifestDoc = await readDailyManifest(manifestPath, readFileImpl);
+
+  await mkdirImpl(outDir, { recursive: true });
+  const { buffer, responseContentType } = await downloadDiscordAttachment({ attachment, fetchImpl });
   const contentType = typeof attachment.content_type === "string" && attachment.content_type.length > 0
     ? attachment.content_type
     : responseContentType;
-  const r2Key = `${today}/${path.basename(outFile)}`;
   const upload = await uploadR2Object({
     config: r2Config,
     key: r2Key,
@@ -554,8 +635,6 @@ export async function handleGameStateCommand({
     fetchImpl,
     now,
   });
-
-  await mkdirImpl(outDir, { recursive: true });
 
   const sourceUrl = typeof payload.jumplink === "string" && payload.jumplink.length > 0
     ? payload.jumplink
@@ -579,28 +658,11 @@ export async function handleGameStateCommand({
     filename_stored: cleanName,
   };
 
-  const lineagePath = `${outFile}.lineage.json`;
-  await writeFileImpl(lineagePath, `${JSON.stringify(lineage, null, 2)}\n`, "utf8");
-
-  const indexPath = `${outDir}/_index.json`;
-  await updateDailyIndexAtomic({
-    indexPath,
-    entry: {
-      filename: path.basename(outFile),
-      captured_at: capturedAtUtc,
-      uploader: safeUploaderHandle,
-      note: safeNote,
-      size_bytes: Number(attachment.size),
-    },
-    readFileImpl,
-    writeFileImpl,
-    renameImpl,
-  });
-
-  const manifestPath = `${outDir}/manifest.json`;
-  await updateDailyManifestAtomic({
-    manifestPath,
-    entry: {
+  let commitPushed = false;
+  try {
+    await writeFileImpl(lineagePath, `${JSON.stringify(lineage, null, 2)}\n`, "utf8");
+    await writeDailyJsonAtomic(indexPath, indexDoc, writeFileImpl, renameImpl);
+    manifestDoc.files.push({
       filename: path.basename(outFile),
       r2_bucket: upload.bucket,
       r2_key: upload.key,
@@ -612,50 +674,63 @@ export async function handleGameStateCommand({
       note: safeNote,
       access: "signed-url-required",
       retention: "forever",
-    },
-    readFileImpl,
-    writeFileImpl,
-    renameImpl,
-  });
+    });
+    await writeDailyJsonAtomic(manifestPath, manifestDoc, writeFileImpl, renameImpl);
 
-  await runGit(["config", "user.email", "actions@github.com"]);
-  await runGit(["config", "user.name", "github-actions[bot]"]);
-  await runGit(["add", "--", lineagePath]);
-  await runGit(["add", "--", indexPath]);
-  await runGit(["add", "--", manifestPath]);
-  await runCommand(
-    process.execPath,
-    [path.join(SCRIPT_DIR, "check-artifact-hygiene.mjs"), "--staged"],
-  );
+    await runGit(["config", "user.email", "actions@github.com"]);
+    await runGit(["config", "user.name", "github-actions[bot]"]);
+    await runGit(["add", "--", lineagePath]);
+    await runGit(["add", "--", indexPath]);
+    await runGit(["add", "--", manifestPath]);
+    await runCommand(
+      process.execPath,
+      [path.join(SCRIPT_DIR, "check-artifact-hygiene.mjs"), "--staged"],
+    );
 
-  const commitMessage = [
-    `data(game-state): ${safeNote || "no note"}`,
-    "",
-    `Manifest: ${manifestPath}`,
-    `R2: ${upload.bucket}/${upload.key}`,
-    `Uploader: ${safeUploaderHandle}`,
-    `Source: ${sourceUrl}`,
-  ].join("\n");
-  await runGit(["commit", "--no-verify", "-F", "-"], { stdin: `${commitMessage}\n` });
+    const commitMessage = [
+      `data(game-state): ${safeNote || "no note"}`,
+      "",
+      `Manifest: ${manifestPath}`,
+      `R2: ${upload.bucket}/${upload.key}`,
+      `Uploader: ${safeUploaderHandle}`,
+      `Source: ${sourceUrl}`,
+    ].join("\n");
+    await runGit(["commit", "--no-verify", "-F", "-"], { stdin: `${commitMessage}\n` });
 
-  const doPush = async () => {
-    await runGit(["push", "--no-verify", "origin", `HEAD:${ref}`]);
-  };
+    const doPush = async () => {
+      await runGit(["push", "--no-verify", "origin", `HEAD:${ref}`]);
+    };
 
-  try {
-    await doPush();
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    if (/non-fast-forward|fetch first|rejected/i.test(message)) {
-      await reconcileAutomationStateImpl({
-        stateDir: process.cwd(),
-        ref,
-        relativePaths: [lineagePath, indexPath, manifestPath],
-      });
+    try {
       await doPush();
-    } else {
-      throw error;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (/non-fast-forward|fetch first|rejected/i.test(message)) {
+        await reconcileAutomationStateImpl({
+          stateDir: process.cwd(),
+          ref,
+          relativePaths: [lineagePath, indexPath, manifestPath],
+        });
+        await doPush();
+      } else {
+        throw error;
+      }
     }
+    commitPushed = true;
+  } catch (error) {
+    if (!commitPushed) {
+      try {
+        await deleteR2Object({ config: r2Config, key: r2Key, fetchImpl, now: nowFn() });
+      } catch (cleanupError) {
+        const failure = error instanceof Error ? error.message : String(error);
+        const cleanupFailure = cleanupError instanceof Error ? cleanupError.message : String(cleanupError);
+        throw new Error(
+          `Game-state save failed (${failure}); R2 object cleanup also failed (${cleanupFailure})`,
+          { cause: new AggregateError([error, cleanupError]) },
+        );
+      }
+    }
+    throw error;
   }
 
   const sha = (await runGit(["rev-parse", "HEAD"])) .trim();

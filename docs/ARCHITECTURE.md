@@ -709,7 +709,8 @@ endpoint. The repository keeps only small, diff-friendly metadata under each
 daily `data/discord/game-state/YYYY-MM-DD/` folder:
 
 - `manifest.json` — R2 bucket/key, SHA-256, size, content type, signed-access
-  requirement, and retention (`forever` by default).
+  requirement, and retention (`forever` for this slice). The 90-day archive
+  option tracked by issue #164 is not implemented, so this PR leaves that issue open.
 - `<filename>.lineage.json` — Discord source, uploader, note, capture time, and
   the same R2 integrity fields.
 - `_index.json` — the daily query index used for lightweight browsing.
