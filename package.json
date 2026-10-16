@@ -38,11 +38,11 @@
 	},
 	"dependencies": {
 		"@discordjs/rest": "^2.6.3",
-		"@huggingface/transformers": "^4.3.0",
-		"discord-api-types": "^0.38.55",
+		"@huggingface/transformers": "^4.3.1",
+		"discord-api-types": "^0.38.56",
 		"tsx": "^4.23.15",
 		"yaml": "^2.9.1",
-		"zod": "^4.6.5"
+		"zod": "^4.6.7"
 	},
 	"overrides": {
 		"sharp": "^0.35.4",
@@ -51,11 +51,11 @@
 	},
 	"devDependencies": {
 		"@azure/static-web-apps-cli": "^2.0.10",
-		"@types/node": "^26.6.3",
+		"@types/node": "^26.6.5",
 		"ajv": "^8.20.0",
 		"ajv-formats": "^3.0.1",
 		"json-schema-to-typescript": "^16.0.0",
-		"playwright": "^1.63.0",
+		"playwright": "^1.64.0",
 		"simple-git-hooks": "^2.14.0",
 		"typescript": "~7.0.2"
 	}
