@@ -13,9 +13,9 @@
     "@noble/ed25519": "^3.2.0"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^5.20261011.1",
+    "@cloudflare/workers-types": "^5.20261018.1",
     "typescript": "^7.0.2",
     "vitest": "^5.0.1",
-    "wrangler": "^4.149.0"
+    "wrangler": "^4.151.1"
   }
 }
