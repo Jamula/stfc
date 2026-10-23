@@ -2,6 +2,7 @@
 
 **For:** `cyrusjamula` (or any delegated operator)
 **Tracking issue:** #115
+**Deployment-auth blocker:** #127 (owner provisioning still required)
 **Contract:** `specs/005-web-control-panel/deploy-contract.md`
 
 ---
@@ -41,6 +42,9 @@ az account show       # confirms you're in the right subscription
 Run the idempotent bootstrap script from the repo root:
 
 ```bash
+# Select the subscription that should contain the STFC Control Panel.
+az account set --subscription "<SUBSCRIPTION_ID>"
+
 # Optional: override defaults
 export AZURE_RESOURCE_GROUP=stfc-control-panel-rg
 export AZURE_LOCATION=eastus
@@ -52,119 +56,71 @@ The script:
 - Creates the resource group if it doesn't exist
 - Creates the SWA (`stfc-control-panel`) on the Free tier if it doesn't exist
 - Applies the kill-switch app settings (`DISABLE_WRITES=1`, `DISABLE_CHAT=1`)
-- Prints the deployment token (for fallback mode)
-- Prints the OIDC federation next-steps
+- Prints the deployment-token setup command
 
 The script is **idempotent** — safe to run multiple times.
 
----
-
-## 3. Configure OIDC federated credentials (primary auth)
-
-The deploy workflow uses OIDC federation instead of a long-lived deploy
-token. This is a one-time manual step.
-
-### 3a. Create a Service Principal
-
-```bash
-az ad sp create-for-rbac \
-  --name stfc-control-panel-deploy \
-  --skip-assignment \
-  --output json
-```
-
-Note the output:
-```json
-{
-  "appId":       "<CLIENT_ID>",
-  "tenant":      "<TENANT_ID>",
-  "displayName": "stfc-control-panel-deploy"
-}
-```
-
-You also need the **object ID** of the application (different from appId):
-```bash
-az ad app show --id <CLIENT_ID> --query id -o tsv
-# → <APP_OBJECT_ID>
-```
-
-### 3b. Assign Website Contributor role
-
-```bash
-SUBSCRIPTION_ID=$(az account show --query id -o tsv)
-RESOURCE_GROUP=stfc-control-panel-rg
-
-az role assignment create \
-  --assignee <CLIENT_ID> \
-  --role "Website Contributor" \
-  --scope "/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${RESOURCE_GROUP}/providers/Microsoft.Web/staticSites/stfc-control-panel"
-```
-
-### 3c. Add federated credentials
-
-Two credentials are needed: one for `main` branch (prod deploys) and one
-for pull requests (preview environments).
-
-```bash
-APP_OBJECT_ID=<APP_OBJECT_ID>
-
-# Prod (push to main)
-az ad app federated-credential create \
-  --id "${APP_OBJECT_ID}" \
-  --parameters '{
-    "name": "stfc-main",
-    "issuer": "https://token.actions.githubusercontent.com",
-    "subject": "repo:Jamula/stfc:ref:refs/heads/main",
-    "audiences": ["api://AzureADTokenExchange"]
-  }'
-
-# PR previews
-az ad app federated-credential create \
-  --id "${APP_OBJECT_ID}" \
-  --parameters '{
-    "name": "stfc-pr",
-    "issuer": "https://token.actions.githubusercontent.com",
-    "subject": "repo:Jamula/stfc:pull_request",
-    "audiences": ["api://AzureADTokenExchange"]
-  }'
-```
+Before assigning permissions, confirm that `stfc-control-panel` is the intended
+resource in the selected subscription. Do not reuse a Static Web App connected
+to a different repository. In particular, **do not use `swa-jamula-web-prod`**:
+its GitHub link belongs to another repository.
 
 ---
 
-## 4. Add repo secrets
+## 3. Configure the deployment token
 
-In `github.com/Jamula/stfc → Settings → Secrets and variables → Actions`,
-add three **repository secrets**:
+The pinned official `Azure/static-web-apps-deploy` action requires
+`azure_static_web_apps_api_token`. An Azure login using GitHub OIDC does not
+replace this action input, so this repository uses the SWA deployment token.
+
+For #127, first verify the existing target without retrieving credentials:
+
+```bash
+az account set --subscription "<SUBSCRIPTION_ID>"
+az staticwebapp show \
+  --name stfc-control-panel \
+  --resource-group stfc-control-panel-rg \
+  --query '{name:name,resourceGroup:resourceGroup,repositoryUrl:repositoryUrl,defaultHostname:defaultHostname}' \
+  -o json
+```
+
+Confirm the name and resource group match, and any repository link is
+`https://github.com/Jamula/stfc`. If the resource is absent or linked elsewhere,
+stop and ask the owner to provision or correct the intended resource; do not
+substitute another SWA. The bootstrap in step 2 creates resources and changes
+app settings; it is not a read-only verification command.
+
+Pipe the token from Azure CLI directly to GitHub CLI so it is not printed or
+passed as a command-line argument. Run this only from the owner's local Bash
+terminal (Git Bash on Windows), with tracing/debug logging disabled:
+
+```bash
+set -o pipefail
+az staticwebapp secrets list \
+  --name stfc-control-panel \
+  --resource-group stfc-control-panel-rg \
+  --query properties.apiKey -o tsv \
+  | gh secret set AZURE_STATIC_WEB_APPS_API_TOKEN --repo Jamula/stfc
+```
+
+The workflow needs only this **repository secret**:
 
 | Secret name | Value |
 |---|---|
-| `AZURE_TENANT_ID` | `<tenant>` from step 3a |
-| `AZURE_CLIENT_ID` | `<appId>` from step 3a |
-| `AZURE_SUBSCRIPTION_ID` | `az account show --query id -o tsv` |
+| `AZURE_STATIC_WEB_APPS_API_TOKEN` | Deployment token from the `stfc-control-panel` Static Web App |
 
-Using `gh` CLI:
-```bash
-gh secret set AZURE_TENANT_ID     --body "<TENANT_ID>"
-gh secret set AZURE_CLIENT_ID     --body "<CLIENT_ID>"
-gh secret set AZURE_SUBSCRIPTION_ID --body "$(az account show --query id -o tsv)"
-```
+Verify names only with `gh secret list --repo Jamula/stfc --json name`; never
+print or share secret values. Azure app registrations, federated credentials,
+`AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, and `AZURE_SUBSCRIPTION_ID` are not needed
+for this workflow.
 
-### Deployment-token fallback (optional)
-
-If OIDC federation is blocked by an Azure AD Conditional Access policy,
-fall back to deployment-token mode:
-
-1. Get the token printed by `create-swa.sh` (or from Portal → SWA → Manage
-   deployment token).
-2. Add it as a repo secret: `gh secret set AZURE_STATIC_WEB_APPS_API_TOKEN`
-3. Update `.github/workflows/swa-deploy.yml`:
-   - Remove the `Log in to Azure (OIDC)` steps
-   - Set `azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}`
-4. Document the downgrade in `.squad/decisions/inbox/`.
+**#127 remains blocked** until the owner provisions the intended SWA token and
+the upload and preview-close jobs succeed. A skipped deployment is not proof
+that provisioning is complete.
 
 ---
 
-## 5. Invite the first operator (role assignment)
+## 4. Invite the first operator (role assignment)
 
 The SWA uses GitHub OAuth with a custom `stfc_operator` role.
 Roles are assigned via invitation links (Azure Portal only — CLI support
@@ -188,9 +144,9 @@ use case).
 
 ---
 
-## 6. Verify the deployment
+## 5. Verify the deployment
 
-After completing steps 1–5:
+After completing steps 1–4:
 
 1. Push any commit to `main` (or open a draft PR):
    ```bash
@@ -210,24 +166,25 @@ After completing steps 1–5:
    `staticwebapp.config.json` deny-by-default rule).
 5. After signing in, you should see the placeholder landing page
    (real UI lands in Wave 3, issue #119).
+6. Close the preview PR and confirm `teardown` succeeds. Fork PRs do not receive
+   repository secrets, so deployment and teardown intentionally skip for them.
 
 ---
 
-## 7. Troubleshooting
+## 6. Troubleshooting
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
-| Deploy workflow fails with `AADSTS700016` | Wrong `AZURE_CLIENT_ID` | Re-check secret matches appId |
-| Deploy workflow fails with `AADSTS70021` | Federated credential subject mismatch | Re-check branch/PR subject in step 3c |
-| Deploy workflow fails with `AuthorizationFailed` | RBAC not assigned | Re-run step 3b |
-| Login loop (redirect to GitHub, back to site) | Role not assigned | Re-do step 5 (invite) |
+| Deploy job is skipped | `AZURE_STATIC_WEB_APPS_API_TOKEN` is missing | Set the deployment token using step 3 |
+| Deploy action reports an invalid token | Token belongs to a different SWA or was rotated | Re-check the target SWA, then set its current token using step 3 |
+| Login loop (redirect to GitHub, back to site) | Role not assigned | Re-do step 4 (invite) |
 | `az staticwebapp appsettings set` 403 | Insufficient role on resource group | Ensure your az session has Contributor+ on the RG |
 
 ---
 
 ## Related files
 
-- `specs/005-web-control-panel/deploy-contract.md` — full OIDC contract
+- `specs/005-web-control-panel/deploy-contract.md` — deployment contract
 - `.github/workflows/swa-deploy.yml` — deploy + preview workflow
 - `staticwebapp.config.json` — route rules + security headers
 - `scripts/azure/create-swa.sh` — idempotent resource creation script

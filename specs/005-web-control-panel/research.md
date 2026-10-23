@@ -240,24 +240,23 @@ approach.
 | Factor | Deployment Token | OIDC Federation |
 |---|---|---|
 | Setup complexity | Low — one secret in repo | High — Service Principal, federated credential, RBAC role on SWA resource |
-| Workflow permissions needed | None beyond `contents: read` | `id-token: write` + `contents: read` |
+| Workflow permissions needed | `contents: read` + `pull-requests: write` for preview comments | `id-token: write` + `contents: read`, but not a substitute for the pinned action's token |
 | Long-lived secret? | Yes — stored as repo secret; rotatable in portal | No — ephemeral JWT; no stored secret |
 | Branch protection / cron churn compat. | ✅ No conflicts | ✅ No conflicts |
-| SHA-pinned action support | ✅ `Azure/static-web-apps-deploy@<sha>` works | ✅ Same action, same sha pin |
+| SHA-pinned action support | ✅ `Azure/static-web-apps-deploy@<sha>` works | ❌ Requires a different deployment mechanism that explicitly supports Azure credentials |
 | Single-maintainer operational burden | Low — reset via portal if compromised; otherwise never touch it | Medium — Azure RBAC setup; identity federation config; more failure surfaces |
-| SWA native support | ✅ First-class (auto-generated at site creation) | ⚠️ SWA-specific OIDC docs are sparse; standard Azure OIDC works but requires extra ARM config |
+| Pinned official action support | ✅ First-class required input | ❌ `azure_static_web_apps_api_token` remains required; `azure/login` does not replace it |
 
 **Branch protection / Rule 4 compatibility:** The deployment token is
-stored as a repo secret (`AZURE_STATIC_WEB_APPS_API_TOKEN_*`). Cron
+stored as a repo secret (`AZURE_STATIC_WEB_APPS_API_TOKEN`). Cron
 commits (Rule 4 — the 15-min `redeem.yml` churn on `docs/redeem-history.md`)
 do not interact with this secret. No rebase conflicts introduced by either
 approach.
 
-**SHA-pinning:** Both approaches use the same GitHub Action
-(`Azure/static-web-apps-deploy`). Pin by commit SHA for supply-chain
-hygiene. The action accepts `azure_static_web_apps_api_token` for
-deployment-token mode; OIDC would use OIDC implicitly — same SHA pin
-works either way.
+**SHA-pinning:** The workflow pins `Azure/static-web-apps-deploy` by commit
+SHA for supply-chain hygiene. The pinned action's `action.yml` requires
+`azure_static_web_apps_api_token`; Azure OIDC login alone cannot deploy through
+this action.
 
 **Rotation pain for deployment token:** Rotation is manual (Azure Portal
 → Manage deployment token → Reset). Only needed if compromised. For a
@@ -272,9 +271,9 @@ negligible.
 **Recommendation:** **Use deployment token for Phase 1.** Simpler,
 first-class SWA support, zero Azure RBAC/identity-federation overhead.
 Pin `Azure/static-web-apps-deploy` by SHA. Store the token as
-`AZURE_STATIC_WEB_APPS_API_TOKEN` in repo secrets. Revisit OIDC if
-the project ever adds additional maintainers or the token rotation
-becomes a pain point at scale.
+`AZURE_STATIC_WEB_APPS_API_TOKEN` in repo secrets. Revisit OIDC only with a
+deployment mechanism verified to accept Azure credentials; additional
+maintainers alone do not change the pinned action's required input.
 
 **Blockers:** None.
 

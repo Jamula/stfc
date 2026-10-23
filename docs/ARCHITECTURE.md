@@ -320,9 +320,9 @@ adding a contract.
 - Prod on push to `main`.
 - Preview on PR open/sync/reopen targeting `main`.
 - Teardown on PR close.
-- Auth: **OIDC federation** (no long-lived deploy secret). Skips
-  gracefully when `AZURE_CLIENT_ID` is unset (issue #127 still
-  unprovisioned).
+- Auth: `AZURE_STATIC_WEB_APPS_API_TOKEN` repository secret, required by the
+  pinned official Azure deploy action. Skips gracefully when it is unset
+  (issue #127).
 
 **Operator runbooks.**
 - Setup: `docs/SWA-SETUP.md`
@@ -493,9 +493,9 @@ substring grep. The live decision ledger uses logical key `decisions/decisions.m
 physical path `.squad/decisions/decisions.md` applies only to local/worktree.
 See `.squad/decisions-archive.md` (Uhura PR #102).
 
-**Deploy auth.** OIDC federation, no long-lived secrets. Workflow skips
-deploy gracefully when `AZURE_CLIENT_ID` is unset (commits `434e996`
-+ `84ffe6f`).
+**Deploy auth.** Static Web Apps deployment token. The official pinned deploy
+action requires this input; workflow skips gracefully when
+`AZURE_STATIC_WEB_APPS_API_TOKEN` is unset.
 
 ---
 
@@ -616,7 +616,7 @@ sequenceDiagram
 ### 5.1 Secret management
 
 - **CI secrets** (`DISCORD_BOT_TOKEN`, `STFC_ACCOUNTS`, `STFC_EMAIL`,
-  `STFC_PASSWORD`, `STFC_REFRESH_PAT`, Azure OIDC): set via
+  `STFC_PASSWORD`, `STFC_REFRESH_PAT`, `AZURE_STATIC_WEB_APPS_API_TOKEN`): set via
   `gh secret set <NAME> --repo Jamula/stfc` from a **LOCAL terminal
   only** (Rule 21). `gh` prompts with hidden input.
 - **Codespaces token scopes.** The Codespaces-injected `GITHUB_TOKEN`
@@ -859,8 +859,8 @@ paths, and prove `main`'s tip SHA is unchanged while state commits land on
 
 ## 7. Notable absences / known gaps
 
-- **Azure OIDC secrets unprovisioned** (issue #127 open) → SWA deploy
-  step skips when `AZURE_CLIENT_ID` is empty (workflow handles gracefully).
+- **SWA deployment token unprovisioned** (issue #127 open) → SWA deploy
+  step skips when `AZURE_STATIC_WEB_APPS_API_TOKEN` is empty (workflow handles gracefully).
 - **Discord bot guild membership** in the operator's STFC server is
   unconfirmed → issues #76 / #96 blocked until verified.
 - **Crew v1.5 OCR POC** pending (issue #85) → crew v1.5 implementation

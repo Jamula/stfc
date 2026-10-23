@@ -158,7 +158,7 @@ Run before consolidation. Any reference to a number that becomes RESERVED (12, 2
 |---|---|---|
 | `constitutional` | hot, forever | Constitution amendments, charter creations, agent retirements |
 | `standing-rule` | hot, forever | "Always/never X" directives, cost-discipline, doc-update rule |
-| `active-blocker` | hot until resolved | Discord guild access, Azure OIDC provisioning, plan.md placeholder |
+| `active-blocker` | hot until resolved | Discord guild access, SWA deployment-token provisioning (#127), plan.md placeholder |
 | `unresolved-followup` | hot until closed | Tracked chronicle next-action checklist items |
 | `canonical-pattern` | hot, forever | Auth-first handler, ship-runner, ETag caching, structural workflow pin |
 | `current-epic` | hot until epic closes | P1 web-control-panel decisions, crew v1.5/v2 |

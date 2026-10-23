@@ -78,7 +78,7 @@ Primary trust boundaries: Browser → SWA, SWA → Functions, Functions → GitH
 | GitHub App installation token | Function memory cache only. | Short-lived bearer for Actions API and raw content reads. | Per-request mint/cache TTL; never logged; revoke App if compromised. |
 | `MODELS_API_TOKEN` | SWA Function app setting only. | GitHub Models inference access and quota. | `models:read` only; separate from App key; rotate on leak. |
 | `GEMINI_API_KEY` | Optional SWA Function app setting. | Fallback LLM inference and quota. | Stored separately; rotate on leak; only used after primary failure. |
-| `SWA_DEPLOYMENT_TOKEN` | GitHub Actions secret for deploy workflow, unless OIDC is chosen. | Can deploy frontend/API. | Prefer OIDC if spike approves; otherwise pin workflow and rotate on leak. |
+| `AZURE_STATIC_WEB_APPS_API_TOKEN` | GitHub Actions repository secret for the deploy workflow. | Can deploy frontend/API. | Minimize workflow permissions; never print token; rotate in Azure and update the repository secret if compromised. |
 | `AZURE_TABLE_CONNECTION_STRING` | SWA Function app setting. | Idempotency, replay prevention, budgets, refresh-token cooldown. | Least-privilege table access; conditional writes; rotate on leak. |
 | Allowlist membership | SWA custom role invitation + Function env-var username list. | Determines who may read/use panel. | Two independent gates; owner-only `cyrusjamula` for refresh-token. |
 | Audit log `data/audit/*.jsonl` | Committed repo artifact via App token. | Forensic record of writes and confirmation decisions. | Redacted schema, append-only convention, branch protection/review. |
