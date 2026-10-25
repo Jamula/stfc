@@ -35,14 +35,20 @@ describe("extractor regex constant", () => {
 describe("extractor / promo-codes.txt coverage", () => {
   const entries = readPromoCodesTxtEntries();
 
-  it("loads exactly 34 non-comment entries from promo-codes.txt", () => {
-    assert.equal(entries.length, 34, `entries:\n${entries.join("\n")}`);
+  it("loads exactly 38 non-comment entries from promo-codes.txt", () => {
+    assert.equal(entries.length, 38, `entries:\n${entries.join("\n")}`);
+    for (const code of [
+      "SPOCK", "CADET", "KIRK", "WARPSPEED", "COMMANDER",
+      "CANDE2", "CANDE3", "BLASTAARLEGEND", "OOPS",
+    ]) {
+      assert.equal(entries.filter((entry) => entry === code).length, 1, `${code} must appear exactly once`);
+    }
   });
 
-  // All 34 entries — including 3-char codes TNG, GQ5, GQ7 — are now
+  // All entries — including 3-char codes TNG, GQ5, GQ7 — are now
   // extractable after relaxing the regex floor from 4 to 3 chars (#18).
 
-  describe("each promo-codes.txt entry is extractable (all 34 match)", () => {
+  describe("each promo-codes.txt entry is extractable", () => {
     for (const entry of entries) {
       test(`promo-codes.txt entry: ${entry}`,
         () => {
