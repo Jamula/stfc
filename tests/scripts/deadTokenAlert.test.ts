@@ -99,8 +99,8 @@ describe("dead-token-alert — selection", () => {
     );
   });
 
-  it("still finds an existing alert carrying retired routing labels", () => {
-    const legacy = issue(101, TITLE, ["squad", "squad:uhura", ...REQUIRED]);
+  it("still finds an existing alert carrying unrelated extra labels", () => {
+    const legacy = issue(101, TITLE, ["help wanted", ...REQUIRED]);
     const matches = selectAlertIssues([legacy], { title: TITLE, requiredLabels: REQUIRED });
     assert.deepEqual(matches.map((match) => match.number), [101]);
   });
