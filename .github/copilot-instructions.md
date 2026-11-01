@@ -9,6 +9,13 @@ marking it ready; those actions require an explicit user request.
 - Node version comes from `.nvmrc` (currently `24`). Every workflow reads it; no workflow hardcodes a version.
 - The repo is worked on from **both Windows and Linux Codespaces**. Keep tooling cross-platform.
 
+## Technology preferences
+
+- Prefer C# on a supported **.NET LTS** release for new tools and systems.
+- When .NET is not viable for the target platform or integration, use **Node.js with JavaScript or TypeScript**.
+- Avoid Python when possible; use it only when neither .NET nor Node.js is a suitable choice.
+- These preferences guide new technology choices, not unsolicited rewrites of existing systems. Preserve the current stack when maintaining existing code.
+
 ## Build, test, and typecheck
 
 `npm test` and `npm run typecheck` are **two independent gates**. `npm test` runs `node --import tsx --test`, which strips types without checking them — a type error can pass tests and still fail CI. Run both before pushing.
