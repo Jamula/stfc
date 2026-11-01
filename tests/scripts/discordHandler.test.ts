@@ -194,8 +194,7 @@ describe("scripts/discord-handler.mjs", () => {
     assert.match(postedBody, /Latest redeem history:/);
     assert.match(postedBody, /newest/);
     assert.ok(postedBody.indexOf("newest") < postedBody.indexOf("oldest"));
-    // Garak (PR #250 review, round 2): /redeem-status may only be exempted
-    // from the shared stfc-gift-redeemer writer lock if it never writes
+    // /redeem-status may only be exempted from the shared writer lock if it never writes
     // automation-state itself — prove it here instead of just asserting it.
     assert.deepEqual(gitCalls, [], "redeem-status must not touch git at all");
   });
@@ -259,8 +258,7 @@ describe("scripts/discord-handler.mjs", () => {
     assert.equal(ghCalls[1]?.[1], "list");
     assert.match(postedBody, /Redeem triggered — run ID 123456/);
     assert.match(postedBody, /actions\/runs\/123456/);
-    // Garak (PR #250 review, round 2): /trigger-redeem may only be exempted
-    // from the shared stfc-gift-redeemer writer lock if it never writes
+    // /trigger-redeem may only be exempted from the shared writer lock if it never writes
     // automation-state itself — it only dispatches redeem.yml (which is
     // already serialized under that lock) via gh, not git.
     assert.deepEqual(gitCalls, [], "trigger-redeem must not touch git at all");
@@ -1628,7 +1626,7 @@ describe("scripts/discord-handler.mjs", () => {
     // `GAME-STATE` resolves to the shared stfc-gift-redeemer group (it
     // over-serializes rather than escaping the lock). The handler dispatches
     // on exact lower-case strings, so it must refuse to write for it —
-    // that is what makes the over-serialization harmless (Garak, PR #266).
+    // that is what makes the over-serialization harmless.
     const stdout = makeStdout();
     const stderr = makeStdout();
     const gitCalls: string[][] = [];

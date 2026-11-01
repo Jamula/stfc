@@ -522,7 +522,7 @@ If you encounter issues not covered in [Troubleshooting](#troubleshooting):
 1. Check the full epic #143 and related PRs (#144–#148) for context
 2. Review `worker/README.md` for Worker-specific details
 3. Check GitHub Actions run logs (Actions tab → workflow run → job → step)
-4. Ask in `#stfc` Slack channel (mention `@Uhura` for integrations questions)
+4. Open a repository issue if the problem is not already tracked.
 
 ---
 

@@ -1,14 +1,14 @@
 // AUTO-GENERATED — do not hand-edit.
 // Source of truth: specs/005-web-control-panel/contracts/run-result.json
 // Regenerate:      npm run build:contracts
-// Schema is the source of truth (Kirk review #6).
+// Schema is the source of truth.
 
 /**
  * RunResult variant for workflow = "redeem".
  */
 export interface RedeemRunResult {
   /**
-   * Contract version. Consumers MUST reject unknown versions (Kirk #6).
+   * Contract version. Consumers MUST reject unknown versions.
    */
   schema_version: '1';
   /**
@@ -54,7 +54,7 @@ export interface RedeemRunResult {
  */
 export interface DiscordMonitorRunResult {
   /**
-   * Contract version. Consumers MUST reject unknown versions (Kirk #6).
+   * Contract version. Consumers MUST reject unknown versions.
    */
   schema_version: '1';
   /**
@@ -100,7 +100,7 @@ export interface DiscordMonitorRunResult {
  */
 export interface RefreshTokenRunResult {
   /**
-   * Contract version. Consumers MUST reject unknown versions (Kirk #6).
+   * Contract version. Consumers MUST reject unknown versions.
    */
   schema_version: '1';
   /**

@@ -1,4 +1,4 @@
-// Garak (PR #250 review): monitor and handler wrote automation-state under
+// Monitor and handler wrote automation-state under
 // different concurrency groups. A monitor run could fetch the tip *after*
 // a handler push landed, then wholesale-replace data/discord with its own
 // (older) job-start snapshot — a plain fast-forward commit with nothing for
@@ -13,7 +13,7 @@
 //   2. the previously shipped rm -rf + cp -a pattern actually loses data
 //      under the identical interleaving, so this is a real regression guard.
 //
-// Round 2 (Garak, PR #250 review): the shared stfc-gift-redeemer
+// Round 2 (PR #250 review): the shared stfc-gift-redeemer
 // concurrency group across redeem.yml/discord-monitor.yml/discord-command-
 // handler.yml (for /game-state) is the PRIMARY fix — it makes this
 // interleaving impossible in production because the handler and monitor
@@ -22,7 +22,7 @@
 // second, independent line of defense (path-level ownership exclusion)
 // holds even in the worst case where serialization is somehow bypassed.
 //
-// Round 3 (Bashir, PR #266 review): every git call below is asynchronous.
+// Round 3 (PR #266 review): every git call below is asynchronous.
 // The earlier execFileSync version blocked the shared node:test event loop
 // for ~10–20s per test, which starved unrelated suites' before-hooks and
 // made the required full `npm test` gate intermittently red (observed
@@ -44,7 +44,7 @@ const execFileAsync = promisify(execFile);
 /**
  * Scratch lives in the OS temp dir, never the repo root: a crashed run can
  * then never leave an untracked `.automation-state-*` directory sitting in
- * the working tree (Picard, PR #266 review).
+ * the working tree (PR #266 review).
  */
 async function makeScratch(prefix: string): Promise<string> {
   return mkdtemp(path.join(os.tmpdir(), prefix));
@@ -155,7 +155,7 @@ async function cloneMonitorStateWorktree(scratch: string, origin: string): Promi
   return stateDir;
 }
 
-describe("automation-state writer race (Garak, PR #250 review)", () => {
+describe("automation-state writer race (PR #250 review)", () => {
   it("the production allowlist helper survives a stale monitor snapshot applied after a newer handler upload, on a clean fast-forward push", async () => {
     const scratch = await makeScratch("stfc-automation-state-race-");
     try {
@@ -188,7 +188,7 @@ describe("automation-state writer race (Garak, PR #250 review)", () => {
       await git(stateDir, "commit", "--no-verify", "-m", "chore(discord-monitor): run race-test");
       // No fetch/rebase before this push — reproduces the exact race: the
       // clone above is already the latest tip, so this succeeds as a plain
-      // fast-forward, exactly like the buggy scenario Garak found.
+      // fast-forward, exactly like the original buggy scenario.
       await git(stateDir, "push", "-q", "origin", "HEAD:automation-state");
 
       const checkDir = path.join(scratch, "final-check");

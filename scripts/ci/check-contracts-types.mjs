@@ -7,7 +7,7 @@
  *
  * Exits 1 if any file is out of sync — meaning either:
  *   (a) a schema was changed without re-running `npm run build:contracts`, OR
- *   (b) someone hand-edited a generated file (forbidden per Kirk review #6).
+ *   (b) someone hand-edited a generated file.
  *
  * Exits 0 if all files are in sync.
  */

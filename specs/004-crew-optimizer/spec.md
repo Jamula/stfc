@@ -335,7 +335,7 @@ scoping, and rate-limit enforcement.
   N changes from M screenshots`.
 - **FR-018**: The PR body MUST include per-change diff + per-field
   confidence flag + the Discord *message* URL (not the CDN image URL,
-  which can rotate). Labels: `squad:scotty`.
+  which can rotate).
 - **FR-019**: The roster-sync workflow MUST NOT auto-merge. Human review
   is the gate.
 - **FR-020**: The OCR POC MUST be measured against the acceptance bar

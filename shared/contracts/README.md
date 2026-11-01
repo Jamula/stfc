@@ -15,7 +15,6 @@ These files are **auto-generated** — do not hand-edit. See the banner in each 
 See the banner in each file for:
 - Source schema location (under `specs/005-web-control-panel/contracts/`)
 - Regeneration command
-- Schema review authority (e.g., "Kirk review #6")
 
 ## Regenerate contracts
 

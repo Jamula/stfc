@@ -15,7 +15,7 @@
 # and the workflow does NOT enable `set -x`. The script itself is responsible
 # for redacting the token from any error message before exit (FR-012).
 #
-# Pinning test: `tests/workflows/discord-ops-workflow.test.ts` (Bashir) asserts
+# Pinning test: `tests/workflows/discord-ops-workflow.test.ts` asserts
 # the exact values below — trigger set, permissions, concurrency group,
 # timeout, secret-mapping shape, and the 10 MB curl cap. Per repo Rule 3,
 # any edit here ships in the same commit as the test update.

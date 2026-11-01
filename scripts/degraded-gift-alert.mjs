@@ -5,7 +5,7 @@ import { findAlertIssue, resolveDeadTokenAlert } from './dead-token-alert.mjs';
 
 export const PERSISTENT_TRANSIENT_RUNS = 3;
 export const DEGRADED_ALERT_TITLE = 'STFC redemption degraded — repeated gift claim failures';
-export const DEGRADED_ALERT_LABELS = ['squad', 'squad:uhura', 'bug', 'priority:p2'];
+export const DEGRADED_ALERT_LABELS = ['bug', 'priority:p2'];
 const REQUIRED_LABELS = ['bug', 'priority:p2'];
 const DEFAULT_STATE_PATH = 'data/redeem-degraded-state.json';
 

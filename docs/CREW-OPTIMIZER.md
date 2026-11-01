@@ -323,7 +323,7 @@ only when the input hash changes) and appends a job summary for CI.
 
 ## Workflow
 
-> **Status:** `optimize-crew.yml` is pending merge in PR #102 (O'Brien).
+> **Status:** `optimize-crew.yml` was tracked in PR #102.
 > The skills run manually today. This section documents the intended
 > workflow behavior once #102 lands.
 

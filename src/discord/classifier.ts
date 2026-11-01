@@ -2,7 +2,7 @@
 //
 // Contract: specs/001-discord-monitor/contracts/classifier.contract.md
 //
-// PRIVACY INVARIANT (FR-016 / FR-017 / Picard Condition 5):
+// PRIVACY INVARIANT (FR-016 / FR-017):
 //   `classify()` MUST NEVER issue an outbound HTTP call. The only network
 //   activity allowed in this module is a one-time model download inside
 //   `load()` to `huggingface.co` (transformers.js cache); the SHA-256 of the

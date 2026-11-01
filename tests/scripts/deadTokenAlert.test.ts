@@ -39,13 +39,13 @@ const FIXTURE = [
   issue(88, `Retro: why did "${TITLE}" go unnoticed for 11 days?`, ["bug", "priority:p1"]),
   // Decoy: exact title, but only one of the two required labels.
   issue(95, TITLE, ["bug"]),
-  // Real alert, oldest. Carries extra mutable squad:* labels — identity is a
+  // Real alert, oldest. Carries extra mutable routing labels — identity is a
   // superset test, so reassignment must not orphan the alert.
-  issue(101, TITLE, ["squad", "squad:uhura", "bug", "priority:p1"]),
+  issue(101, TITLE, ["team:operations", "bug", "priority:p1"]),
   // Decoy: unrelated issue that carries both required labels.
   issue(120, "Redeem workflow push retries are unbounded", ["bug", "priority:p1"]),
   // Real alert, duplicate filed later.
-  issue(140, TITLE, ["bug", "priority:p1", "squad"]),
+  issue(140, TITLE, ["bug", "priority:p1", "team:operations"]),
 ];
 
 function recorder(): { lines: string[]; log: (line: string) => void } {
@@ -97,6 +97,12 @@ describe("dead-token-alert — selection", () => {
       matches.map((m) => m.number),
       [101],
     );
+  });
+
+  it("still finds an existing alert carrying retired routing labels", () => {
+    const legacy = issue(101, TITLE, ["squad", "squad:uhura", ...REQUIRED]);
+    const matches = selectAlertIssues([legacy], { title: TITLE, requiredLabels: REQUIRED });
+    assert.deepEqual(matches.map((match) => match.number), [101]);
   });
 
   it("returns multiple exact matches oldest-first, ignoring every decoy", () => {

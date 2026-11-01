@@ -1,7 +1,7 @@
 {
   "name": "stfc-control-panel-api",
   "version": "1.0.0",
-  "description": "STFC Control Panel — Azure Functions API. Populated by Wave 3 (Uhura #117, Scotty #120).",
+  "description": "STFC Control Panel — Azure Functions API.",
   "private": true,
   "type": "module",
   "engines": {

@@ -1,6 +1,5 @@
 # Threat Model: 005-web-control-panel
 
-**Owner:** Garak<br>
 **Tracking issue:** #107<br>
 **Status:** Complete — Phase 0 STRIDE-lite baseline<br>
 **As of:** 2026-05-31T22:40:48+00:00
@@ -121,7 +120,7 @@ Primary trust boundaries: Browser → SWA, SWA → Functions, Functions → GitH
 
 | ID | Asset/category | Threat | Required mitigation / test | Residual risk |
 | --- | --- | --- | --- | --- |
-| I-1 | STFC/Discord secrets | Function leaks `STFC_ACCOUNTS` or `DISCORD_BOT_TOKEN` through response, logs, model prompt, or audit. | Constitution forbids provisioning these to SWA; Functions cannot read them; workflows keep them in Actions runner only; redaction tests. | A future PR could bridge the boundary; Garak/Kirk review gate must block it. |
+| I-1 | STFC/Discord secrets | Function leaks `STFC_ACCOUNTS` or `DISCORD_BOT_TOKEN` through response, logs, model prompt, or audit. | Constitution forbids provisioning these to SWA; Functions cannot read them; workflows keep them in Actions runner only; redaction tests. | A future PR could bridge the boundary; review changes against this constraint. |
 | I-2 | GitHub App / Models / Gemini secrets | Secrets appear in logs, audit, assistant output, or client bundle. | Server-only env; never send to browser/model; output redaction; rotate Models/Gemini token or revoke App on leak. | Stack traces can betray environment names; raw errors must be suppressed. |
 | I-3 | Prompt injection extracts secrets | Retrieved RAG context tells model to print secrets or call tools that expose them. | No STFC/Discord secrets in Function; tools return schema-limited data; read tools require confirmation; assistant-output secret-pattern redaction. | Model can still disclose non-secret operational metadata in context. |
 | I-4 | Audit redaction failure | Prompts, raw errors, or PII enter `data/audit/*.jsonl`. | Audit schema excludes prompts/raw errors; redact before commit; tests with seeded secret patterns and PII-like values. | GitHub login and action metadata are intentionally retained. |
@@ -237,7 +236,7 @@ Primary trust boundaries: Browser → SWA, SWA → Functions, Functions → GitH
 
 **Live verified premise:** `redeem.yml`, `discord-monitor.yml`, and `refresh-token.yml` all currently use `concurrency.group: stfc-gift-redeemer` and `cancel-in-progress: false`.
 
-**Kirk's adopt-don't-409 claim:** If a same-workflow cron is already running and the user clicks the same workflow, the Function returns 200 `adopted-existing` and watches that run. If a different workflow with a different blast radius is running, the Function returns 409 Busy.
+**Adopt-don't-409 claim:** If a same-workflow cron is already running and the user clicks the same workflow, the Function returns 200 `adopted-existing` and watches that run. If a different workflow with a different blast radius is running, the Function returns 409 Busy.
 
 **What it closes:** It avoids a pointless duplicate same-workflow dispatch and reduces Actions minute waste. Because the concurrency group is genuinely shared, the manual run would otherwise queue rather than run concurrently.
 

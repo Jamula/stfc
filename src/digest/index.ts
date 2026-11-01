@@ -5,7 +5,7 @@
 //             § 4 (Tip), § 10 (RunHealth)
 //
 // Invariants:
-//   1. Byte-stable on no-change re-run (Picard Condition 5).
+//   1. Byte-stable on no-change re-run.
 //   2. Embedded `DIGEST_STATE_V1` JSON state block is the round-trip source
 //      of truth for idempotent merge.
 //   3. Forbidden-content guard runs BEFORE every write — JWTs, the literal
@@ -174,7 +174,7 @@ function parseStateBlock(markdown: string): DailyDigest | null {
 }
 
 function merge(prior: DailyDigest, next: DailyDigest): DailyDigest {
-  // Idempotency fast-path (Picard Condition 5): if every runId in next is
+  // Idempotency fast-path: if every runId in next is
   // already present in prior, this is a fully-covered re-run. Return prior
   // unchanged so the downstream byte-compare short-circuits the write.
   const priorRunSet = new Set(prior.runIds ?? []);

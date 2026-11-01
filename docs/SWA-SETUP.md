@@ -207,18 +207,21 @@ The control panel uses a **two-layer authorization model** (threat-model S-1, E-
 Set these in Azure Portal → Static Web Apps → `stfc-control-panel` → **Configuration**,
 or via `az staticwebapp appsettings set`:
 
+Before deploying this change, configure both settings below. Earlier setting
+names are no longer read; without the new values, API access fails closed.
+
 | Setting | Type | Description |
 |---|---|---|
-| `SQUAD_ALLOWED_USERS` | Comma-separated GitHub usernames | Users allowed to access the API (e.g. `cyrusjamula,teammate`). Must include every operator invited via SWA role management. |
-| `SQUAD_OWNER` | Single GitHub username | The owner with elevated privileges (refresh-token, owner-only UI). Must be `cyrusjamula`. |
+| `STFC_ALLOWED_USERS` | Comma-separated GitHub usernames | Users allowed to access the API (e.g. `cyrusjamula,teammate`). Must include every operator invited via SWA role management. |
+| `STFC_OWNER` | Single GitHub username | The owner with elevated privileges (refresh-token, owner-only UI). Must be `cyrusjamula`. |
 
 ```bash
 az staticwebapp appsettings set \
   --name stfc-control-panel \
   --resource-group stfc-control-panel-rg \
   --setting-names \
-    SQUAD_ALLOWED_USERS="cyrusjamula" \
-    SQUAD_OWNER="cyrusjamula"
+    STFC_ALLOWED_USERS="cyrusjamula" \
+    STFC_OWNER="cyrusjamula"
 ```
 
 For local development, add these to `api/local.settings.json` (git-ignored):
@@ -226,8 +229,8 @@ For local development, add these to `api/local.settings.json` (git-ignored):
 {
   "IsEncrypted": false,
   "Values": {
-    "SQUAD_ALLOWED_USERS": "cyrusjamula",
-    "SQUAD_OWNER": "cyrusjamula"
+    "STFC_ALLOWED_USERS": "cyrusjamula",
+    "STFC_OWNER": "cyrusjamula"
   }
 }
 ```

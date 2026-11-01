@@ -1,8 +1,4 @@
 version: 2
-# Intended reviewers by ecosystem (Squad roles, not GitHub reviewer handles):
-#   npm / and /web: Scotty (package owner) and O'Brien (security/dependency triage)
-#   npm /worker and /api: Uhura (package owner) and O'Brien (security/dependency triage)
-#   github-actions: O'Brien (security/tooling)
 # Minor and patch updates are grouped; major updates remain separate pull requests.
 updates:
   - package-ecosystem: "npm"

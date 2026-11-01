@@ -571,7 +571,7 @@ describe("discordMonitor / workflow YAML assertions (T027)", () => {
     assert.equal(monitorGroup, refreshTokenGroup, "refresh-token.yml concurrency group must match bit-for-bit");
   });
 
-  it("shares `queue: max` with every other writer on the group (Garak, PR #266 review)", () => {
+  it("shares `queue: max` with every other writer on the group", () => {
     // The default `queue: single` keeps one pending run per group and lets a
     // newer shared-group run cancel it, so a monitor run could evict a pending
     // /game-state upload. Every member of the group must opt into `max`.

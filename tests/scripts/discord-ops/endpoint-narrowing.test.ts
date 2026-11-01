@@ -1,7 +1,7 @@
 // Endpoint-narrowing pinning test for
 // `scripts/discord-ops/set-discord-app-metadata.mjs`.
 //
-// Garak PR #71 MED-1: the constitution v1.5.0 carve-out narrows the
+// The constitution v1.5.0 carve-out narrows the
 // /api/v10 write surface to exactly two endpoints. The constitution
 // test (`tests/constitution/discord-ops-carveout.test.ts`) pins the
 // prose side. This file pins the IMPLEMENTATION side — the actual
@@ -59,7 +59,7 @@ const FORBIDDEN_PREFIXES = [
 ];
 
 describe(
-  "scripts/discord-ops/set-discord-app-metadata.mjs — endpoint narrowing (Garak MED-1)",
+  "scripts/discord-ops/set-discord-app-metadata.mjs — endpoint narrowing",
   { skip: !scriptExists },
   () => {
     it("DISCORD_API_BASE is exactly `https://discord.com/api/v10` (no trailing path)", () => {

@@ -1,4 +1,4 @@
-// Pinning tests for `.github/workflows/knowledge-rebuild.yml` (O'Brien's
+// Pinning tests for `.github/workflows/knowledge-rebuild.yml` (the
 // push-on-change knowledge-embedding rebuild workflow).
 //
 // Rule 3: workflow YAML changes need pinning tests in the same commit.

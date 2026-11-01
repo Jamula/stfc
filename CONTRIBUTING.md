@@ -58,9 +58,7 @@ Under "Test-first evidence":
 - Failure output: _(paste the stdout from Step 1)_
 - Passing output: _(paste the stdout from Step 2)_
 
-**What happens if you skip this:** The Tester reviewer (Bashir) will leave a
-`request-changes` review citing the missing evidence. The PR will not merge
-until the evidence is supplied.
+Reviewers can request the missing evidence before approving a bug-fix PR.
 
 ---
 
@@ -73,53 +71,12 @@ implementation.
 
 ---
 
-## Review gates
+## Review and CI
 
-PRs go through the following gates. Named reviewers hold explicit veto powers
-granted by repository governance and reviewer protocols.
+Review changes for correctness, security, and coverage of the documented
+acceptance criteria. Do not commit credentials or real account data: the
+pre-commit hook and `artifact-hygiene.yml` scan applicable files for leaks.
 
-For a detailed explanation of who does what and why, see [the Squad](docs/squad.md).
-For issue routing conventions, see [.squad/routing.md](.squad/routing.md).
-
-### Bashir (Tester) — four veto powers
-
-Bashir may issue `request-changes` or block merge at any of these four gates:
-
-1. **Spec testability** _(before implementation)_ — Acceptance criteria that
-   are untestable, vague, or lack Given/When/Then structure. Edge cases listed in
-   the spec with no plan to cover them.
-
-2. **Task-level test requirements** _(before implementation)_ — Task lists
-   that omit test tasks for user stories that have acceptance criteria. Task
-   ordering that places implementation tasks before the corresponding test task
-   (violates test-first).
-
-3. **Implementation coverage mapping** _(before merge)_ — Features where one or
-   more acceptance criteria in the spec do not have a corresponding passing test.
-
-4. **Bug-fix test-first** _(before merge)_ — Bug-fix PRs without a reproducing
-   test, or where the PR description does not supply the failing-test commit SHA
-   and failure output proving the test was written before the fix.
-
-### Picard (M2/EM) and Kirk (Lead) — veto powers
-
-**Picard (M2/EM)** may block at spec review (scope creep, governance
-conflicts) and at any review stage on governance grounds (scope expansion
-beyond the agreed plan).
-
-**Kirk (Lead)** may block at plan review (architectural violations, missing
-Constitution Check section) and at implementation review on technical-
-correctness grounds (architectural integrity gaps, contract violations).
-
-### Artifact hygiene scan
-
-Before merge, run Uhura's artifact-hygiene scanner on any spec, plan, or tasks
-files in the diff. The scan flags JWT-shaped strings, session cookies, and real
-account data that must not appear in committed artifacts (Principle VII).
-See Uhura's script for invocation instructions.
-
-### CI
-
-All CI checks must be green before merge. The `squad-test-gate.yml` workflow
-runs `npm run typecheck` and `npm test`; Scotty's pre-commit hook enforces the
-test gate locally.
+The `test-gate.yml` workflow runs `npm run typecheck` and `npm test` for both
+the root package and the worker. Run the relevant commands locally and report
+the results in the pull request. The pre-commit hook runs the root test suite.

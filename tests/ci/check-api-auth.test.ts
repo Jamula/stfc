@@ -85,10 +85,10 @@ describe("check-api-auth CI gate", () => {
     assert.equal(result.status, 0, result.stderr);
   });
 
-  // ── Position-aware enforcement (Garak P0#1 hardening, 2026-06-01) ───────────
+  // ── Position-aware enforcement ────────────────────────────────────────────
 
   it("exits 1 when the handler runs any statement BEFORE requireAllowedUser", () => {
-    // Counter-test for Garak P0#1: a handler that imports + calls the auth
+    // A handler that imports + calls the auth
     // guard but executes `const log = console.log;` first must be flagged.
     // The legacy presence-only gate let this slip through.
     const result = runGate(join(FIXTURES, "badPosition"));

@@ -1,5 +1,5 @@
-// Pinning tests for `.github/workflows/discord-ops.yml` (O'Brien's
-// workflow_dispatch wrapper).
+// Pinning tests for the `.github/workflows/discord-ops.yml`
+// workflow_dispatch wrapper.
 //
 // Rule 3: workflow YAML changes need pinning tests in the same commit.
 // Per the directive, this workflow must:

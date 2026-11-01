@@ -2,7 +2,6 @@
 
 ## Phase 0 Platform Spike
 
-**Owner:** O'Brien
 **Tracking issue:** #109
 **Status:** COMPLETED — 2026-05-31
 **Spike date:** 2026-05-31T22:40:48+00:00

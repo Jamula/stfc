@@ -155,6 +155,6 @@ Tests cover:
 
 - **#143** — Epic: Discord slash command infrastructure
 - **#146** — This Worker (code only)
-- **#147** — GH Actions handler workflow that processes the dispatch (Scotty)
-- **#148** — Deploy workflow (O'Brien)
-- **#149** — Operator runbook (Uhura)
+- **#147** — GH Actions handler workflow that processes the dispatch
+- **#148** — Deploy workflow
+- **#149** — Operator runbook

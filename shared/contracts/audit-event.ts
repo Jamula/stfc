@@ -1,14 +1,14 @@
 // AUTO-GENERATED — do not hand-edit.
 // Source of truth: specs/005-web-control-panel/contracts/audit-event.json
 // Regenerate:      npm run build:contracts
-// Schema is the source of truth (Kirk review #6).
+// Schema is the source of truth.
 
 /**
  * Append-only JSONL row recording every write action against the SWA/Functions surface or chat tool surface. Stored under data/audit/*.jsonl. Phase 0 wave 3 — issue #110. REDACTION RULE: prompts, raw errors, args, and payloads MUST NOT appear in this stream.
  */
 export interface AuditEvent {
   /**
-   * Contract version. Consumers MUST reject unknown versions (Kirk #6).
+   * Contract version. Consumers MUST reject unknown versions.
    */
   schema_version: '1';
   /**

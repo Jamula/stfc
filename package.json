@@ -29,8 +29,7 @@
 		"typecheck": "tsc --noEmit",
 		"capture-token": "node scripts/capture-token.mjs",
 		"playwright:install": "npx playwright install chromium",
-		"prepare": "simple-git-hooks",
-		"skill:telemetry": "tsx src/cli.ts telemetry"
+		"prepare": "simple-git-hooks"
 	},
 	"simple-git-hooks": {
 		"pre-commit": "node scripts/pre-commit.mjs",

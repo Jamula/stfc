@@ -1,5 +1,5 @@
-// Pinning tests for `scripts/discord-ops/set-discord-app-metadata.mjs`
-// (Scotty's operator-only one-shot script).
+// Pinning tests for `scripts/discord-ops/set-discord-app-metadata.mjs`,
+// an operator-only one-shot script.
 //
 // Constitution v1.4.0 → next bump: the Principle V carve-out grants this
 // script PATCH/PUT/POST authority against `discord.com/api/v10`. The
@@ -9,8 +9,6 @@
 // then asserts the script's stdout AND stderr never echo it back.
 //
 // Sentinel token: BOT_TOKEN_SENTINEL_DO_NOT_LEAK_a8f3c91e
-// (registered in `.squad/decisions/inbox/bashir-discord-ops-tests.md` —
-// future devs MUST NOT reuse this string for any other purpose.)
 
 import { describe, it, before, after } from "node:test";
 import assert from "node:assert/strict";
@@ -92,7 +90,7 @@ const scriptExists = fs.existsSync(SCRIPT);
 
 // All assertions live inside the describe block so the suite still runs
 // (and reports a clean "skipped — script not yet committed" message)
-// when Scotty hasn't landed his file yet. Once the file exists, the
+// when the script has not landed yet. Once the file exists, the
 // tests become real regression guards.
 describe("scripts/discord-ops/set-discord-app-metadata.mjs", { skip: !scriptExists }, () => {
   it("--help prints usage and exits 0", () => {
@@ -217,7 +215,7 @@ describe("scripts/discord-ops/set-discord-app-metadata.mjs", { skip: !scriptExis
     before(() => {
       tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "stfc-discord-ops-"));
       bigFile = path.join(tmpDir, "huge.png");
-      // Scotty's script validates magic bytes BEFORE size, so the file
+      // The script validates magic bytes BEFORE size, so the file
       // must start with a valid PNG signature (8 bytes) to reach the
       // size check. Pad with zeros to push total size past 10 MB.
       const PNG_MAGIC = Buffer.from([

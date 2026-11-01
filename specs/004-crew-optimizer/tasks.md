@@ -57,8 +57,8 @@
   inputs (officers, tasks, roster tracked-by-default, generated
   per-account report). Security & Compliance adds optimize-crew.yml
   to the SHA-pinning enumeration. Version bump v1.5.0 → v1.6.0.
-- **T009** Tuvok editorial pass on the amendment (haiku model). Apply
-  surgical grammar fixes; flag any out-of-scope claim for Picard.
+- **T009** Editorial pass on the amendment. Apply surgical grammar fixes and
+  flag any out-of-scope claim for review.
 - **T010** Rule 1 plan-template re-sync: run the grep
   `grep -nE 'STFC_ACCOUNTS|promo-codes\.txt|DISCORD_BOT_TOKEN|data/discord|data/digests|huggingface|discord\.com|data/crew|skill:roster|skill:optimize-crew|optimize-crew\.yml' .specify/templates/*.md`,
   cross-check each match, update lagging templates. Single match in
@@ -78,9 +78,7 @@
 - **T012** Author this `tasks.md`. _Status: done._
 - **T013** Open PR with `Closes #77` (single line, per Rule 6),
   title `feat(004-crew-optimizer): P0–P5 spec pipeline + v1
-  constitution amendment`. Reviewer-gate dispatch (Garak hostile
-  fact-check + Kirk technical + Picard governance) follows the
-  standard reviewer protocol.
+  constitution amendment`. Request technical and scope review.
 
 ## Implementation tasks (in-spec map for the 19-issue board)
 
@@ -92,38 +90,38 @@
 
 | T### | Maps to issue | Scope | Test acceptance |
 |---|---|---|---|
-| T100 | #78 (Scotty) | Data layer: `src/crew/{schemas,database,roster,tasks}.ts` + `data/crew/officers.json` seed (~30–50 officers) + `data/crew/tasks/*.yaml` (4 tasks: `mining-g3`, `hostile-grind`, `armada-25`, `station-defense`) + `data/crew/roster/demo.yaml` | `tests/crew/{schemas,database,roster,tasks,realdata}.test.ts`; unknown-officer error path verbatim; wired into `tests/index.test.ts` |
-| T101 | #79 (Scotty + Bashir review) | Engine: `src/crew/{optimizer,progression,staleness,diff}.ts` + tiny-world fixtures under `tests/crew/fixtures/` | Engine tests + ≥1 fixture end-to-end run; wired into `tests/index.test.ts` |
-| T102 | #80 (Scotty) | `skill:roster` family (5 subcommands) with stable YAML round-trip + auto-bump `last_updated` + temp-dir-scoped CLI tests | Per-subcommand CLI tests + byte-stable round-trip assertion; tests NEVER touch live `data/crew/roster/`; wired into `tests/index.test.ts` |
-| T103 | #81 (Scotty) | `skill:optimize-crew` + `skill:progression`, wired into `src/cli.ts`, honour `runAll` exit-code convention | Per-account iteration + exit-code tests; wired into `tests/index.test.ts` |
-| T104 | #82 (O'Brien) | `.github/workflows/optimize-crew.yml` (no cron, group `stfc-crew-optimizer`, push on `data/crew/**` + `workflow_dispatch`, rebase-before-push) + Rule 3 pinning tests | `tests/skills/optimizeCrew.test.ts` asserts triggers, group, SHA-pinned actions; `pre-commit-checks.mjs` workflow-pinning gate passes |
-| T105 | #83 (Tuvok + Scotty) | Operator docs: `README.md` section, `docs/CREW-OPTIMIZER.md` (incl. `.gitignore` opt-out snippet), `data/crew/roster/demo.yaml`, quickstart cross-ref | `demo.yaml` validates via T100's real-data test |
-| T106 | #84 (Garak → Kirk → Picard) | v1 reviewer gate: APPROVE comments on every v1 PR per Rule 9b | Verdict comments live on the PRs; issue closes when all linked PRs merged |
+| T100 | #78 | Data layer: `src/crew/{schemas,database,roster,tasks}.ts` + `data/crew/officers.json` seed (~30–50 officers) + `data/crew/tasks/*.yaml` (4 tasks: `mining-g3`, `hostile-grind`, `armada-25`, `station-defense`) + `data/crew/roster/demo.yaml` | `tests/crew/{schemas,database,roster,tasks,realdata}.test.ts`; unknown-officer error path verbatim; wired into `tests/index.test.ts` |
+| T101 | #79 | Engine: `src/crew/{optimizer,progression,staleness,diff}.ts` + tiny-world fixtures under `tests/crew/fixtures/` | Engine tests + ≥1 fixture end-to-end run; wired into `tests/index.test.ts` |
+| T102 | #80 | `skill:roster` family (5 subcommands) with stable YAML round-trip + auto-bump `last_updated` + temp-dir-scoped CLI tests | Per-subcommand CLI tests + byte-stable round-trip assertion; tests NEVER touch live `data/crew/roster/`; wired into `tests/index.test.ts` |
+| T103 | #81 | `skill:optimize-crew` + `skill:progression`, wired into `src/cli.ts`, honour `runAll` exit-code convention | Per-account iteration + exit-code tests; wired into `tests/index.test.ts` |
+| T104 | #82 | `.github/workflows/optimize-crew.yml` (no cron, group `stfc-crew-optimizer`, push on `data/crew/**` + `workflow_dispatch`, rebase-before-push) + workflow pinning tests | `tests/skills/optimizeCrew.test.ts` asserts triggers, group, SHA-pinned actions; `pre-commit-checks.mjs` workflow-pinning gate passes |
+| T105 | #83 | Operator docs: `README.md` section, `docs/CREW-OPTIMIZER.md` (incl. `.gitignore` opt-out snippet), `data/crew/roster/demo.yaml`, quickstart cross-ref | `demo.yaml` validates via T100's real-data test |
+| T106 | #84 | v1 review | Review the linked PRs before merging |
 
 ### v1.5 — Discord/OCR (gated on OCR POC)
 
 | T### | Maps to issue | Scope | Test acceptance |
 |---|---|---|---|
-| T200 | #85 (Uhura) | OCR POC spike — measure against the FR-020 acceptance bar on 20 real screenshots | POC measurement table posted to issue #85 |
-| T201 | #86 (Picard) | POC gate decision: PASS → unblock #87..#90; FAIL → close #85..#90 as wontfix | Verdict comment with `**APPROVE** ✅` or `**CHANGES_REQUESTED** ⚠️` per Rule 9b |
-| T202 | #87 (Tuvok) | Constitution v1.5 amendment (`roster-sync.yml` workflow + `cdn.discordapp.com` inbound + `skill:bootstrap-roster` + roster-channel allowlist) + plan-template re-sync | Rule 1 grep is green post-amendment |
-| T203 | #88 (Uhura + Scotty + O'Brien) | `src/crew/ocr.ts` + image-attachment ingestion + `.github/workflows/roster-sync.yml` + PR-opening logic + Rule 3 pinning tests | `tests/crew/ocr.test.ts` + `tests/discord/imageAttachments.test.ts` + `tests/skills/rosterSync.test.ts`; re-check `tests/skills/discordMonitor.test.ts` per Rule 3; wired into `tests/index.test.ts` |
-| T204 | #89 (Tuvok) | v1.5 operator docs (screenshot capture guide, device resolution, Discord channel setup, troubleshooting) | Doc-only |
-| T205 | #90 (Garak → Kirk → Picard) | v1.5 reviewer gate | APPROVE comments on every v1.5 PR |
+| T200 | #85 | OCR POC spike — measure against the FR-020 acceptance bar on 20 real screenshots | POC measurement table posted to issue #85 |
+| T201 | #86 | POC gate decision: PASS → unblock #87..#90; FAIL → close #85..#90 as wontfix | Record the decision on the issue |
+| T202 | #87 | Constitution v1.5 amendment (`roster-sync.yml` workflow + `cdn.discordapp.com` inbound + `skill:bootstrap-roster` + roster-channel allowlist) + plan-template re-sync | Rule 1 grep is green post-amendment |
+| T203 | #88 | `src/crew/ocr.ts` + image-attachment ingestion + `.github/workflows/roster-sync.yml` + PR-opening logic + workflow pinning tests | `tests/crew/ocr.test.ts` + `tests/discord/imageAttachments.test.ts` + `tests/skills/rosterSync.test.ts`; re-check `tests/skills/discordMonitor.test.ts`; wire into `tests/index.test.ts` |
+| T204 | #89 | v1.5 operator docs (screenshot capture guide, device resolution, Discord channel setup, troubleshooting) | Doc-only |
+| T205 | #90 | v1.5 review | Review the linked PRs before merging |
 
 ### v2 — Read-only interactive Discord commands (gated on v1 ship)
 
 | T### | Maps to issue | Scope | Test acceptance |
 |---|---|---|---|
-| T300 | #91 (Uhura) | `src/crew/commandParser.ts` (allowlist class + rate limit + `!crew help`) | `tests/discord/commandParser.test.ts`; wired into `tests/index.test.ts` |
-| T301 | #92 (Uhura + Scotty) | `src/crew/commandHandlers.ts` for the 8 read-only verbs (`best`, `status`, `progression`, `explain`, `synergy`, `tasks`, `officers`, `roster show`) | `tests/crew/commandHandlers.test.ts` per verb + integration test via the parser; wired into `tests/index.test.ts` |
-| T302 | #93 (Uhura + Scotty) | `src/crew/knowledge.ts` (chunking + embeddings) + `data/crew/knowledge-embeddings.json` + `skill:knowledge-rebuild` + `!crew knowledge` handler — RETRIEVAL-ONLY, no LLM generation (FR-024) | `tests/crew/knowledge.test.ts` (chunking determinism + cache invalidation + top-k ordering); wired into `tests/index.test.ts` |
-| T303 | #94 (O'Brien) | `.github/workflows/knowledge-rebuild.yml` (triggers on push to `docs/stfc-game-knowledge.md` / `data/crew/officers.json` / `data/crew/tasks/**`; group `stfc-knowledge-rebuild`) + Rule 3 pinning tests | `tests/skills/knowledgeRebuild.test.ts` asserts triggers, group, action SHAs |
-| T304 | #95 (Tuvok + Garak + Kirk + Picard) | v2 operator docs (Discord commands section, `!crew help` output documented, v3 slash-commands deferred-scope note) + v2 reviewer gate | APPROVE comments on every v2 PR |
+| T300 | #91 | `src/crew/commandParser.ts` (allowlist class + rate limit + `!crew help`) | `tests/discord/commandParser.test.ts`; wired into `tests/index.test.ts` |
+| T301 | #92 | `src/crew/commandHandlers.ts` for the 8 read-only verbs (`best`, `status`, `progression`, `explain`, `synergy`, `tasks`, `officers`, `roster show`) | `tests/crew/commandHandlers.test.ts` per verb + integration test via the parser; wired into `tests/index.test.ts` |
+| T302 | #93 | `src/crew/knowledge.ts` (chunking + embeddings) + `data/crew/knowledge-embeddings.json` + `skill:knowledge-rebuild` + `!crew knowledge` handler — RETRIEVAL-ONLY, no LLM generation (FR-024) | `tests/crew/knowledge.test.ts` (chunking determinism + cache invalidation + top-k ordering); wired into `tests/index.test.ts` |
+| T303 | #94 | `.github/workflows/knowledge-rebuild.yml` (triggers on push to `docs/stfc-game-knowledge.md` / `data/crew/officers.json` / `data/crew/tasks/**`; group `stfc-knowledge-rebuild`) + workflow pinning tests | `tests/skills/knowledgeRebuild.test.ts` asserts triggers, group, action SHAs |
+| T304 | #95 | v2 operator docs (Discord commands section, `!crew help` output documented, v3 slash-commands deferred-scope note) + review | Review the linked PRs before merging |
 
 ## Hand-off note for #78 (the first impl issue after #77 merges)
 
-When Scotty picks up #78:
+When implementing #78:
 
 1. The schemas in `src/crew/schemas.ts` MUST match the shapes in
    `data-model.md` exactly. zod validation errors should be human-

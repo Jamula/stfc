@@ -33,7 +33,6 @@
     "src/discord/**/*.ts",
     "src/lib/**/*.ts",
     "src/skills/**/*.ts",
-    "src/telemetry/**/*.ts",
     "tests/**/*.ts",
     "src/crew/**/*.ts",
     "shared/contracts/**/*.ts",

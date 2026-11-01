@@ -307,7 +307,7 @@ describe("runAll", () => {
   });
 
   it("a rejected gift claim is sent once, stays visible, and never triggers exit 2", async () => {
-    // Garak's blocker: an auth response on a mutating request is not proof the
+    // An auth response on a mutating request is not proof the
     // server applied nothing first (#204). The claim must therefore be sent
     // exactly once, reported as TRANSIENT (degraded, visible), and must NOT
     // promote the account to TOKEN_EXPIRED / secret rotation on that single

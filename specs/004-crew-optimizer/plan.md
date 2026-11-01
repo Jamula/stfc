@@ -1,6 +1,6 @@
 # Implementation Plan: Crew Optimizer
 
-**Branch**: `squad/77-speckit-pipeline` | **Date**: 2026-05-31 | **Spec**: [spec.md](./spec.md)
+**Date**: 2026-05-31 | **Spec**: [spec.md](./spec.md)
 **Input**: Feature specification from `/specs/004-crew-optimizer/spec.md`
 **Issue**: #77 (this spec pipeline) — implementation tracked under #78–#95
 
@@ -67,7 +67,7 @@ constitution lives at `.specify/memory/constitution.md`.
 
 **Re-check after Phase 1 design:** No new violations introduced. The
 constitution amendment in `.specify/memory/constitution.md` (drafted by
-`speckit.constitution`, editorial pass by Tuvok) is the only governance
+`speckit.constitution`) is the only governance
 mutation; Principle V's durable-inputs enumeration and Principle II's
 sanctioned-skills enumeration each gain a single bullet block.
 
@@ -233,7 +233,7 @@ deviation from the existing patterns.
 | 0 | `speckit.specify` → `spec.md` | Done |
 | 1 | `speckit.clarify` → 5 Qs resolved | Done (encoded in spec FR-001..FR-004) |
 | 2 | `speckit.plan` → `plan.md` + `research.md` + `data-model.md` + `contracts/` + `quickstart.md` | In progress |
-| 3 | `speckit.constitution` → v1 amendment + Tuvok editorial pass | Pending |
+| 3 | `speckit.constitution` → v1 amendment and editorial pass | Pending |
 | 4 | Rule 1 plan-template re-sync grep | Pending |
 | 5 | `speckit.analyze` → cross-artifact consistency | Pending |
 | 6 | `speckit.tasks` → `tasks.md` | Pending |

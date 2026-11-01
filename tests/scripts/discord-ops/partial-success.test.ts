@@ -1,6 +1,6 @@
 // Partial-success path test for `scripts/discord-ops/set-discord-app-metadata.mjs`.
 //
-// Scenario (Kirk PR #71 LOW-4): the script is invoked with both
+// Scenario: the script is invoked with both
 // `--icon` (PATCH /users/@me) and `--description` (PATCH /applications/@me).
 // The first PATCH succeeds, the second is rejected by Discord with 500.
 // User-visible contract being pinned here:
@@ -11,9 +11,7 @@
 //   3. Final exit code is 2 (Discord-said-no, per the USAGE exit-code
 //      table) — not 1, not 0.
 //
-// Sentinel token (registered in
-// `.squad/decisions/inbox/bashir-discord-ops-tests.md`): reuse the
-// same sentinel from set-discord-app-metadata.test.ts.
+// Reuse the sentinel token from set-discord-app-metadata.test.ts.
 
 import { describe, it, before, after } from "node:test";
 import assert from "node:assert/strict";

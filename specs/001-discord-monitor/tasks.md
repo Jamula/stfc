@@ -60,16 +60,15 @@ US1–US3.
 
 **Purpose**: Land the constitution v1.3.0 amendment as a STANDALONE PR before
 any implementation code that references or handles `DISCORD_BOT_TOKEN`. Per
-Picard's APPROVE WITH CONDITIONS decision, this amendment must be reviewable
-and revertable independently of implementation code (Principle VI).
+the review conditions, this amendment must be reviewable and revertable
+independently of implementation code (Principle VI).
 
 **⚠️ BLOCKER**: No Phase 1+ task may merge to `main` until T000 acceptance
 criteria are satisfied and the amendment PR has landed.
 
 ### Governance check for Phase 0
 
-- [X] T000 Verify the v1.3.0 amendment PR satisfies all three P0 findings from
-  `.squad/decisions/inbox/tuvok-001-discord-monitor-amendment-audit.md` before
+- [X] T000 Verify the v1.3.0 amendment PR satisfies all three P0 findings before
   merging. Acceptance criteria (checklist — all three must be ✅ before merge):
   - **[P0-1]** `.specify/templates/plan-template.md` Principle V guidance text is
     updated: the stale line stating "durable inputs limited to STFC_ACCOUNTS /
@@ -112,7 +111,7 @@ criteria are satisfied and the amendment PR has landed.
   & Compliance Constraints;
   (5) add `discord-monitor.yml` to the SHA-pinning roster in Security &
   Compliance Constraints alongside `redeem.yml`, `refresh-token.yml`,
-  `test.yml`, `squad-test-gate.yml`;
+  `test.yml`, `test-gate.yml`;
   (6) write the full v1.3.0 Sync Impact Report satisfying P0-1, P0-2, P0-3
   above, including the 2026-05-16 refinement note splitting suppression into
   operator-rules + skill-cooldowns.
@@ -121,9 +120,8 @@ criteria are satisfied and the amendment PR has landed.
 
 - [X] T002 Open standalone PR for the v1.3.0 amendment
   (`.specify/memory/constitution.md` + `.specify/templates/plan-template.md`).
-  Collect sign-offs: Tuvok (process audit), Borg Queen (claim verification),
-  Bashir (cross-check), Picard (ratification). Merge to `main`. This PR
-  contains NO implementation source files.
+  Complete review before merging to `main`. This PR contains NO implementation
+  source files.
 
 **Checkpoint**: Constitution v1.3.0 landed on `main`. Implementation phases
 may begin.
@@ -151,7 +149,7 @@ new test stubs must fail.
   ^2.17.x. Add `"skill:discord-monitor": "tsx src/cli.ts discord-monitor"` to
   `scripts`. Run `npm install` to update `package-lock.json`. Verify
   `discord-api-types` actual license via `npm view discord-api-types license`
-  (plan claimed Apache-2.0; Picard Condition 1 requires verification — MIT is
+  (plan claimed Apache-2.0; the review requires verification — MIT is
   also license-compatible per Security & Compliance Constraints).
 
 - [X] T005 [P] Create empty stub source files (export stubs only — no logic):
@@ -297,8 +295,7 @@ duplicates suppressed, outcomes recorded, and any failures result in
     the extractor. The 27 that match the core regex `^[A-Z][A-Z0-9]{3,19}$`
     are extracted. The 3 known short-code gaps (`TNG`, `GQ5`, `GQ7`) MUST
     be reported as KNOWN GAPS in the test output (labeled, expected
-    failures — not regressions; these are accepted precision trade-offs per
-    Tuvok's plan-corrections memo).
+    failures — not regressions; these are accepted precision trade-offs).
   - The example string in "the code format is `XXXXX-YYYYY`" is NOT
     extracted (hyphenated format must be rejected).
   - Spoiler-tag decoration `||CODE||`, zero-width Unicode characters, and
@@ -358,14 +355,12 @@ duplicates suppressed, outcomes recorded, and any failures result in
     candidates after `promo-codes.txt` codes, deduplicated, and passes the
     unified list to the STFC API client.
   - `redeemCodes()` called with no args continues to work unchanged —
-    existing behavior is not regressed (Picard architecture review: "no
-    regressions in current 5 skills").
+    existing behavior is not regressed.
   - The new `readCodesForRun(opts?)` function in `src/lib/promoCodes.ts`
     wraps the existing seam exports `readPromoCodes(path)` +
     `parsePromoCodes(content)`. These two function names MUST remain
     unchanged. The name `loadPromoCodes` MUST NOT appear (it does not
-    exist; verify import at `src/skills/redeemCodes.ts:9` per Tuvok
-    corrections memo P1-6).
+    exist; verify the import at `src/skills/redeemCodes.ts:9`).
 
 - [X] T017 [P] [US1] Write ingest unit tests in
   `tests/discord/ingest.test.ts` **before** implementing
@@ -573,7 +568,7 @@ input.
     FR-017).
   - `classify()` called on any message makes zero outbound `fetch` calls
     (stub `globalThis.fetch`, assert call count = 0; this is the privacy
-    invariant test that Principle IX and Picard Condition 5 both require).
+    invariant test required by Principle IX).
   - Confidence floor 0.55: output below floor → `label: "unclassified"`,
     which MUST NOT be surfaced into the digest (callers filter it).
   - `classify()` called before `load()` → throws (lifecycle contract).
@@ -601,9 +596,8 @@ input.
   under `src/digest/` — mirrors plan.md § Project Structure). Assert
   (maps to US2 Scenarios 1–3 and digest-writer contract):
   - Same-day re-run with identical input → byte-identical output file;
-    `mode: "merged-idempotent"` returned; no file write performed (Picard
-    Condition 5 — digest byte-identical-on-no-change idempotency
-    invariant).
+    `mode: "merged-idempotent"` returned; no file write performed (the
+    digest byte-identical-on-no-change idempotency invariant).
   - Same-day re-run with new codes/tips added → merged output;
     `generatedAt` updated; `health.runIds[]` is the union; per-counter
     values summed.
@@ -632,7 +626,7 @@ input.
 - [ ] T032 [P] [US2] Implement tier-1 heuristic in
   `src/discord/classifier.ts` — keyword + regex scoring against STFC
   vocabulary (`tip`, `trick`, `hack`, `event`, `armada`, `hostile`,
-  `ops`, `crew`, ship names from `.squad/knowledge/stfc/database.md` if
+  `ops`, `crew`, ship names from `docs/stfc-game-knowledge.md` if
   available). Discard chatter (messages < 20 chars, greetings, single
   emoji, raid-pings) as `chatter` without invoking tier-2. Implement
   `Classifier` interface from `contracts/classifier.contract.md`
@@ -753,8 +747,8 @@ hardening, and final hygiene gate validation.
   equivalent operational-dependencies section) contains a clearly-titled
   advisory "Branch protection on `main` will break this feature" with
   exact remediation steps (either disable required PR review for
-  `github-actions[bot]`, or enable PR-gated auto-commit mode) — Picard
-  Condition 6. If the advisory is absent or incomplete, add it to
+  `github-actions[bot]`, or enable PR-gated auto-commit mode). If the
+  advisory is absent or incomplete, add it to
   `quickstart.md`. Also confirm operator instructions for editing
   `data/discord/suppression.json` (the operator-only file) are documented;
   `data/discord/cooldowns.json` should be documented as skill-managed
@@ -766,8 +760,7 @@ hardening, and final hygiene gate validation.
   partial failure (where `cursors.json` was not flushed) will re-extract
   messages between the last successful append and the cursor position,
   but `candidates.jsonl` membership dedup prevents re-submission to the
-  STFC API. Behavior is bounded and intentional, not a bug — Picard
-  Condition 7.
+  STFC API. Behavior is bounded and intentional, not a bug.
 
 - [x] T041 [P] Run `npm run typecheck` and `npm test` — confirm all 43
   tasks' deliverables compile and all tests pass. Address any type

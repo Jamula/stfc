@@ -274,7 +274,7 @@ describe("automation-state scheduled workflow contract", () => {
 });
 
 describe("automation-state Discord handler contract", () => {
-  it("joins the shared stfc-gift-redeemer writer lock only for /game-state, the one command that writes automation-state directly, and isolates every other command onto its own per-command queue (Garak, PR #250 review round 2)", () => {
+  it("joins the shared stfc-gift-redeemer writer lock only for /game-state, the one command that writes automation-state directly, and isolates every other command onto its own per-command queue", () => {
     // /game-state commits + pushes to automation-state from inside this
     // job (scripts/discord-handler.mjs), so it must share the exact same
     // lock as redeem.yml/discord-monitor.yml — the interleaving that let a
@@ -296,14 +296,14 @@ describe("automation-state Discord handler contract", () => {
     // Sharing the group is necessary but not sufficient: on the default
     // `queue: single` the shared group holds one pending run, so the next
     // redeem/monitor/refresh run would cancel a pending /game-state job
-    // after Discord already got its deferred response (Garak, PR #266).
+    // after Discord already got its deferred response.
     assert.equal(concurrency.queue, "max");
 
     // Mirror the expression's branching (not just its raw text) and pin
     // concrete resolved values per command. GitHub's `==` operator compares
     // strings case-INsensitively, and concurrency group names are themselves
     // case-insensitive, so this mirror lower-cases before comparing. It is
-    // deliberately not a case-sensitive parity claim (Garak, PR #266 review):
+    // deliberately not a case-sensitive parity claim:
     // https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency
     const resolveHandlerConcurrencyGroup = (command: string): string =>
       command.toLowerCase() === "game-state"
@@ -390,7 +390,7 @@ describe("automation-state Discord handler contract", () => {
   });
 });
 
-describe("shared stfc-gift-redeemer writer queue contract (Garak, PR #266 review)", () => {
+describe("shared stfc-gift-redeemer writer queue contract", () => {
   const declarations = allConcurrencyDeclarations();
   const sharedWriters = declarations.filter((decl) => joinsSharedWriterGroup(decl.concurrency));
 

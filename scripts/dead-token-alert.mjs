@@ -11,7 +11,7 @@
  * `selectAlertIssues`.
  *
  * Identity is: exact title match, plus every required label present. Required
- * labels are the stable pair (`bug`, `priority:p1`); the mutable `squad:*`
+ * labels are the stable pair (`bug`, `priority:p1`); additional routing
  * labels are deliberately NOT identity, because reassigning an alert must not
  * orphan it. Extra labels are allowed — the check is a superset test, not
  * equality. When several issues match, the oldest (lowest number) wins and the

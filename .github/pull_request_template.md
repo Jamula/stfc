@@ -19,7 +19,7 @@ _Tick **at least one**. Multiple selections are allowed._
 
 ## Test-first evidence _(REQUIRED when "Bug fix" is ticked above)_
 
-> Skip this section only if no box above is "Bug fix." Leaving it blank on a bug-fix PR will result in a **request-changes** from the Tester reviewer.
+> Skip this section only if no box above is "Bug fix." Reviewers may request missing evidence on a bug-fix PR.
 
 **Failing-test commit SHA** _(the commit where the test exists but the fix does not — proves test-first)_
 
@@ -60,7 +60,7 @@ _For **non-trivial** changes (multi-file, cross-skill, new feature, >4 hr, build
 
 - [ ] `npm test` passed locally with zero failures before this PR was opened.
 
-_(Scotty's pre-commit hook should enforce this automatically. The checkbox creates an auditable paper trail.)_
+_(The pre-commit hook should enforce this automatically. The checkbox creates an auditable paper trail.)_
 
 ---
 
@@ -78,7 +78,7 @@ _If there is a tension with a principle, describe it here and note how the plan'
 
 ## Reviewer lanes
 
-_Replace the placeholder with every reviewer required for this PR. The reviewer gate fails closed until all placeholders are replaced and every listed reviewer approves the current head SHA._
+_List requested reviewers and their focus, if applicable._
 
 - **<Reviewer>** (<lane>): <scope>
 

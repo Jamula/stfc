@@ -1,7 +1,7 @@
 // T016 [US1] — redeemer-seam tests. Asserts the new extraCandidates path
 // merges correctly with promo-codes.txt and the (a) existing seam function
 // names are preserved, (b) the forbidden name `loadPromoCodes` is absent
-// (Tuvok corrections memo P1-6), (c) the new `readCodesForRun` wrapper is
+// and (c) the new `readCodesForRun` wrapper is
 // exported.
 
 import { describe, it, beforeEach, afterEach } from "node:test";
@@ -58,7 +58,7 @@ describe("promo-codes seam: import surface", () => {
     assert.equal(typeof readCodesForRun, "function");
   });
 
-  it("loadPromoCodes is NOT exported (Tuvok P1-6: this name MUST NOT appear)", () => {
+  it("loadPromoCodes is NOT exported", () => {
     assert.equal(
       (promoCodesModule as Record<string, unknown>)["loadPromoCodes"],
       undefined,
@@ -67,7 +67,7 @@ describe("promo-codes seam: import surface", () => {
   });
 
   it("the redeemCodes skill imports readPromoCodes (or readCodesForRun), NOT loadPromoCodes", () => {
-    // Source-level grep: the import line at redeemCodes.ts:9 (per Tuvok memo)
+    // Source-level grep: the import line at redeemCodes.ts:9
     // must reference readPromoCodes / readCodesForRun, never loadPromoCodes.
     const src = fs.readFileSync(
       path.resolve(import.meta.dirname, "..", "..", "src", "skills", "redeemCodes.ts"),

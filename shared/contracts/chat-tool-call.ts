@@ -1,14 +1,14 @@
 // AUTO-GENERATED — do not hand-edit.
 // Source of truth: specs/005-web-control-panel/contracts/chat-tool-call.json
 // Regenerate:      npm run build:contracts
-// Schema is the source of truth (Kirk review #6).
+// Schema is the source of truth.
 
 /**
  * Canonical chat tool-call payload presented to the user for confirmation and bound by HMAC (RD P1.9) for execution in Phase 7. Phase 0 wave 3 — issue #110. The HMAC over this payload ensures the executed payload cannot be substituted for the confirmed one.
  */
 export interface ChatToolCall {
   /**
-   * Contract version. Consumers MUST reject unknown versions (Kirk #6).
+   * Contract version. Consumers MUST reject unknown versions.
    */
   schema_version: '1';
   /**

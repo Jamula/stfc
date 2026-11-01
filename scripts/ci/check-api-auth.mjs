@@ -4,11 +4,7 @@
  * requireAllowedUser or requireOwner (from api/src/_lib/auth.ts) AS THE
  * FIRST NON-TRIVIAL STATEMENT in the handler function body.
  *
- * Kirk required change #3: "Per-Function auth becomes a CI grep gate —
- * static check fails build if any api/**\/**.ts handler doesn't import +
- * call requireAllowedUser as first statement." (plan.md line 24)
- *
- * Hardened 2026-06-01 per Garak P0#1: previously the gate accepted the call
+ * Previously the gate accepted the call
  * anywhere in the file, so a handler with `const log = console.log;` before
  * auth would silently pass. The gate now finds each handler function body
  * and asserts its first non-trivial statement (or the first statement inside
