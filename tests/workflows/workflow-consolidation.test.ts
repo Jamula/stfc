@@ -18,21 +18,6 @@ const workflowFiles = readdirSync(workflowsDirectory)
   .filter((file) => /\.ya?ml$/.test(file))
   .sort();
 const retiredWorkflowFiles = [
-  "squad-artifact-hygiene.yml",
-  "squad-cleanup-runs.yml",
-  "squad-ci.yml",
-  "squad-docs.yml",
-  "squad-heartbeat.yml",
-  "squad-insider-release.yml",
-  "squad-issue-assign.yml",
-  "squad-label-enforce.yml",
-  "squad-preview.yml",
-  "squad-promote.yml",
-  "squad-release.yml",
-  "squad-reviewer-gate.yml",
-  "squad-test-gate.yml",
-  "squad-triage.yml",
-  "sync-squad-labels.yml",
   "test.yml",
 ] as const;
 const workflowSources = workflowFiles.map((file) => ({

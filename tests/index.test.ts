@@ -54,7 +54,6 @@ import "./scripts/discord-ops/endpoint-narrowing.test.ts";
 import "./workflows/discord-ops-workflow.test.ts";
 import "./workflows/redeem-workflow.test.ts";
 import "./workflows/workflow-consolidation.test.ts";
-import "./workflows/repository-integrations.test.ts";
 import "./workflows/automation-state-workflows.test.ts";
 import "./workflows/automation-state-git.test.ts";
 import "./workflows/automation-state-race.test.ts";

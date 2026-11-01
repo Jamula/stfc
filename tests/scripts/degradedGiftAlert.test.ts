@@ -151,13 +151,13 @@ describe("degraded-gift-alert", () => {
       log: () => {},
     });
 
-    it("recognizes an existing alert with retired routing labels", () => {
+    it("recognizes an existing alert with unrelated extra labels", () => {
       const result = syncDegradedGiftAlert({
         state: repeatedGift,
         listIssues: () => [{
           number: 42,
           title: DEGRADED_ALERT_TITLE,
-          labels: ["squad", "squad:uhura", "bug", "priority:p2"],
+          labels: ["help wanted", "bug", "priority:p2"],
         }],
         createIssue: () => assert.fail("the existing alert must not be duplicated"),
         updateIssue: () => {},

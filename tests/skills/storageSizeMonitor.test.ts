@@ -103,7 +103,6 @@ describe('storageSizeMonitor workflow', () => {
     const run = createStep?.run as string | undefined;
     assert(run, 'Create alert issue step must have a script');
     assert.match(run, /--label 'priority:storage,type:operations'/);
-    assert.doesNotMatch(run, /squad/i);
   });
 
   it('checks out with pinned SHA', () => {

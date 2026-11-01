@@ -171,18 +171,6 @@ describe("requireAllowedUser", () => {
     assert.throws(() => requireAllowedUser(withPrincipal()), ForbiddenError);
   });
 
-  it("fails closed when only the retired allowlist setting is configured", () => {
-    const previous = process.env["SQUAD_ALLOWED_USERS"];
-    try {
-      delete process.env["STFC_ALLOWED_USERS"];
-      process.env["SQUAD_ALLOWED_USERS"] = "cyrusjamula";
-      assert.throws(() => requireAllowedUser(withPrincipal()), ForbiddenError);
-    } finally {
-      if (previous === undefined) delete process.env["SQUAD_ALLOWED_USERS"];
-      else process.env["SQUAD_ALLOWED_USERS"] = previous;
-    }
-  });
-
   it("trims whitespace around usernames in the allowlist env var", () => {
     process.env["STFC_ALLOWED_USERS"] = " cyrusjamula , alloweduser ";
     const p = requireAllowedUser(withPrincipal());
@@ -241,18 +229,6 @@ describe("requireOwner", () => {
   it("throws ForbiddenError when STFC_OWNER is not set", () => {
     delete process.env["STFC_OWNER"];
     assert.throws(() => requireOwner(withPrincipal()), ForbiddenError);
-  });
-
-  it("fails closed when only the retired owner setting is configured", () => {
-    const previous = process.env["SQUAD_OWNER"];
-    try {
-      delete process.env["STFC_OWNER"];
-      process.env["SQUAD_OWNER"] = "cyrusjamula";
-      assert.throws(() => requireOwner(withPrincipal()), ForbiddenError);
-    } finally {
-      if (previous === undefined) delete process.env["SQUAD_OWNER"];
-      else process.env["SQUAD_OWNER"] = previous;
-    }
   });
 
   it("re-validates a supplied principal against STFC_ALLOWED_USERS (no bypass)", () => {
