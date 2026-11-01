@@ -1,7 +1,7 @@
 # Data Model: 005-web-control-panel
 
 **Status:** Placeholder — schema sources of truth live under
-`contracts/` (issue #108, Kirk authors / Bashir validates).
+`contracts/` (issue #108).
 
 This file enumerates the three contract schemas that drive the 005
 data model. The actual JSON Schema definitions land in
@@ -43,18 +43,16 @@ to expect.
 - **`schema_version` is mandatory on all three.** Consumers MUST
   reject unknown versions. Producers MAY add OPTIONAL fields in
   `v1.x` minor revisions; breaking changes bump to `v2` with a
-  coordinated consumer update PR (Kirk #6).
-- **TS types are generated, not hand-written.** A build step under
-  Scotty's ownership emits `shared/contracts/*.ts` from these JSON
+  coordinated consumer update PR.
+- **TS types are generated, not hand-written.** A build step emits
+  `shared/contracts/*.ts` from these JSON
   Schemas; a CI gate fails if generated types drift from the schemas
   (FR-015 in `spec.md`).
-- **Schema authorship + validation is split.** Kirk authors the
-  schemas; Bashir adds round-trip validation tests using known-good
+- **Schema validation.** Add round-trip validation tests using known-good
   fixtures (FR-007 in `spec.md`).
 
 ## v3 plan reference
 
 `~/.copilot/session-state/d40435a0-d735-463b-887e-e5f586f7369b/plan.md`
-§ "Phase 0 — Governance + spec + threat model + schema", and Kirk #6
-(schema_version + consumer rejection rule) in the §"How v3 differs
-from v2" table.
+§ "Phase 0 — Governance + spec + threat model + schema" and the
+schema-version rule in the §"How v3 differs from v2" table.

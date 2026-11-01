@@ -91,8 +91,6 @@ targeted before. Guild membership is unknown but likely absent.
 4. Then run `node scripts/fetch-discord-channel.mjs` from the repo root.
 
 **Who to ask:** A maintainer or moderator of the STFC Officer Tool Discord.
-See the outreach package at `.squad/agents/uhura/outreach/stfc-discord-bot-request.md`
-for a ready-to-send DM draft and a technical scope summary suitable for admins.
 
 ## Refresh procedure (once unblocked)
 

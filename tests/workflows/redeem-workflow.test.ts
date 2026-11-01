@@ -9,7 +9,7 @@
 // never on `main`, since the repository ruleset rejects direct pushes from
 // GITHUB_TOKEN's `github-actions` identity and cannot be given a bypass
 // actor for it on this org/plan — see the retro comments on #241 for the
-// live-verified evidence). Kirk/Picard's governance decision on #241
+// live-verified evidence). The decision on #241
 // explicitly rejected any RepositoryRole/User/PAT-based bypass (it would
 // recreate #220's auto-landing vector), so these tests also assert that no
 // such bypass mechanism was reintroduced.
@@ -192,7 +192,7 @@ describe(".github/workflows/redeem.yml", () => {
   );
 
   it(
-    "serializes on the shared writer group with a bounded FIFO queue, never the lossy default (Garak, PR #266 review)",
+    "serializes on the shared writer group with a bounded FIFO queue, never the lossy default",
     { skip: yaml === undefined },
     () => {
       // redeem.yml runs every 10 minutes, so it is the workflow most likely
@@ -230,7 +230,7 @@ describe(".github/workflows/redeem.yml", () => {
       assert.doesNotMatch(
         yaml!,
         /secrets\.[A-Z_]*PAT[A-Z_]*/,
-        "must not read a PAT secret for pushing — Kirk/Picard rejected RepositoryRole/User/PAT bypass on #241",
+        "must not read a PAT secret for pushing — the RepositoryRole/User/PAT bypass was rejected on #241",
       );
       assert.doesNotMatch(
         yaml!,
@@ -265,7 +265,7 @@ describe(".github/workflows/redeem.yml", () => {
 
       assert.deepEqual(titles, [expectedTitle, expectedTitle]);
       assert.deepEqual(requiredLabels, ["bug,priority:p1", "bug,priority:p1"]);
-      assert.ok(requiredLabels.every((labels) => !labels.includes("squad:")));
+      assert.match(yaml!, /--label "bug,priority:p1"/);
     },
   );
 

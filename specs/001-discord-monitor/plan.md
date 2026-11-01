@@ -93,7 +93,7 @@ existing `tsconfig.json` include set).
 | VII | Artifact Hygiene | **PASS** | All artifacts in this PR are placeholder-only (no real Discord IDs, no real codes from monitored channels, no JWTs). Plan extends `scripts/check-artifact-hygiene.mjs` path list to include `data/digests/**/*.md` so the digest is scanned on every PR (including auto-commit PRs). |
 | VIII | Wire-First Discovery | **PASS (with TODO in /tasks)** | `contracts/discord-bot.contract.md` cites the upstream Discord docs; captured request/response fixtures under `tests/fixtures/discord/` are scheduled in `/speckit.tasks` BEFORE the client implementation task per Principle IX ordering. |
 | IX | Test-First Discipline (NON-NEGOTIABLE) | **PASS** | Every acceptance criterion in `spec.md` § "User Scenarios" maps to a test in the `/speckit.tasks` plan (extractor unit tests, classifier unit tests, dedup tests, digest idempotency test, end-to-end integration test with stubbed Discord REST). `npm test` will be required green pre-merge. |
-| — | Artifact Hygiene CI gate | **PASS** | Existing `.github/workflows/squad-artifact-hygiene.yml` already covers `specs/`, `.specify/`, `docs/`, `.github/`. This plan adds `data/digests/**/*.md` to the scanner's path list (task in `/speckit.tasks`). |
+| — | Artifact Hygiene CI gate | **PASS** | `.github/workflows/artifact-hygiene.yml` covers `specs/`, `docs/`, and `.github/` Markdown artifacts. |
 
 **Re-evaluation after Phase 1 design:** All five contract documents and
 the data model honor the same posture; no principle moved from PASS to
@@ -387,8 +387,8 @@ still picked up. Pruning of suppression entries beyond
 | Integration — skill | `tests/skills/discordMonitor.test.ts` | Full run on fixture data: empty allow-list = no-op; mixed-channel fixture produces correct digest + cursor + auto-commit list; per-run cap truncates correctly. |
 | Regression | `tests/skills/redeemCodes.test.ts` | `extraCandidates` path is exercised; existing no-arg behavior unchanged (no regressions in current 5 skills). |
 
-Acceptance-scenario coverage map (spec § User Stories) is enumerated in
-`/speckit.tasks`. Bashir reviews this map at the spec-review gate.
+The acceptance-scenario coverage map (spec § User Stories) is enumerated in
+`/speckit.tasks` for review.
 
 ## Constitution Impact (v1.3.0 amendment recommendation)
 
@@ -448,7 +448,7 @@ Required edits to `.specify/memory/constitution.md`:
 5. **§ Security & Compliance Constraints — third-party action pinning**
    — note that `discord-monitor.yml` is added to the SHA-pinning roster
    alongside `redeem.yml`, `refresh-token.yml`, `test.yml`, and
-   `squad-test-gate.yml`.
+   `test-gate.yml`.
 
 6. **Sync Impact Report** — bump 1.2.0 → 1.3.0, MINOR (new sanctioned
    surfaces, no removed obligations), credit reason "Discord monitor
@@ -457,21 +457,14 @@ Required edits to `.specify/memory/constitution.md`:
 
 The amendment PR is a standalone change. It should land **before** the
 first PR that adds `DISCORD_BOT_TOKEN` handling code, OR be bundled with
-that first PR with explicit reviewer sign-off (Picard) on the bundling
+that first PR with explicit reviewer sign-off on the bundling
 choice. `/speckit.tasks` will track this as a P0 task.
 
-## Reviewer gate plan
+## Review plan
 
-Per constitution § "Speckit Reviewer Gates":
-
-| Gate | Reviewer | What they verify on this feature |
-|------|----------|----------------------------------|
-| Spec review (already passed) | Bashir, Picard | Acceptance criteria are testable; no scope creep. ✅ Passed (clarifications resolved, checklist green). |
-| **Plan review (this gate)** | **Picard** | Architecture choices honor existing principles; no unapproved deps; Constitution Check section is complete. **Specifically check:** the v1.3.0 amendment recommendation in § Constitution Impact and decide whether to land it before `/speckit.implement`. |
-| **Plan review — critic** | **Borg Queen** | Verify every concrete claim in this plan against the live repo: regex catches every code in `promo-codes.txt`, `@discordjs/rest` install size, model SHA-256 pinning is real, concurrency-group string matches `redeem.yml`'s. Hostile review encouraged. |
-| **Plan review — process audit** | **Tuvok** | Verify the proposed v1.3.0 amendment is correctly scoped (MINOR not MAJOR), Sync Impact Report shape is right, and § Constitution Impact lists every dependent template. |
-| Tasks review | Bashir | `/speckit.tasks` output puts test tasks before implementation tasks; every spec acceptance criterion has a test task. |
-| Implementation review | Bashir, Picard | Diff matches plan; tests pass; no token leakage in committed artifacts; smoke-test of the new workflow recorded in PR. |
+Review the acceptance criteria and task coverage, verify implementation and
+dependency claims against the repository, and check that tests pass and
+committed artifacts contain no credentials.
 
 ## Risks & mitigations
 
@@ -488,7 +481,8 @@ Per constitution § "Speckit Reviewer Gates":
 
 ## Acknowledged assumptions
 
-The following assumptions underpin this plan. Each was surfaced by Borg Queen's hostile fact-check (2026-05-13) and accepted as plan-stage risk. The implementer MUST revisit each during implementation.
+The following assumptions underpin this plan. Each was identified during
+review and accepted as a plan-stage risk. Revisit each during implementation.
 
 1. **Operator will configure the allow-list before the first meaningful run.** If they don't, the skill no-ops the Discord half indefinitely. The digest will say "0 channels configured" every run — but will anyone notice? There is no alerting surface in v1. The feature could ship, merge, run for months, and never actually monitor anything.
    — **Failure mode:** Silent feature deadweight.

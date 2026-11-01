@@ -1,5 +1,5 @@
 // Fixture: compliant handler with the canonical `try { … } catch (e) { errorResponse(e) }`
-// wrap. The hardened gate (Garak P0#1) must descend into the leading `try {` block and
+// wrap. The hardened gate must descend into the leading `try {` block and
 // recognise the auth guard call as the first non-trivial statement INSIDE the try body.
 import { app, HttpRequest, HttpResponseInit, InvocationContext } from "@azure/functions";
 import { requireAllowedUser } from "./_lib/auth.js";

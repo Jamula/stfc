@@ -39,7 +39,7 @@ describe(".github/workflows/discord-command-handler.yml", () => {
     "joins the shared stfc-gift-redeemer writer lock only for /game-state, queues rather than replaces, and does not cancel in-progress",
     { skip: yaml === undefined },
     () => {
-      // Garak (PR #250 review, round 2): /game-state is the only command
+      // /game-state is the only command
       // that writes automation-state directly from this job, so it alone
       // must share the writer lock with redeem.yml/discord-monitor.yml —
       // a static per-workflow group here (whether always-shared or always-
@@ -49,7 +49,7 @@ describe(".github/workflows/discord-command-handler.yml", () => {
         /concurrency:\s*\n(?:\s+#.*\n|\s*\n)*\s+group:\s*\$\{\{\s*github\.event\.client_payload\.command\s*==\s*'game-state'\s*&&\s*'stfc-gift-redeemer'\s*\|\|\s*format\('stfc-discord-handler-\{0\}',\s*github\.event\.client_payload\.command\)\s*\}\}\s*\n\s+queue:\s*max\b/,
       );
       assert.match(yaml!, /cancel-in-progress:\s*false\b/);
-      // Garak (PR #266 review): the default `queue: single` keeps one pending
+      // The default `queue: single` keeps one pending
       // run per group, so a later redeem/monitor/refresh run would cancel a
       // pending /game-state upload. `queue: max` queues up to 100 instead.
       assert.match(yaml!, /^\s+queue:\s*max\s*$/m);

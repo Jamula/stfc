@@ -72,7 +72,7 @@ jobs:
         run: |
           gh issue create \
             --title '[storage] data/discord/game-state exceeds threshold' \
-            --label 'squad:obrien,priority:storage,type:operations' \
+            --label 'priority:storage,type:operations' \
             --body 'Current size: ${{ steps.size.outputs.size_mb }} MB. Threshold: 100 MB. Alert raised: '"$(date -u '+%Y-%m-%dT%H:%M:%SZ')"'. Recommended: review data/discord/game-state contents, archive old days to R2 (deferred #164), or trigger migration. Closes when size drops below 75 MB (hysteresis pending #165).'
 
       - name: Add comment to existing alert

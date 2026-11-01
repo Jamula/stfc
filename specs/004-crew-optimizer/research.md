@@ -43,11 +43,8 @@ to v1.x with a separate licensing check.
   DB, and the unknown-officer error (FR-010) would fire constantly on
   first use.
 
-**Pre-research note from parallel agent:** A research agent was tasked
-with scoping the stfc.space scrape (notes expected at
-`.squad/decisions/inbox/research-officer-db-seeding.md`). At the time
-this plan was written, those notes had not landed; the resolution
-above stands regardless (hand-curate for v1, revisit later).
+At the time this plan was written, further scrape research had not landed;
+the resolution above stands regardless (hand-curate for v1, revisit later).
 
 ## R3. Tag vocabulary (Clarify Q2 — resolved)
 

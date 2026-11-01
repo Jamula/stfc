@@ -1,0 +1,58 @@
+name: Test Gate
+# Single CI gate for the repo. Runs typecheck + the test suite on every
+# pull request.
+#
+# Code coverage reporting is intentionally disabled. This workflow must not
+# invoke test:coverage or actions/upload-code-coverage until coverage is
+# deliberately re-enabled together with its tooling and upload configuration.
+#
+# The job is named "npm test (required)" so it can be enforced as a required
+# status check in GitHub -> Settings -> Branches -> Branch protection rules.
+
+on:
+  pull_request:
+    branches: ["**"]
+
+permissions:
+  contents: read
+
+# Opt into the Node 24 runtime for actions/* internals (default June 2026).
+# Silences the "Node 20 actions are deprecated" warning in run logs.
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+# Avoid redundant in-flight runs for the same ref/event.
+concurrency:
+  group: test-gate-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-gate:
+    name: npm test (required)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            worker/package-lock.json
+
+      - run: npm ci
+
+      - run: npm run typecheck
+
+      - run: npm test
+
+      - run: npm ci
+        working-directory: worker
+
+      - run: npm run typecheck
+        working-directory: worker
+
+      - run: npm test
+        working-directory: worker

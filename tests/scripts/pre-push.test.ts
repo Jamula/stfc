@@ -33,7 +33,7 @@ describe("isPushToMain", () => {
 
   it("returns false for a feature branch push", () => {
     const stdin =
-      "refs/heads/squad/11-prepush abc123 refs/heads/squad/11-prepush def456\n";
+      "refs/heads/feature/11-prepush abc123 refs/heads/feature/11-prepush def456\n";
     assert.equal(isPushToMain(stdin), false);
   });
 

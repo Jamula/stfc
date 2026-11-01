@@ -18,19 +18,22 @@ const workflowFiles = readdirSync(workflowsDirectory)
   .filter((file) => /\.ya?ml$/.test(file))
   .sort();
 const retiredWorkflowFiles = [
+  "squad-artifact-hygiene.yml",
+  "squad-cleanup-runs.yml",
   "squad-ci.yml",
   "squad-docs.yml",
+  "squad-heartbeat.yml",
   "squad-insider-release.yml",
+  "squad-issue-assign.yml",
+  "squad-label-enforce.yml",
   "squad-preview.yml",
   "squad-promote.yml",
+  "squad-release.yml",
+  "squad-reviewer-gate.yml",
+  "squad-test-gate.yml",
+  "squad-triage.yml",
+  "sync-squad-labels.yml",
   "test.yml",
-] as const;
-const squadTemplateWorkflowFiles = readdirSync(".squad/templates/workflows")
-  .filter((file) => /\.ya?ml$/.test(file))
-  .sort();
-const gitWorkflowSkillPaths = [
-  ".github/skills/git-workflow/SKILL.md",
-  ".squad/templates/skills/git-workflow/SKILL.md",
 ] as const;
 const workflowSources = workflowFiles.map((file) => ({
   file,
@@ -39,6 +42,9 @@ const workflowSources = workflowFiles.map((file) => ({
 const workflows = workflowSources.map(({ file, source }) => ({
   file,
   workflow: parseYaml(source) as {
+    on?: {
+      pull_request?: { branches?: string[]; paths?: string[] };
+    };
     jobs?: Record<
       string,
       {
@@ -421,20 +427,20 @@ describe("npm publish workflow guard (self-tests)", () => {
 
 describe("findNodeTestInvocations guard (self-tests)", () => {
   // These fixtures are not read from any workflow file -- they prove the
-  // helper itself is sound against the historical failure and every gap
-  // Kirk identified, plus common false-positive shapes, independent of
+  // helper itself is sound against the historical failure and identified
+  // gaps, plus common false-positive shapes, independent of
   // whatever the live workflows currently contain.
   const globCommandFixtures = [
     ["historical bare form (#242 original)", "node --test test/*.test.cjs"],
     [
-      "Kirk gap 1: options before --test",
+      "options before --test",
       "node --import tsx --test 'tests/**/*.test.ts'",
     ],
     [
-      "Kirk gap 2: options after --test",
+      "options after --test",
       "node --test --watch tests/**/*.test.ts",
     ],
-    ["Kirk gap 3: npx tsx form", "npx tsx --test tests/**/*.test.ts"],
+    ["npx tsx form", "npx tsx --test tests/**/*.test.ts"],
     [
       "glob target quoted with double quotes",
       'node --import tsx --test "tests/**/*.test.ts"',
@@ -509,13 +515,14 @@ describe("workflow consolidation", () => {
           ),
         )
         .map(({ file }) => file),
-      ["squad-test-gate.yml"],
+      ["test-gate.yml"],
     );
   });
 
   it("runs worker typecheck and Vitest in the existing required gate", () => {
-    const gate = workflows.find(({ file }) => file === "squad-test-gate.yml");
-    assert.ok(gate, "squad-test-gate.yml must exist");
+    const gate = workflows.find(({ file }) => file === "test-gate.yml");
+    assert.ok(gate, "test-gate.yml must exist");
+    assert.deepEqual(gate.workflow.on?.pull_request?.branches, ["**"]);
 
     const job = Object.values(gate.workflow.jobs ?? {}).find(
       ({ name }) => name === "npm test (required)",
@@ -603,111 +610,16 @@ describe("workflow consolidation", () => {
     }
   });
 
-  it("does not keep templates for retired dev/preview release-train workflows", () => {
-    for (const file of retiredWorkflowFiles) {
-      assert.ok(
-        !squadTemplateWorkflowFiles.includes(file),
-        `.squad/templates/workflows/${file} must remain removed`,
-      );
-    }
-  });
-
-  it("documents the supported main-only branch model in git-workflow skills", () => {
-    for (const skillPath of gitWorkflowSkillPaths) {
-      const skill = readFileSync(skillPath, "utf8");
-      assert.match(
-        skill,
-        /\bmain-only\b/,
-        `${skillPath} must explicitly describe the main-only model`,
-      );
-      const normalizedSkill = skill.replace(/\s+/g, " ");
-      assert.match(
-        normalizedSkill,
-        /For `local`\/`worktree` backends using the \*\*worktree-local\*\* strategy, branch-local `\.squad\/` state exists only inside that worktree and is lost when the worktree is removed; snapshot and verify it into the main checkout using the procedure below regardless of state-tool availability\./i,
-        `${skillPath} must require the worktree-local snapshot regardless of state-tool availability`,
-      );
-      assert.match(
-        normalizedSkill,
-        /Skip the snapshot only when the worktree uses the \*\*main-checkout\*\* strategy, where `\.squad\/` state already lives in the main checkout and nothing is isolated\./i,
-        `${skillPath} must only skip the snapshot for the shared main-checkout strategy`,
-      );
-      assert.match(
-        normalizedSkill,
-        /For `orphan`, `two-layer`, or `git-notes` backends, reconcile and clean mutable state only through the configured state tools using canonical logical paths.{0,300}Never read or copy a worktree `\.squad\/` checkout snapshot for these backends\. If any required state tool is unavailable for these backends, fail closed/i,
-        `${skillPath} must fail closed and avoid checkout snapshots for non-local backends`,
-      );
-      for (const lane of ["scope", "technical", "operations"]) {
-        assert.match(
-          skill,
-          new RegExp(`\\b${lane}\\b`, "i"),
-          `${skillPath} must record ${lane} implications`,
-        );
-      }
-      assert.doesNotMatch(
-        skill,
-        /dev\s*→\s*preview|preview\s*→\s*main|origin\/dev|origin\/preview|--base\s+dev/,
-        `${skillPath} must not describe the retired dev/preview promotion workflow`,
-      );
-    }
-  });
-
-  it("documents the private GitHub-release process without stale npm guidance", () => {
-    const releaseProcess = readFileSync(
-      ".squad/templates/skills/release-process/SKILL.md",
-      "utf8",
+  it("retains the independent artifact-hygiene scan", () => {
+    const hygiene = workflows.find(({ file }) => file === "artifact-hygiene.yml");
+    assert.ok(hygiene, "artifact-hygiene.yml must exist");
+    assert.ok(hygiene.workflow.on?.pull_request?.paths?.includes("docs/**"));
+    const steps = Object.values(hygiene.workflow.jobs ?? {}).flatMap(
+      (job) => job.steps ?? [],
     );
-    assert.match(
-      releaseProcess,
-      /private\s+`stfc-gift-redeemer`\s+package/,
-      "release guidance must identify this repository's private package",
-    );
-    assert.match(
-      releaseProcess,
-      /\.github\/workflows\/squad-release\.yml/,
-      "release guidance must reference the actual release workflow",
-    );
-    assert.match(
-      releaseProcess,
-      /does not publish to a package\s+registry/i,
-      "release guidance must state that the workflow does not publish packages",
-    );
-    assert.match(
-      releaseProcess,
-      /workflow\s+consolidation regression test/i,
-      "release guidance must describe the active workflow publishing guard",
-    );
-    assert.doesNotMatch(
-      releaseProcess,
-      /packages\/squad-(?:sdk|cli)|@bradygaster\/squad-cli|squad-npm-publish\.yml/,
-      "release guidance must not retain Squad CLI package or workflow instructions",
-    );
-  });
-
-  it("keeps versioning guidance aligned with the main-only private package", () => {
-    const versioningPolicy = readFileSync(
-      ".squad/templates/skills/versioning-policy/SKILL.md",
-      "utf8",
-    );
-    const normalizedPolicy = versioningPolicy.replace(/\s+/g, " ");
-    assert.match(
-      normalizedPolicy,
-      /\bmain-only\b/,
-      "versioning guidance must state the supported branch model",
-    );
-    assert.match(
-      normalizedPolicy,
-      /private `stfc-gift-redeemer` package/,
-      "versioning guidance must identify the actual private package",
-    );
-    assert.match(
-      normalizedPolicy,
-      /\.github\/workflows\/squad-release\.yml/,
-      "versioning guidance must reference the actual release workflow",
-    );
-    assert.doesNotMatch(
-      versioningPolicy,
-      /@bradygaster\/squad-(?:sdk|cli)|packages\/squad-(?:sdk|cli)|prerelease-version-guard|skip-version-check|bump-build\.mjs|`dev`|`preview`/,
-      "versioning guidance must not retain stale Squad workspace or branch instructions",
+    assert.ok(
+      steps.some((step) => step.run?.includes("node scripts/check-artifact-hygiene.mjs")),
+      "the PR workflow must run the artifact scanner",
     );
   });
 
@@ -840,8 +752,8 @@ describe("workflow consolidation", () => {
   });
 
   it("runs the canonical suite entry point on push to main (#242, #222)", () => {
-    const release = workflows.find(({ file }) => file === "squad-release.yml");
-    assert.ok(release, "squad-release.yml must exist");
+    const release = workflows.find(({ file }) => file === "release.yml");
+    assert.ok(release, "release.yml must exist");
     const steps = Object.values(release!.workflow.jobs ?? {}).flatMap(
       (job) => job.steps ?? [],
     );
@@ -849,17 +761,17 @@ describe("workflow consolidation", () => {
     // (unlike a `test/*.test.cjs` glob) it cannot silently match zero files.
     assert.ok(
       steps.some((step) => step.run?.trim() === "npm test"),
-      "squad-release.yml must run npm test, not a hand-rolled glob invocation",
+      "release.yml must run npm test, not a hand-rolled glob invocation",
     );
     assert.ok(
       steps.some((step) => step.run?.trim() === "npm run typecheck"),
-      "squad-release.yml must run npm run typecheck alongside npm test",
+      "release.yml must run npm run typecheck alongside npm test",
     );
   });
 
-  it("does not suppress release validation failures after a Squad upgrade", () => {
-    const release = workflows.find(({ file }) => file === "squad-release.yml");
-    assert.ok(release, "squad-release.yml must exist");
+  it("does not suppress release validation failures", () => {
+    const release = workflows.find(({ file }) => file === "release.yml");
+    assert.ok(release, "release.yml must exist");
     for (const job of Object.values(release.workflow.jobs ?? {})) {
       assert.ok(!job["continue-on-error"], "release job failures must propagate");
       for (const step of job.steps ?? []) {
@@ -871,8 +783,8 @@ describe("workflow consolidation", () => {
   });
 
   it("installs locked dependencies before release validation", () => {
-    const release = workflows.find(({ file }) => file === "squad-release.yml");
-    assert.ok(release, "squad-release.yml must exist");
+    const release = workflows.find(({ file }) => file === "release.yml");
+    assert.ok(release, "release.yml must exist");
     const steps = Object.values(release!.workflow.jobs ?? {}).flatMap(
       (job) => job.steps ?? [],
     );
@@ -886,15 +798,15 @@ describe("workflow consolidation", () => {
       (step) => step.run?.trim() === "npm test",
     );
 
-    assert.ok(installIndex >= 0, "squad-release.yml must run npm ci");
+    assert.ok(installIndex >= 0, "release.yml must run npm ci");
     assert.ok(
       installIndex < typecheckIndex && installIndex < testIndex,
-      "squad-release.yml must install dependencies before typecheck and tests",
+      "release.yml must install dependencies before typecheck and tests",
     );
   });
 
   it("pins npm's \"test\" script to the concrete tests/index.test.ts entry point, not a glob (#242, #222)", () => {
-    // The assertion above only proves squad-release.yml literally invokes
+    // The assertion above only proves release.yml literally invokes
     // the string `npm test`; it says nothing about what that indirection
     // actually runs. Read package.json's "test" script through JSON.parse
     // (not a raw-text regex, which would be brittle against reformatting)

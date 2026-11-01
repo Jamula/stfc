@@ -130,7 +130,7 @@ describe("degraded-gift-alert", () => {
     assert.equal(created.status, "created");
     assert.equal(calls.length, 1);
     assert.equal(calls[0]!.title, DEGRADED_ALERT_TITLE);
-    assert.deepEqual(calls[0]!.labels, DEGRADED_ALERT_LABELS);
+    assert.deepEqual(calls[0]!.labels, ["bug", "priority:p2"]);
     assert.match(calls[0]!.body, /30 Day Loyalty Chest \(bundle 771\) — 3 consecutive runs/);
     assert.match(calls[0]!.body, /actions\/runs\/10/);
     assert.equal(alreadyOpen.status, "already-open");
@@ -149,6 +149,23 @@ describe("degraded-gift-alert", () => {
       listIssues: () => [{ number: 42, title: DEGRADED_ALERT_TITLE, labels: DEGRADED_ALERT_LABELS }],
       closeIssue: (number, comment) => closeCalls.push({ number, comment }),
       log: () => {},
+    });
+
+    it("recognizes an existing alert with retired routing labels", () => {
+      const result = syncDegradedGiftAlert({
+        state: repeatedGift,
+        listIssues: () => [{
+          number: 42,
+          title: DEGRADED_ALERT_TITLE,
+          labels: ["squad", "squad:uhura", "bug", "priority:p2"],
+        }],
+        createIssue: () => assert.fail("the existing alert must not be duplicated"),
+        updateIssue: () => {},
+        log: () => {},
+      });
+
+      assert.equal(result.status, "already-open");
+      assert.equal(result.number, 42);
     });
 
     assert.equal(result.status, "resolved");

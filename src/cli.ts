@@ -13,7 +13,6 @@ import { listGifts } from "./skills/listGifts.ts";
 import { claimGifts } from "./skills/claimGifts.ts";
 import { redeemCodes } from "./skills/redeemCodes.ts";
 import { discordMonitor } from "./skills/discordMonitor.ts";
-import { telemetry } from "./skills/telemetry.ts";
 import { roster } from "./skills/roster.ts";
 import { optimizeCrew } from "./skills/optimizeCrew.ts";
 import { progression } from "./skills/progression.ts";
@@ -31,7 +30,6 @@ const SKILLS = [
   "claim-gifts",
   "redeem-codes",
   "discord-monitor",
-  "telemetry",
   "roster",
   "optimize-crew",
   "progression",
@@ -55,16 +53,13 @@ const SKILL_FNS: Record<SkillName, SkillFn> = {
   "claim-gifts": (o) => claimGifts(o),
   "redeem-codes": (o) => redeemCodes(o),
   "discord-monitor": (o) => discordMonitor({ accounts: o.accounts, promoCodesPath: o.promoCodesPath }),
-  "telemetry": () => telemetry({
-    subcommand: (process.argv[3] as "collect" | "report" | "recommend") ?? undefined,
-  }),
   "roster": () => roster(),
   "optimize-crew": () => optimizeCrew(),
   "progression": () => progression(),
 };
 
-// Skills that do NOT require accounts (operate on session store, not STFC API).
-const ACCOUNT_FREE_SKILLS: ReadonlySet<SkillName> = new Set(["telemetry", "roster", "optimize-crew", "progression"]);
+// Skills that do not require STFC API accounts.
+const ACCOUNT_FREE_SKILLS: ReadonlySet<SkillName> = new Set(["roster", "optimize-crew", "progression"]);
 
 async function main(): Promise<number> {
   const skillName = (process.argv[2] ?? "").trim();

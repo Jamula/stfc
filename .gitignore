@@ -22,44 +22,9 @@ playwright-diagnostics/
 .idea
 .DS_Store
 
-# Squad: ignore runtime state (logs, inbox, sessions)
-.squad/orchestration-log/
-.squad/log/
-.squad/decisions/inbox/
-.squad/sessions/
-.squad/.scratch/
-.squad/.watch-pids
-.squad/ralph-circuit-breaker.json
-# Squad: two-layer/orphan backend worktree-inbox (backend-owned, never committed)
-.squad/worktree-inbox/
-# Squad: SubSquad activation file (local to this machine)
-.squad-workstream
-
-
 # CLI runtime output
 summary.md
 # Digest writer output — *.md are now durable artifacts (constitution v2.0.0,
 # Phase 0 PR merged 2026-05-31). Only .gitkeep is still auto-ignored here
 # so an empty dir can be committed; individual *.md files are committed by
 # discord-monitor.yml after each run.
-# Squad: ignore runtime state (logs, inbox, sessions)
-.squad/.cache/
-# Squad: state owned by squad-state branch (two-layer/orphan backend)
-.squad/decisions.md
-# Squad: local-only mutable decisions ledger; the archive remains tracked
-.squad/decisions/decisions.md
-# Squad: memory directory is backend-owned runtime state, except the static
-# policy file config.json (constitution-tracked, safe to version — PR #314)
-.squad/memory/*
-!.squad/memory/config.json
-.squad/agents/*/history.md
-.squad/fact-checker/audit-trail.md
-# Squad: backend-owned mutable state migrated out of the index (PR #314);
-# physical copies are preserved on disk but no longer tracked
-.squad/identity/
-.squad/casting/history.json
-.squad/rai/audit-trail.md
-# Squad: bare and timestamped archive variants (e.g.
-# history-archive-2026-06-02.md, history-archive-20260602T044144Z.md)
-.squad/agents/*/history-archive*
-# /Squad: state owned by squad-state branch

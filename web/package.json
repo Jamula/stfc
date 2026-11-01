@@ -1,7 +1,7 @@
 {
   "name": "stfc-control-panel-web",
   "version": "1.0.0",
-  "description": "STFC Control Panel — Lit+Vite frontend. Populated by Wave 3 (Scotty, issue #119).",
+  "description": "STFC Control Panel — Lit+Vite frontend.",
   "private": true,
   "type": "module",
   "engines": {

@@ -21,7 +21,7 @@
   ],
   "properties": {
     "schema_version": {
-      "description": "Contract version. Consumers MUST reject unknown versions (Kirk #6).",
+      "description": "Contract version. Consumers MUST reject unknown versions.",
       "type": "string",
       "const": "1"
     },

@@ -3,7 +3,7 @@
  *
  * SWA injects X-MS-CLIENT-PRINCIPAL as a base64-encoded JSON blob on every
  * authenticated request forwarded to a linked Azure Function (research.md Q1).
- * We decode it defensively here and validate against the SQUAD_ALLOWED_USERS
+ * We decode it defensively here and validate against the STFC_ALLOWED_USERS
  * env-var allowlist as the Function-side defence-in-depth re-check (threat-model
  * S-1, S-2, E-1).
  *
@@ -78,14 +78,14 @@ export function parsePrincipal(req: RequestLike): Principal | null {
 
 /**
  * Verify a Principal's `userDetails` (GitHub login) is in the
- * `SQUAD_ALLOWED_USERS` env-var allowlist. Shared by `requireAllowedUser` and
+ * `STFC_ALLOWED_USERS` env-var allowlist. Shared by `requireAllowedUser` and
  * `requireOwner` so the allowlist check cannot be bypassed by callers that
- * supply a pre-parsed principal (Garak hostile fact-check P1#15).
+ * supply a pre-parsed principal.
  *
  * @throws ForbiddenError(403) — principal not in allowlist (or allowlist empty)
  */
 function assertInAllowlist(principal: Principal): Principal {
-  const allowlist = (process.env["SQUAD_ALLOWED_USERS"] ?? "")
+  const allowlist = (process.env["STFC_ALLOWED_USERS"] ?? "")
     .split(",")
     .map((u) => u.trim())
     .filter((u) => u.length > 0);
@@ -99,7 +99,7 @@ function assertInAllowlist(principal: Principal): Principal {
 
 /**
  * Assert the request has a valid SWA principal AND the GitHub username is in
- * the `SQUAD_ALLOWED_USERS` env-var allowlist (comma-separated GitHub logins).
+ * the `STFC_ALLOWED_USERS` env-var allowlist (comma-separated GitHub logins).
  *
  * @throws UnauthorizedError(401) — principal missing or malformed
  * @throws ForbiddenError(403)    — principal valid but not in allowlist
@@ -113,14 +113,14 @@ export function requireAllowedUser(req: RequestLike): Principal {
 }
 
 /**
- * Assert the request comes from the `SQUAD_OWNER` (env var, typically `cyrusjamula`).
+ * Assert the request comes from the `STFC_OWNER` (env var, typically `cyrusjamula`).
  *
- * Approach **(c) — Defense-in-depth re-check** (Garak P1#15 fix): the optional
+ * Defense-in-depth re-check: the optional
  * `principal` parameter is a parsing-fast-path ONLY — it skips the base64/JSON
- * decode step but MUST NOT bypass the `SQUAD_ALLOWED_USERS` allowlist gate.
+ * decode step but MUST NOT bypass the `STFC_ALLOWED_USERS` allowlist gate.
  * When supplied, the principal is re-validated against the allowlist via
  * `assertInAllowlist`. Without this, any caller could synthesize a Principal
- * object whose `userDetails === SQUAD_OWNER` and gain owner access without
+ * object whose `userDetails === STFC_OWNER` and gain owner access without
  * being on the allowlist (defence-in-depth bypass).
  *
  * Use for refresh-token and other owner-only endpoints (threat-model S-4, E-2, E-5).
@@ -130,7 +130,7 @@ export function requireAllowedUser(req: RequestLike): Principal {
  */
 export function requireOwner(req: RequestLike, principal?: Principal): Principal {
   const p = principal ? assertInAllowlist(principal) : requireAllowedUser(req);
-  const owner = process.env["SQUAD_OWNER"] ?? "";
+  const owner = process.env["STFC_OWNER"] ?? "";
   if (!owner || p.userDetails !== owner) {
     throw new ForbiddenError(`User "${p.userDetails}" is not the owner`);
   }

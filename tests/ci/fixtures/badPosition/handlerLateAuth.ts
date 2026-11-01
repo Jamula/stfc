@@ -1,6 +1,6 @@
 // Fixture: non-compliant handler — imports + calls requireAllowedUser, BUT
 // executes side-effecting code before the auth guard. The hardened gate
-// (Garak P0#1) must flag this even though both the import and the call
+// must flag this even though both the import and the call
 // are present (the legacy presence-only gate let this slip through).
 import { app, HttpRequest, HttpResponseInit, InvocationContext } from "@azure/functions";
 import { requireAllowedUser } from "./_lib/auth.js";

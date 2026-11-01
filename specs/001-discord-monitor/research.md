@@ -55,7 +55,7 @@ package.json size measured via `npm view @discordjs/rest dist.unpackedSize`.
 1. **Tier 1 — heuristic pre-filter** (TypeScript, in-repo, no model files).
    Keyword + regex scoring against a curated lexicon of STFC vocabulary
    (`tip`, `trick`, `hack`, `event`, `armada`, `hostile`, `ops`, `crew`,
-   ship names from `.squad/knowledge/stfc/database.md`, etc.). Most chatter
+   ship names from `docs/stfc-game-knowledge.md`, etc.). Most chatter
    (greetings, raid pings, single-emoji reactions, < 20 char messages) is
    discarded here without ever invoking a model. This alone is expected to
    drop ≥ 70 % of channel volume.
@@ -101,8 +101,7 @@ before invoking the model; mismatch is a fatal error and fails the workflow.
   text leaves the runner".
 
 **Source:** Transformers.js README, HuggingFace model card for
-`Xenova/nli-deberta-v3-xsmall`, measured RAM via local Node REPL (recorded in
-`.squad/scratch/` during plan; not committed).
+`Xenova/nli-deberta-v3-xsmall`, measured RAM via local Node REPL.
 
 ---
 
@@ -307,9 +306,8 @@ d. **Carry forward without change** the rule that any new sanctioned
 The amendment is **MINOR** (1.2.0 → 1.3.0): it adds new bounded surfaces
 without removing or contradicting existing principles.
 
-This decision is also captured in `plan.md` § Constitution Impact and is
-listed under the Reviewer Gate plan (Picard/Borg-Queen review the
-amendment PR).
+This decision is also captured in `plan.md` § Constitution Impact and
+listed under the review plan for the amendment PR.
 
 **Source:** `.specify/memory/constitution.md` v1.2.0 §§ V and "Security &
 Compliance Constraints"; this feature's R6 table.

@@ -95,6 +95,17 @@ describe('storageSizeMonitor workflow', () => {
     assert(run && run.includes('100 MB'), 'alert issue body must mention threshold value (100 MB)');
   });
 
+  it('creates alerts with operational labels only', () => {
+    const jobs = workflow.jobs as Record<string, unknown>;
+    const monitor = jobs?.monitor as Record<string, unknown>;
+    const steps = monitor?.steps as Array<Record<string, unknown>> | undefined;
+    const createStep = steps?.find((step) => step.name === 'Create alert issue');
+    const run = createStep?.run as string | undefined;
+    assert(run, 'Create alert issue step must have a script');
+    assert.match(run, /--label 'priority:storage,type:operations'/);
+    assert.doesNotMatch(run, /squad/i);
+  });
+
   it('checks out with pinned SHA', () => {
     const jobs = workflow.jobs as Record<string, unknown>;
     const monitor = jobs?.monitor as Record<string, unknown>;

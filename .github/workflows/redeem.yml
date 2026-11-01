@@ -28,7 +28,7 @@ env:
 # Prevent cron + manual dispatch from racing.
 #
 # `queue: max` is mandatory for every workflow that can join this group
-# (Garak, PR #266 review). The default `queue: single` keeps at most ONE
+# (PR #266 review). The default `queue: single` keeps at most ONE
 # pending run per group and cancels/replaces it whenever a newer run of ANY
 # workflow in the group arrives — so a 10-minute redeem run would silently
 # evict a pending `/game-state` upload that Discord has already acknowledged.
@@ -168,7 +168,7 @@ jobs:
           } > /tmp/alert-body.md
 
           gh issue create --title "$TITLE" \
-            --label "squad,squad:uhura,bug,priority:p1" \
+            --label "bug,priority:p1" \
             --body-file /tmp/alert-body.md
 
       # Self-resolving half of the alert (retro #243): a dead-token alert

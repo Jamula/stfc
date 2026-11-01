@@ -42,7 +42,7 @@ function banner(schemaFile) {
     `// AUTO-GENERATED — do not hand-edit.`,
     `// Source of truth: specs/005-web-control-panel/contracts/${schemaFile}`,
     `// Regenerate:      npm run build:contracts`,
-    `// Schema is the source of truth (Kirk review #6).`,
+    `// Schema is the source of truth.`,
     ``,
   ].join('\n');
 }

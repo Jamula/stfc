@@ -202,7 +202,6 @@ function ephemeralError(message: string): Response {
 /**
  * Returns true iff guild_id is listed in the comma-separated ALLOWED_GUILD_IDS env var.
  * Fails closed: if ALLOWED_GUILD_IDS is unset or empty, every guild is denied.
- * Ref: guild allowlist design — .squad/decisions/inbox/kirk-game-state-arch.md:107-108
  */
 function isGuildAllowed(guildId: string | undefined, allowedGuildIds: string | undefined): boolean {
   if (!guildId) return false;
@@ -220,7 +219,6 @@ function isGuildAllowed(guildId: string | undefined, allowedGuildIds: string | u
  * - Caps at 200 chars (human caption; prevents payload bloat + long commit messages)
  * - Strips U+0000–U+001F and U+007F (NUL, newlines, tabs, other control chars)
  *
- * Ref: Garak hostile fact-check #165, "note sanitization in transit" finding
  */
 function sanitizeNote(note: string): string {
   // eslint-disable-next-line no-control-regex

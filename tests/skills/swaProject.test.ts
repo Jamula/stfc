@@ -1,8 +1,8 @@
 // Pinning tests for the SWA project structure scaffolding (Wave 2, issue #115).
 //
 // Asserts that the directories and files expected by the deploy workflow
-// (swa-deploy.yml app_location/api_location/output_location) and by Wave 3
-// agents (Scotty #119/#120, Uhura #117) are present and have the right shape.
+// (swa-deploy.yml app_location/api_location/output_location) are present and
+// have the right shape.
 //
 // Note: swa-deploy.yml gates deploy/teardown on a `preflight` job's has-token
 // output (probed from AZURE_STATIC_WEB_APPS_API_TOKEN) so it skips rather than

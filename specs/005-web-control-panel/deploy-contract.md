@@ -1,6 +1,5 @@
 # SWA Deploy Contract — 005-web-control-panel
 
-**Owner:** O'Brien (DevOps / Platform Engineer)
 **Tracking issue:** #113
 **Status:** FINAL — Phase 1 Wave 1
 **Date:** 2026-05-31

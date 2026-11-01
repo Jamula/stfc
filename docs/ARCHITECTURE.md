@@ -16,7 +16,6 @@ flowchart LR
     Push[("git push / PR")]
     Discord[("💬 Discord channel")]
     HTTP[("🌐 SWA HTTP request")]
-    Op[("🧑 Operator session")]
   end
 
   subgraph Subsystems
@@ -24,7 +23,6 @@ flowchart LR
     Monitor["Discord Monitor<br/>src/discord/"]
     Crew["Crew Optimizer<br/>src/crew/"]
     SWA["Web Panel<br/>api/ + web/"]
-    Squad["Squad Governance<br/>.squad/ + .github/agents/"]
     CI["CI/CD<br/>.github/workflows/"]
   end
 
@@ -45,9 +43,7 @@ flowchart LR
   Push --> SWA
   HTTP --> Azure
   Azure --> SWA
-  SWA -->|reads digests, telemetry| Repo
-  Op --> Squad
-  Squad --> CI
+  SWA -.->|future data reads| Repo
   CI --> Repo
 ```
 
@@ -57,7 +53,6 @@ flowchart LR
 | **Discord Monitor** | `src/discord/` | `discord-monitor.yml` (`15 */4 * * *`) | Promo code ingest, `!crew` command parser, dedup/cooldown state |
 | **Crew Optimizer** | `src/crew/`, `src/skills/optimizeCrew.ts` | `optimize-crew.yml` (push to `data/crew/**`), `!crew` commands | Roster, optimization scoring, progression, task synergies |
 | **Web Control Panel** | `api/`, `web/`, `shared/contracts/` | Azure SWA HTTPS requests | Read-only operator dashboard (Phase 1) |
-| **Squad Governance** | `.squad/`, `.github/agents/` | Coordinator session start | Agent dispatch, decisions ledger, agent memory |
 | **CI/CD** | `.github/workflows/`, `scripts/` | git events + cron | Tests, typecheck, lint, deploy, hygiene gates |
 
 ---
@@ -75,8 +70,7 @@ Only the meaningful top-level directories. Per-subsystem detail lives in §3.
 │   ├── digest/                # Discord digest writers
 │   ├── discord/               # Bot client, classifier, parser, state
 │   ├── lib/                   # Cross-cutting helpers (accounts, jwt, logger, outcomes)
-│   ├── skills/                # Top-level "verbs" dispatched from cli.ts
-│   └── telemetry/             # Run-result emitter
+│   └── skills/                # Top-level "verbs" dispatched from cli.ts
 │
 ├── api/                       # Azure Functions (Wave 3 Phase 1 web panel)
 │   ├── _lib/github-raw.ts     # ⚠️ Layout inconsistency w/ src/_lib (PR #124 finding)
@@ -99,23 +93,18 @@ Only the meaningful top-level directories. Per-subsystem detail lives in §3.
 ├── data/                      # Seeds on main; selected live state on automation-state
 │   ├── crew/                  # officers.json, roster/, tasks/ (crew domain)
 │   ├── digests/               # Discord digest snapshots
-│   ├── discord/               # Cursor + cooldown state
-│   └── telemetry/             # Run-result history
+│   └── discord/               # Cursor + cooldown state
 │
 ├── config/                    # Static config consumed by skills
 │   ├── classifier-model.json
-│   ├── discord-allowlist.json
-│   └── model-tiers.json
+│   └── discord-allowlist.json
 │
 ├── promo-codes.txt            # Human seed; operational union is on automation-state
 ├── docs/                      # User & operator docs (THIS file + per-subsystem)
 ├── specs/                     # Feature specs and contract references
-├── .squad/                    # Squad governance state (agent histories, decisions, etc.)
-├── .copilot/skills/           # 11 coordinator-level skills (SKILL.md packages)
 ├── .github/
-│   ├── agents/squad.agent.md  # Coordinator (1 140 LoC, modular post-cleanup PR1)
-│   ├── copilot-instructions.md # 22 repo-wide rules (global, ALL agents)
-│   └── workflows/             # 14 GitHub Actions workflows
+│   ├── copilot-instructions.md # Repository-wide coding guidance
+│   └── workflows/             # GitHub Actions workflows
 └── staticwebapp.config.json   # SWA route + role + CSP config
 ```
 
@@ -248,9 +237,7 @@ a roster.
 `src/discord/crewCommandParser.ts` + `src/skills/crewSkillSupport.ts`.
 
 **Knowledge-base embedding** is deferred to issue #93 (post-#92 ship).
-Includes Hugging Face transformer integration via `@huggingface/transformers`
-(see `package.json:39-45`); model SHA rotation is O'Brien's beat
-(per `.squad/routing.md`).
+Includes Hugging Face transformer integration via `@huggingface/transformers`.
 
 **Per-account outputs.** `optimize-crew.yml` runs on push to `data/crew/**`
 and commits regenerated `docs/crew/*.md` recommendation files back to the
@@ -283,19 +270,19 @@ Browser → Azure SWA edge → /api/* → Linked Azure Function (api/)
    non-trivial statement. The principal is decoded from the
    `X-MS-CLIENT-PRINCIPAL` base64 JSON header
    (`api/src/_lib/auth.ts:62-77`), validated for shape, and checked
-   against the `SQUAD_ALLOWED_USERS` env var (comma-separated GitHub
+   against the `STFC_ALLOWED_USERS` env var (comma-separated GitHub
    logins).
 
    - `requireOwner` re-validates against the allowlist even when given a
-     pre-parsed Principal (`auth.ts:115-138`) — Garak P1#15 hardening
-     prevents a synthetic principal from bypassing the gate.
+     pre-parsed Principal (`auth.ts:115-138`), preventing a synthetic
+     principal from bypassing the gate.
    - `requireRole(req, role)` is deliberately **not** accepted by the
      grep gate — forces username allowlist or owner re-check.
 
 **CI gate.** `scripts/ci/check-api-auth.mjs` walks `api/src/**.ts`
 (excluding `_lib`, `dist`, `node_modules`) and asserts every HTTP handler
 calls `requireAllowedUser`/`requireOwner` as its first non-trivial
-statement (post-Garak P0#1 hardening on 2026-06-01). Opt-out via
+statement. Opt-out via
 `// @auth-anonymous-justification: <reason>`.
 
 **Frontend.** `web/src/app.ts` is a 118-LoC Lit 3 root that hash-routes
@@ -340,89 +327,9 @@ adding a contract.
 **Layout inconsistency to be aware of.** `api/_lib/github-raw.ts`
 (top-level) coexists with `api/src/_lib/auth.ts` (nested). Two roots
 typecheck via different paths. To be consolidated before Wave 4 work
-expands `api/` further (PR #124 finding #2; route → Scotty).
+expands `api/` further (PR #124 finding #2).
 
-### 3.5 Squad Governance — `.squad/` + `.github/agents/`
-
-Meta-layer that turns the Copilot CLI into a multi-agent team.
-
-**Coordinator.** `.github/agents/squad.agent.md` (1 140 LoC, modular
-post-cleanup PR1). The Coordinator does not generate domain artifacts —
-it routes work and enforces handoffs. Heavy templates live on-demand in
-`.squad/templates/`.
-
-**Roster** (`.squad/team.md`):
-
-| Agent | Role |
-|---|---|
-| **Picard** | M2 / Engineering Manager (scope, priorities, triage, governance) |
-| **Kirk** | Lead / Architect (technical direction, code review correctness) |
-| **Scotty** | Core Dev (TypeScript / CLI / build) |
-| **Uhura** | Integrations Dev (STFC API, auth, secrets) |
-| **Bashir** | Tester (fixtures, coverage, flaky-test debug) |
-| **Garak** | Critic (hostile fact-check, pre-mortem) — inherited from Borg Queen 2026-05-16 |
-| **Tuvok** | Process Auditor / Editorial Specialist |
-| **O'Brien** | DevOps / Platform Engineer (workflows, secrets toolchain, releases) |
-| **Scribe** | Session Logger (silent — persists `.squad/` state through the configured state backend) |
-| **Ralph** | Work Monitor (heartbeat-driven) |
-| **@copilot** | GitHub Copilot coding agent (full 🟢🟡🔴 tier per 2026-05-18 user decision) |
-
-**Routing.** `.squad/routing.md` maps work type → owner. Anything touching
-`.github/workflows/*.yml` routes to O'Brien (unified 2026-05-18).
-
-**Reviewer verdict gate.** `.github/workflows/squad-reviewer-gate.yml` runs
-trusted gate logic from the default branch and publishes `Squad reviewer gate`
-on the exact pull request head SHA. Required lanes are declared in the pull
-request body; each `APPROVE` or `CHANGES_REQUESTED` comment must name that full
-SHA, so a new push invalidates older verdicts. See
-`docs/REVIEWER-GATE.md` for the comment contract, trust limits, and break-glass
-runbook. Issue #220 Phase 1 does not add this context to the live ruleset:
-comment-derived status is operational governance, not a security boundary
-against a session acting with the repository owner's identity.
-
-**Decisions.** The append-only ledger uses logical key `decisions/decisions.md` (live),
-with roll-over to `.squad/decisions-archive.md`. Agents submit decisions via
-`squad_state_write` to logical key `decisions/inbox/{agent}-{slug}.md`; the
-Coordinator appends accepted items to `decisions/decisions.md`. Physical paths
-`.squad/decisions/decisions.md` and `.squad/decisions/inbox/` apply only to
-local/worktree. Governed backends fail closed if the state bridge is unavailable.
-
-**Agent memory.** Per-agent `.squad/agents/{name}/history.md` (private
-learning, max ~15 KB before Scribe rotates to
-`history-archive.md`).
-
-**Squad mutable state.** Persist the following state through the configured
-state-backend tools; no agent, including Scribe, stages or commits it directly.
-These are the corresponding paths in local/worktree checkouts:
-
-- `.squad/agents/{name}/history.md`
-- `.squad/decisions/inbox/*`
-- `.squad/decisions/decisions.md`
-- `.squad/log/*`, `.squad/orchestration-log/*`
-
-For other `.squad/` artifacts that are intentionally committed, non-Scribe
-agents must NEVER `git add .squad/` broadly. Always
-`git add -- <specific path>`.
-
-**Worktrees.** `.squad/config.json: "worktrees": true` — each issue
-gets `/workspaces/stfc-{N}` per Rule 22 (`npm ci` preflight or
-node_modules symlink). Worktree teardown sweeps any uncommitted `.squad/`
-artifacts back to the main checkout first (Rule 8).
-
-**Skills.**
-- `.copilot/skills/` (3 SKILL.md packages — Coordinator-level
-  process knowledge: issue-creation, scope-override-fanout,
-  squad-commands).
-- `.squad/skills/` (22+ team-level reusable workflows — e.g.
-  hostile-fact-check, plan-review-gate, structural-workflow-pin-tests,
-  swa-operator-runbook).
-
-Address skills by name when invoking (e.g. *"use the session-recovery
-skill"*).
-
-**Detailed roster + role hierarchy.** `docs/squad.md`.
-
-### 3.6 CI/CD — `.github/workflows/` + `scripts/`
+### 3.5 CI/CD — `.github/workflows/` + `scripts/`
 
 The core application and required-check workflows are grouped by purpose:
 
@@ -434,14 +341,10 @@ The core application and required-check workflows are grouped by purpose:
 | `discord-ops.yml` | Manual Discord app metadata setter | dispatch **only** (constitution carve-out) |
 | `swa-deploy.yml` | Azure SWA deploy | push to `main`, PR open/sync/close |
 | `storage-size-monitor.yml` | Alert when `data/discord/game-state` exceeds 100 MB | `0 6 * * *` + dispatch |
-| `squad-test-gate.yml` | Canonical typecheck + npm test required check; coverage uploads intentionally disabled | PR |
-| `squad-reviewer-gate.yml` | Default-branch, current-head reviewer-verdict status (observe-only until a later authorized ruleset change) | PR target + PR comments |
+| `test-gate.yml` | Root and worker typecheck + tests; coverage uploads intentionally disabled | PR |
 | GitHub CodeQL default setup | Canonical `actions` + `javascript-typescript` security analysis | default branch + PRs |
-| `squad-artifact-hygiene.yml` | Secret + JWT leak scanner | PR touching `specs/`, `docs/`, `.github/**/*.md` |
-| `squad-heartbeat.yml` | Ralph heartbeat (issues/PRs closed/labeled) | event-only (no cron — see existing rules) |
-| `squad-issue-assign.yml` | `squad:{member}` label → agent dispatch | `issues: labeled` |
-| `squad-triage.yml` | Initial `squad` label → Picard triage | `issues: labeled` |
-| `sync-squad-labels.yml` | Sync GitHub labels from `.squad/team.md` | push to `team.md` + dispatch |
+| `artifact-hygiene.yml` | Secret + JWT leak scanner | PR touching `specs/`, `docs/`, `.github/**/*.md` |
+| `release.yml` | Validate and publish releases | push to `main` |
 | `secrets-check.yml` | Diagnostic: which STFC_* secrets are set | dispatch |
 
 **Pre-commit.** `scripts/pre-commit.mjs` (installed by `simple-git-hooks`):
@@ -456,20 +359,13 @@ The core application and required-check workflows are grouped by purpose:
    status emits `<status>\0<path>\0`. The parser derives `staged` (every
    touched path, including deletions and rename/copy destinations — this
    matches the old `--name-only` behavior other checks depend on),
-   `deleted` (paths removed outright, for the `git rm --cached` migration
-   allowlist), and `renamedFrom` (rename/copy source paths, so a rename
-   out of a mutable-state path can't bypass the boundary check).
-3. Runs `checkSquadBoundary` — rejects mutable `.squad/` state paths for
-   every actor; direct commits of mutable state are not supported.
-4. Runs `checkPortableFilenames` — blocks filenames illegal on Windows.
-5. Runs `checkWorkflowPinningTests` — if `.github/workflows/*.yml` is
-   staged, asserts the matching `tests/skills/*` literal-pin test was
-   updated (Rule 3).
-6. Runs `npm test` (~2-3 s, 900+ tests via `node:test` + `tsx`).
+   `deleted` (paths removed outright), and `renamedFrom` (rename/copy source
+   paths).
+3. Runs `checkPortableFilenames` — blocks filenames illegal on Windows.
+4. Runs `checkWorkflowPinningTests` when workflow files are staged.
+5. Runs `npm test` via `node:test` + `tsx`.
 
-**Bypass.** `--no-verify` is **forbidden** per repo rules. Fix the
-failure instead. Mutable `.squad/` state paths are rejected for every
-actor; direct commits of mutable state are not supported.
+**Bypass.** Prefer fixing failing checks rather than bypassing hooks.
 
 **Test discipline.** `npm test` + `npm run typecheck` are the gates.
 Validate at `package.json:20,28`.
@@ -480,18 +376,15 @@ Validate at `package.json:20,28`.
 - `scripts/ci/check-bundle-budget.mjs` — 80 KiB gzipped JS cap.
 - `scripts/ci/check-contracts-types.mjs` — generated TS vs JSON Schema
   drift.
-- `scripts/check-artifact-hygiene.mjs` — secret / token redaction
-  (referenced by `pre-commit.mjs` as a TODO, currently invoked from
-  `squad-artifact-hygiene.yml`).
+- `scripts/check-artifact-hygiene.mjs` — secret / token redaction,
+  also invoked by `artifact-hygiene.yml` and the pre-commit hook.
 
 **Pinning tests.** `tests/skills/discordMonitor.test.ts`,
 `tests/workflows/*.test.ts` pin workflow values literally (crons,
 `concurrency.group`, permission scopes). Any edit to the workflow
 ships in the same commit as the pinning-test update (Rule 3).
 Canonical pattern is **structural parse + assert on object graph**, not
-substring grep. The live decision ledger uses logical key `decisions/decisions.md`; its
-physical path `.squad/decisions/decisions.md` applies only to local/worktree.
-See `.squad/decisions-archive.md` (Uhura PR #102).
+substring grep.
 
 **Deploy auth.** Static Web Apps deployment token. The official pinned deploy
 action requires this input; workflow skips gracefully when
@@ -590,7 +483,7 @@ sequenceDiagram
   participant Auth as api/src/_lib/auth.ts
   participant Repo as GitHub raw (api/_lib/github-raw.ts)
 
-  Browser->>Edge: GET /api/data/runs (cookie/session)
+  Browser->>Edge: GET /api/data/runs (planned)
   Edge->>Edge: check stfc_operator role (staticwebapp.config.json)
   alt role missing
     Edge-->>Browser: 403 (CSP-safe page)
@@ -598,16 +491,19 @@ sequenceDiagram
     Edge->>Fn: forward + inject X-MS-CLIENT-PRINCIPAL header
     Fn->>Auth: requireAllowedUser(req)   // MUST be first non-trivial statement
     Auth->>Auth: parsePrincipal(req)     // base64 → JSON → shape check
-    Auth->>Auth: assertInAllowlist(principal)  // SQUAD_ALLOWED_USERS env
+    Auth->>Auth: assertInAllowlist(principal)  // STFC_ALLOWED_USERS env
     alt allowlist miss
       Auth-->>Fn: throw ForbiddenError(403)
       Fn-->>Browser: 403
     else allowed
-      Fn->>Repo: fetch data/telemetry/*.json
+      Fn->>Repo: fetch approved data when implemented
       Fn-->>Browser: 200 JSON
     end
   end
 ```
+
+The telemetry tab is currently a UI placeholder; no telemetry data source is
+wired to it.
 
 ---
 
@@ -648,7 +544,7 @@ a linked `automation-state` worktree as its working repository:
 `/redeem-status` reads current history and `/game-state` reads/writes current
 game-state. `storage-size-monitor.yml` checks out that live ref directly.
 
-**Writer serialization (Garak, PR #250 review round 2; PR #266 review).**
+**Writer serialization (PR #250 review round 2; PR #266 review).**
 `redeem.yml`, `discord-monitor.yml` and `refresh-token.yml` share one
 `stfc-gift-redeemer` concurrency group (`cancel-in-progress: false`) so their
 pushes to `automation-state` never interleave.
@@ -769,9 +665,8 @@ of `data/promo-code-dead.json` on `automation-state`; deleting the frozen
 allowlisted data back through a reviewed `main` PR, then revert this workflow
 change. No credential or ruleset cleanup is required. A minimal
 deletion/non-fast-forward-only ruleset for `automation-state` (no required
-checks and no bypass actors) is a proposal pending fresh Picard approval, not a
-live mutation. #247 remains optional and any future bypass actor requires a
-fresh governance verdict.
+checks and no bypass actors) is a proposal, not a live mutation. #247 remains
+optional and any future bypass actor requires explicit review.
 
 GitHub Actions has **zero CI execution evidence** for this revision while the
 account billing/spending block in #218 stops jobs before their first step.
@@ -795,10 +690,6 @@ paths, and prove `main`'s tip SHA is unchanged while state commits land on
 - **CodeQL scan lag** can reject a push briefly even when the previous
   commit was green. Wait 30-60 s and retry (Rule 4 addendum). Never
   amend or `--no-verify`.
-- **Worktree mode.** Each issue work-tree at `/workspaces/stfc-{N}`.
-  Symlink `node_modules` or run `npm ci` per-tree (Rule 22). Sweep
-  uncommitted `.squad/` artifacts back to main checkout BEFORE
-  `git worktree remove` (Rule 8).
 
 ### 5.4 Testing & quality gates
 
@@ -808,8 +699,9 @@ paths, and prove `main`'s tip SHA is unchanged while state commits land on
   mode).
 - **Pre-commit hook** runs the full suite on every commit
   (`scripts/pre-commit.mjs`). `--no-verify` is forbidden.
-- **Required CI checks:** `squad-test-gate.yml` ("npm test (required)") +
-  GitHub CodeQL default setup ("Analyze (javascript-typescript)").
+- **CI checks:** `test-gate.yml` ("npm test (required)") and GitHub
+  CodeQL default setup ("Analyze (javascript-typescript)"). Repository
+  rules determine whether these checks are required.
 - **CodeQL:** one canonical GitHub default-setup workflow analyzes Actions
   workflow files and JavaScript/TypeScript. The two `Analyze (...)` jobs are
   language jobs within that workflow, not duplicate workflows.
@@ -819,13 +711,13 @@ paths, and prove `main`'s tip SHA is unchanged while state commits land on
   path.
 - **Bundle budget:** 80 KiB gzipped JS for `web/dist/`
   (`scripts/ci/check-bundle-budget.mjs`).
-- **Artifact hygiene:** `squad-artifact-hygiene.yml` scans PR diffs for
+- **Artifact hygiene:** `artifact-hygiene.yml` scans PR diffs for
   JWTs, API keys, account data; redacts to `<REDACTED-TOKEN>` in any
   output.
 - **Contract drift:** `npm run check:contracts` against
   `shared/contracts/*.ts`.
 - **API auth gate:** `scripts/ci/check-api-auth.mjs` (first-statement
-  enforcement, post-Garak P0#1 hardening).
+  enforcement).
 
 ---
 
@@ -838,15 +730,8 @@ paths, and prove `main`'s tip SHA is unchanged while state commits land on
 | Scheduled gift redemption flow | §4.1 + `redeem.yml` |
 | Web panel request auth flow | §4.3 + `api/src/_lib/auth.ts` |
 | Exit-code semantics | §3.1 + `src/skills/runAll.ts:399-407` |
-| Decisions ledger | `.squad/decisions/decisions.md` (live), `.squad/decisions-archive.md` |
-| Coordinator file | `.github/agents/squad.agent.md` |
-| Global repo rules (22 of them) | `.github/copilot-instructions.md` |
-| Squad roster + role hierarchy | `.squad/team.md` + `docs/squad.md` |
-| Work routing table | `.squad/routing.md` |
 | Feature specifications | `specs/NNN-feature-slug/` |
 | Repository rules | `.github/copilot-instructions.md` |
-| Reviewer protocol skill | `.copilot/skills/reviewer-protocol/SKILL.md` |
-| Test discipline skill | `.copilot/skills/test-discipline/SKILL.md` |
 | Web panel setup | `docs/SWA-SETUP.md` |
 | Web panel invitation runbook | `docs/SWA-INVITATION-RUNBOOK.md` |
 | Crew optimizer details | `docs/CREW-OPTIMIZER.md` |
@@ -864,23 +749,18 @@ paths, and prove `main`'s tip SHA is unchanged while state commits land on
 - **Discord bot guild membership** in the operator's STFC server is
   unconfirmed → issues #76 / #96 blocked until verified.
 - **Crew v1.5 OCR POC** pending (issue #85) → crew v1.5 implementation
-  phases gated on Picard's POC verdict (issue #86).
+  phases gated on the POC verdict (issue #86).
 - **Crew v2 knowledge-base embedding** (issue #93) deferred until #92
   handlers ship.
 - **Wave 4+ web panel endpoints** still in flight — `/api/data/*` shape
   evolving across PRs #125, #126.
 - **`api/` layout consolidation** — `api/_lib/` (top-level) vs
   `api/src/_lib/` (nested) inconsistency carried forward from PR #124;
-  to be resolved by Scotty before Wave 4 expansion (PR #124 finding #2).
+  to be resolved before Wave 4 expansion (PR #124 finding #2).
 - **Grep-gate vs first-statement promise** — `check-api-auth.mjs`
-  hardened to first-statement on 2026-06-01 per Garak P0#1; older
+  hardened to first-statement on 2026-06-01; older
   copies of the gate documentation may still describe presence-only
   checks. TODO: verify all consumer docs reflect the hardened semantics.
-- **`pre-commit.mjs` hygiene TODO** — `scripts/check-artifact-hygiene.mjs`
-  is currently invoked only from `squad-artifact-hygiene.yml`; the
-  pre-commit hook has a TODO marker to invoke it locally too
-  (`scripts/pre-commit.mjs:7-9, 24-25`). Verify with Uhura before
-  uncommenting.
 - **Bundle budget unit ambiguity** — `web/bundle-budget.json` is 81 920
   bytes = 80 KiB; spec text reads "80 KB" (= 80 000). TODO: clarify in
   spec or update the JSON.
@@ -889,60 +769,20 @@ paths, and prove `main`'s tip SHA is unchanged while state commits land on
 
 ## 8. How to make changes safely
 
-1. **Create a tracking issue first.** No commit without an issue + a
-   `squad:{member}` label (Rule 14). Create with:
-   ```bash
-   gh issue create --title "<task>" --label "squad:<member>" --body "<scope>"
-   ```
-2. **Branch in a worktree** (Rule 22):
-   ```bash
-   git worktree add /workspaces/stfc-{N} -b squad/{N}-<slug> main
-   cd /workspaces/stfc-{N}
-   ln -s ../stfc/node_modules node_modules   # or `npm ci` if symlink fails
-   ```
-3. **Test-first** per constitutional Principle IX. Add the failing test,
-   then the code. Pre-commit runs `npm test` — never `--no-verify`.
-4. **Update pinning tests in the same commit** when editing
-   `.github/workflows/*.yml` (Rule 3). Use structural YAML parse
-   assertions, not substring grep.
-5. **Rebase before push** (Rule 4):
-   ```bash
-   git fetch origin && git rebase origin/main
-   ```
-6. **PR body discipline:**
-   - One `Closes #N` **per line** (Rule 6a). Never `Closes #1, #2`.
-   - Required sections: `## Tests` (Rule 15) and capability docs delta
-     (Rule 16). State "No test changes — covered by <file>" explicitly
-     if applicable.
-   - For multi-item PRs, declare per-section reviewer lanes
-     (PR1-cleanup boilerplate).
-7. **Reviewer verdict on single-maintainer PRs:** post via
-   `gh pr comment <N>` with an explicit `**APPROVE** ✅` /
-   `**CHANGES_REQUESTED** ⚠️` / `**COMMENT** 💬` header (Rule 9b).
-   `gh pr review --approve` is blocked when reviewer = author.
-8. **Reviewer-approved + CI-green makes a PR merge-ready, not merged**
-   (issue #220). Merging — including `gh pr merge`, enabling auto-merge,
-   or running `gh pr ready` — requires an explicit user request in the
-   current, active conversation; it is never inferred from review/CI
-   status alone, and this holds for constitution PRs too. No numbered
-   "Rule 7" merge-authorization rule exists in this repo.
-9. **For meta squad changes** (`squad.agent.md`,
-   `.github/copilot-instructions.md`), **restart the session after
-   merge** so the Coordinator picks up the new rules (self-development
-   rule).
-10. **Squad commit boundaries** (Rule 2). Never `git add .squad/`
-    broadly. Stage paths individually: `git add -- <path>`.
-11. **Worktree teardown** (Rule 8): sweep uncommitted `.squad/`
-    artifacts back to the main checkout BEFORE
-    `git worktree remove`:
-    ```bash
-    if [ -d "<worktree>/.squad" ]; then
-      rsync -a --ignore-existing <worktree>/.squad/ .squad/
-    fi
-    ```
+1. Describe non-trivial work in an issue or pull request and use an isolated
+   branch or worktree.
+2. Add regression tests for changes in behavior. For bug fixes, record the
+   failing-before and passing-after evidence requested by the PR template.
+3. Update workflow pinning tests when changing `.github/workflows/*.yml`;
+   prefer structural YAML assertions.
+4. Run `npm test` and `npm run typecheck` independently, plus the relevant
+   sub-package checks. The pre-commit hook runs the root tests.
+5. Complete the pull request template and request review. Passing checks and
+   approval do not authorize a merge, auto-merge, or marking a PR ready without
+   an explicit user request.
 
 ---
 
-*Maintained by Kirk. Cross-references over duplication — when a
+*Prefer cross-references over duplication — when a
 subsystem's behaviour changes, update its own doc and adjust the
 **pointer** here, not the body.*

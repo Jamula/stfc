@@ -30,11 +30,11 @@ checklists/requirements.md, `.specify/memory/constitution.md` v1.3.0,
 | 3 | 🟡 WARNING | Plan § Constitution Impact (plan.md:389–449) and Constitution Check (plan.md:91) still describe the v1.3.0 amendment as *future / proposed*. v1.3.0 is now drafted in `constitution.md` (uncommitted on this branch). Plan is stale relative to the constitution it must conform to. |
 | 4 | 🟡 WARNING | FR-003 requires ingestion of "**plain text + message edits within the lookback window**" (spec.md:221–223). The plan's ingestion strategy (research.md:111–116; plan.md:245–247) uses `?after=<lastMessageId>` only — it never re-fetches prior pages, so message edits are **never re-scanned**. Real coverage gap. |
 | 5 | 🟡 WARNING | Quickstart Step 1.2 (quickstart.md:18–20) requires enabling Discord's privileged **Message Content Intent**. Neither spec FR-002 (spec.md:220) nor the discord-bot contract (discord-bot.contract.md:6–18) lists this prerequisite. Operator will hit a silent "empty `content`" failure if intent is not toggled. |
-| 6 | 🟡 WARNING | `.squad/decisions.md:1459` and similar log entries treat the v1.3.0 amendment as approved/imminent and have language describing implementation as "unblocked"; the user has confirmed nothing is merged. The real git state is the source of truth (constitution.md modified, no PR landed). Note for awareness; do NOT edit `.squad/`. |
+| 6 | 🟡 WARNING | Verify the v1.3.0 amendment's merge status before treating implementation as unblocked; at the time of this report, the amendment had not landed. |
 | 7 | 🟡 WARNING | Plan's "Acknowledged assumptions" #5 (plan.md:493–494) flags that `onnxruntime-node` could `process.exit` on a native segfault, killing the run. There is no contract item or task to mitigate (e.g., a parent-process write-state-on-signal trap, or running classifier in a child process). Real risk hot-spot. |
 | 8 | 🟡 WARNING | FR-018 says near-duplicate tips MAY be collapsed via similarity threshold (spec.md:269–272). Plan defers near-duplicate (plan.md:506) and uses **exact-hash only** in `tips-seen.jsonl` (state-files.contract.md:106–117). Permitted by the MAY, but spec/data-model don't surface that v1 ships exact-hash only — 🟡 because tasks.md will silently bake in exact-only forever if not flagged. |
 | 9 | ℹ️ INFO | Spec's "Constitution Alignment Notes" section (spec.md:435) cites **constitution v1.2.0** verbatim. Expected (spec was written before v1.3.0) but reviewer should not be confused. |
-| 10 | ℹ️ INFO | The Speckit Reviewer Gates section of the constitution (constitution.md:514–544) only enumerates Bashir + Picard. Plan adds Borg Queen (critic) and Tuvok (process audit) for this feature (plan.md:455–461). These are squad-process roles, not constitutional gates — fine, but reviewers should know the broader review board is feature-specific, not constitutional. |
+| 10 | ℹ️ INFO | The review plan includes additional feature-specific review beyond the constitution's listed gates. |
 
 ---
 
@@ -251,13 +251,9 @@ skeleton without further questions.
   references `discord.com/developers/applications` but that's an operator
   browser action, not workflow code — out of constitutional scope.
 
-### C.5 Speckit Reviewer Gates — 🟢 OK
-- Plan § Reviewer Gate plan (plan.md:451–462) names Bashir (Tester),
-  Picard (Lead), Borg Queen (critic), Tuvok (process auditor). Constitution
-  Speckit Reviewer Gates section enumerates only Bashir + Picard
-  (constitution.md:514–544). The two extra agents are squad-process roles
-  layered on top — consistent with `.squad/` convention; not a violation
-  but worth noting (#10 in Top Findings).
+### C.5 Review plan — 🟢 OK
+- The plan describes feature-specific review in addition to the gates
+  listed in the constitution (#10 in Top Findings).
 
 ---
 
@@ -286,12 +282,9 @@ skeleton without further questions.
    `concurrency.group: stfc-gift-redeemer` is the only thing serializing
    them. Plan acknowledged-assumption #2 (plan.md:484–486) flags this — it
    is real and worth a regression test.
-5. **Stale `.squad/` orchestration claims** (Top Finding #6). Operators
-   reading `.squad/decisions.md` and the orchestration log may believe the
-   v1.3.0 amendment has merged when it has not. This is a process-hygiene
-   risk, not a code risk, but it could lead to /speckit.implement being
-   started against an unamended constitution. Verify git state before
-   starting Phase 1+ of `tasks.md`.
+5. **Amendment status** (Top Finding #6). Verify git state before
+   starting Phase 1+ of `tasks.md` so implementation is not started
+   against an unamended constitution.
 
 ---
 
@@ -372,9 +365,9 @@ Every FR has at least one anchor. ⚠ = open item from this report.
 ## Severity counts
 
 - 🔴 BLOCKER: **2** (A.1 suppression writer; A.2 digest module path)
-- 🟡 WARNING: **6** (A.3 stale plan amendment language, A.5 FR-003 edits gap, Top #5 message-content-intent, Top #6 .squad inaccuracy, Top #7 onnxruntime exit risk, Top #8 near-duplicate tips silently exact-only)
+- 🟡 WARNING: **6** (A.3 stale plan amendment language, A.5 FR-003 edits gap, Top #5 message-content-intent, Top #6 amendment status, Top #7 onnxruntime exit risk, Top #8 near-duplicate tips silently exact-only)
 - 🟢 OK: **majority of cross-checks** (24 of 30 FR rows trivially OK; both BLOCKERs are scoped to one file each)
-- ℹ️ INFO: **3** (A.6 6-vs-7 counting; B.2 caret ranges; #9 spec cites v1.2.0; #10 reviewer gates squad roles)
+- ℹ️ INFO: **3** (A.6 6-vs-7 counting; B.2 caret ranges; #9 spec cites v1.2.0; #10 feature-specific review)
 
 ---
 
@@ -416,7 +409,7 @@ without blocking task generation.
 
 ## Resolution Note (2026-05-16)
 
-**Resolved by:** Picard (Lead) via /speckit.implement preflight
+**Resolved during:** /speckit.implement preflight
 **Requested by:** cyrusj
 
 ### BLOCKER #1 — `data/discord/suppression.json` writer mismatch
