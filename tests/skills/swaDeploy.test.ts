@@ -127,7 +127,7 @@ describe("swa-deploy.yml / contract pinning (T-SWA-001)", () => {
     assert.match(validationJob, /- name: Smoke test built API modules/);
     assert.match(
       validationJob,
-      /run: node --input-type=module -e .*import\('\.\/dist\/_lib\/auth\.js'\).*import\('\.\/dist\/_lib\/respond\.js'\)/,
+      /run: node --input-type=module -e .*import\('\.\/dist\/api\/src\/_lib\/auth\.js'\).*import\('\.\/dist\/api\/src\/_lib\/respond\.js'\).*import\('\.\/dist\/api\/src\/index\.js'\)/,
     );
     assert.match(
       normalizedYaml,

@@ -12,7 +12,7 @@
  *   }
  */
 
-import type { UnauthorizedError, ForbiddenError } from "./auth.ts";
+import type { UnauthorizedError, ForbiddenError } from "./auth.js";
 
 /** Minimal Azure Functions HttpResponseInit shape (no @azure/functions dependency). */
 export interface HttpResponseInit {

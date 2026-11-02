@@ -57,6 +57,18 @@ describe("SWA project structure (T-SWA-002)", () => {
     );
   });
 
+  it("smoke-tests the configured Functions entrypoint under Node 22", () => {
+    const pkg = JSON.parse(read("api/package.json")) as { main: string };
+    const workflow = parseYaml(read(".github/workflows/swa-deploy.yml")) as {
+      jobs: Record<string, { steps: Array<{ name?: string; run?: string; "working-directory"?: string }> }>;
+    };
+    const smoke = workflow.jobs["validate-api-node-22"]?.steps.find(
+      step => step.name === "Smoke test built API modules",
+    );
+    assert.equal(smoke?.["working-directory"], "api");
+    assert.ok(smoke?.run?.includes(`import('./${pkg.main}')`), "smoke check must load the actual registered API entrypoint");
+  });
+
   // ── web/ scaffold ──────────────────────────────────────────────────────────
   describe("web/ scaffold", () => {
     it("web/ directory exists", () => {

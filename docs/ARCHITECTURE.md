@@ -473,7 +473,7 @@ sequenceDiagram
   participant Auth as api/src/_lib/auth.ts
   participant Repo as GitHub raw (api/_lib/github-raw.ts)
 
-  Browser->>Edge: GET /api/data/runs (planned)
+  Browser->>Edge: GET /api/data/runs
   Edge->>Edge: check stfc_operator role (staticwebapp.config.json)
   alt role missing
     Edge-->>Browser: 403 (CSP-safe page)
@@ -486,14 +486,18 @@ sequenceDiagram
       Auth-->>Fn: throw ForbiddenError(403)
       Fn-->>Browser: 403
     else allowed
-      Fn->>Repo: fetch approved data when implemented
+      Fn->>Repo: fetch cached committed artifacts and Actions metadata
       Fn-->>Browser: 200 JSON
     end
   end
 ```
 
-The telemetry tab is currently a UI placeholder; no telemetry data source is
-wired to it.
+All five tabs use the read-only `data/{tab}` Function. Redeem history and digests
+read `automation-state`; officer reference data and optional run-result artifacts
+read `main`. Runs merge cached Actions metadata with validated v1 run results by
+correlation ID. Unknown or invalid artifacts fail rather than disappearing.
+The telemetry endpoint reports explicitly unavailable because no approved
+telemetry artifact producer exists; it does not invent metrics.
 
 ---
 

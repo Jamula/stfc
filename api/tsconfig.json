@@ -9,9 +9,8 @@
     "noImplicitOverride": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "types": ["node"],
     "outDir": "dist",
-    "rootDir": "src",
+    "rootDir": "..",
     "paths": {
       "@stfc/contracts/*": ["../shared/contracts/*"]
     }

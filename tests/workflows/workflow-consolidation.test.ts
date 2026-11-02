@@ -709,8 +709,9 @@ describe("workflow consolidation", () => {
     assert.ok(
       steps.some(
         (step) =>
-          step.run?.includes("import('./dist/_lib/auth.js')") &&
-          step.run.includes("import('./dist/_lib/respond.js')") &&
+          step.run?.includes("import('./dist/api/src/_lib/auth.js')") &&
+          step.run.includes("import('./dist/api/src/_lib/respond.js')") &&
+          step.run.includes("import('./dist/api/src/index.js')") &&
           step["working-directory"] === "api",
       ),
       "API validation must smoke-test the built API modules",

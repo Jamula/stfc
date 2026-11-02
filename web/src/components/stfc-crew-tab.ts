@@ -1,15 +1,9 @@
-import { LitElement, html, css } from 'lit';
 import { customElement } from 'lit/decorators.js';
+import { DashboardTabElement } from './stfc-dashboard-tab.js';
 
 @customElement('stfc-crew-tab')
-export class StfcCrewTab extends LitElement {
-  static override styles = css`
-    :host { display: block; padding: 1rem; }
-  `;
-
-  override render() {
-    return html`<p>Crew tab loaded — data wiring in #121.</p>`;
-  }
+export class StfcCrewTab extends DashboardTabElement {
+  protected readonly tab = 'crew';
 }
 
 declare global {
