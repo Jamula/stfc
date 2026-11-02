@@ -7,7 +7,7 @@ domain: squad-internals
 source: "Extracted from squad.agent.md as part of the slimming effort (bradygaster/squad#1308). Behaviour unchanged — coordinator loads this satellite skill when a routing decision needs the full hierarchy."
 ---
 
-> **Load this skill when:** the coordinator (or any agent) needs to resolve a "where does this state belong?" or "who is allowed to write this file?" question — e.g., when reading `.squad/decisions.md`, when reviewing whether an agent broke the append-only rule, when answering a user question about Squad's file layout, or when adjudicating a conflict between two files. The short summary in `squad.agent.md` is for routing; this skill is the full reference.
+> **Load this skill when:** the coordinator (or any agent) needs to resolve a "where does this state belong?" or "who is allowed to write this file?" question — e.g., when reading the `decisions.md` state key through the configured bridge, when reviewing whether an agent broke the append-only rule, when answering a user question about Squad's file layout, or when adjudicating a conflict between two files. The short summary in `squad.agent.md` is for routing; this skill is the full reference.
 
 ## State backend note
 
@@ -18,7 +18,7 @@ Authority and persistence are separate: an authoritative record can also be runt
 | File | Status | Who May Write | Who May Read |
 |------|--------|---------------|--------------|
 | `.github/agents/squad.agent.md` | **Authoritative governance.** All roles, handoffs, gates, and enforcement rules. | Repo maintainer (human) | Squad (Coordinator) |
-| `.squad/decisions.md` | **Authoritative, runtime-owned decision ledger.** Canonical record for scope, architecture, and process decisions; read as `decisions.md` through the state bridge. | No writes until cross-process serialization is verified | All agents, through the state bridge |
+| `decisions.md` (state key) | **Authoritative, runtime-owned decision ledger.** Canonical record for scope, architecture, and process decisions; do not assume an on-disk path. | No writes until cross-process serialization is verified | All agents, through the state bridge |
 | `.squad/team.md` | **Authoritative roster.** Current team composition. | Squad (Coordinator) | All agents |
 | `.squad/routing.md` | **Authoritative routing.** Work assignment rules. | Squad (Coordinator) | Squad (Coordinator) |
 | `.squad/ceremonies.md` | **Authoritative ceremony config.** Definitions, triggers, and participants for team ceremonies. | Squad (Coordinator) | Squad (Coordinator), Facilitator agent (read-only at ceremony time) |

@@ -19,7 +19,7 @@ Use the `TEAM ROOT` path provided in your spawn prompt. All `.squad/` paths are 
 
 ### Decision Recording
 After making a decision that affects other team members, write it to:
-`.squad/decisions/inbox/{your-name}-{brief-slug}.md`
+state key `decisions/inbox/{session}-{counter}.md` through `squad_state_create_if_absent`. Use a path-safe session identifier and counter; the entry remains a pending proposal until accepted.
 
 Format:
 ```
@@ -37,6 +37,6 @@ If you have reviewer authority and reject work: the original author is locked ou
 
 ## Anti-Patterns
 - Don't read all agent charters — you only need your own context + decisions.md
-- Don't write directly to `.squad/decisions.md` — always use the inbox drop-box
+- Don't edit the runtime-owned decision ledger; read it through the state bridge with key `decisions.md` and submit proposals through `decisions/inbox/`
 - Don't modify other agents' history.md files — that's Scribe's job
 - Don't assume CWD is the repo root — always use TEAM ROOT

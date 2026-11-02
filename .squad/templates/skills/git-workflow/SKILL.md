@@ -113,10 +113,12 @@ All PRs target `dev` independently. Agents never interfere with each other's fil
 
 ### .squad/ State in Worktrees
 
-The `.squad/` directory exists in each worktree as a copy. This is safe because:
-- `.gitattributes` declares `merge=union` on append-only files (history.md, decisions.md, logs)
-- Each agent appends to its own section; union merge reconciles on PR merge to dev
-- **Rule:** Never rewrite or reorder `.squad/` files in a worktree — append only
+For a local-file backend, the `.squad/` directory exists in each worktree as a copy. This is safe because:
+- `.gitattributes` may declare `merge=union` on local append-only files (including the canonical local ledger at `.squad/decisions/decisions.md`)
+- Each agent appends to its own section; union merge reconciles local files on PR merge
+- **Rule:** Never rewrite or reorder local append-only state in a worktree
+
+The governed two-layer backend stores mutable state through the configured bridge. Use logical state key `decisions.md`; do not assume a worktree copy or rely on Git merge drivers for runtime-owned state.
 
 ### Cleanup After Merge
 

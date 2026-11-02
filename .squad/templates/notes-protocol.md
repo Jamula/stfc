@@ -66,8 +66,9 @@ All notes MUST be valid JSON. Minimum required fields:
 }
 ```
 
-Set `"promote_to_permanent": true` to signal Ralph to copy this to
-`decisions.md` after the PR merges.
+Set `"promote_to_permanent": true` to ask Ralph to submit a pending proposal through
+`squad_state_create_if_absent` under logical state key `decisions/inbox/{session}-{counter}.md`
+after the PR merges. The proposal is not an automatic ledger update.
 
 ### Research notes
 
@@ -188,8 +189,8 @@ the promotion automatically when `promote_to_permanent` is set.
 
 1. Fetch all notes from remote
 2. Traverse commits reachable from the default branch that have notes
-3. For each note with `"promote_to_permanent": true` → append to `decisions.md`
-4. Push state
+3. For each note with `"promote_to_permanent": true` → submit a pending proposal through `squad_state_create_if_absent` under `decisions/inbox/{session}-{counter}.md`
+4. Leave ledger consolidation to an explicitly approved safe procedure; do not rewrite or push mutable state manually
 
 **After PR close/rejection:**
 

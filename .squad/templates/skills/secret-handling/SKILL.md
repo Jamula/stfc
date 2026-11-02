@@ -8,7 +8,9 @@ source: earned (issue #267 — credential leak incident)
 
 ## Context
 
-Spawned agents have read access to the entire repository, including `.env` files containing live credentials. If an agent reads secrets and writes them to `.squad/` files (decisions, logs, history), Scribe auto-commits them to git, exposing them in remote history. This skill codifies absolute prohibitions and safe alternatives.
+Spawned agents have read access to the entire repository, including `.env` files containing live credentials. If an agent reads secrets and writes them to `.squad/` files, a later merge or commit could expose them in remote history. In a governed two-layer backend, decision state is runtime-owned and is not a local file to stage; use the bridge's logical keys and never include secret values in proposals. This skill codifies absolute prohibitions and safe alternatives.
+
+The local `.squad/decisions/inbox/` paths in the examples below apply only to legacy local-file backends. For two-layer backends, submit pending proposals through the configured state bridge under `decisions/inbox/`; do not create or stage local state files.
 
 ## Patterns
 
