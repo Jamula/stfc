@@ -44,6 +44,8 @@ describe("native Squad configuration", () => {
     };
 
     assert.equal(config.stateBackend, "two-layer");
+    assert.equal(Object.hasOwn(config, "teamRoot"), false);
+    assert.equal(Object.hasOwn(config, "stateLocation"), false);
     assert.ok(mcp.mcpServers.squad_state, "Missing squad_state MCP server");
     assert.equal(mcp.mcpServers.squad_state.command, "npx");
     assert.match(mcp.mcpServers.squad_state.args.join(" "), /@bradygaster\/squad-cli@.+ state-mcp$/);
@@ -164,6 +166,7 @@ describe("native Squad configuration", () => {
       assert.match(decisions, /do not use `squad_decide`/i);
       assert.match(decisions, /do not write directly to `.squad\/decisions\/`/i);
       assert.doesNotMatch(decisions, /the Scribe will merge it/i);
+      assert.match(decisions, /unpersisted or unverified decision.*content/i);
     }
   });
 
@@ -193,6 +196,7 @@ describe("native Squad configuration", () => {
       assert.match(handshake, /Configured two-layer state backend is reachable/);
       assert.match(handshake, /bridge.*startup directory.*checkout root/i);
       assert.match(handshake, /startup directory.*cannot be verified.*HALT/i);
+      assert.match(handshake, /teamRoot.*stateLocation.*HALT/i);
       assert.match(handshake, /both.*layers/i);
       assert.match(handshake, /notes-layer write fails/i);
       assert.match(handshake, /does not establish.*data integrity/i);
@@ -223,6 +227,7 @@ describe("native Squad configuration", () => {
     assert.match(spawn, /Configured two-layer state backend is reachable/);
     assert.match(spawn, /bridge.*startup directory.*checkout root/i);
     assert.match(spawn, /startup directory.*cannot be verified.*stop/i);
+    assert.match(spawn, /teamRoot.*stateLocation.*stop/i);
     assert.doesNotMatch(spawn, /skip post-work entirely -- Scribe handles it independently/i);
     assert.doesNotMatch(spawn, /Scribe handles cleanup/i);
     assert.match(spawn, /unpersisted.*decision/i);
@@ -237,6 +242,8 @@ describe("native Squad configuration", () => {
       assert.match(content, /verify your own/i);
       assert.match(content, /do not use `squad_decide`/i);
     }
+    const lightweight = read(".squad", "templates", "skills", "coordinator-response-mode", "SKILL.md");
+    assert.match(lightweight, /unpersisted or unverified decision.*content/i);
   });
 
   it("keeps decision inbox entries when concurrent consolidation cannot be serialized", () => {

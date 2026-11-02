@@ -144,7 +144,9 @@ prompt: |
   If the startup directory cannot be verified, stop before state mutations and report it.
   Before any state mutation, check your own bridge checkout root's `.squad/config.json`
   and require `stateBackend` to be exactly `two-layer`, regardless of the inherited
-  team root or backend value. Each writer must check its own `squad_state_health`
+  team root or backend value. If `teamRoot` or `stateLocation` is present, stop.
+  Also stop on any other unverified setting or environment override that could redirect
+  the state namespace. Each writer must check its own `squad_state_health`
   response for `State backend storage: StateBackendStorageAdapter`, and run
   `npx -y @bradygaster/squad-cli@1.1.0 health --json` from the checkout root on
   the same host and runtime environment as that bridge. Parse stdout as JSON

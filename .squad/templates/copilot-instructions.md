@@ -58,7 +58,7 @@ When opening a PR:
 
 ## Decisions
 
-Before any state mutation, verify your own `squad_state_health` response and the checkout-root health probe described in `.squad/templates/spawn-reference.md`; a parent session's result does not transfer. If you make a decision that affects other team members, create an inbox entry through `squad_state_create_if_absent` and verify it through `squad_state_read`. Do not use `squad_decide`, which can overwrite another decision. Read relevant inbox entries as pending proposals, not accepted policy. If the verified `two-layer` state bridge is unavailable, report the limitation; do not write directly to `.squad/decisions/`.
+Before any state mutation, verify your own `squad_state_health` response and the checkout-root health probe described in `.squad/templates/spawn-reference.md`; a parent session's result does not transfer. If you make a decision that affects other team members, create an inbox entry through `squad_state_create_if_absent` and verify it through `squad_state_read`. If creation or verification fails or cannot be attempted, report the unpersisted or unverified decision and its content in your handoff. Do not use `squad_decide`, which can overwrite another decision. Read relevant inbox entries as pending proposals, not accepted policy. If the verified `two-layer` state bridge is unavailable, report the limitation; do not write directly to `.squad/decisions/`.
 
 The pinned runtime's memory index can lose concurrent updates. Do not use `memory.write` or other mutating `memory.*` tools; `memory.search` may be incomplete.
 <!-- squad:copilot-instructions:end -->

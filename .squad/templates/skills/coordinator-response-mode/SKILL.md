@@ -88,7 +88,7 @@ prompt: |
   TARGET FILE(S): {exact file path(s)}
 
   Do the work. Keep it focused.
-  Before any state mutation, verify your own bridge and the checkout-root health probe described in `.squad/templates/spawn-reference.md`. If you made a meaningful decision, create a unique inbox entry with `squad_state_create_if_absent` and verify it through `squad_state_read`. Do not use `squad_decide` or mutating `memory.*` tools in the pinned runtime. Do not run git notes, switch branches, or write mutable `.squad/` state by hand.
+  Before any state mutation, verify your own bridge and the checkout-root health probe described in `.squad/templates/spawn-reference.md`. If you made a meaningful decision, create a unique inbox entry with `squad_state_create_if_absent` and verify it through `squad_state_read`. If creation or verification fails or cannot be attempted, report the unpersisted or unverified decision and its content to the coordinator for an authorized handoff. Do not use `squad_decide` or mutating `memory.*` tools in the pinned runtime. Do not run git notes, switch branches, or write mutable `.squad/` state by hand.
 
   ⚠️ OUTPUT: Report outcomes in human terms. Never expose tool internals or SQL.
   ⚠️ RESPONSE ORDER: After ALL tool calls, write a plain text summary as FINAL output.
