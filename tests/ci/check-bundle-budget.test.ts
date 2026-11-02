@@ -8,122 +8,134 @@
  * when present, so we can inject fixture paths.
  */
 
-import { describe, it, before, after } from 'node:test';
+import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
+import { tmpdir } from 'node:os';
 
 const REPO = resolve(import.meta.dirname, '../..');
 const SCRIPT = join(REPO, 'scripts', 'ci', 'check-bundle-budget.mjs');
-const FIXTURE_BASE = join(REPO, 'tests', 'ci', 'fixtures', 'budget');
 
 /** Generate N random bytes — nearly incompressible (gzipped ≈ raw size). */
 function makeUncompressibleBytes(size: number): Buffer {
   return randomBytes(size);
 }
 
-async function runScript(distDir: string, budgetFile: string) {
-  return spawnSync('node', [SCRIPT], {
-    cwd: REPO,
-    encoding: 'utf8',
-    timeout: 30_000,
-    env: {
-      ...process.env,
-      BUNDLE_BUDGET_DIST_DIR: distDir,
-      BUNDLE_BUDGET_FILE: budgetFile,
-    },
-  });
+async function withFixture(run: (base: string, budgetFile: string) => Promise<void>) {
+  const base = await mkdtemp(join(tmpdir(), 'stfc-bundle-budget-'));
+  const budgetFile = join(base, 'bundle-budget.json');
+
+  try {
+    await writeFile(budgetFile, JSON.stringify({ max_gzipped_js_bytes: 81920 }));
+    await run(base, budgetFile);
+  } finally {
+    await rm(base, { recursive: true, force: true });
+  }
 }
 
-// ---------------------------------------------------------------------------
-// Fixtures
-// ---------------------------------------------------------------------------
+function runScript(distDir: string, budgetFile: string): Promise<{
+  status: number | null;
+  stdout: string;
+  stderr: string;
+}> {
+  return new Promise((resolvePromise, reject) => {
+    const child = spawn('node', [SCRIPT], {
+      cwd: REPO,
+      env: {
+        ...process.env,
+        BUNDLE_BUDGET_DIST_DIR: distDir,
+        BUNDLE_BUDGET_FILE: budgetFile,
+      },
+    });
+    let stdout = '';
+    let stderr = '';
 
-const UNDER_BUDGET_DIR = join(FIXTURE_BASE, 'under-budget');
-const OVER_BUDGET_DIR = join(FIXTURE_BASE, 'over-budget');
-const BUDGET_FILE = join(FIXTURE_BASE, 'bundle-budget.json');
-
-before(async () => {
-  await rm(FIXTURE_BASE, { recursive: true, force: true });
-  // Fixture dirs use assets/ sub-dir (matching real Vite output)
-  await mkdir(join(UNDER_BUDGET_DIR, 'assets'), { recursive: true });
-  await mkdir(join(OVER_BUDGET_DIR, 'assets'), { recursive: true });
-
-  // Budget: 80 KB = 81920 bytes
-  await writeFile(BUDGET_FILE, JSON.stringify({ max_gzipped_js_bytes: 81920 }));
-
-  // Under-budget fixture: a single 50 KB file (gzips ~poorly to ~47.5 KB)
-  // We use near-incompressible content so gzipped ≈ raw size × 0.95
-  const content50kb = makeUncompressibleBytes(50_000);
-  await writeFile(join(UNDER_BUDGET_DIR, 'assets', 'app.js'), content50kb);
-
-  // Over-budget fixture: two 60 KB files → ~114 KB gzipped total
-  const content60kb = makeUncompressibleBytes(60_000);
-  await writeFile(join(OVER_BUDGET_DIR, 'assets', 'app.js'), content60kb);
-  await writeFile(join(OVER_BUDGET_DIR, 'assets', 'vendor.js'), content60kb);
-});
-
-after(async () => {
-  await rm(FIXTURE_BASE, { recursive: true, force: true });
-});
+    child.stdout.setEncoding('utf8').on('data', (chunk: string) => {
+      stdout += chunk;
+    });
+    child.stderr.setEncoding('utf8').on('data', (chunk: string) => {
+      stderr += chunk;
+    });
+    child.once('error', reject);
+    child.once('close', (status) => {
+      resolvePromise({ status, stdout, stderr });
+    });
+  });
+}
 
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
 describe('check-bundle-budget — under budget', () => {
-  it('exits 0 when total gzipped JS < 80 KB', async () => {
-    const result = await runScript(UNDER_BUDGET_DIR, BUDGET_FILE);
-    assert.equal(
-      result.status,
-      0,
-      `Expected exit 0 but got ${result.status}:\n${result.stdout}\n${result.stderr}`,
-    );
-  });
+  it('exits 0 and reports PASS when total gzipped JS is under budget', async () => {
+    await withFixture(async (base, budgetFile) => {
+      const underBudgetDir = join(base, 'under-budget');
+      await mkdir(join(underBudgetDir, 'assets'), { recursive: true });
+      await writeFile(
+        join(underBudgetDir, 'assets', 'app.js'),
+        makeUncompressibleBytes(50_000),
+      );
 
-  it('output contains PASS', async () => {
-    const result = await runScript(UNDER_BUDGET_DIR, BUDGET_FILE);
-    assert.ok(
-      result.stdout.includes('PASS'),
-      `Expected PASS in output:\n${result.stdout}`,
-    );
+      const result = await runScript(underBudgetDir, budgetFile);
+      assert.equal(
+        result.status,
+        0,
+        `Expected exit 0 but got ${result.status}:\n${result.stdout}\n${result.stderr}`,
+      );
+      assert.ok(
+        result.stdout.includes('PASS'),
+        `Expected PASS in output:\n${result.stdout}`,
+      );
+      assert.ok(
+        result.stdout.includes('app.js'),
+        `Expected app.js in breakdown:\n${result.stdout}`,
+      );
+    });
   });
 });
 
 describe('check-bundle-budget — over budget', () => {
-  it('exits 1 when total gzipped JS > 80 KB', async () => {
-    const result = await runScript(OVER_BUDGET_DIR, BUDGET_FILE);
-    assert.equal(
-      result.status,
-      1,
-      `Expected exit 1 but got ${result.status}:\n${result.stdout}\n${result.stderr}`,
-    );
-  });
+  it('exits 1 and reports both JavaScript files when total gzipped JS exceeds budget', async () => {
+    await withFixture(async (base, budgetFile) => {
+      const overBudgetDir = join(base, 'over-budget');
+      await mkdir(join(overBudgetDir, 'assets'), { recursive: true });
+      const content60kb = makeUncompressibleBytes(60_000);
+      await writeFile(join(overBudgetDir, 'assets', 'app.js'), content60kb);
+      await writeFile(join(overBudgetDir, 'assets', 'vendor.js'), content60kb);
 
-  it('output contains FAIL', async () => {
-    const result = await runScript(OVER_BUDGET_DIR, BUDGET_FILE);
-    assert.ok(
-      result.stdout.includes('FAIL') || result.stderr.includes('FAIL'),
-      `Expected FAIL in output:\n${result.stdout}\n${result.stderr}`,
-    );
-  });
-
-  it('output shows both JS files in breakdown', async () => {
-    const result = await runScript(OVER_BUDGET_DIR, BUDGET_FILE);
-    const combined = result.stdout + result.stderr;
-    assert.ok(combined.includes('app.js'), `Expected app.js in breakdown:\n${combined}`);
-    assert.ok(combined.includes('vendor.js'), `Expected vendor.js in breakdown:\n${combined}`);
+      const result = await runScript(overBudgetDir, budgetFile);
+      const combined = result.stdout + result.stderr;
+      assert.equal(
+        result.status,
+        1,
+        `Expected exit 1 but got ${result.status}:\n${combined}`,
+      );
+      assert.ok(combined.includes('FAIL'), `Expected FAIL in output:\n${combined}`);
+      assert.ok(combined.includes('app.js'), `Expected app.js in breakdown:\n${combined}`);
+      assert.ok(combined.includes('vendor.js'), `Expected vendor.js in breakdown:\n${combined}`);
+    });
   });
 });
 
 describe('check-bundle-budget — missing dist dir', () => {
   it('exits 1 with an error when dist dir does not exist', async () => {
-    const result = await runScript(
-      join(FIXTURE_BASE, 'nonexistent-dir'),
-      BUDGET_FILE,
-    );
-    assert.equal(result.status, 1);
+    await withFixture(async (base, budgetFile) => {
+      const missingDir = join(base, 'nonexistent-dir');
+      const result = await runScript(missingDir, budgetFile);
+      const combined = result.stdout + result.stderr;
+      assert.equal(
+        result.status,
+        1,
+        `Expected exit 1 but got ${result.status}:\n${combined}`,
+      );
+      assert.ok(
+        combined.includes(`${missingDir} not found`),
+        `Expected missing directory error for ${missingDir}:\n${combined}`,
+      );
+    });
   });
 });
