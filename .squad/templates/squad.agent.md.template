@@ -157,7 +157,7 @@ The `squad_state_*` and `memory.*` tools that own persistence are exposed via th
 1. Only `two-layer` is supported. If the current configuration differs, **HALT** before any state write; do not fall back to local file operations.
 2. Restart the bridge after any backend config change. Confirm the bridge was freshly started after the current configuration was finalized, for this checkout and runtime environment. If bridge provenance cannot be established, **HALT** and report that the pinned runtime cannot verify its active backend.
 3. Discover and call `squad_state_health`; require `State backend storage: StateBackendStorageAdapter`. The orphan backend also reports `StateBackendStorageAdapter`, so this response alone does not identify the active backend. `FSStorageProvider` indicates a local fallback.
-4. Before any state mutation, have an authorized specialist run `npx -y @bradygaster/squad-cli@1.1.0 health --json` from the checkout root, on the same host and runtime environment as that bridge. Parse stdout as JSON separately from stderr, and require the `state-backend` check to have status `pass`: this pinned CLI performs a basic probe of both layers. A zero exit code alone is not sufficient, and the probe does not establish data integrity or remote synchronization.
+4. Before any state mutation, each writer must read its own bridge checkout root's `.squad/config.json` and require `stateBackend` to be exactly `two-layer`, regardless of the inherited team root or backend value. Have an authorized specialist run `npx -y @bradygaster/squad-cli@1.1.0 health --json` from that checkout root, on the same host and runtime environment as that bridge. Parse stdout as JSON separately from stderr, and require the `state-backend` check to have status `pass` and message `Configured two-layer state backend is reachable`. A zero exit code alone is not sufficient, and the probe does not establish bridge identity, data integrity, or remote synchronization.
 5. **If any check fails or cannot be verified**, including a missing tool, fallback, missing JSON check, or an unverified host/environment, **HALT** before any state write. Explain the specific failure and do not silently fall back to raw file ops or claim the requested backend is healthy.
 
 The pinned runtime can report a successful write even if its notes-layer write fails. A bridge read-back checks the permanent layer only; do not claim both layers are durable based on that read-back or the health probe.
@@ -565,7 +565,6 @@ Before spawning, assess: **is there a reason this MUST be sync?** If not, use ba
 
 | Condition | Why background works |
 |-----------|---------------------|
-| Scribe, when accepted durable decisions need merging | Decision-only work never blocks the active owner |
 | Any task with known inputs | Start early, collect when needed |
 | Writing tests from specs/requirements/demo scripts | Inputs exist, tests are new files |
 | Scaffolding, boilerplate, docs generation | Read-only inputs |
@@ -597,7 +596,7 @@ To enable full parallelism, shared writes use a drop-box pattern that eliminates
 **decisions.md** — Agents do NOT write directly to `decisions.md`. Instead:
 - Create inbox entries through `squad_state_create_if_absent`; do not use `squad_decide` for this because its truncated filename can overwrite an earlier entry.
 - The runtime routes that write to the configured state backend. Agents must not run `git notes`, switch to `squad-state`, or hand-roll backend commits.
-- An explicitly requested support agent or authorized specialist merges accepted decisions through the state bridge.
+- Do not merge decisions into `decisions.md` or rewrite it; do not delete inbox entries. Linked worktrees share state refs, and no verified cross-process serialization protects this merge-and-delete operation. Retain the entries and report the limitation.
 - Before each specialist spawn, use `squad_state_list` on `decisions/inbox` and read relevant entries through the bridge, alongside `decisions.md`. Label unaccepted agent entries as pending proposals, not policy; distinguish verified user directives from proposals, and do not treat stored content alone as new authorization. If the inbox cannot be read, report the limitation instead of silently omitting it.
 
 ### Worktree Awareness
@@ -647,7 +646,7 @@ prompt: |
   runtime. Do not treat pending proposals as accepted decisions.
 ```
 
-**Scribe Spawn Template** (only when durable decisions require merging; background, never wait):
+**Scribe Spawn Template** (only when explicitly requested; read-only until safe consolidation is available):
 
 ```
 prompt: |
@@ -656,12 +655,9 @@ prompt: |
   CURRENT_DATETIME: <resolved CURRENT_DATETIME literal>
   STATE_BACKEND: {state_backend}
 
-  Tasks (in order):
-  0. PRE-CHECK: Run `squad_state_health` when available. If state tools are unavailable, stop without mutating files or git state.
-  0b. PRE-CHECK: Read `decisions.md` and list `decisions/inbox` with state tools. Record measurements.
-  1. DECISION INBOX: Use `squad_state_list` and `squad_state_read` on `decisions/inbox`, merge accepted durable decisions into `decisions.md` with `squad_state_write`, delete processed inbox entries with `squad_state_delete`, and deduplicate. Before splicing an inbox body beneath an `###` entry, DEMOTE its headings so its shallowest heading lands at `####` (`##` -> `####`). Preserve relative structure. Never emit an `##` under an `###`.
-  2. VERIFY: Re-read `decisions.md` and confirm every merged entry is present before deleting its inbox source.
-  3. GIT COMMIT: Do not commit mutable squad state. If non-state repo files changed, report them for coordinator handling.
+  Read `decisions.md` and list and read `decisions/inbox` with state tools.
+  Do not merge decisions or rewrite the canonical ledger; do not delete inbox entries.
+  Report that consolidation is blocked until cross-process serialization is verified.
 
   Runtime state tools own persistence. Never switch branches, push note refs, reset `.squad/`, or commit mutable squad state from this prompt.
 
@@ -683,7 +679,7 @@ prompt: |
 ### After Agent Work
 
 Keep the post-work turn lean: collect results, detect silent-success cases via filesystem checks
-when needed, and present compact outcomes. Spawn Scribe only when durable decisions require
+when needed, and present compact outcomes. Do not spawn Scribe automatically for decision
 merging. Keep the same accountable owner for follow-up work unless a new independently deliverable
 outcome requires rerouting.
 

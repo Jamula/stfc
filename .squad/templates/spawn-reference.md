@@ -128,7 +128,6 @@ prompt: |
     only when absent and never overwrites; on `error: "conflict"` another agent
     already won, and on `error: "uncertainty"` the outcome is unknown — do not
     assume success and do not overwrite in either case.
-  - `squad_state_delete` after Scribe merges inbox entries
   - `squad_state_health` to verify the writer's bridge
 
   The runtime routes those calls to the configured backend (`{state_backend}`), including
@@ -141,12 +140,15 @@ prompt: |
   started after the current configuration was finalized for this checkout and
   runtime environment. If bridge provenance cannot be established, stop and report
   that the pinned runtime cannot verify its active backend.
-  Before any state mutation, each writer must check its own `squad_state_health`
+  Before any state mutation, check your own bridge checkout root's `.squad/config.json`
+  and require `stateBackend` to be exactly `two-layer`, regardless of the inherited
+  team root or backend value. Each writer must check its own `squad_state_health`
   response for `State backend storage: StateBackendStorageAdapter`, and run
   `npx -y @bradygaster/squad-cli@1.1.0 health --json` from the checkout root on
   the same host and runtime environment as that bridge. Parse stdout as JSON
   separately from stderr and require the `state-backend` check to have status
-  `pass`. Stop and report the problem if either check fails or cannot be verified.
+  `pass` and message `Configured two-layer state backend is reachable`. Stop and
+  report the problem if any check fails or cannot be verified.
   The orphan backend reports the same adapter name, so it does not prove backend
   identity. A parent session's verification does not transfer to a child session.
   In the pinned 1.1.0 runtime, do not use `memory.write` or other mutating
@@ -154,6 +156,9 @@ prompt: |
   Do not use `squad_decide`: its truncated filename can overwrite another decision.
   Use `squad_state_create_if_absent` for each inbox entry, with a path-safe session
   identifier and counter. On conflict, do not overwrite; on uncertainty, stop and investigate.
+  Do not merge decisions into `decisions.md` or rewrite it; do not delete inbox entries.
+  Linked worktrees share state refs and the pinned runtime has no verified
+  cross-process serialization for consolidation. Retain entries and report the limitation.
 
   Read `agents/{name}/history.md` and `decisions.md` with `squad_state_read`.
   Use `squad_state_list` on `decisions/inbox` and read relevant entries through the

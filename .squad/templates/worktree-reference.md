@@ -4,12 +4,9 @@
 
 Squad and all spawned agents may be running inside a **git worktree** rather than the main checkout. All `.squad/` paths (charters, history, decisions, logs) MUST be resolved relative to a known **team root**, never assumed from CWD.
 
-**Two strategies for resolving the team root:**
-
-| Strategy | Team root | State scope | When to use |
-|----------|-----------|-------------|-------------|
-| **worktree-local** | Current worktree root | Branch-local — each worktree has its own `.squad/` state | Feature branches that need isolated decisions and history |
-| **main-checkout** | Main working tree root | Shared — all worktrees read/write the main checkout's `.squad/` | Single source of truth for memories, decisions, and logs across all branches |
+**State scope:** The team root identifies static configuration, not an isolated mutable state
+backend. Linked worktrees share Git state and notes refs; do not assume their two-layer state
+is branch-local or use another checkout's state as a fallback.
 
 **How the Coordinator resolves the team root (on every session start):**
 
@@ -21,29 +18,17 @@ Squad and all spawned agents may be running inside a **git worktree** rather tha
    - **Yes** → Team root = CWD. This handles monorepos where `.squad/` lives in a subfolder.
 2. If not, run `git rev-parse --show-toplevel` to get the current worktree root.
 3. Check if `.squad/` exists at that root (fall back to `.ai-team/` for repos that haven't migrated yet).
-   - **Yes** → use **worktree-local** strategy. Team root = current worktree root.
-   - **No** → use **main-checkout** strategy. Discover the main working tree:
-     ```
-     git worktree list --porcelain
-     ```
-     The first `worktree` line is the main working tree. Team root = that path.
-4. The user may override the strategy at any time (e.g., *"use main checkout for team state"* or *"keep team state in this worktree"*).
+   - **Yes** → Team root = current worktree root.
+   - **No** → stop and report that this checkout has no team configuration. Do not fall back to another checkout.
 
 **Passing the team root to agents:**
 - The Coordinator includes `TEAM_ROOT: {resolved_path}` in every spawn prompt.
-- Agents resolve ALL `.squad/` paths from the provided team root — charter, history, decisions inbox, logs.
-- Agents never discover the team root themselves. They trust the value from the Coordinator.
+- Agents resolve static `.squad/` configuration from the provided team root and use state tools for mutable state.
+- Every writer separately verifies the bridge checkout's configuration and provenance as described in `spawn-reference.md`; the inherited team root does not verify its bridge.
 
-**Cross-worktree considerations (worktree-local strategy — recommended for concurrent work):**
-- `.squad/` files are **branch-local**. Each worktree works independently — no locking, no shared-state races.
-- When branches merge into main, `.squad/` state merges with them. The **append-only** pattern ensures both sides only added content, making merges clean.
-- A `merge=union` driver in `.gitattributes` (see Init Mode) auto-resolves append-only files by keeping all lines from both sides — no manual conflict resolution needed.
-- The Scribe commits `.squad/` changes to the worktree's branch. State flows to other branches through normal git merge / PR workflow.
-
-**Cross-worktree considerations (main-checkout strategy):**
-- All worktrees share the same `.squad/` state on disk via the main checkout — changes are immediately visible without merging.
-- **Not safe for concurrent sessions.** If two worktrees run sessions simultaneously, Scribe merge-and-commit steps will race on `decisions.md` and git index. Use only when a single session is active at a time.
-- Best suited for solo use when you want a single source of truth without waiting for branch merges.
+**Cross-worktree considerations:** Linked worktrees share the two-layer state and notes refs.
+Decision consolidation and inbox deletion are disabled until cross-process serialization is
+verified; retain inbox entries. Ordinary source branch merges do not synchronize runtime state.
 
 ### Worktree Lifecycle Management
 

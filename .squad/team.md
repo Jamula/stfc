@@ -73,3 +73,4 @@
 - The pinned runtime can report successful state writes even when the notes-layer write fails; the bridge reads the permanent layer, and its health probe does not guarantee both layers' data integrity.
 - Do not run `squad upgrade` in place: the pinned CLI replaces the coordinator contract and can install automatic workflows. Evaluate upgrades in an isolated clone and port compatible, reviewed changes without enabling unauthorized automation.
 - The pinned runtime's memory index is not safe for concurrent server instances. Avoid mutating `memory.*` tools and do not assume memory search is complete; use the state inbox for durable decisions.
+- Linked worktrees share two-layer state refs. Decision consolidation and inbox deletion are disabled until cross-process serialization is verified; retain inbox entries and report this limitation.

@@ -279,12 +279,11 @@ Proceed? (yes / no)
 ### Archive Old Decisions
 
 - **intent:** archive decisions, clean up decisions, move old decisions, compact decisions
-- **summary:** Move old decisions from decisions.md to decisions-archive.md
+- **summary:** Explain why decision archival is currently unavailable
 - **action:** coordinator
-- **command:** Move entries older than threshold from .squad/decisions.md → .squad/decisions-archive.md
-- **args:**
-  - `olderThan`: Archive decisions older than how many days? | default: 30
-- **confirm:** true
+- **command:** Do not rewrite or archive the decision ledger until cross-process serialization is verified; retain all entries and report the limitation.
+- **args:** (none)
+- **confirm:** false
 
 ### Summarize Agent History
 

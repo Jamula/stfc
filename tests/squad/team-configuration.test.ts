@@ -189,9 +189,11 @@ describe("native Squad configuration", () => {
       assert.match(content, /do not switch to a local backend/i);
       assert.match(handshake, /stdout as JSON separately from stderr/);
       assert.match(handshake, /state-backend.*pass/);
+      assert.match(handshake, /writer.*own.*checkout.*config/i);
+      assert.match(handshake, /Configured two-layer state backend is reachable/);
       assert.match(handshake, /both.*layers/i);
       assert.match(handshake, /notes-layer write fails/i);
-      assert.match(handshake, /does not establish data integrity/i);
+      assert.match(handshake, /does not establish.*data integrity/i);
       assert.match(handshake, /HALT/);
     }
   });
@@ -215,6 +217,8 @@ describe("native Squad configuration", () => {
     assert.match(spawn, /only.*two-layer.*supported/i);
     assert.match(spawn, /restart.*bridge.*after.*config/i);
     assert.match(spawn, /provenance.*stop/i);
+    assert.match(spawn, /own.*checkout.*config/i);
+    assert.match(spawn, /Configured two-layer state backend is reachable/);
     assert.match(spawn, /uncertainty.*stop/i);
     for (const file of [
       [".squad", "agents", "scribe", "charter.md"],
@@ -225,6 +229,25 @@ describe("native Squad configuration", () => {
       assert.match(content, /verify your own/i);
       assert.match(content, /do not use `squad_decide`/i);
     }
+  });
+
+  it("keeps decision inbox entries when concurrent consolidation cannot be serialized", () => {
+    for (const file of [
+      [".github", "agents", "squad.agent.md"],
+      [".squad", "templates", "squad.agent.md.template"],
+      [".squad", "templates", "spawn-reference.md"],
+      [".squad", "agents", "scribe", "charter.md"],
+      [".squad", "templates", "scribe-charter.md"],
+      [".squad", "templates", "after-agent-reference.md"],
+    ]) {
+      const content = read(...file);
+      assert.match(content, /do not (?:merge|consolidate).*decisions/i, file.join("/"));
+      assert.match(content, /do not delete.*inbox/i, file.join("/"));
+      assert.doesNotMatch(content, /merge (?:accepted )?(?:durable )?decisions into `decisions\.md` with `squad_state_write`/i, file.join("/"));
+    }
+    const worktrees = read(".squad", "templates", "worktree-reference.md");
+    assert.match(worktrees, /linked worktrees share.*state.*refs/i);
+    assert.doesNotMatch(worktrees, /no shared-state races/i);
   });
 
   it("blocks unsafe in-place upgrades and preserves the team and workflow policy", () => {
