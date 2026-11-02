@@ -6,7 +6,7 @@
 #
 # Usage:
 #   ./scripts/notes/fetch.ps1           # fetch only
-#   ./scripts/notes/fetch.ps1 -Setup    # first-time: add refspec + fetch
+#   ./scripts/notes/fetch.ps1 -Setup    # first-time: add tracking refspec + fetch
 #   ./scripts/notes/fetch.ps1 -Merge    # fetch + merge (use after push conflict)
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -24,49 +24,60 @@ function Log ([string]$msg, [string]$color = "White") {
 }
 
 $repo = Resolve-Path $RepoPath
+$trackingPrefix = "refs/remotes/$Remote/notes"
+$refspec = "+refs/notes/*:${trackingPrefix}/*"
+
+function Assert-NoNotesMerge {
+    foreach ($name in @("NOTES_MERGE_PARTIAL", "NOTES_MERGE_REF")) {
+        $path = git -C $repo rev-parse --git-path $name
+        if ($LASTEXITCODE -ne 0) { Write-Error "Failed to locate notes merge state."; exit 1 }
+        if (-not [System.IO.Path]::IsPathRooted($path)) { $path = Join-Path $repo $path }
+        if (Test-Path $path) {
+            Write-Error "A notes merge is already in progress. Resolve or abort it before syncing notes; its state was not changed."
+            exit 1
+        }
+    }
+}
+
+if ($Merge) { Assert-NoNotesMerge }
 
 # ── One-time setup: add fetch refspec ──────────────────────────────────────
 if ($Setup) {
-    $existing = git -C $repo config --get-all "remote.$Remote.fetch" 2>&1 |
-                Where-Object { $_ -match "refs/notes" }
-    if ($existing) {
+    # Remove the old destructive mapping when upgrading an existing setup.
+    git -C $repo config --fixed-value --unset-all "remote.$Remote.fetch" "refs/notes/*:refs/notes/*" 2>&1 | Out-Null
+    git -C $repo config --fixed-value --unset-all "remote.$Remote.fetch" "+refs/notes/*:refs/notes/*" 2>&1 | Out-Null
+    $existing = @(git -C $repo config --get-all "remote.$Remote.fetch" 2>&1)
+    if ($existing -contains $refspec) {
         Log "Notes refspec already configured." DarkGray
     } else {
-        git -C $repo config --add "remote.$Remote.fetch" "refs/notes/*:refs/notes/*"
+        git -C $repo config --add "remote.$Remote.fetch" $refspec
+        if ($LASTEXITCODE -ne 0) { Write-Error "Failed to configure notes refspec."; exit 1 }
         Log "Added notes refspec to remote.$Remote.fetch" Green
     }
 }
 
 # ── Fetch notes ─────────────────────────────────────────────────────────────
 Log "Fetching notes from $Remote..."
-$output = git -C $repo fetch $Remote "refs/notes/*:refs/notes/*" 2>&1
+$output = git -C $repo fetch --prune --refmap= $Remote $refspec 2>&1
 if ($LASTEXITCODE -ne 0) {
-    Log "Fetch warning: $output" DarkYellow
+    Write-Error "Failed to fetch notes from ${Remote}: $output"
+    exit 1
 } else {
     Log "Notes fetched." Green
 }
 
 # ── Merge notes if requested (after push conflict) ──────────────────────────
 if ($Merge) {
-    # Abort any stale merge-in-progress state
-    $mergeLock = Join-Path $repo ".git/NOTES_MERGE_PARTIAL"
-    if (Test-Path $mergeLock) {
-        Log "Stale notes merge in progress — aborting before retry" DarkYellow
-        git -C $repo notes merge --abort 2>&1 | Out-Null
-    }
-
-    $namespaces = git -C $repo for-each-ref "refs/notes/squad/" --format="%(refname)" 2>&1
-    foreach ($ref in $namespaces) {
-        $ns = $ref -replace "refs/notes/", ""
-        $remoteRef = "refs/notes/remotes/$Remote/$ns"
-        $remoteExists = git -C $repo for-each-ref $remoteRef --format="%(refname)" 2>&1
-        if ($remoteExists) {
-            Log "Merging notes: $ns (cat_sort_uniq)"
-            git -C $repo notes --ref=$ns merge -s cat_sort_uniq $remoteRef 2>&1 | Out-Null
-            if ($LASTEXITCODE -ne 0) {
-                Log "  Merge failed on $ns — aborting and continuing" Red
-                git -C $repo notes merge --abort 2>&1 | Out-Null
-            }
+    $remoteRefs = git -C $repo for-each-ref "$trackingPrefix/squad/" --format="%(refname)" 2>&1
+    foreach ($remoteRef in $remoteRefs) {
+        Assert-NoNotesMerge
+        $ns = $remoteRef.Substring($trackingPrefix.Length + 1)
+        Log "Merging notes: $ns (cat_sort_uniq)"
+        $mergeOutput = git -C $repo notes --ref=$ns merge -s cat_sort_uniq $remoteRef 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            # Do not abort: a concurrent invocation may own the merge state.
+            Write-Error "Failed to merge notes for ${ns}: $mergeOutput. Check for an in-progress notes merge before retrying."
+            exit 1
         }
     }
     Log "Notes merge complete." Green

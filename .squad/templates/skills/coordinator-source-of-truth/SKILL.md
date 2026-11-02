@@ -7,18 +7,18 @@ domain: squad-internals
 source: "Extracted from squad.agent.md as part of the slimming effort (bradygaster/squad#1308). Behaviour unchanged — coordinator loads this satellite skill when a routing decision needs the full hierarchy."
 ---
 
-> **Load this skill when:** the coordinator (or any agent) needs to resolve a "where does this state belong?" or "who is allowed to write this file?" question — e.g., when about to write `.squad/decisions.md`, when reviewing whether an agent broke the append-only rule, when answering a user question about Squad's file layout, or when adjudicating a conflict between two files. The short summary in `squad.agent.md` is for routing; this skill is the full reference.
+> **Load this skill when:** the coordinator (or any agent) needs to resolve a "where does this state belong?" or "who is allowed to write this file?" question — e.g., when reading `.squad/decisions.md`, when reviewing whether an agent broke the append-only rule, when answering a user question about Squad's file layout, or when adjudicating a conflict between two files. The short summary in `squad.agent.md` is for routing; this skill is the full reference.
 
 ## State backend note
 
-Files below marked as **"Derived / append-only"** are **mutable state** — agents access them with runtime state tools (`squad_state_read`, `squad_state_write`, `squad_state_append`, `squad_state_create_if_absent`, `squad_state_delete`, `squad_state_list`). The runtime decides whether the configured backend stores them on disk, git-native state, or an external provider. Files marked as **"Authoritative"** are **static config** and always live on disk regardless of backend.
+Authority and persistence are separate: an authoritative record can also be runtime-owned mutable state. The decision ledger and files marked **"Derived / append-only"** are accessed through the configured state bridge (`squad_state_read`, `squad_state_write`, `squad_state_append`, `squad_state_create_if_absent`, `squad_state_delete`, `squad_state_list`), not by assuming an on-disk copy is current. The runtime decides whether the backend stores them on disk, git-native state, or an external provider. Other authoritative entries in the table are static configuration on disk. Verify the bridge as described in `.squad/templates/spawn-reference.md`; if it is unavailable, report the limitation rather than falling back to direct mutable-state access.
 
 ## File hierarchy
 
 | File | Status | Who May Write | Who May Read |
 |------|--------|---------------|--------------|
 | `.github/agents/squad.agent.md` | **Authoritative governance.** All roles, handoffs, gates, and enforcement rules. | Repo maintainer (human) | Squad (Coordinator) |
-| `.squad/decisions.md` | **Authoritative decision ledger.** Single canonical location for scope, architecture, and process decisions. | Squad (Coordinator) — append only | All agents |
+| `.squad/decisions.md` | **Authoritative, runtime-owned decision ledger.** Canonical record for scope, architecture, and process decisions; read as `decisions.md` through the state bridge. | No writes until cross-process serialization is verified | All agents, through the state bridge |
 | `.squad/team.md` | **Authoritative roster.** Current team composition. | Squad (Coordinator) | All agents |
 | `.squad/routing.md` | **Authoritative routing.** Work assignment rules. | Squad (Coordinator) | Squad (Coordinator) |
 | `.squad/ceremonies.md` | **Authoritative ceremony config.** Definitions, triggers, and participants for team ceremonies. | Squad (Coordinator) | Squad (Coordinator), Facilitator agent (read-only at ceremony time) |
@@ -40,6 +40,6 @@ Files below marked as **"Derived / append-only"** are **mutable state** — agen
 ## Rules
 
 1. **If `squad.agent.md` and any other file conflict, `squad.agent.md` wins.** It is the only file with hard governance authority.
-2. **Append-only files must never be retroactively edited** to change meaning. They are diagnostic and audit-trail material. Corrections go in a new entry that references the prior one.
+2. **Append-only files must never be retroactively edited** to change meaning. For other append-only records, corrections go in a new entry that references the prior one; the decision ledger is subject to rule 4.
 3. **Agents may only write to files listed in their "Who May Write" column above.** Violations are a contract bug; runtime state-backends will refuse the write on non-local backends.
-4. **Non-coordinator agents may propose decisions** in their responses, but only Squad (Coordinator) records accepted decisions in `.squad/decisions.md`.
+4. **Do not consolidate, rewrite, or append to the decision ledger until cross-process serialization is verified.** Retain all inbox entries; do not delete them. Report the limitation. Create proposals as unique inbox entries through `squad_state_create_if_absent` and read them through the bridge as pending proposals, not accepted policy.

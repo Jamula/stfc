@@ -64,7 +64,11 @@ $noteJson = $note | ConvertTo-Json -Compress -Depth 10
 
 # ── Fetch first to avoid conflicts ───────────────────────────────────────────
 Log "Fetching notes before write..."
-git -C $repo fetch $Remote "refs/notes/*:refs/notes/*" 2>&1 | Out-Null
+& (Join-Path $PSScriptRoot "fetch.ps1") -RepoPath $repo -Remote $Remote -Merge -Quiet
+if ($LASTEXITCODE -ne 0) {
+    Write-Error "Failed to synchronize notes before writing."
+    exit 1
+}
 
 # ── Check if note already exists on this commit ─────────────────────────────
 $existing = git -C $repo notes --ref=$namespace show $Commit 2>&1
@@ -88,34 +92,38 @@ Log "Note written to refs/notes/$namespace on $($Commit.Substring(0,[Math]::Min(
 if (-not $NoPush) {
     $maxRetries = 5
     $nsRef = "refs/notes/$namespace"
+    $pushed = $false
 
     for ($i = 0; $i -lt $maxRetries; $i++) {
         Log "Pushing notes (attempt $($i+1))..."
         $pushOut = git -C $repo push $Remote "${nsRef}:${nsRef}" 2>&1
         if ($LASTEXITCODE -eq 0) {
             Log "Notes pushed successfully." Green
+            $pushed = $true
             break
         }
 
         if ($pushOut -match "non-fast-forward|fetch first|rejected") {
             Log "Push conflict — fetch-first retry..." DarkYellow
 
-            # Force-fetch: overwrite local ref with current remote state
-            git -C $repo fetch $Remote "${nsRef}:${nsRef}" 2>&1 | Out-Null
-
-            # Re-append our note on top of the now-current remote state
-            git -C $repo notes --ref=$namespace append -m $noteJson $Commit 2>&1 | Out-Null
-
-            $jitter = Get-Random -Minimum 0 -Maximum 1000
-            $sleep  = [Math]::Pow(2, $i) + $jitter / 1000
-            Start-Sleep -Seconds $sleep
+            if ($i -lt $maxRetries - 1) {
+                & (Join-Path $PSScriptRoot "fetch.ps1") -RepoPath $repo -Remote $Remote -Merge -Quiet
+                if ($LASTEXITCODE -ne 0) {
+                    Write-Error "Failed to synchronize notes after push rejection; local notes were retained."
+                    exit 1
+                }
+                $jitter = Get-Random -Minimum 0 -Maximum 1000
+                $sleep  = [Math]::Pow(2, $i) + $jitter / 1000
+                Start-Sleep -Seconds $sleep
+            }
 
         } else {
             Log "Push error: $pushOut" Red
-            if ($i -eq $maxRetries - 1) {
-                Write-Warning "Failed after $maxRetries retries. Push manually: git push origin '${nsRef}:${nsRef}'"
-            }
         }
+    }
+    if (-not $pushed) {
+        Write-Error "Failed to push notes after $maxRetries attempts. Local notes were retained; push manually: git push $Remote '${nsRef}:${nsRef}'. Last error: $pushOut"
+        exit 1
     }
 }
 

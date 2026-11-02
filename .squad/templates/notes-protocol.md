@@ -125,20 +125,21 @@ Or use the helper script:
 ### One-time setup
 
 ```bash
-git config --add remote.origin.fetch 'refs/notes/*:refs/notes/*'
-git fetch origin 'refs/notes/*:refs/notes/*'
+git config --fixed-value --unset-all remote.origin.fetch 'refs/notes/*:refs/notes/*'
+git config --add remote.origin.fetch '+refs/notes/*:refs/remotes/origin/notes/*'
+git fetch --prune --refmap= origin '+refs/notes/*:refs/remotes/origin/notes/*'
 ```
 
 Or use the helper:
 
 ```powershell
-./scripts/notes/fetch.ps1 -Setup
+./scripts/notes/fetch.ps1 -Setup -Merge
 ```
 
 ### Every work round
 
-1. **Start**: `git fetch origin 'refs/notes/*:refs/notes/*'`
-2. **End**: `git push origin 'refs/notes/*:refs/notes/*'`
+1. **Start**: `./scripts/notes/fetch.ps1 -Merge` fetches tracking refs and merges remote squad namespaces into local notes.
+2. **End**: Push the agent's namespace: `git push origin 'refs/notes/squad/{agent}:refs/notes/squad/{agent}'`.
 
 ---
 
@@ -147,12 +148,11 @@ Or use the helper:
 1. **Per-agent namespaces prevent 99% of conflicts.** Only one agent writes to
    `refs/notes/squad/data`, so there are no write conflicts in normal use.
 
-2. **Same agent, two machines:** First push wins. Losing machine should fetch
-   and append:
-   ```bash
-   git fetch origin 'refs/notes/*:refs/notes/*'
-   git notes --ref=squad/{agent} append -m '{...}' HEAD
-   git push origin 'refs/notes/*:refs/notes/*'
+2. **Same agent, two machines:** First push wins. The losing machine should
+   fetch and merge the remote history, preserving both local and remote notes:
+   ```powershell
+   ./scripts/notes/fetch.ps1 -Merge
+   git push origin 'refs/notes/squad/{agent}:refs/notes/squad/{agent}'
    ```
 
 3. **Shared namespaces** (`research`, `review`): Always use `git notes append`,
@@ -160,9 +160,8 @@ Or use the helper:
 
 4. **Push conflict recovery:**
    ```bash
-   git fetch origin 'refs/notes/*:refs/notes/*'
-   git notes merge refs/notes/remotes/origin/squad/{namespace}
-   git push origin 'refs/notes/*:refs/notes/*'
+   ./scripts/notes/fetch.ps1 -Merge
+   git push origin 'refs/notes/squad/{agent}:refs/notes/squad/{agent}'
    ```
 
 ---

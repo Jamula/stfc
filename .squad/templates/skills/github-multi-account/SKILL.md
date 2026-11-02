@@ -36,8 +36,8 @@ if ($existing -notmatch "gh-personal") {
     $block = @"
 
 # === GitHub Multi-Account Aliases ===
-function gh-personal { gh auth switch --user $personal 2>`$null | Out-Null; gh @args }
-function gh-work { gh auth switch --user $work 2>`$null | Out-Null; gh @args }
+function gh-personal { gh auth switch --user $personal | Out-Null; if (`$LASTEXITCODE -ne 0) { return }; gh @args }
+function gh-work { gh auth switch --user $work | Out-Null; if (`$LASTEXITCODE -ne 0) { return }; gh @args }
 Set-Alias ghp gh-personal
 Set-Alias ghw gh-work
 "@
@@ -47,8 +47,8 @@ Set-Alias ghw gh-work
 # 3. Create CMD wrappers
 $binDir = Join-Path $env:USERPROFILE ".squad\bin"
 if (!(Test-Path $binDir)) { New-Item -ItemType Directory -Path $binDir -Force | Out-Null }
-"@echo off`ngh auth switch --user $personal >nul 2>&1`ngh %*" | Out-File "$binDir\ghp.cmd" -Encoding ascii
-"@echo off`ngh auth switch --user $work >nul 2>&1`ngh %*" | Out-File "$binDir\ghw.cmd" -Encoding ascii
+"@echo off`ngh auth switch --user $personal >nul && gh %*" | Out-File "$binDir\ghp.cmd" -Encoding ascii
+"@echo off`ngh auth switch --user $work >nul && gh %*" | Out-File "$binDir\ghw.cmd" -Encoding ascii
 
 # 4. Add to PATH
 $userPath = [Environment]::GetEnvironmentVariable("PATH", "User")
@@ -58,8 +58,8 @@ if ($userPath -notmatch [regex]::Escape($binDir)) {
 }
 
 # 5. Load in current session
-function gh-personal { gh auth switch --user $personal 2>$null | Out-Null; gh @args }
-function gh-work { gh auth switch --user $work 2>$null | Out-Null; gh @args }
+function gh-personal { gh auth switch --user $personal | Out-Null; if ($LASTEXITCODE -ne 0) { return }; gh @args }
+function gh-work { gh auth switch --user $work | Out-Null; if ($LASTEXITCODE -ne 0) { return }; gh @args }
 Set-Alias ghp gh-personal
 Set-Alias ghw gh-work
 ```
@@ -82,14 +82,7 @@ ghw api user --jq '.login'   # should show work username
    - Personal account repos → `ghp` / `gh-personal`
    - Work/EMU account repos → `ghw` / `gh-work`
 
-## Repo-Specific Account Binding
-
-This repo (`bradygaster/squad`) is bound to the **bradygaster** (personal) account.
-All `gh` operations in this repo MUST use `ghp` / `gh-personal`.
-
 ## For Squad Agents
-At the TOP of any script touching GitHub, define:
-```powershell
-function gh-personal { gh auth switch --user bradygaster 2>$null | Out-Null; gh @args }
-function gh-work { gh auth switch --user bradyg_microsoft 2>$null | Out-Null; gh @args }
-```
+Use the aliases configured from the user's confirmed account selection. Do not
+redefine them with account names from another user or repository. If the aliases
+are unavailable, complete setup and verification before performing repo operations.
