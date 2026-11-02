@@ -589,6 +589,35 @@ describe("workflow consolidation", () => {
     );
   });
 
+  it("propagates failures from every required-gate check", () => {
+    const gate = workflows.find(({ file }) => file === "test-gate.yml");
+    assert.ok(gate, "test-gate.yml must exist");
+
+    const job = Object.values(gate.workflow.jobs ?? {}).find(
+      ({ name }) => name === "npm test (required)",
+    );
+    assert.ok(job, "the required gate must exist");
+    assert.ok(
+      job["continue-on-error"] !== true &&
+        job["continue-on-error"] !== "true",
+      "required-gate job failures must propagate",
+    );
+
+    for (const step of job.steps ?? []) {
+      if (
+        ["npm ci", "npm run typecheck", "npm test"].includes(
+          step.run?.trim() ?? "",
+        )
+      ) {
+        assert.ok(
+          step["continue-on-error"] !== true &&
+            step["continue-on-error"] !== "true",
+          `${step.run} failures must propagate`,
+        );
+      }
+    }
+  });
+
   it("does not restore superseded workflows", () => {
     for (const file of retiredWorkflowFiles) {
       assert.ok(!workflowFiles.includes(file), `${file} must remain removed`);
