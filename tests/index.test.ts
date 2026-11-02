@@ -41,6 +41,7 @@ import "./skills/optimizeCrew.test.ts";
 import "./skills/progression.test.ts";
 import "./scripts/pre-commit.test.ts";
 import "./scripts/pre-push.test.ts";
+import "./squad/team-configuration.test.ts";
 import "./scripts/captureTokenOtp.test.ts";
 import "./scripts/captureTokenMerge.test.ts";
 import "./scripts/discordHandler.test.ts";
