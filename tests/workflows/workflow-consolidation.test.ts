@@ -55,6 +55,9 @@ const workflowSteps = workflows.flatMap(({ file, workflow }) =>
   ),
 );
 
+const suppressesFailures = (value: unknown): boolean =>
+  value !== undefined && value !== false;
+
 // --- node --test guard helpers (#242, #214, #222) -------------------------
 //
 // This repo invokes Node's test runner in more than one shape:
@@ -597,9 +600,9 @@ describe("workflow consolidation", () => {
       ({ name }) => name === "npm test (required)",
     );
     assert.ok(job, "the required gate must exist");
-    assert.ok(
-      job["continue-on-error"] !== true &&
-        job["continue-on-error"] !== "true",
+    assert.equal(
+      suppressesFailures(job["continue-on-error"]),
+      false,
       "required-gate job failures must propagate",
     );
 
@@ -609,13 +612,26 @@ describe("workflow consolidation", () => {
           step.run?.trim() ?? "",
         )
       ) {
-        assert.ok(
-          step["continue-on-error"] !== true &&
-            step["continue-on-error"] !== "true",
+        assert.equal(
+          suppressesFailures(step["continue-on-error"]),
+          false,
           `${step.run} failures must propagate`,
         );
       }
     }
+  });
+
+  it("rejects expression-valued continue-on-error settings", () => {
+    for (const value of ["${{ true }}", "${{ false }}"]) {
+      assert.equal(
+        suppressesFailures(value),
+        true,
+        `continue-on-error expression ${value} must be treated as suppressing failures`,
+      );
+    }
+
+    assert.equal(suppressesFailures(undefined), false);
+    assert.equal(suppressesFailures(false), false);
   });
 
   it("does not restore superseded workflows", () => {
