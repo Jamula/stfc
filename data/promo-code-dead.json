@@ -229,5 +229,33 @@
     "accounts_tried": [
       "main"
     ]
+  },
+  "CANDE2": {
+    "marked_dead_at": "2026-11-02T08:48:06.878Z",
+    "first_seen_outcome": "CODE_INVALID_OR_EXPIRED",
+    "accounts_tried": [
+      "main"
+    ]
+  },
+  "CANDE3": {
+    "marked_dead_at": "2026-11-02T08:48:07.087Z",
+    "first_seen_outcome": "CODE_INVALID_OR_EXPIRED",
+    "accounts_tried": [
+      "main"
+    ]
+  },
+  "BLASTAARLEGEND": {
+    "marked_dead_at": "2026-11-02T08:48:07.255Z",
+    "first_seen_outcome": "CODE_INVALID_OR_EXPIRED",
+    "accounts_tried": [
+      "main"
+    ]
+  },
+  "OOPS": {
+    "marked_dead_at": "2026-11-02T08:48:07.562Z",
+    "first_seen_outcome": "CODE_INVALID_OR_EXPIRED",
+    "accounts_tried": [
+      "main"
+    ]
   }
 }
