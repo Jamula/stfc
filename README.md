@@ -2,7 +2,7 @@
 
 A headless TypeScript CLI that automatically redeems web-store gifts and promo
 codes from the **Star Trek Fleet Command** store. It is designed to run as a
-scheduled GitHub Action every 15 minutes (~96 runs/day), so daily login bonuses,
+scheduled GitHub Action every 10 minutes (144 runs/day), so daily login bonuses,
 free packs, and promotional codes are claimed without you ever opening the store
 in a browser. Optionally monitors configured Discord channels for new promo codes
 and player tips, harvesting both into a daily digest.
@@ -30,13 +30,13 @@ and player tips, harvesting both into a daily digest.
    `capture-token` wrote to `.env` into *Settings → Secrets and variables →
    Actions → STFC_ACCOUNTS*.
 3. **Enable the `Redeem gifts` workflow** under the Actions tab. It will run
-   on the cron schedule (every 15 minutes) from then on. You can also trigger
+   on the cron schedule (every 10 minutes) from then on. You can also trigger
    it manually with the **Run workflow** button to verify everything works.
 
-> **Optional 1:** if you'd rather never re-capture your JWT by hand when it
-> expires (~30 days), set up the **`Refresh token` workflow** that logs in
-> for you in CI. See [docs/SETUP.md](docs/SETUP.md#optional-fully-automated-token-refresh-in-ci)
-> for the (small) extra setup.
+> **Optional 1:** a manually triggered `Refresh token` workflow is present,
+> but automatic refresh is currently unavailable for the passwordless
+> email-OTP login. Use the local browser-based `capture-token` flow when a
+> token expires; see [docs/SETUP.md](docs/SETUP.md#token-refresh).
 
 > **Optional 2:** if you want to harvest promo codes and tips from the STFC
 > Discord community automatically, enable the **`Discord monitor` workflow**
@@ -61,14 +61,11 @@ For each account it performs roughly:
 - `POST /offers/gifts/claim`  — claim each pending gift.
 - `POST /redeem/claim`        — submit each promo code from `promo-codes.txt`.
 
-The JWT used as the `Authorization: Bearer …` header is taken from your
-normal browser session (via the `npm run capture-token` Playwright helper)
-and stored encrypted in a GitHub Actions secret named `STFC_ACCOUNTS`.
+The bearer token is sent in the `Authorization` header. It is captured from your normal browser session (via `npm run capture-token`) and stored as a GitHub Actions secret named `STFC_ACCOUNTS`.
 
-Optionally, you can also store your Scopely email + password as repo
-secrets and let the **`Refresh token` workflow** log in for you weekly so
-the JWT never goes stale — see
-[docs/SETUP.md](docs/SETUP.md#optional-fully-automated-token-refresh-in-ci).
+The `Refresh token` workflow is manual-only. Because the current login flow
+uses email OTP, refresh the token locally with the visible browser flow in
+[docs/SETUP.md](docs/SETUP.md#token-refresh).
 
 ---
 
@@ -83,13 +80,10 @@ When configured, a scheduled workflow (`discord-monitor.yml`) runs every 4 hours
 - Classify non-code messages as "tips/tricks/hacks" vs chatter
 - Produce a daily digest summarizing: codes attempted + outcomes, classified guidance, ingestion health
 
-**Currently shipped (Phases 0–3):**
-- Ingestion, extraction, deduplication, cool-down management
-- Auto-redeem integration (codes are attempted on the next scheduled redeem run)
-- Daily digest with code outcomes and classified tips
-
-**In development (Phase 4+):**
-- Tips classification refinement and daily digest roll-up
+The monitor ingests configured channels, extracts and deduplicates candidate
+codes, feeds eligible codes into redemption, and produces a daily digest.
+Discord slash-command interactions are handled separately by the Worker and
+GitHub Actions bridge; see [`discord/RUNBOOK.md`](discord/RUNBOOK.md).
 
 To set up, see [specs/001-discord-monitor/quickstart.md](specs/001-discord-monitor/quickstart.md).
 For the one-time bot creation, privileged-intent toggles, install URL, and
@@ -120,13 +114,9 @@ npm run skill:progression -- --account main
 
 A roster maintenance family (`skill:roster status|add|promote|rankup|validate`) keeps `data/crew/roster/{account}.yaml` up to date.
 
-The `optimize-crew.yml` workflow (pending PR #102) fires on push to `data/crew/**` and regenerates `docs/crew/` reports automatically.
-
-v1.5 (iPhone OCR roster refresh) and v2 (read-only Discord `!crew` commands) are in development — see issues [#85](https://github.com/Jamula/stfc/issues/85) and [#91](https://github.com/Jamula/stfc/issues/91).
+The CLI writes reports under `docs/crew/`; there is no automatic crew-report workflow in this repository. Read-only `!crew` commands are also supported through the Discord monitor.
 
 Full operator guide: **[docs/CREW-OPTIMIZER.md](docs/CREW-OPTIMIZER.md)**.
-
-> A `.github/workflows/optimize-crew.yml` workflow regenerates `docs/crew/*.md` on every push that changes `data/crew/**`.
 
 ---
 
@@ -161,10 +151,11 @@ For local diagnostics you can run individual steps:
 │   └── workflows/
 │       ├── redeem.yml              # scheduled gift redemption (every 10 min, 144/day)
 │       ├── discord-monitor.yml     # optional: harvest codes & tips from Discord (every 4 hours)
-│       ├── refresh-token.yml       # weekly JWT refresh via Playwright auto-login
-│       ├── test-gate.yml           # typecheck + test gate on PRs
-│       ├── artifact-hygiene.yml    # scan documentation for secrets
-│       └── release.yml             # validate and publish GitHub releases
+│       ├── refresh-token.yml       # manually triggered token refresh
+│       ├── discord-command-handler.yml # slash-command interaction handler
+│       ├── deploy-cloudflare-worker.yml # Discord interaction bridge
+│       ├── swa-deploy.yml          # web control panel deployment
+│       └── test-gate.yml           # root and worker tests + typechecks
 ├── docs/
 │   ├── SETUP.md                    # end-to-end setup guide
 │   ├── stfc-game-knowledge.md      # STFC game domain reference (Scopely sources)
@@ -275,12 +266,11 @@ anything. To re-attempt all codes, make a normal forward commit on
 - **Rollback:** preserve the live allowlisted files in a reviewed `main` PR,
   then revert the workflow change. The state branch can remain for audit; there
   are no credentials or live ruleset changes to unwind.
-- **Validation:** GitHub Actions currently provides zero execution evidence
-  while the account-level billing block in #218 prevents jobs from starting.
-  Local gates are `npm test` and `npm run typecheck`. After #218, dispatch
-  redeem twice (run 2 must retain run 1 history), dispatch Discord monitor,
-  exercise `/redeem-status` and `/game-state`, and verify `main`'s tip SHA is
-  unchanged while commits land on `automation-state`.
+- **Validation:** check the latest GitHub Actions run and summary for live
+  evidence; availability can depend on repository billing and runner access.
+  Local gates are `npm test` and `npm run typecheck`. After a successful
+  workflow run, verify that state commits land on `automation-state`, not
+  `main`.
 
 Promo-code redemption retries transient failures up to **3 total attempts**
 (initial + 2 retries), sleeping **1s then 2s** by default:

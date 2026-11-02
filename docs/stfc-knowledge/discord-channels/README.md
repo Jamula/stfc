@@ -36,15 +36,16 @@ For Discord channels the fields map as follows:
 
 | Sub-directory | Guild | Channel | Status |
 | --- | --- | --- | --- |
-| [`officer-tool-data-collection/`](./officer-tool-data-collection/README.md) | STFC Officer Tool (`639255937869152267`) | `#data-collection` (`1115978499400933473`) | ⚠️ **Blocked — bot not in guild** (see below) |
+| [`officer-tool-data-collection/`](./officer-tool-data-collection/README.md) | STFC Officer Tool (`639255937869152267`) | `#data-collection` (`1115978499400933473`) | No content ingested; bot membership/access not verified |
 
-## ⚠️ Current blocker — guild `639255937869152267`
+## Current status — guild `639255937869152267`
 
-**What was attempted (2026-05-31):**
+**Last recorded check (2026-05-31):**
 
-The bot token (`DISCORD_BOT_TOKEN`) is stored exclusively as a GitHub Actions
-encrypted secret. It is not present in the local development environment. Two
-API probes were staged but could not be executed without the token:
+The bot token (`DISCORD_BOT_TOKEN`) is stored as a GitHub Actions secret and
+was not available in the local development environment. The two API probes
+below were documented but not executed, so this repository does not establish
+whether the bot is currently a member of the guild or can read the channel.
 
 ```bash
 # Guild membership check
@@ -56,20 +57,19 @@ curl -sH "Authorization: Bot $DISCORD_BOT_TOKEN" \
   "https://discord.com/api/v10/channels/1115978499400933473" | jq .
 ```
 
-Both probes require the token in the caller's environment. The ingest was
-staged (fetcher script written, directory structure created, lineage stubs
-placed) but **no content has been ingested** because guild access cannot be
-confirmed.
+Both probes require the token in the caller's environment. The fetcher and
+lineage stub exist, but **no content has been ingested**.
 
 **Historical context (from `src/discord/` discovery, 2026-05-18):**
 
-The bot was originally deployed to monitor a *different* guild's channels. The
-STFC Officer Tool Discord (guild `639255937869152267`) has not been explicitly
-targeted before. Guild membership is unknown but likely absent.
+The bot was originally deployed to monitor a *different* guild's channels.
+Membership in the STFC Officer Tool Discord has not been verified from this
+repository.
 
 **What's needed to unblock:**
 
-1. **A guild admin** of `639255937869152267` must invite the bot using:
+1. If the bot is not already a member, a **guild admin** of
+   `639255937869152267` must invite it using:
    ```
    https://discord.com/api/oauth2/authorize?client_id={CLIENT_ID}&scope=bot&permissions=66560
    ```
@@ -92,7 +92,7 @@ targeted before. Guild membership is unknown but likely absent.
 
 **Who to ask:** A maintainer or moderator of the STFC Officer Tool Discord.
 
-## Refresh procedure (once unblocked)
+## Refresh procedure (once access is available)
 
 ```bash
 export DISCORD_BOT_TOKEN="<your-bot-token>"

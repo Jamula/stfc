@@ -182,8 +182,8 @@ expected digest output), see
 ### `discord/commands.json` — single source of truth
 
 `discord/commands.json` is the canonical definition of every slash command
-this bot exposes. Downstream workflows (#145 registration, #147 handler)
-read this file; **do not add or rename commands without updating it**.
+this bot exposes. The registration workflow and the command handler use this
+file; **do not add or rename commands without updating it**.
 
 Current commands:
 
@@ -191,10 +191,11 @@ Current commands:
 |---|---|---|---|
 | `/redeem-status` | CHAT_INPUT (1) | Show the latest redemption run results | (all members) |
 | `/trigger-redeem` | CHAT_INPUT (1) | Manually trigger the next gift redemption run | ADMINISTRATOR (`"8"`) |
+| `/game-state` | CHAT_INPUT (1) | Upload an image or video with an optional note | ADMINISTRATOR (`"8"`) |
 
 `default_member_permissions: "8"` is Discord's bitmask for the
 `ADMINISTRATOR` permission (bit 3, value 8). Only server administrators can
-invoke `/trigger-redeem`. See [Discord permission docs](https://discord.com/developers/docs/topics/permissions).
+invoke `/trigger-redeem` and `/game-state`. See [Discord permission docs](https://discord.com/developers/docs/topics/permissions).
 
 ### Validator
 
@@ -257,15 +258,19 @@ The Cloudflare Worker bridge dispatches `repository_dispatch` events with
 `event_type: "discord-command"`. Workflow
 `.github/workflows/discord-command-handler.yml` routes the payload to:
 
-- `redeem-status` — reads recent lines from `docs/redeem-history.md`
+- `redeem-status` — reads live history from `docs/redeem-history.md` on
+  `automation-state`
 - `trigger-redeem` — starts `redeem.yml` and replies with the run ID + link
+- `game-state` — uploads the attachment to the configured private R2 bucket
+  and records metadata on `automation-state`
 - any other command — replies with `Unknown command: <name>`
 
 To add a new slash command end-to-end:
 
 1. Add the command to `discord/commands.json`
 2. Re-register commands (`discord-register-commands.yml`)
-3. Add a new command case in `scripts/discord-handler.mjs`
+3. Add a new command case in `scripts/discord-handler.mjs` and, if needed,
+   configure the Worker dispatch and handler workflow.
 4. Add/update tests (`tests/discord/commandsJson.test.ts`,
    `tests/scripts/discordHandler.test.ts`)
 

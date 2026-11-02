@@ -7,7 +7,7 @@
 | **Source URL** | <https://docs.google.com/spreadsheets/d/19gxHFoje5GGRWSmE9BtSp97j_zOnMY4jBP9gFr1zi90/edit#gid=1179953085> (gid `1179953085`) |
 | **Source name** | STFC Community Sheet — *Starfleet Academy, Athena & Duo Waves — M90 & M91* — Critical Damage Mitigation tab |
 | **Author(s) / contributors** | JulesVern; Quasel; BlueMandalorian; STFC Officer Tool Discord `#data-collection` channel |
-| **Captured on** | 2026-05-31 |
+| **Captured on** | 2026-11-02 |
 | **License / attribution requirements** | Community-maintained reference. Upstream says **"MAKE A COPY"** for any use of the calculators; we mirror read-only. Preserve the author list above on every quote or excerpt; link back to the source URL. We do **not** modify the upstream sheet — contributions go through the authors via the Discord channel: https://discord.gg/BRhru6Vcnj |
 | **Refresh strategy** | Re-fetch via the public gviz CSV endpoint per tab: `node scripts/fetch-community-sheet.mjs` from the repo root rewrites every per-tab mirror and updates **Captured on**. If the upstream adds/renames/removes tabs, update the `TABS` array in that script first (gids come from the published `/htmlview` URL). |
 

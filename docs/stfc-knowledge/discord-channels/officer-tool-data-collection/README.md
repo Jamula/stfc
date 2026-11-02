@@ -1,9 +1,9 @@
 # STFC Officer Tool Discord — #data-collection channel
 
-> **Status: ⚠️ BLOCKED — bot not in guild `639255937869152267`**
+> **Status: No snapshot captured; bot access has not been verified**
 >
 > No content has been ingested. This file is a stub created to record the
-> intent, lineage metadata, and blocker details. See the
+> intent and lineage metadata. See the
 > [discord-channels README](../README.md) for unblock steps.
 
 ## Lineage
@@ -12,7 +12,7 @@
 | --- | --- |
 | **Source URL** | <https://discord.com/channels/639255937869152267/1115978499400933473> |
 | **Source name** | STFC Officer Tool Discord — `#data-collection` channel (guild `639255937869152267`, channel `1115978499400933473`) |
-| **Author(s) / contributors** | Community contributors in the STFC Officer Tool Discord `#data-collection` channel (usernames not yet retrievable — bot access blocked) |
+| **Author(s) / contributors** | Community contributors in the STFC Officer Tool Discord `#data-collection` channel (usernames not collected; no snapshot exists) |
 | **Captured on** | 2026-05-31 (stub only — no content ingested) |
 | **License / attribution requirements** | Mirrored from the STFC Officer Tool community Discord. Original authors retain credit. Do not modify mirrored content; refresh via re-ingestion. |
 | **Refresh strategy** | `node scripts/fetch-discord-channel.mjs` from the repo root (requires `DISCORD_BOT_TOKEN` env var set to a bot token that is a member of guild `639255937869152267`). Fetches pins first (`GET /channels/1115978499400933473/pins`), then paginates history (`GET /channels/1115978499400933473/messages?limit=100&before={id}`). |
