@@ -37,6 +37,7 @@ function Log ([string]$msg, [string]$color = "White") {
 
 $repo      = Resolve-Path $RepoPath
 $namespace = "squad/$($Agent.ToLower())"
+$nsRef = "refs/notes/$namespace"
 
 # ── Validate JSON content ────────────────────────────────────────────────────
 try {
@@ -70,28 +71,50 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
+# Stage the write against a snapshot, then compare-and-swap the public ref.
+$baseOid = git -C $repo rev-parse --verify --quiet $nsRef 2>&1
+$baseExists = ($LASTEXITCODE -eq 0)
+if (-not $baseExists -and $LASTEXITCODE -ne 1) {
+    Write-Error "Failed to read local notes ref ${nsRef}: $baseOid"
+    exit 1
+}
+$stagingRef = "refs/notes/squad-staging/$([guid]::NewGuid().ToString('N'))"
+if ($baseExists) {
+    git -C $repo update-ref $stagingRef $baseOid ("0" * $baseOid.Length) 2>&1 | Out-Null
+    if ($LASTEXITCODE -ne 0) { Write-Error "Failed to initialize the note staging ref."; exit 1 }
+}
+
 # ── Check if note already exists on this commit ─────────────────────────────
-$existing = git -C $repo notes --ref=$namespace show $Commit 2>&1
+$existing = git -C $repo notes --ref=$stagingRef show $Commit 2>&1
 $useAppend = ($LASTEXITCODE -eq 0)
 
 if ($useAppend) {
     Log "Note exists on $Commit — appending" DarkYellow
-    git -C $repo notes --ref=$namespace append -m $noteJson $Commit
+    git -C $repo notes --ref=$stagingRef append -m $noteJson $Commit
 } else {
-    git -C $repo notes --ref=$namespace add -m $noteJson $Commit
+    git -C $repo notes --ref=$stagingRef add -m $noteJson $Commit
 }
 
 if ($LASTEXITCODE -ne 0) {
+    git -C $repo update-ref -d $stagingRef 2>&1 | Out-Null
     Write-Error "Failed to write note to refs/notes/$namespace on $Commit"
     exit 1
 }
+$stagedOid = git -C $repo rev-parse --verify $stagingRef
+if ($LASTEXITCODE -ne 0) { Write-Error "Failed to read staged note at $stagingRef."; exit 1 }
+if (-not $baseExists) { $baseOid = "0" * $stagedOid.Length }
+$updateOutput = git -C $repo update-ref $nsRef $stagedOid $baseOid 2>&1
+if ($LASTEXITCODE -ne 0) {
+    Write-Error "Notes changed concurrently; the new note is retained at $stagingRef. Reconcile it before retrying. $updateOutput"
+    exit 1
+}
+git -C $repo update-ref -d $stagingRef $stagedOid 2>&1 | Out-Null
 
 Log "Note written to refs/notes/$namespace on $($Commit.Substring(0,[Math]::Min(8,$Commit.Length)))" Green
 
 # ── Push with retry ──────────────────────────────────────────────────────────
 if (-not $NoPush) {
     $maxRetries = 5
-    $nsRef = "refs/notes/$namespace"
     $pushed = $false
 
     for ($i = 0; $i -lt $maxRetries; $i++) {

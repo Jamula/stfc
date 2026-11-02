@@ -7,7 +7,7 @@
 # Usage:
 #   ./scripts/notes/fetch.ps1           # fetch only
 #   ./scripts/notes/fetch.ps1 -Setup    # first-time: add tracking refspec + fetch
-#   ./scripts/notes/fetch.ps1 -Merge    # fetch + merge (use after push conflict)
+#   ./scripts/notes/fetch.ps1 -Merge    # fetch + fast-forward local notes
 # ─────────────────────────────────────────────────────────────────────────────
 
 [CmdletBinding()]
@@ -24,7 +24,7 @@ function Log ([string]$msg, [string]$color = "White") {
 }
 
 $repo = Resolve-Path $RepoPath
-$trackingPrefix = "refs/remotes/$Remote/notes"
+$trackingPrefix = "refs/squad/notes-remotes/$Remote"
 $refspec = "+refs/notes/*:${trackingPrefix}/*"
 
 function Assert-NoNotesMerge {
@@ -46,6 +46,8 @@ if ($Setup) {
     # Remove the old destructive mapping when upgrading an existing setup.
     git -C $repo config --fixed-value --unset-all "remote.$Remote.fetch" "refs/notes/*:refs/notes/*" 2>&1 | Out-Null
     git -C $repo config --fixed-value --unset-all "remote.$Remote.fetch" "+refs/notes/*:refs/notes/*" 2>&1 | Out-Null
+    git -C $repo config --fixed-value --unset-all "remote.$Remote.fetch" "+refs/notes/*:refs/remotes/$Remote/notes/*" 2>&1 | Out-Null
+    git -C $repo config --fixed-value --unset-all "remote.$Remote.fetch" "refs/notes/*:refs/remotes/$Remote/notes/*" 2>&1 | Out-Null
     $existing = @(git -C $repo config --get-all "remote.$Remote.fetch" 2>&1)
     if ($existing -contains $refspec) {
         Log "Notes refspec already configured." DarkGray
@@ -66,21 +68,44 @@ if ($LASTEXITCODE -ne 0) {
     Log "Notes fetched." Green
 }
 
-# ── Merge notes if requested (after push conflict) ──────────────────────────
+# ── Fast-forward notes if requested ─────────────────────────────────────────
 if ($Merge) {
     $remoteRefs = git -C $repo for-each-ref "$trackingPrefix/squad/" --format="%(refname)" 2>&1
     foreach ($remoteRef in $remoteRefs) {
         Assert-NoNotesMerge
         $ns = $remoteRef.Substring($trackingPrefix.Length + 1)
-        Log "Merging notes: $ns (cat_sort_uniq)"
-        $mergeOutput = git -C $repo notes --ref=$ns merge -s cat_sort_uniq $remoteRef 2>&1
+        $localRef = "refs/notes/$ns"
+        $remoteOid = git -C $repo rev-parse --verify $remoteRef 2>&1
         if ($LASTEXITCODE -ne 0) {
-            # Do not abort: a concurrent invocation may own the merge state.
-            Write-Error "Failed to merge notes for ${ns}: $mergeOutput. Check for an in-progress notes merge before retrying."
+            Write-Error "Failed to read tracking notes for ${ns}: $remoteOid"
+            exit 1
+        }
+        $localOid = git -C $repo rev-parse --verify --quiet $localRef 2>&1
+        if ($LASTEXITCODE -eq 1) {
+            # An all-zero old value requires that the ref still not exist.
+            $localOid = "0" * $remoteOid.Length
+        } elseif ($LASTEXITCODE -ne 0) {
+            Write-Error "Failed to read local notes for ${ns}: $localOid"
+            exit 1
+        } elseif ($localOid -eq $remoteOid) {
+            continue
+        } else {
+            git -C $repo merge-base --is-ancestor $remoteOid $localOid 2>&1 | Out-Null
+            if ($LASTEXITCODE -eq 0) { continue }
+            git -C $repo merge-base --is-ancestor $localOid $remoteOid 2>&1 | Out-Null
+            if ($LASTEXITCODE -ne 0) {
+                Write-Error "Local and remote notes for $ns diverged; reconcile them manually without discarding either history."
+                exit 1
+            }
+        }
+        Log "Fast-forwarding notes: $ns"
+        $updateOutput = git -C $repo update-ref $localRef $remoteOid $localOid 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            Write-Error "Notes for $ns changed concurrently; no update was applied. Retry synchronization. $updateOutput"
             exit 1
         }
     }
-    Log "Notes merge complete." Green
+    Log "Notes synchronization complete." Green
 }
 
 # ── Show available namespaces ────────────────────────────────────────────────

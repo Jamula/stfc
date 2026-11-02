@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
+import { spawnSync, type SpawnSyncReturns } from "node:child_process";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, it } from "node:test";
@@ -60,10 +60,18 @@ ${current}
         foreach ($switchExit in @(1, 0)) {
             $script:switchExit = $switchExit
             $script:calls = @()
-            & $alias api user --jq '.login'
+            $threw = $false
+            try {
+                & $alias api user --jq '.login'
+                $succeeded = $?
+            } catch {
+                $succeeded = $?
+                $threw = $true
+            }
             $results += [PSCustomObject]@{
                 source = $source; alias = $alias; switchExit = $switchExit
-                exitCode = $LASTEXITCODE; calls = @($script:calls)
+                exitCode = $LASTEXITCODE; succeeded = $succeeded
+                threw = $threw; calls = @($script:calls)
             }
         }
     }
@@ -81,6 +89,8 @@ ConvertTo-Json -InputObject @($results) -Depth 6 -Compress
       alias: string;
       switchExit: number;
       exitCode: number;
+      succeeded: boolean;
+      threw: boolean;
       calls: string[][];
     }>;
     assert.equal(results.length, 8);
@@ -91,6 +101,43 @@ ConvertTo-Json -InputObject @($results) -Depth 6 -Compress
       if (row.switchExit === 0) expected.push(["api", "user", "--jq", ".login"]);
       assert.deepEqual(row.calls, expected, context);
       assert.equal(row.exitCode, row.switchExit, context);
+      assert.equal(row.succeeded, row.switchExit === 0, `${context}: PowerShell $?`);
+      assert.equal(row.threw, row.switchExit !== 0, `${context}: terminating error`);
+    }
+
+    for (const [source, definitions] of [
+      ["profile", `$block = @"\n${profile}\n"@\nInvoke-Expression $block`],
+      ["current", current],
+    ]) {
+      for (const alias of ["gh-personal", "gh-work"]) {
+        const account = alias === "gh-personal" ? "confirmed-personal" : "confirmed-work";
+        const failureScript = `
+$personal = 'confirmed-personal'
+$work = 'confirmed-work'
+function gh {
+    if ($args[0] -eq 'auth') {
+        [Console]::Error.WriteLine("mock-switch:$($args[3])")
+        $global:LASTEXITCODE = 1
+    } else {
+        [Console]::Out.WriteLine('unexpected-command')
+    }
+}
+${definitions}
+& ${alias} api user
+`;
+        const failure: SpawnSyncReturns<string> = spawnSync(
+          shell,
+          ["-NoLogo", "-NoProfile", "-NonInteractive", "-EncodedCommand",
+            Buffer.from(failureScript, "utf16le").toString("base64")],
+          { encoding: "utf8" },
+        );
+        const context = `${source} ${alias}`;
+        assert.ifError(failure.error);
+        assert.ok(failure.status !== null && failure.status !== 0, `${context}: failed switch must exit nonzero`);
+        assert.match(failure.stderr, new RegExp(`mock-switch:${account}`), context);
+        assert.match(failure.stderr, /GitHub account switch failed/, context);
+        assert.doesNotMatch(failure.stdout, /unexpected-command/, context);
+      }
     }
   });
 });

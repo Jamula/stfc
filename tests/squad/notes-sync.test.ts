@@ -24,7 +24,20 @@ function git(repo: string, ...args: string[]) {
 
 function script(name: string, args: string[], env: NodeJS.ProcessEnv = {}) {
   const quote = (s: string) => `'${s.replaceAll("'", "''")}'`;
-  const command = `if ($env:NOTES_TEST_NO_SLEEP) { function global:Start-Sleep { param($Seconds) } }; & ${quote(join(scripts, name))} ${args.join(" ")}; exit $LASTEXITCODE`;
+  const command = `
+    if ($env:NOTES_TEST_NO_SLEEP) { function global:Start-Sleep { param($Seconds) } }
+    if ($env:NOTES_RACE_NOTE) {
+      $global:gitExe = (Get-Command git -CommandType Application | Select-Object -First 1).Source
+      function global:git {
+        $raceNamespace = if ($env:NOTES_RACE_NAMESPACE) { $env:NOTES_RACE_NAMESPACE } else { 'squad/data' }
+        if (-not $global:raceInjected -and $args.Count -ge 5 -and $args[2] -eq 'update-ref' -and $args[3] -eq "refs/notes/$raceNamespace") {
+          $global:raceInjected = $true
+          & $global:gitExe -C $args[1] notes "--ref=$raceNamespace" append -m $env:NOTES_RACE_NOTE HEAD
+        }
+        & $global:gitExe @args
+      }
+    }
+    & ${quote(join(scripts, name))} ${args.join(" ")}; exit $LASTEXITCODE`;
   return run("pwsh", ["-NoProfile", "-EncodedCommand", Buffer.from(command, "utf16le").toString("base64")], env);
 }
 
@@ -51,7 +64,10 @@ test("notes sync preserves unpublished notes, merges remote-only refs and report
     git(local, "commit", "--allow-empty", "-m", "base");
     git(local, "remote", "add", "origin", remote);
     git(local, "push", "origin", "HEAD:refs/heads/main");
-    note(local, "remote original");
+    git(local, "push", "origin", "HEAD:refs/heads/notes/squad/data");
+    git(local, "update-ref", "refs/remotes/origin/notes/squad/data", "HEAD");
+    const branchTrackingOid = git(local, "rev-parse", "refs/remotes/origin/notes/squad/data");
+    note(local, JSON.stringify({ content: "remote original" }));
     git(local, "push", "origin", "refs/notes/squad/data");
     assert.equal(run("git", ["clone", "-b", "main", remote, peer]).status, 0);
     git(peer, "config", "user.name", "Notes Test");
@@ -59,6 +75,7 @@ test("notes sync preserves unpublished notes, merges remote-only refs and report
 
     // A legacy configuration must not overwrite local-only notes even before -Setup migrates it.
     git(local, "config", "--add", "remote.origin.fetch", "refs/notes/*:refs/notes/*");
+    git(local, "config", "--add", "remote.origin.fetch", "+refs/notes/*:refs/remotes/origin/notes/*");
     assert.equal(write("local one", "-NoPush").status, 0);
     assert.equal(write("local two", "-NoPush").status, 0);
     let result = git(local, "notes", "--ref=squad/data", "show", "HEAD");
@@ -69,8 +86,10 @@ test("notes sync preserves unpublished notes, merges remote-only refs and report
     const setup = script("fetch.ps1", [`-RepoPath '${local.replaceAll("'", "''")}'`, "-Setup", "-Merge", "-Quiet"]);
     assert.equal(setup.status, 0, setup.stderr);
     const configured = git(local, "config", "--get-all", "remote.origin.fetch");
-    assert.match(configured, /\+refs\/notes\/\*:refs\/remotes\/origin\/notes\/\*/);
+    assert.match(configured, /\+refs\/notes\/\*:refs\/squad\/notes-remotes\/origin\/\*/);
     assert.doesNotMatch(configured, /refs\/notes\/\*:refs\/notes\/\*/);
+    assert.doesNotMatch(configured, /refs\/notes\/\*:refs\/remotes\/origin\/notes\/\*/);
+    assert.equal(git(local, "rev-parse", "refs/remotes/origin/notes/squad/data"), branchTrackingOid);
 
     git(peer, "notes", "--ref=squad/research", "add", "-m", "remote-only namespace", "HEAD");
     git(peer, "push", "origin", "refs/notes/squad/research");
@@ -78,20 +97,41 @@ test("notes sync preserves unpublished notes, merges remote-only refs and report
     assert.equal(merge.status, 0, merge.stderr);
     assert.match(git(local, "notes", "--ref=squad/research", "show", "HEAD"), /remote-only namespace/);
 
-    // Advance the remote during the first push, forcing the real rejection/retry path.
-    git(peer, "fetch", "origin", "+refs/notes/squad/data:refs/notes/squad/data");
-    note(peer, "concurrent remote");
-    const hook = join(local, ".git", "hooks", "pre-push");
-    writeFileSync(hook, "#!/bin/sh\nif [ ! -f \"$NOTES_TEST_MARKER\" ]; then\n  touch \"$NOTES_TEST_MARKER\"\n  git -C \"$NOTES_TEST_PEER\" push origin refs/notes/squad/data || exit 1\nfi\n");
-    chmodSync(hook, 0o755);
-    const race = write("local retry", "", { NOTES_TEST_MARKER: join(root, "pushed"), NOTES_TEST_PEER: peer, NOTES_TEST_NO_SLEEP: "1" });
-    assert.equal(race.status, 0, race.stderr);
-    result = git(local, "notes", "--ref=squad/data", "show", "HEAD");
-    for (const expected of ["remote original", "concurrent remote", "local one", "local two", "local retry"]) assert.match(result, new RegExp(expected));
-    git(peer, "fetch", "origin", "+refs/notes/squad/data:refs/notes/squad/data");
-    assert.equal(git(peer, "notes", "--ref=squad/data", "show", "HEAD"), result);
+    // A competing local update must defeat a fast-forward compare-and-swap.
+    const researchBase = git(local, "rev-parse", "refs/notes/squad/research");
+    git(peer, "notes", "--ref=squad/research", "append", "-m", "remote research advance", "HEAD");
+    git(peer, "push", "origin", "refs/notes/squad/research");
+    const fetchRace = script("fetch.ps1", [`-RepoPath '${local.replaceAll("'", "''")}'`, "-Merge", "-Quiet"], {
+      NOTES_RACE_NAMESPACE: "squad/research",
+      NOTES_RACE_NOTE: "concurrent research",
+    });
+    assert.notEqual(fetchRace.status, 0);
+    assert.match(fetchRace.stderr, /changed concurrently/);
+    assert.match(git(local, "notes", "--ref=squad/research", "show", "HEAD"), /concurrent research/);
+    assert.match(git(peer, "notes", "--ref=squad/research", "show", "HEAD"), /remote research advance/);
+    // Reset this disposable fixture after confirming both histories survived,
+    // then verify the uncontended fast-forward succeeds.
+    git(local, "update-ref", "refs/notes/squad/research", researchBase);
+    const fastForward = script("fetch.ps1", [`-RepoPath '${local.replaceAll("'", "''")}'`, "-Merge", "-Quiet"]);
+    assert.equal(fastForward.status, 0, fastForward.stderr);
+    assert.equal(git(local, "notes", "--ref=squad/research", "show", "HEAD"), git(peer, "notes", "--ref=squad/research", "show", "HEAD"));
 
-    rmSync(hook);
+    // Mutate the public ref exactly between staging and compare-and-swap.
+    const race = write("staged local", "-NoPush", { NOTES_RACE_NOTE: JSON.stringify({ content: "concurrent local" }) });
+    assert.notEqual(race.status, 0);
+    assert.match(race.stderr, /changed concurrently/);
+    const stage = git(local, "for-each-ref", "refs/notes/squad-staging/", "--format=%(refname)");
+    assert.match(stage, /^refs\/notes\/squad-staging\/[a-f0-9]+$/);
+    result = git(local, "notes", "--ref=squad/data", "show", "HEAD");
+    assert.match(result, /concurrent local/);
+    assert.doesNotMatch(result, /staged local/);
+    const stagedContent = git(local, "notes", `--ref=${stage}`, "show", "HEAD");
+    assert.match(stagedContent, /staged local/);
+    assert.match(stagedContent, /local one/);
+    for (const entry of result.split(/\r?\n\s*\r?\n/)) JSON.parse(entry);
+    for (const entry of stagedContent.split(/\r?\n\s*\r?\n/)) JSON.parse(entry);
+    git(local, "update-ref", "-d", stage);
+
     const rejectHook = join(remote, "hooks", "pre-receive");
     writeFileSync(rejectHook, "#!/bin/sh\nexit 1\n");
     chmodSync(rejectHook, 0o755);
@@ -133,6 +173,23 @@ test("notes sync preserves unpublished notes, merges remote-only refs and report
     [partial, mergeRef, conflictFile].forEach((path, i) => assert.deepEqual(readFileSync(path), before[i], `${path} changed during write`));
     assert.equal(git(local, "rev-parse", "refs/notes/squad/conflict"), beforeRef);
     git(local, "notes", "merge", "--abort");
+
+    // Divergent JSON histories must not be automatically concatenated or discarded.
+    git(peer, "fetch", "origin", "+refs/notes/squad/data:refs/notes/squad/data");
+    note(peer, JSON.stringify({ content: "concurrent remote" }));
+    git(peer, "push", "origin", "refs/notes/squad/data");
+    const beforeLocal = git(local, "notes", "--ref=squad/data", "show", "HEAD");
+    const beforeRemote = git(peer, "notes", "--ref=squad/data", "show", "HEAD");
+    const diverged = script("fetch.ps1", [`-RepoPath '${local.replaceAll("'", "''")}'`, "-Merge", "-Quiet"]);
+    assert.notEqual(diverged.status, 0);
+    assert.match(diverged.stderr, /diverged/);
+    assert.equal(git(local, "notes", "--ref=squad/data", "show", "HEAD"), beforeLocal);
+    assert.equal(git(peer, "notes", "--ref=squad/data", "show", "HEAD"), beforeRemote);
+    for (const entry of beforeLocal.split(/\r?\n\s*\r?\n/)) JSON.parse(entry);
+    for (const entry of beforeRemote.split(/\r?\n\s*\r?\n/)) JSON.parse(entry);
+    const rejectedWrite = write("must not overwrite divergence", "-NoPush");
+    assert.notEqual(rejectedWrite.status, 0);
+    assert.equal(git(local, "notes", "--ref=squad/data", "show", "HEAD"), beforeLocal);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

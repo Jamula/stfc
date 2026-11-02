@@ -90,6 +90,10 @@ Set `"archive_on_close": true` to signal Ralph to archive this to
 
 ## Write Commands
 
+The helper below uses a compare-and-swap to avoid overwriting concurrent helper
+writes. Direct `git notes` commands do not participate in this protocol; do not
+run them concurrently with helpers or other writers.
+
 ```bash
 # Write a decision note on the current commit
 git notes --ref=squad/{your-agent} add \
@@ -126,8 +130,9 @@ Or use the helper script:
 
 ```bash
 git config --fixed-value --unset-all remote.origin.fetch 'refs/notes/*:refs/notes/*'
-git config --add remote.origin.fetch '+refs/notes/*:refs/remotes/origin/notes/*'
-git fetch --prune --refmap= origin '+refs/notes/*:refs/remotes/origin/notes/*'
+git config --fixed-value --unset-all remote.origin.fetch '+refs/notes/*:refs/remotes/origin/notes/*'
+git config --add remote.origin.fetch '+refs/notes/*:refs/squad/notes-remotes/origin/*'
+git fetch --prune --refmap= origin '+refs/notes/*:refs/squad/notes-remotes/origin/*'
 ```
 
 Or use the helper:
@@ -138,7 +143,7 @@ Or use the helper:
 
 ### Every work round
 
-1. **Start**: `./scripts/notes/fetch.ps1 -Merge` fetches tracking refs and merges remote squad namespaces into local notes.
+1. **Start**: `./scripts/notes/fetch.ps1 -Merge` fetches tracking refs and fast-forwards local squad namespaces where possible.
 2. **End**: Push the agent's namespace: `git push origin 'refs/notes/squad/{agent}:refs/notes/squad/{agent}'`.
 
 ---
@@ -148,21 +153,16 @@ Or use the helper:
 1. **Per-agent namespaces prevent 99% of conflicts.** Only one agent writes to
    `refs/notes/squad/data`, so there are no write conflicts in normal use.
 
-2. **Same agent, two machines:** First push wins. The losing machine should
-   fetch and merge the remote history, preserving both local and remote notes:
-   ```powershell
-   ./scripts/notes/fetch.ps1 -Merge
-   git push origin 'refs/notes/squad/{agent}:refs/notes/squad/{agent}'
-   ```
+2. **Same agent, two machines:** First push wins. If histories diverge, the
+   helper stops rather than automatically merging JSON payloads. Manually
+   reconcile both histories and preserve each complete note before pushing.
 
 3. **Shared namespaces** (`research`, `review`): Always use `git notes append`,
    never `git notes add`.
 
-4. **Push conflict recovery:**
-   ```bash
-   ./scripts/notes/fetch.ps1 -Merge
-   git push origin 'refs/notes/squad/{agent}:refs/notes/squad/{agent}'
-   ```
+4. **Concurrent local write:** The helper fails instead of overwriting another
+   writer and reports a staging ref containing its note. Preserve and manually
+   reconcile that ref before deleting it or retrying.
 
 ---
 

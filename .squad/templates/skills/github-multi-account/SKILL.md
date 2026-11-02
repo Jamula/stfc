@@ -36,8 +36,8 @@ if ($existing -notmatch "gh-personal") {
     $block = @"
 
 # === GitHub Multi-Account Aliases ===
-function gh-personal { gh auth switch --user $personal | Out-Null; if (`$LASTEXITCODE -ne 0) { return }; gh @args }
-function gh-work { gh auth switch --user $work | Out-Null; if (`$LASTEXITCODE -ne 0) { return }; gh @args }
+function gh-personal { gh auth switch --user $personal | Out-Null; if (`$LASTEXITCODE -ne 0) { throw "GitHub account switch failed." }; gh @args }
+function gh-work { gh auth switch --user $work | Out-Null; if (`$LASTEXITCODE -ne 0) { throw "GitHub account switch failed." }; gh @args }
 Set-Alias ghp gh-personal
 Set-Alias ghw gh-work
 "@
@@ -58,8 +58,8 @@ if ($userPath -notmatch [regex]::Escape($binDir)) {
 }
 
 # 5. Load in current session
-function gh-personal { gh auth switch --user $personal | Out-Null; if ($LASTEXITCODE -ne 0) { return }; gh @args }
-function gh-work { gh auth switch --user $work | Out-Null; if ($LASTEXITCODE -ne 0) { return }; gh @args }
+function gh-personal { gh auth switch --user $personal | Out-Null; if ($LASTEXITCODE -ne 0) { throw "GitHub account switch failed." }; gh @args }
+function gh-work { gh auth switch --user $work | Out-Null; if ($LASTEXITCODE -ne 0) { throw "GitHub account switch failed." }; gh @args }
 Set-Alias ghp gh-personal
 Set-Alias ghw gh-work
 ```
