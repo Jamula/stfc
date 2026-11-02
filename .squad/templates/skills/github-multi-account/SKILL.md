@@ -23,6 +23,11 @@ Ask: "I see you have multiple GitHub accounts: {list them}. Which one is your pe
 ### Step 3: Run the setup automatically
 Once the user confirms, do ALL of this for them:
 
+If the profile already defines either alias, setup stops for explicit migration.
+Review the existing definitions with the user and update only the approved managed
+block to the definitions below, preserving their confirmed accounts and unrelated
+profile content. Do not silently skip old definitions or append duplicates.
+
 ```powershell
 # 1. Define the functions
 $personal = "THEIR_PERSONAL_USERNAME"
@@ -32,8 +37,10 @@ $work = "THEIR_WORK_USERNAME"
 $profilePath = $PROFILE.CurrentUserAllHosts
 if (!(Test-Path $profilePath)) { New-Item -Path $profilePath -Force | Out-Null }
 $existing = Get-Content $profilePath -Raw -ErrorAction SilentlyContinue
-if ($existing -notmatch "gh-personal") {
-    $block = @"
+if ($existing -match "gh-personal|gh-work") {
+    throw "Existing GitHub account aliases require migration. Review and update the managed profile block before continuing."
+}
+$block = @"
 
 # === GitHub Multi-Account Aliases ===
 function gh-personal { gh auth switch --user $personal | Out-Null; if (`$LASTEXITCODE -ne 0) { throw "GitHub account switch failed." }; gh @args }
@@ -41,8 +48,7 @@ function gh-work { gh auth switch --user $work | Out-Null; if (`$LASTEXITCODE -n
 Set-Alias ghp gh-personal
 Set-Alias ghw gh-work
 "@
-    Add-Content -Path $profilePath -Value $block
-}
+Add-Content -Path $profilePath -Value $block
 
 # 3. Create CMD wrappers
 $binDir = Join-Path $env:USERPROFILE ".squad\bin"
@@ -65,7 +71,9 @@ Set-Alias ghw gh-work
 ```
 
 ### Step 4: Verify for the user
-Run these and show the results:
+Open a new PowerShell session after installation or migration. Verify that both
+aliases use the confirmed accounts and that a failed switch terminates without
+running the requested command. Run these and show the results:
 ```powershell
 ghp api user --jq '.login'   # should show personal username
 ghw api user --jq '.login'   # should show work username

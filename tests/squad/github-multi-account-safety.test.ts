@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync, type SpawnSyncReturns } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { describe, it } from "node:test";
 
@@ -139,5 +139,35 @@ ${definitions}
         assert.doesNotMatch(failure.stdout, /unexpected-command/, context);
       }
     }
+  });
+
+  it("requires explicit migration of existing profile aliases in a new shell", (t) => {
+    const shell = powerShell();
+    if (!shell) {
+      t.skip("PowerShell is not installed");
+      return;
+    }
+    const setup = /```powershell\n([\s\S]*?)# 3\. Create CMD wrappers/.exec(skill)?.[1];
+    assert.ok(setup, "Missing documented profile setup");
+    const dir = mkdtempSync(path.join(process.cwd(), ".account-profile-test-"));
+    t.after(() => rmSync(dir, { recursive: true, force: true }));
+    const profilePath = path.join(dir, "profile.ps1");
+    const oldProfile = "function gh-personal { return }\nfunction gh-work { return }\n";
+    writeFileSync(profilePath, oldProfile);
+    const script = `
+$PROFILE = [PSCustomObject]@{ CurrentUserAllHosts = '${profilePath.replaceAll("'", "''")}' }
+. $PROFILE.CurrentUserAllHosts
+${setup}
+Write-Output 'unexpected-setup-success'
+`;
+    const result = spawnSync(shell, [
+      "-NoLogo", "-NoProfile", "-NonInteractive", "-EncodedCommand",
+      Buffer.from(script, "utf16le").toString("base64"),
+    ], { encoding: "utf8" });
+    assert.ifError(result.error);
+    assert.ok(result.status !== null && result.status !== 0, "Existing aliases must not silently skip migration");
+    assert.match(result.stderr, /Existing GitHub account aliases require migration/);
+    assert.doesNotMatch(result.stdout, /unexpected-setup-success/);
+    assert.equal(readFileSync(profilePath, "utf8"), oldProfile, "Do not replace user aliases without review");
   });
 });

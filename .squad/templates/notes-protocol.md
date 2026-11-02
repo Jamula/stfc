@@ -161,7 +161,8 @@ Or use the helper:
    never `git notes add`.
 
 4. **Concurrent local write:** The helper fails instead of overwriting another
-   writer and reports a staging ref containing its note. Preserve and manually
+   writer and reports a `refs/notes/private-staging/` ref containing its note, outside
+   the runtime's `refs/notes/squad*` publication selection. Preserve and manually
    reconcile that ref before deleting it or retrying.
 
 ---

@@ -120,8 +120,8 @@ test("notes sync preserves unpublished notes, merges remote-only refs and report
     const race = write("staged local", "-NoPush", { NOTES_RACE_NOTE: JSON.stringify({ content: "concurrent local" }) });
     assert.notEqual(race.status, 0);
     assert.match(race.stderr, /changed concurrently/);
-    const stage = git(local, "for-each-ref", "refs/notes/squad-staging/", "--format=%(refname)");
-    assert.match(stage, /^refs\/notes\/squad-staging\/[a-f0-9]+$/);
+    const stage = git(local, "for-each-ref", "refs/notes/private-staging/", "--format=%(refname)");
+    assert.match(stage, /^refs\/notes\/private-staging\/[a-f0-9]+$/);
     result = git(local, "notes", "--ref=squad/data", "show", "HEAD");
     assert.match(result, /concurrent local/);
     assert.doesNotMatch(result, /staged local/);
@@ -130,6 +130,10 @@ test("notes sync preserves unpublished notes, merges remote-only refs and report
     assert.match(stagedContent, /local one/);
     for (const entry of result.split(/\r?\n\s*\r?\n/)) JSON.parse(entry);
     for (const entry of stagedContent.split(/\r?\n\s*\r?\n/)) JSON.parse(entry);
+    git(local, "push", "origin", "refs/notes/squad*");
+    const publishedRefs = git(local, "ls-remote", "--refs", "origin");
+    assert.doesNotMatch(publishedRefs, /staging/);
+    assert.equal(git(local, "notes", `--ref=${stage}`, "show", "HEAD"), stagedContent);
     git(local, "update-ref", "-d", stage);
 
     const rejectHook = join(remote, "hooks", "pre-receive");

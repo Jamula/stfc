@@ -78,7 +78,7 @@ if (-not $baseExists -and $LASTEXITCODE -ne 1) {
     Write-Error "Failed to read local notes ref ${nsRef}: $baseOid"
     exit 1
 }
-$stagingRef = "refs/notes/squad-staging/$([guid]::NewGuid().ToString('N'))"
+$stagingRef = "refs/notes/private-staging/$([guid]::NewGuid().ToString('N'))"
 if ($baseExists) {
     git -C $repo update-ref $stagingRef $baseOid ("0" * $baseOid.Length) 2>&1 | Out-Null
     if ($LASTEXITCODE -ne 0) { Write-Error "Failed to initialize the note staging ref."; exit 1 }
