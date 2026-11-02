@@ -147,6 +147,16 @@ describe("native Squad configuration", () => {
       assert.match(body, /\|\s*\*\*Trigger\*\*\s*\|\s*manual\s*\|/);
       assert.match(body, /\|\s*\*\*Enabled\*\*\s*\|\s*no\s*\|/);
     }
+    const enforcement = section(ceremonies, "Retrospective with Enforcement");
+    const ceremoniesTemplate = read(".squad", "templates", "ceremonies.md");
+    assert.equal(section(ceremoniesTemplate, "Retrospective with Enforcement"), enforcement);
+    assert.match(
+      enforcement,
+      /#383 removed the local checker, CI dispatcher, and enforcement skill; #387 restored this ceremony only as a manual, disabled definition/,
+    );
+    assert.match(enforcement, /Neither a worktree-local log nor a CI GitHub label is currently consumed as a completion signal/);
+    assert.match(enforcement, /Do not check for overdue retrospectives or run this ceremony automatically/);
+    assert.doesNotMatch(enforcement, /\*\*Enforcement skill\*\*/);
     const coordinator = read(".github", "agents", "squad.agent.md");
     assert.match(coordinator, /support identities and are inactive unless the user explicitly requests them/);
     assert.doesNotMatch(coordinator, /spawned automatically before user-facing artifacts/i);

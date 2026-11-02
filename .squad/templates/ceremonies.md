@@ -47,23 +47,21 @@
 
 | Field | Value |
 |-------|-------|
-| **Trigger** | auto |
-| **When** | weekly |
-| **Condition** | No *retrospective* log in .squad/log/ within the last 7 days |
+| **Trigger** | manual |
+| **When** | on request |
+| **Condition** | Run only when the user explicitly requests a retrospective |
 | **Facilitator** | lead |
 | **Participants** | all |
 | **Time budget** | focused |
-| **Enabled** | yes |
-| **Enforcement skill** | retro-enforcement |
+| **Enabled** | no |
+
+**Why enforcement is disabled:** Commit #383 removed the local checker, CI dispatcher, and enforcement skill; #387 restored this ceremony only as a manual, disabled definition. Neither a worktree-local log nor a CI GitHub label is currently consumed as a completion signal.
 
 **Agenda:**
 1. What shipped this week? (closed issues, merged PRs)
 2. What did not ship? (open issues, blockers)
 3. Root cause on any failures
-4. Action items -- each MUST become a GitHub Issue labeled retro-action
+4. Action items -- create GitHub issues only when the user explicitly authorizes them
 
 **Coordinator integration:**
-At round start, call Test-RetroOverdue (see skill retro-enforcement). If overdue, run this ceremony before the work queue.
-
-**Why GitHub Issues, not markdown:**
-Production data: 0% completion across 6 retros using markdown checklists, 100% after switching to GitHub Issues.
+Do not check for overdue retrospectives or run this ceremony automatically.

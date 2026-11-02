@@ -48,13 +48,14 @@
 | Field | Value |
 |-------|-------|
 | **Trigger** | manual |
-| **When** | weekly |
-| **Condition** | No *retrospective* log in .squad/log/ within the last 7 days |
+| **When** | on request |
+| **Condition** | Run only when the user explicitly requests a retrospective |
 | **Facilitator** | lead |
 | **Participants** | all |
 | **Time budget** | focused |
 | **Enabled** | no |
-| **Enforcement skill** | retro-enforcement |
+
+**Why enforcement is disabled:** Commit #383 removed the local checker, CI dispatcher, and enforcement skill; #387 restored this ceremony only as a manual, disabled definition. Neither a worktree-local log nor a CI GitHub label is currently consumed as a completion signal.
 
 **Agenda:**
 1. What shipped this week? (closed issues, merged PRs)
