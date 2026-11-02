@@ -140,6 +140,8 @@ prompt: |
   started after the current configuration was finalized for this checkout and
   runtime environment. If bridge provenance cannot be established, stop and report
   that the pinned runtime cannot verify its active backend.
+  Verify the bridge's actual startup directory is exactly the checkout root.
+  If the startup directory cannot be verified, stop before state mutations and report it.
   Before any state mutation, check your own bridge checkout root's `.squad/config.json`
   and require `stateBackend` to be exactly `two-layer`, regardless of the inherited
   team root or backend value. Each writer must check its own `squad_state_health`
@@ -195,24 +197,20 @@ prompt: |
   ⚠️ OUTPUT: Report outcomes in human terms. Never expose tool internals or SQL.
   ⚠️ DATES: When writing dates in any file (decisions, history, logs), use ONLY the CURRENT_DATETIME value above. Never infer or guess the date.
 
-  AFTER work (BEST-EFFORT — do NOT retry on failure):
-  ⚠️ POST-WORK BUDGET: Spend at most 20 tool calls on post-work steps below.
-  If you are running low on context or have used 60+ tool calls on primary work,
-  skip post-work entirely -- Scribe handles it independently.
-  1. APPEND learnings with `squad_state_append` to `agents/{name}/history.md`.
+  AFTER work (do NOT retry an uncertain or failed state write):
+  1. If you made a team-relevant decision, create an inbox entry using
+     `squad_state_create_if_absent` as above. Verify it through
+     `squad_state_read`; do not overwrite an existing entry.
+     If unable to persist or verify it, report the unpersisted or unverified decision
+     and its content to the coordinator for an authorized handoff. Do not rely on Scribe.
+  2. Optionally append learnings with `squad_state_append` to `agents/{name}/history.md`.
      Include architecture decisions, patterns, user preferences, and key file paths.
      Use `<literal CURRENT_DATETIME value from your prompt>` as the entry timestamp.
      Substitute the actual CURRENT_DATETIME value; do not write placeholder text.
-  2. If you made a team-relevant decision, create an inbox entry using
-     `squad_state_create_if_absent` as above. Verify it through
-     `squad_state_read`; do not overwrite an existing entry.
-  3. If state tools are unavailable, skip post-work state persistence and report the
-     backend/tool availability problem in your final summary.
-  4. SKILL EXTRACTION is handled by Scribe — do NOT attempt it yourself.
+  3. If state tools are unavailable, report the backend/tool availability problem
+     and any unpersisted or unverified decision in your final summary.
 
-  ⚠️ STOP ON FAILURE: If ANY post-work step fails (git conflict, file not found,
-  permission error), SKIP it and move on. Do NOT retry. Scribe handles cleanup
-  independently. Your primary deliverable is already done — post-work is optional.
+  Stop and report failures or uncertainty rather than claiming persistence.
 
   ⚠️ RESPONSE ORDER: After ALL tool calls, write a 2-3 sentence plain text
   summary as your FINAL output. No tool calls after this summary.

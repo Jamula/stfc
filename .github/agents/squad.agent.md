@@ -46,25 +46,16 @@ These project-specific rules override conflicting generic Squad defaults below:
 
 ### State & Team Root Resolution (before mode check)
 
-Before deciding Init vs Team mode, resolve where the team state actually lives:
-
-1. **Read `.squad/config.json`** (if it exists in the current `.squad/` directory).
-2. **External state** — if `stateLocation` is `"external"`:
-   - Resolve the external state path: `{platform_appdata}/squad/projects/{projectKey}/`
-   - The team root is that external path. Load `team.md` from there.
-3. **Remote/satellite mode** — if `teamRoot` is present:
-   - The team root is the value of `teamRoot` (absolute path to another `.squad/` directory).
-   - Load `team.md` from `{teamRoot}/.squad/team.md` (or `{teamRoot}/team.md` if teamRoot already points inside `.squad/`).
-4. **Neither** — team root is the local `.squad/` directory (default behavior).
-
-Store the resolved team root as `TEAM_ROOT`. All subsequent `.squad/` path references use this root.
+Use the current checkout root as `TEAM_ROOT` for static configuration. Nested, external,
+and other-checkout team roots are unsupported by this project; report and stop if the
+checkout does not contain its own `.squad/config.json` and `.squad/team.md`.
+Mutable state is accessed through the bridge only after the handshake below.
 
 ### Mode-Switch Check
 
-Check: Does `{TEAM_ROOT}/team.md` exist? (fall back to `.ai-team/team.md` for repos migrating from older installs)
-- **No** → Init Mode
-- **Yes, but `## Members` has zero roster entries** → Init Mode (treat as unconfigured — scaffold exists but no team was cast)
-- **Yes, with roster entries** → Team Mode
+Check: Does `{TEAM_ROOT}/.squad/team.md` contain roster entries?
+- **No** → stop and report the incomplete configuration; do not reinitialize in place.
+- **Yes** → Team Mode
 
 ---
 
@@ -172,7 +163,7 @@ Phase 1 MUST end with user confirmation before any file is created.
 
 **On every session start:** Resolve the team root from the supplied workspace context and pass it to specialists. Use the requester and current time supplied by the host; ask when an essential value is unavailable. Read mutable state through the configured state bridge. Seven does not run shell commands or edit files.
 
-**Resolve state backend:** Read `.squad/config.json` (at the resolved TEAM_ROOT) and check the `stateBackend` field. Only `two-layer` is supported in this project. Store it as `STATE_BACKEND` and pass it into every spawn prompt. Any other value is unsupported; halt before state mutations and report the mismatch. Static config (charters, team.md, routing.md) always lives on disk.
+**Resolve state backend:** Read `.squad/config.json` at the checkout root and check the `stateBackend` field. Only `two-layer` is supported in this project. Store it as `STATE_BACKEND` and pass it into every spawn prompt. Any other value is unsupported; halt before state mutations and report the mismatch. Static config (charters, team.md, routing.md) always lives on disk.
 
 **State-backend handshake — MANDATORY on every session before any state mutation (bradygaster/squad#1305):**
 
@@ -181,7 +172,7 @@ The runtime owns persistence and you MUST NOT touch `.squad/decisions.md`, `.squ
 The `squad_state_*` and `memory.*` tools that own persistence are exposed via the `squad_state` MCP server (declared in `.mcp.json`). Copilot CLI may load MCP tools **lazily** — they are not always advertised in your initial function list at session start. You MUST proactively confirm they are reachable:
 
 1. Only `two-layer` is supported. If the current configuration differs, **HALT** before any state write; do not fall back to local file operations.
-2. Restart the bridge after any backend config change. Confirm the bridge was freshly started after the current configuration was finalized, for this checkout and runtime environment. If bridge provenance cannot be established, **HALT** and report that the pinned runtime cannot verify its active backend.
+2. Restart the bridge after any backend config change. Confirm the bridge was freshly started after the current configuration was finalized, for this checkout and runtime environment. Verify the bridge's actual startup directory is exactly the checkout root. If bridge provenance or startup directory cannot be verified, **HALT** and report that the pinned runtime cannot verify its active backend.
 3. Discover and call `squad_state_health`; require `State backend storage: StateBackendStorageAdapter`. The orphan backend also reports `StateBackendStorageAdapter`, so this response alone does not identify the active backend. `FSStorageProvider` indicates a local fallback.
 4. Before any state mutation, each writer must read its own bridge checkout root's `.squad/config.json` and require `stateBackend` to be exactly `two-layer`, regardless of the inherited team root or backend value. Have an authorized specialist run `npx -y @bradygaster/squad-cli@1.1.0 health --json` from that checkout root, on the same host and runtime environment as that bridge. Parse stdout as JSON separately from stderr, and require the `state-backend` check to have status `pass` and message `Configured two-layer state backend is reachable`. A zero exit code alone is not sufficient, and the probe does not establish bridge identity, data integrity, or remote synchronization.
 5. **If any check fails or cannot be verified**, including a missing tool, fallback, missing JSON check, or an unverified host/environment, **HALT** before any state write. Explain the specific failure and do not silently fall back to raw file ops or claim the requested backend is healthy.

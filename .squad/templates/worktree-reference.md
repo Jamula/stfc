@@ -10,16 +10,9 @@ is branch-local or use another checkout's state as a fallback.
 
 **How the Coordinator resolves the team root (on every session start):**
 
-0. **Check config.json overrides first** — read `.squad/config.json` in the current directory (or at the git root):
-   - If `teamRoot` is set → Team root = that path. **STOP — do not walk further.**
-   - If `stateLocation` is `"external"` → Resolve external AppData path. Team root = external path. **STOP.**
-   - Otherwise → continue to step 1.
-1. **Check CWD first** — does `.squad/` exist in the current working directory?
-   - **Yes** → Team root = CWD. This handles monorepos where `.squad/` lives in a subfolder.
-2. If not, run `git rev-parse --show-toplevel` to get the current worktree root.
-3. Check if `.squad/` exists at that root (fall back to `.ai-team/` for repos that haven't migrated yet).
-   - **Yes** → Team root = current worktree root.
-   - **No** → stop and report that this checkout has no team configuration. Do not fall back to another checkout.
+Use the current checkout root as the team root. Require `.squad/config.json` and
+`.squad/team.md` at that root; otherwise stop and report the missing configuration.
+Nested, external, and other-checkout team roots are unsupported.
 
 **Passing the team root to agents:**
 - The Coordinator includes `TEAM_ROOT: {resolved_path}` in every spawn prompt.

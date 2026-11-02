@@ -191,6 +191,8 @@ describe("native Squad configuration", () => {
       assert.match(handshake, /state-backend.*pass/);
       assert.match(handshake, /writer.*own.*checkout.*config/i);
       assert.match(handshake, /Configured two-layer state backend is reachable/);
+      assert.match(handshake, /bridge.*startup directory.*checkout root/i);
+      assert.match(handshake, /startup directory.*cannot be verified.*HALT/i);
       assert.match(handshake, /both.*layers/i);
       assert.match(handshake, /notes-layer write fails/i);
       assert.match(handshake, /does not establish.*data integrity/i);
@@ -219,6 +221,12 @@ describe("native Squad configuration", () => {
     assert.match(spawn, /provenance.*stop/i);
     assert.match(spawn, /own.*checkout.*config/i);
     assert.match(spawn, /Configured two-layer state backend is reachable/);
+    assert.match(spawn, /bridge.*startup directory.*checkout root/i);
+    assert.match(spawn, /startup directory.*cannot be verified.*stop/i);
+    assert.doesNotMatch(spawn, /skip post-work entirely -- Scribe handles it independently/i);
+    assert.doesNotMatch(spawn, /Scribe handles cleanup/i);
+    assert.match(spawn, /unpersisted.*decision/i);
+    assert.match(spawn, /decision.*coordinator.*authorized handoff/is);
     assert.match(spawn, /uncertainty.*stop/i);
     for (const file of [
       [".squad", "agents", "scribe", "charter.md"],
@@ -248,6 +256,8 @@ describe("native Squad configuration", () => {
     const worktrees = read(".squad", "templates", "worktree-reference.md");
     assert.match(worktrees, /linked worktrees share.*state.*refs/i);
     assert.doesNotMatch(worktrees, /no shared-state races/i);
+    assert.match(worktrees, /Nested, external, and other-checkout team roots are unsupported/i);
+    assert.doesNotMatch(worktrees, /If `teamRoot` is set/i);
   });
 
   it("blocks unsafe in-place upgrades and preserves the team and workflow policy", () => {
