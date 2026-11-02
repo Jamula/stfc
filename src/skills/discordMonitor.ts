@@ -222,6 +222,15 @@ export async function discordMonitor(
     try {
       const ingestOut = await ingestDiscord(ingestAllowlist, newCursors, client, runId, now);
       ingestedMessages = ingestOut.messages;
+      const emptyContentCount = ingestedMessages.filter(
+        (message) => message.contentRaw.trim().length === 0,
+      ).length;
+      if (emptyContentCount > 0) {
+        const noun = emptyContentCount === 1 ? "message had" : "messages had";
+        log.warn(
+          `${emptyContentCount} Discord ${noun} empty text content; cause is undetermined.`,
+        );
+      }
       newCursors = ingestOut.newCursors;
       botUsername = ingestOut.botIdentity.username;
       mergeHealth(health, ingestOut.health);
