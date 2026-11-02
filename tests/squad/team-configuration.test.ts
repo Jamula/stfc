@@ -180,6 +180,13 @@ describe("native Squad configuration", () => {
       assert.match(handshake, /checkout root/i);
       assert.doesNotMatch(handshake, /from the team root/i);
       assert.match(handshake, /each.*bridge/i);
+      assert.match(handshake, /only.*two-layer.*supported/i);
+      assert.match(handshake, /orphan.*StateBackendStorageAdapter/i);
+      assert.match(handshake, /restart.*bridge.*after.*config/i);
+      assert.match(handshake, /provenance.*HALT/i);
+      assert.match(handshake, /Invalidate.*backend configuration.*bridge.*checkout.*host.*environment/i);
+      assert.doesNotMatch(content, /file writes to `\.squad\/` are valid/i);
+      assert.match(content, /do not switch to a local backend/i);
       assert.match(handshake, /stdout as JSON separately from stderr/);
       assert.match(handshake, /state-backend.*pass/);
       assert.match(handshake, /both.*layers/i);
@@ -205,6 +212,9 @@ describe("native Squad configuration", () => {
     const spawn = read(".squad", "templates", "spawn-reference.md");
     assert.match(spawn, /each writer.*own.*squad_state_health/i);
     assert.match(spawn, /checkout root/i);
+    assert.match(spawn, /only.*two-layer.*supported/i);
+    assert.match(spawn, /restart.*bridge.*after.*config/i);
+    assert.match(spawn, /provenance.*stop/i);
     assert.match(spawn, /uncertainty.*stop/i);
     for (const file of [
       [".squad", "agents", "scribe", "charter.md"],
@@ -236,6 +246,8 @@ describe("native Squad configuration", () => {
     const switchBackend = between(catalog, "### Switch State Backend", "---\n\n## Team Management");
     assert.match(switchBackend, /verified.*migration/i);
     assert.match(switchBackend, /do not.*config/i);
+    assert.match(switchBackend, /backend switching.*unsupported/i);
+    assert.match(switchBackend, /only.*two-layer/i);
     assert.doesNotMatch(switchBackend, /\*\*action:\*\* file-edit/);
   });
 

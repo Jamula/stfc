@@ -61,11 +61,11 @@ Proceed? (yes / no)
 ### Switch State Backend
 
 - **intent:** switch state backend, change state storage, use git-notes, use orphan branch
-- **summary:** Assess state migration before changing the backend
+- **summary:** Explain why backend switching is unsupported
 - **action:** coordinator
-- **command:** Do not edit the backend config alone; a verified migration of existing state is required before switching. Report the switch as unsupported if no safe migration is available.
+- **command:** Only `two-layer` is supported; backend switching is unsupported. Do not edit the backend config until a verified migration and backend-specific verification are designed and reviewed.
 - **args:** (none)
-- **confirm:** true
+- **confirm:** false
 - **platform_caveats:** User confirmation alone does not migrate state; preserve and verify existing decisions and histories.
 
 ---

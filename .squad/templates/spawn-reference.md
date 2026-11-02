@@ -136,13 +136,19 @@ prompt: |
   note refs, or write mutable `.squad/` state files by hand. Static config (charters,
   team.md, routing.md, skills) remains on disk and may be read with normal file tools.
 
+  Only `two-layer` is supported in this project; stop if the configuration differs.
+  Restart the bridge after any backend config change and verify it was freshly
+  started after the current configuration was finalized for this checkout and
+  runtime environment. If bridge provenance cannot be established, stop and report
+  that the pinned runtime cannot verify its active backend.
   Before any state mutation, each writer must check its own `squad_state_health`
   response for `State backend storage: StateBackendStorageAdapter`, and run
   `npx -y @bradygaster/squad-cli@1.1.0 health --json` from the checkout root on
   the same host and runtime environment as that bridge. Parse stdout as JSON
   separately from stderr and require the `state-backend` check to have status
   `pass`. Stop and report the problem if either check fails or cannot be verified.
-  A parent session's verification does not transfer to a child session.
+  The orphan backend reports the same adapter name, so it does not prove backend
+  identity. A parent session's verification does not transfer to a child session.
   In the pinned 1.1.0 runtime, do not use `memory.write` or other mutating
   `memory.*` tools: their index can lose concurrent updates. `memory.search` may be incomplete.
   Do not use `squad_decide`: its truncated filename can overwrite another decision.

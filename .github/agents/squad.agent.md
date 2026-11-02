@@ -24,7 +24,7 @@ These project-specific rules override conflicting generic Squad defaults below:
 - Opening a pull request alone does not authorize marking it ready, deployment, live redemption, external configuration changes, or spending.
 - Preserve existing stacks. Prefer supported .NET LTS for new tools, or Node.js with JavaScript or TypeScript if .NET is unsuitable; avoid Python where possible.
 - The `two-layer` backend owns mutable Squad state. Use its bridge, and use the native atomic casting protocol for the registry/history pair. Do not fall back to direct file or Git writes.
-- Do not run `squad init` or `squad upgrade` in this configured repository. Follow the isolated upgrade evaluation procedure in `.squad/templates/session-init-reference.md`; do not change backends without a verified migration.
+- Do not run `squad init` or `squad upgrade` in this configured repository. Follow the isolated upgrade evaluation procedure in `.squad/templates/session-init-reference.md`. Backend switching is unsupported until a verified migration and backend-specific verification are available.
 - Do not use `squad_decide` for new inbox entries: its truncated filename can overwrite another decision. Use `squad_state_create_if_absent` instead.
 - In the pinned 1.1.0 runtime, do not use `memory.write`, `memory.classify`, `memory.promote`, `memory.delete`, or `memory.audit`: concurrent server instances can lose index updates. Treat `memory.search` as potentially incomplete and use the state inbox for durable decisions.
 - Make routine decisions autonomously. Ask the user only when a genuine blocker, consequential choice, or missing authority requires their input.
@@ -172,22 +172,23 @@ Phase 1 MUST end with user confirmation before any file is created.
 
 **On every session start:** Resolve the team root from the supplied workspace context and pass it to specialists. Use the requester and current time supplied by the host; ask when an essential value is unavailable. Read mutable state through the configured state bridge. Seven does not run shell commands or edit files.
 
-**Resolve state backend:** Read `.squad/config.json` (at the resolved TEAM_ROOT) and check the `stateBackend` field. Valid values: `"local"` (default), `"orphan"`, `"two-layer"`. Legacy alias: `"worktree"` maps to `"local"`. Deprecated: `"git-notes"` maps to `"two-layer"` with a deprecation warning. Store as `STATE_BACKEND` and pass it into every spawn prompt. This determines how agents read and write mutable state (history, decisions, logs). Static config (charters, team.md, routing.md) always lives on disk regardless of backend. The `"two-layer"` option combines git-notes (commit-scoped annotations) with orphan branch (permanent state) — see the blog post for the full architecture.
+**Resolve state backend:** Read `.squad/config.json` (at the resolved TEAM_ROOT) and check the `stateBackend` field. Only `two-layer` is supported in this project. Store it as `STATE_BACKEND` and pass it into every spawn prompt. Any other value is unsupported; halt before state mutations and report the mismatch. Static config (charters, team.md, routing.md) always lives on disk.
 
 **State-backend handshake — MANDATORY on every session before any state mutation (bradygaster/squad#1305):**
 
-For all backends EXCEPT `"local"` / `"worktree"`, the runtime owns persistence and you MUST NOT touch `.squad/decisions.md`, `.squad/decisions/inbox/`, `.squad/agents/*/history.md`, `.squad/casting/*.json`, `.squad/identity/*.md`, or `.squad/memory/*` paths via `create` / `edit` / `write_file` tools. Those writes either fail at the pre-commit hook or create phantom state the runtime overwrites at next read — a contract violation that produces silent data loss.
+The runtime owns persistence and you MUST NOT touch `.squad/decisions.md`, `.squad/decisions/inbox/`, `.squad/agents/*/history.md`, `.squad/casting/*.json`, `.squad/identity/*.md`, or `.squad/memory/*` paths via `create` / `edit` / `write_file` tools. Those writes may create phantom state — a contract violation that produces silent data loss.
 
 The `squad_state_*` and `memory.*` tools that own persistence are exposed via the `squad_state` MCP server (declared in `.mcp.json`). Copilot CLI may load MCP tools **lazily** — they are not always advertised in your initial function list at session start. You MUST proactively confirm they are reachable:
 
-1. If `STATE_BACKEND ∈ {"local", "worktree"}`: file ops on `.squad/` are valid; skip the probe.
-2. Otherwise, discover and call `squad_state_health`. For the configured `two-layer` backend, require `State backend storage: StateBackendStorageAdapter`; `FSStorageProvider` indicates a local fallback. A successful response alone is not sufficient.
-3. Before any state mutation, have an authorized specialist run `npx -y @bradygaster/squad-cli@1.1.0 health --json` from the checkout root, on the same host and runtime environment as that bridge. Parse stdout as JSON separately from stderr, and require the `state-backend` check to have status `pass`: this pinned CLI performs a basic probe of both layers. A zero exit code alone is not sufficient, and the probe does not establish data integrity or remote synchronization.
-4. **If either check fails or cannot be verified**, including a missing tool, fallback, missing JSON check, or an unverified host/environment, **HALT** before any state write. Explain the specific failure and do not silently fall back to raw file ops or claim the requested backend is healthy.
+1. Only `two-layer` is supported. If the current configuration differs, **HALT** before any state write; do not fall back to local file operations.
+2. Restart the bridge after any backend config change. Confirm the bridge was freshly started after the current configuration was finalized, for this checkout and runtime environment. If bridge provenance cannot be established, **HALT** and report that the pinned runtime cannot verify its active backend.
+3. Discover and call `squad_state_health`; require `State backend storage: StateBackendStorageAdapter`. The orphan backend also reports `StateBackendStorageAdapter`, so this response alone does not identify the active backend. `FSStorageProvider` indicates a local fallback.
+4. Before any state mutation, have an authorized specialist run `npx -y @bradygaster/squad-cli@1.1.0 health --json` from the checkout root, on the same host and runtime environment as that bridge. Parse stdout as JSON separately from stderr, and require the `state-backend` check to have status `pass`: this pinned CLI performs a basic probe of both layers. A zero exit code alone is not sufficient, and the probe does not establish data integrity or remote synchronization.
+5. **If any check fails or cannot be verified**, including a missing tool, fallback, missing JSON check, or an unverified host/environment, **HALT** before any state write. Explain the specific failure and do not silently fall back to raw file ops or claim the requested backend is healthy.
 
 The pinned runtime can report a successful write even if its notes-layer write fails. A bridge read-back checks the permanent layer only; do not claim both layers are durable based on that read-back or the health probe.
 
-Cache this handshake only for each verified bridge instance. Every child session or other writer must verify its own bridge and health probe before its first state mutation; a parent's result does not transfer. Recheck if the bridge or its environment changes.
+Cache this handshake only for each verified bridge instance. Every child session or other writer must verify its own bridge and health probe before its first state mutation; a parent's result does not transfer. Invalidate the check if the backend configuration, bridge, checkout, host, or environment changes.
 
 **⚡ Context caching:** After the first message in a session, `team.md`, `routing.md`, and `registry.json` are already in your context. Do NOT re-read them on subsequent messages — you already have the roster, routing rules, and cast names. Only re-read if the user explicitly modifies the team (adds/removes members, changes routing).
 
@@ -324,7 +325,7 @@ The `name` parameter generates the human-readable agent ID shown in the tasks pa
 
 The pinned runtime serializes memory-index writes only within one server instance. Until cross-process safety is verified in a replacement runtime, do not use `memory.write` or other mutating `memory.*` tools; `memory.search` may be incomplete. Use the verified state bridge and inbox for decisions and surface any persistence failure.
 
-**HARD RULE — Backend contract enforcement:** If `STATE_BACKEND ∈ {"orphan", "two-layer", "git-notes"}` AND the state-backend handshake (above) did NOT confirm reachable tools, you MUST NOT write to ANY of these paths via `create` / `edit` / `write_file`:
+**HARD RULE — Backend contract enforcement:** You MUST NOT write to ANY of these paths via `create` / `edit` / `write_file`, even when the state-backend handshake succeeds:
 
 - `.squad/decisions.md`
 - `.squad/decisions/inbox/**`
@@ -335,9 +336,7 @@ The pinned runtime serializes memory-index writes only within one server instanc
 - `.squad/rai/audit-trail.md`
 - `.squad/fact-checker/audit-trail.md`
 
-These are runtime-managed paths under non-local backends. Hand-writing creates phantom state. The pre-commit hook will catch it and fail the user; even if it didn't, the runtime overwrites the file at next read. Report the missing bridge and halt instead.
-
-For `STATE_BACKEND ∈ {"local", "worktree"}`, file writes to `.squad/` are valid because the local backend IS the filesystem.
+These are runtime-managed paths. Hand-writing can create phantom state. If the bridge or its verification is unavailable, report the problem and halt state mutations instead.
 
 **External memory:** Never claim provider-backed Copilot Memory, semantic indexing, or remote deletion unless a configured tool or CLI bridge performed the operation. External semantic memory is opt-in; forbidden or transient content must not be persisted.
 
@@ -631,7 +630,7 @@ To enable full parallelism, shared writes use a drop-box pattern that eliminates
 
 Resolve `TEAM_ROOT` before routing work. All `.squad/` paths are relative to that root, and every spawned agent must receive the resolved `TEAM_ROOT` value rather than discovering it independently.
 
-Use worktree-local state by default for concurrent work; allow explicit overrides when the user wants main-checkout or externalized state.
+Use the configured two-layer state bridge for concurrent work; do not switch to a local backend or another checkout's state as a fallback.
 
 **On-demand reference:** Read `.squad/templates/worktree-reference.md` for team-root resolution, worktree strategies, lifecycle rules, and pre-spawn setup.
 
