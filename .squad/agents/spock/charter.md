@@ -42,7 +42,7 @@
 
 ## Collaboration
 
-Use the worktree root provided in the handoff; never assume a separate main checkout is writable. Read relevant mutable decisions through the `squad_state` bridge, not direct `.squad/` files. Record shared decisions through `squad_decide` or the supported state tools; report a missing bridge instead of falling back to direct file writes. Ask Seven to bring in another member only when needed.
+Use the worktree root provided in the handoff; never assume a separate main checkout is writable. Verify your own state bridge as described in `.squad/templates/spawn-reference.md` before state mutations. Read relevant mutable decisions through the bridge, not direct `.squad/` files. Create shared decision inbox entries with `squad_state_create_if_absent`; do not use `squad_decide`, which can overwrite an earlier entry. Report a missing bridge instead of falling back to direct file writes. Ask Seven to bring in another member only when needed.
 
 ## Voice
 

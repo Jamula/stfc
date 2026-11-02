@@ -41,34 +41,32 @@ Proceed? (yes / no)
 ### Upgrade Squad CLI
 
 - **intent:** upgrade squad, update squad, install latest version, get new version
-- **summary:** Upgrade Squad CLI to the latest version for your channel
-- **action:** shell
-- **command:** squad upgrade
-- **args:**
-  - `state-backend`: Which state backend? | choices: {worktree, git-notes, orphan, two-layer} | default: (keep current)
+- **summary:** Evaluate a Squad upgrade without replacing the project contract or enabling workflows
+- **action:** coordinator
+- **command:** Follow `.squad/templates/session-init-reference.md` §1.6; do not run `squad upgrade` in this repository
+- **args:** (none)
 - **confirm:** false
-- **platform_caveats:** Requires terminal. In VS Code, open the integrated terminal and run the command directly.
+- **platform_caveats:** Evaluate the upgrade in an isolated clone and port compatible changes through review.
 
 ### Initialize Squad
 
 - **intent:** set up squad, initialize squad, create team, start squad in this project
-- **summary:** Scaffold Squad in the current directory (idempotent)
-- **action:** shell
-- **command:** squad init
+- **summary:** Explain the existing team configuration and safe initialization boundaries
+- **action:** coordinator
+- **command:** Do not run `squad init` in this repository; the team is already configured and reinitialization can remove state protections and add workflows.
 - **args:** (none)
 - **confirm:** false
-- **platform_caveats:** Requires terminal. Recommend a standalone terminal for best results.
+- **platform_caveats:** For another project, obtain authorization and evaluate initialization in an isolated checkout without enabling unauthorized workflows.
 
 ### Switch State Backend
 
 - **intent:** switch state backend, change state storage, use git-notes, use orphan branch
-- **summary:** Change where Squad stores mutable state (config.json)
-- **action:** file-edit
-- **command:** .squad/config.json → stateBackend
-- **args:**
-  - `stateBackend`: Which state backend? | choices: {worktree, git-notes, orphan, two-layer} | default: (keep current)
+- **summary:** Assess state migration before changing the backend
+- **action:** coordinator
+- **command:** Do not edit the backend config alone; a verified migration of existing state is required before switching. Report the switch as unsupported if no safe migration is available.
+- **args:** (none)
 - **confirm:** true
-- **platform_caveats:** May require migration if switching away from worktree. Show current value and new value before confirming.
+- **platform_caveats:** User confirmation alone does not migrate state; preserve and verify existing decisions and histories.
 
 ---
 

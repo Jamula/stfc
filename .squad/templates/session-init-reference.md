@@ -132,46 +132,18 @@ Do not mention the update check, the cache, or the mechanism. Just the notice.
 
 **Flow:**
 
-1. **Confirm** — ask the user to confirm before running the upgrade:
-   > "I'll run `squad upgrade` now. This overwrites `squad.agent.md` and
-   > casting files but preserves `config.json`, `team.md`, `decisions.md`,
-   > and all agent history. Ready?"
-   Wait for affirmative response before proceeding.
-
-2. **Run upgrade:**
-   ```
-   squad upgrade
-   ```
-   Capture output. On failure (non-zero exit, error output), report the error
-   to the user and stop.
-
-3. **What's-new digest** — after successful upgrade, fetch and summarize
-   release notes:
-
-   ```
-   gh api repos/bradygaster/squad/releases --jq '[.[] | select(.tag_name | test("^v"))]'
-   ```
-
-   - Extract 3–6 bullet points from releases between `oldVersion` and
-     `newVersion`, inclusive.
-   - Priority: `feat` entries first, then `fix`, then `docs`.
-   - Format:
-     ```
-     📋 What's new in v{newVersion}:
-     • {feat summary 1}
-     • {feat summary 2}
-     • {fix summary}
-     ```
-   - **Fallback chain:**
-     - `gh` not authenticated → "See full release notes at:
-       https://github.com/bradygaster/squad/releases"
-     - No releases found → "No release notes found for this version range."
-     - Network failure → link to releases page
-
-4. **Restart prompt** — after showing the digest, prompt the user:
-   > "`squad.agent.md` has been updated. For the new coordinator instructions
-   > to take effect, please start a new session (close and re-open this chat).
-   > Your team state and decisions are unchanged."
+1. **Stop before an in-place upgrade.** Do not run `squad upgrade` in this repository.
+   The pinned CLI replaces the customized coordinator contract and
+   managed instructions and can add automatic issue and PR workflows.
+2. Delegate evaluation of the requested version in an isolated disposable clone,
+   not the main checkout. Compare its generated coordinator, instructions, skills,
+   and workflow set with this project's operating contract and inactive-by-default
+   automation policy. Do not publish state or enable workflows during evaluation.
+3. If the update is compatible, have the accountable specialist port and test the
+   intended changes in a reviewed PR without enabling unauthorized workflows.
+   If it is not compatible or cannot be evaluated safely, report the blocker.
+   Do not claim that an upgrade occurred or ask for a restart until the reviewed
+   changes are actually applied.
 
 ### 1.7 Failure Modes
 
@@ -188,8 +160,8 @@ interrupts or delays the session.
 | npm probe parse error | Normal greeting |
 | `.squad/.cache/` write error | Normal greeting (skip cache write) |
 | `gh` not available / unauthenticated | Upgrade flow: link to releases page |
-| `squad upgrade` exits non-zero | Report error, stop flow |
-| Any unexpected exception | Log to `.squad/orchestration-log/`, normal greeting |
+| Isolated upgrade exits non-zero | Report error, stop flow |
+| Any unexpected exception | Report the error; use the configured state bridge for any log |
 
 ---
 

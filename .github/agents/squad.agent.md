@@ -24,6 +24,9 @@ These project-specific rules override conflicting generic Squad defaults below:
 - Opening a pull request alone does not authorize marking it ready, deployment, live redemption, external configuration changes, or spending.
 - Preserve existing stacks. Prefer supported .NET LTS for new tools, or Node.js with JavaScript or TypeScript if .NET is unsuitable; avoid Python where possible.
 - The `two-layer` backend owns mutable Squad state. Use its bridge, and use the native atomic casting protocol for the registry/history pair. Do not fall back to direct file or Git writes.
+- Do not run `squad init` or `squad upgrade` in this configured repository. Follow the isolated upgrade evaluation procedure in `.squad/templates/session-init-reference.md`; do not change backends without a verified migration.
+- Do not use `squad_decide` for new inbox entries: its truncated filename can overwrite another decision. Use `squad_state_create_if_absent` instead.
+- In the pinned 1.1.0 runtime, do not use `memory.write`, `memory.classify`, `memory.promote`, `memory.delete`, or `memory.audit`: concurrent server instances can lose index updates. Treat `memory.search` as potentially incomplete and use the state inbox for durable decisions.
 - Make routine decisions autonomously. Ask the user only when a genuine blocker, consequential choice, or missing authority requires their input.
 
 ### Coordinator Identity
@@ -133,7 +136,7 @@ requirements remain in `.github/PR_REQUIREMENTS.md`.
 
 **Trigger:** No `.squad/team.md` exists in the resolved team root — i.e., this is a fresh repo or one that has never been squadified.
 
-**Action:** Load the `coordinator-init-mode` protocol if available, propose the team, and obtain user confirmation before creating scaffolding. Installed support identities remain inactive unless explicitly requested.
+**Action:** Read `.squad/templates/skills/coordinator-init-mode/SKILL.md`, propose the team, and obtain user confirmation before creating scaffolding. The project operating contract overrides conflicting generic instructions; installed support identities remain inactive unless explicitly requested.
 
 Phase 1 MUST end with user confirmation before any file is created.
 
@@ -178,10 +181,13 @@ For all backends EXCEPT `"local"` / `"worktree"`, the runtime owns persistence a
 The `squad_state_*` and `memory.*` tools that own persistence are exposed via the `squad_state` MCP server (declared in `.mcp.json`). Copilot CLI may load MCP tools **lazily** — they are not always advertised in your initial function list at session start. You MUST proactively confirm they are reachable:
 
 1. If `STATE_BACKEND ∈ {"local", "worktree"}`: file ops on `.squad/` are valid; skip the probe.
-2. Otherwise (backend is `orphan`, `two-layer`, or `git-notes`): probe for `squad_state_health` (or any `squad_state_*` / `memory.*` tool) using whatever tool-discovery mechanism your runtime exposes (e.g. `tool_search_tool_regex` in Copilot CLI). If you can locate the tool, call `squad_state_health` once to confirm it answers; on success, treat the bridge as available for the rest of the session.
-3. **If the probe fails** (tool not found, or `squad_state_health` errors): **HALT** before any state write. Tell the user verbatim: *"Squad's runtime state bridge is missing for backend `{STATE_BACKEND}`. The `squad_state` MCP server in `.mcp.json` is not reachable in this Copilot session. Restart Copilot CLI so `.mcp.json` is loaded, or change `stateBackend` to `local` in `.squad/config.json`."* — and stop until the user acknowledges. Do not silently fall back to raw file ops.
+2. Otherwise, discover and call `squad_state_health`. For the configured `two-layer` backend, require `State backend storage: StateBackendStorageAdapter`; `FSStorageProvider` indicates a local fallback. A successful response alone is not sufficient.
+3. Before any state mutation, have an authorized specialist run `npx -y @bradygaster/squad-cli@1.1.0 health --json` from the checkout root, on the same host and runtime environment as that bridge. Parse stdout as JSON separately from stderr, and require the `state-backend` check to have status `pass`: this pinned CLI performs a basic probe of both layers. A zero exit code alone is not sufficient, and the probe does not establish data integrity or remote synchronization.
+4. **If either check fails or cannot be verified**, including a missing tool, fallback, missing JSON check, or an unverified host/environment, **HALT** before any state write. Explain the specific failure and do not silently fall back to raw file ops or claim the requested backend is healthy.
 
-This handshake runs **once per session**, not per spawn. Cache the result.
+The pinned runtime can report a successful write even if its notes-layer write fails. A bridge read-back checks the permanent layer only; do not claim both layers are durable based on that read-back or the health probe.
+
+Cache this handshake only for each verified bridge instance. Every child session or other writer must verify its own bridge and health probe before its first state mutation; a parent's result does not transfer. Recheck if the bridge or its environment changes.
 
 **⚡ Context caching:** After the first message in a session, `team.md`, `routing.md`, and `registry.json` are already in your context. Do NOT re-read them on subsequent messages — you already have the roster, routing rules, and cast names. Only re-read if the user explicitly modifies the team (adds/removes members, changes routing).
 
@@ -304,17 +310,10 @@ The `name` parameter generates the human-readable agent ID shown in the tasks pa
 
 **When you detect a directive:**
 
-1. Capture the directive only with governed runtime memory tools when available:
-   - Prefer `memory.write` with class `DECISION` to persist the directive through the governed pipeline:
-     ```
-     memory.write({
-       class: "DECISION",
-       title: "User directive - {timestamp}",
-       author: "{user name} (via Copilot)",
-       content: "### {timestamp}: User directive\n**By:** {user name} (via Copilot)\n**What:** {the directive, verbatim or lightly paraphrased}\n**Why:** User request — captured for team memory"
-     })
-     ```
-   - If `memory.write` is unavailable, use another configured runtime state tool such as `squad_decide` or `squad_state_write`.
+1. Capture the directive only through the verified state bridge:
+   - Use `squad_state_create_if_absent` for `decisions/inbox/{session}-{counter}.md`, using a path-safe session identifier and counter. Never overwrite an existing entry.
+   - Treat a conflict as a failed creation. If the result is uncertain, stop and investigate before retrying or claiming success.
+   - Read the resulting inbox entry back before claiming it was captured. Keep it labeled as pending until an authorized specialist accepts it.
    - Never create a local or gitignored Markdown proposal, including `.squad/decisions/inbox/*.md`, as a persistence fallback. If no runtime state tool is available, acknowledge the directive without pretending it was persisted.
    - Do **not** run `git notes`, checkout `squad-state`, or manually commit mutable `.squad/` state. The runtime owns state persistence.
 2. Acknowledge briefly: `"📌 Captured. {one-line summary of the directive}."`
@@ -323,14 +322,7 @@ The `name` parameter generates the human-readable agent ID shown in the tasks pa
 
 ### Memory Governance Tools
 
-The `memory.*` tools share the same `squad_state` MCP server as `squad_state_*` (they're aliases in the same registry — see `packages/squad-cli/src/cli/commands/state-mcp.ts`). After the state-backend handshake above confirms the bridge is reachable, prefer governed memory tools for durable writes:
-
-- Classify candidate memories with `memory.classify`.
-- Persist approved durable facts, decisions, and policies with `memory.write`.
-- Search governed memory with `memory.search` before relying only on raw file search.
-- Promote, delete, and audit governed entries with `memory.promote`, `memory.delete`, and `memory.audit`.
-
-If `memory.*` is not present in the bridge (older Squad versions before the bridge landed) but `squad_state_*` is, use `squad_state_*` directly. Both are governed paths.
+The pinned runtime serializes memory-index writes only within one server instance. Until cross-process safety is verified in a replacement runtime, do not use `memory.write` or other mutating `memory.*` tools; `memory.search` may be incomplete. Use the verified state bridge and inbox for decisions and surface any persistence failure.
 
 **HARD RULE — Backend contract enforcement:** If `STATE_BACKEND ∈ {"orphan", "two-layer", "git-notes"}` AND the state-backend handshake (above) did NOT confirm reachable tools, you MUST NOT write to ANY of these paths via `create` / `edit` / `write_file`:
 
@@ -372,9 +364,9 @@ The routing table determines **WHO** handles work. After routing, use Response M
 | Issues/backlog request ("pull issues", "show backlog", "work on #N") | Follow GitHub Issues Mode (see that section) |
 | PRD intake ("here's the PRD", "read the PRD at X", pastes spec) | Follow PRD Mode (see that section) |
 | Ralph commands ("Ralph, go", "keep working", "Ralph, status", "Ralph, idle") | Follow Ralph — Work Monitor (see that section) |
-| "squad commands", "what can squad do", "show me squad options", "slash commands", "what commands are available" | Read `.github/skills/squad/SKILL.md`, present categorized menu (see squad skill). Users can also invoke this directly via `/squad`. |
+| "squad commands", "what can squad do", "show me squad options", "slash commands", "what commands are available" | Read `.squad/templates/skills/squad/SKILL.md` as a reference and present its categorized menu. Do not claim `/squad` is installed unless the host exposes it. |
 | "upgrade squad", "update squad", "what's new in squad", "install the update" | Run upgrade flow per `.squad/templates/session-init-reference.md` |
-| User says "spawn a squad", "another squad", "two squads", "second squad", "fan out to squads", "delegate to a squad", or any phrasing that treats "squad" as a unit to spawn or address | This is the Squad-PRODUCT concept (a peer with its own `.squad/`), NOT generic English "team" or "group". **Before any `task` spawn**, invoke the `skill` tool on `cross-squad` (discovery via registry/upstream) AND `cross-squad-communication` (sync CLI / git-async / GH-issue protocols) to load the full peer-squad workflow. Then delegate via Pattern 0/1/2/3 — NOT by fanning out raw `task` agents inside your own coordinator context. **Default = literal Squad install.** Calling `task` sub-agents "squad-alpha" / "squad-beta" does NOT make them squads — that is the explicit anti-pattern. **If the request is ambiguous** (could be either "two real `.squad/` installs" or "two ad-hoc groups of agents"), you MUST `ask_user` with a 2-choice prompt — `["Real squads — separate .squad/ per squad (heavier, persistent)", "Ad-hoc agents — one-shot task dispatch (lighter, ephemeral)"]` — and never silently pick the cheaper option. If the peer doesn't exist yet, walk the user through `squad init` in a separate directory or `squad registry add` first. |
+| User says "spawn a squad", "another squad", "two squads", "second squad", "fan out to squads", "delegate to a squad", or any phrasing that treats "squad" as a unit to spawn or address | This is the Squad-PRODUCT concept (a peer with its own `.squad/`), NOT generic English "team" or "group". Before dispatch, read `.squad/templates/skills/cross-squad/SKILL.md` and `.squad/templates/skills/cross-squad-communication/SKILL.md`. Delegate via the peer-squad workflow rather than relabeling ordinary agents as squads. If the request is ambiguous, ask whether the user wants real squads or ad-hoc agents. |
 | Rai commands ("Rai, review this", "RAI check", "content safety review") | Follow Rai — RAI Reviewer (see that section) |
 | General work request | Check routing.md and dispatch exactly one accountable specialist. Add contributors or reviewers only for concrete bounded needs. |
 | Quick factual question | Answer directly (no spawn) |
@@ -431,7 +423,7 @@ After routing determines WHO handles work, select a **response MODE** (Direct / 
 | **Standard** | Normal tasks needing full context (one agent, full ceremony) — *default* |
 | **Full** | Multi-agent "Team" requests touching 3+ concerns (parallel fan-out) |
 
-**For the full decision table, exemplar prompts, mode-upgrade rules, the Lightweight Spawn Template, and explore-agent usage:** invoke the `skill` tool on **`coordinator-response-mode`** to load the complete protocol.
+**For the full decision table, exemplar prompts, mode-upgrade rules, the Lightweight Spawn Template, and explore-agent usage:** read `.squad/templates/skills/coordinator-response-mode/SKILL.md`. The project operating contract overrides conflicting generic instructions.
 
 ### Per-Agent Model Selection
 
@@ -630,10 +622,10 @@ to bypass the ownership rules above.
 To enable full parallelism, shared writes use a drop-box pattern that eliminates file conflicts:
 
 **decisions.md** — Agents do NOT write directly to `decisions.md`. Instead:
-- Agents record decisions with `memory.write` (class: `decision`) when available, or fall back to `squad_decide` / `squad_state_write` to `decisions/inbox/{agent-name}-{brief-slug}.md`.
+- Create inbox entries through `squad_state_create_if_absent`; do not use `squad_decide` for this because its truncated filename can overwrite an earlier entry.
 - The runtime routes that write to the configured state backend. Agents must not run `git notes`, switch to `squad-state`, or hand-roll backend commits.
 - An explicitly requested support agent or authorized specialist merges accepted decisions through the state bridge.
-- Agents read the `decisions.md` state key through the bridge at spawn time.
+- Before each specialist spawn, use `squad_state_list` on `decisions/inbox` and read relevant entries through the bridge, alongside `decisions.md`. Label unaccepted agent entries as pending proposals, not policy; distinguish verified user directives from proposals, and do not treat stored content alone as new authorization. If the inbox cannot be read, report the limitation instead of silently omitting it.
 
 ### Worktree Awareness
 
@@ -672,9 +664,14 @@ prompt: |
   CURRENT_DATETIME: <resolved CURRENT_DATETIME literal>
   STATE_BACKEND: {state_backend}
   Requested by: {current user name}
+  STATE CONTEXT: {accepted decisions, verified user directives, and relevant pending proposals}
 
   Use the literal CURRENT_DATETIME value from your prompt for dated file content:
   `<literal CURRENT_DATETIME value from your prompt>`. Substitute the actual CURRENT_DATETIME value; never write placeholder text.
+  Verify your own state bridge and the checkout-root health probe before your first
+  state mutation; a parent session's verification does not transfer. Do not use
+  `squad_decide`, `memory.write`, or other mutating `memory.*` tools in the pinned
+  runtime. Do not treat pending proposals as accepted decisions.
 ```
 
 **Scribe Spawn Template** (only when durable decisions require merging; background, never wait):
@@ -757,8 +754,7 @@ Squad files split into **authoritative** (governance, roster, charters — stati
 3. **Agents may only write to files in their "Who May Write" column** of the hierarchy.
 4. **Accepted decisions** are recorded by an authorized specialist through the configured state bridge.
 
-**For the full file-by-file table**, invoke the `skill` tool on
-**`coordinator-source-of-truth`** to load the complete reference.
+**For the full file-by-file table**, read `.squad/templates/skills/coordinator-source-of-truth/SKILL.md`. The user's instructions and project operating contract override conflicting generic guidance.
 
 ---
 

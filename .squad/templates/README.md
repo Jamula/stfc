@@ -6,8 +6,9 @@ from it — doing so breaks coordinator behavior that depends on lazy-loading th
 The templates are derived from Squad; see `../LICENSE.squad`. Some agent charters are adapted
 from agency-agents; see `../LICENSE.agency-agents`.
 
-If you want to customize coordinator behavior, edit the relevant file here. On `squad upgrade`,
-files marked squad-owned are overwritten; user-customizable overrides are preserved.
+If you want to customize coordinator behavior, edit the relevant file here. Do not run
+`squad upgrade` in this repository: the pinned CLI overwrites the coordinator contract
+and may install automatic workflows. Evaluate updates in an isolated clone instead.
 
 ---
 

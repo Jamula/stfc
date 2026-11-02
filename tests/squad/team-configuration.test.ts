@@ -97,7 +97,8 @@ describe("native Squad configuration", () => {
     assert.match(uhura, /Write and maintain user-facing documentation and operational guidance/);
     for (const charter of [spock, data, uhura]) {
       assert.match(charter, /squad_state/);
-      assert.match(charter, /squad_decide/);
+      assert.match(charter, /squad_state_create_if_absent/);
+      assert.match(charter, /do not use `squad_decide`/i);
       assert.doesNotMatch(charter, /the Scribe will merge it/i);
     }
   });
@@ -159,9 +160,111 @@ describe("native Squad configuration", () => {
     const template = read(".squad", "templates", "copilot-instructions.md");
     for (const content of [instructions, template]) {
       const decisions = section(content, "Decisions");
-      assert.match(decisions, /squad_decide/);
+      assert.match(decisions, /squad_state_create_if_absent/);
+      assert.match(decisions, /do not use `squad_decide`/i);
       assert.match(decisions, /do not write directly to `.squad\/decisions\/`/i);
       assert.doesNotMatch(decisions, /the Scribe will merge it/i);
     }
+  });
+
+  it("requires fallback detection and basic probes of both state layers", () => {
+    for (const file of [
+      [".github", "agents", "squad.agent.md"],
+      [".squad", "templates", "squad.agent.md.template"],
+    ]) {
+      const content = read(...file);
+      const handshake = between(content, "**State-backend handshake", "**⚡ Context caching:**");
+      assert.match(handshake, /StateBackendStorageAdapter/);
+      assert.match(handshake, /FSStorageProvider/);
+      assert.match(handshake, /npx -y @bradygaster\/squad-cli@1\.1\.0 health --json/);
+      assert.match(handshake, /checkout root/i);
+      assert.doesNotMatch(handshake, /from the team root/i);
+      assert.match(handshake, /each.*bridge/i);
+      assert.match(handshake, /stdout as JSON separately from stderr/);
+      assert.match(handshake, /state-backend.*pass/);
+      assert.match(handshake, /both.*layers/i);
+      assert.match(handshake, /notes-layer write fails/i);
+      assert.match(handshake, /does not establish data integrity/i);
+      assert.match(handshake, /HALT/);
+    }
+  });
+
+  it("includes pending decisions in handoffs without relying on the racy memory index", () => {
+    for (const file of [
+      [".github", "agents", "squad.agent.md"],
+      [".squad", "templates", "squad.agent.md.template"],
+      [".squad", "templates", "spawn-reference.md"],
+    ]) {
+      const content = read(...file);
+      assert.match(content, /squad_state_list.*decisions\/inbox/);
+      assert.match(content, /pending.*proposals/i);
+      assert.match(content, /do not use `memory\.write`/i);
+      assert.match(content, /squad_state_create_if_absent/);
+      assert.match(content, /do not use `squad_decide`/i);
+    }
+    const spawn = read(".squad", "templates", "spawn-reference.md");
+    assert.match(spawn, /each writer.*own.*squad_state_health/i);
+    assert.match(spawn, /checkout root/i);
+    assert.match(spawn, /uncertainty.*stop/i);
+    for (const file of [
+      [".squad", "agents", "scribe", "charter.md"],
+      [".squad", "templates", "scribe-charter.md"],
+      [".squad", "templates", "skills", "coordinator-response-mode", "SKILL.md"],
+    ]) {
+      const content = read(...file);
+      assert.match(content, /verify your own/i);
+      assert.match(content, /do not use `squad_decide`/i);
+    }
+  });
+
+  it("blocks unsafe in-place upgrades and preserves the team and workflow policy", () => {
+    const instructions = read(".squad", "templates", "session-init-reference.md");
+    const flow = between(instructions, "### 1.6 Upgrade Flow", "### 1.7 Failure Modes");
+    assert.match(flow, /do not run `squad upgrade` in this repository/i);
+    assert.match(flow, /isolated.*clone/i);
+    assert.match(flow, /coordinator.*contract/i);
+    assert.match(flow, /workflow/i);
+    assert.doesNotMatch(flow, /^\s*squad upgrade\s*$/m);
+    const catalog = read(".squad", "templates", "skills", "squad", "SKILL.md");
+    const upgrade = between(catalog, "### Upgrade Squad CLI", "### Initialize Squad");
+    assert.match(upgrade, /session-init-reference\.md/);
+    assert.match(upgrade, /do not run `squad upgrade` in this repository/i);
+    assert.doesNotMatch(upgrade, /\*\*action:\*\* shell/);
+    const init = between(catalog, "### Initialize Squad", "### Switch State Backend");
+    assert.match(init, /do not run `squad init` in this repository/i);
+    assert.doesNotMatch(init, /\*\*action:\*\* shell/);
+    const switchBackend = between(catalog, "### Switch State Backend", "---\n\n## Team Management");
+    assert.match(switchBackend, /verified.*migration/i);
+    assert.match(switchBackend, /do not.*config/i);
+    assert.doesNotMatch(switchBackend, /\*\*action:\*\* file-edit/);
+  });
+
+  it("loads the coordinator's required protocols from files that exist", () => {
+    for (const file of [
+      [".github", "agents", "squad.agent.md"],
+      [".squad", "templates", "squad.agent.md.template"],
+    ]) {
+      const content = read(...file);
+      for (const name of [
+        "coordinator-init-mode",
+        "coordinator-response-mode",
+        "coordinator-source-of-truth",
+        "cross-squad",
+        "cross-squad-communication",
+        "squad",
+      ]) {
+        const reference = `.squad/templates/skills/${name}/SKILL.md`;
+        assert.ok(content.includes(reference), `${file.join("/")} must reference ${reference}`);
+        assert.ok(existsSync(path.join(".squad", "templates", "skills", name, "SKILL.md")));
+      }
+    }
+  });
+
+  it("discloses that two-layer state is local until explicitly synchronized", () => {
+    const team = read(".squad", "team.md");
+    assert.match(team, /state is local/i);
+    assert.match(team, /not synchronized/i);
+    assert.match(team, /explicit user approval/i);
+    assert.match(team, /sync.*fail/i);
   });
 });
