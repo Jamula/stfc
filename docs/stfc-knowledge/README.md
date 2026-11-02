@@ -29,7 +29,7 @@ refresh cannot accidentally drop attribution.
 | Sub-directory | Source kind | Index |
 | --- | --- | --- |
 | [`community-reference-sheet/`](./community-reference-sheet/README.md) | Public Google Sheet (read-only mirror) | 11 per-tab mirrors of *Starfleet Academy, Athena & Duo Waves — M90 & M91* |
-| [`discord-channels/`](./discord-channels/README.md) | Discord channel snapshots (bot REST API) | STFC Officer Tool `#data-collection` channel — ⚠️ blocked on guild access (see README) |
+| [`discord-channels/`](./discord-channels/README.md) | Discord channel snapshots (bot REST API) | STFC Officer Tool `#data-collection` — no content ingested; access not verified (see README) |
 
 ## Adding a new source
 

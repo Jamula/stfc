@@ -3,7 +3,7 @@
 > Single-source-of-truth overview of how the STFC product suite works
 > end-to-end. Reading order: top-down — start with the topology map,
 > drill into the subsystem you care about, follow the cross-references
-> for per-subsystem detail. Last refreshed 2026-06-01.
+> for per-subsystem detail. Last reviewed 2026-11-01.
 
 ---
 
@@ -15,6 +15,7 @@ flowchart LR
     Cron[("⏰ GitHub Actions cron")]
     Push[("git push / PR")]
     Discord[("💬 Discord channel")]
+    Interaction[("⚡ Discord interaction")]
     HTTP[("🌐 SWA HTTP request")]
   end
 
@@ -22,6 +23,7 @@ flowchart LR
     Redeemer["Gift Redeemer<br/>src/skills/runAll.ts"]
     Monitor["Discord Monitor<br/>src/discord/"]
     Crew["Crew Optimizer<br/>src/crew/"]
+    Worker["Interaction Bridge<br/>worker/"]
     SWA["Web Panel<br/>api/ + web/"]
     CI["CI/CD<br/>.github/workflows/"]
   end
@@ -36,6 +38,8 @@ flowchart LR
   Cron --> Monitor
   Push --> CI
   Discord --> Monitor
+  Interaction --> Worker
+  Worker -->|repository_dispatch| CI
   Monitor -->|new codes| Repo
   Monitor -->|!crew dispatch| Crew
   Redeemer -->|reads STFC_ACCOUNTS| Secrets
@@ -43,17 +47,18 @@ flowchart LR
   Push --> SWA
   HTTP --> Azure
   Azure --> SWA
-  SWA -.->|future data reads| Repo
+  SWA -->|approved data reads| Repo
   CI --> Repo
 ```
 
 | Subsystem | Lives in | Triggered by | Owns |
 |---|---|---|---|
 | **Gift Redeemer** | `src/skills/runAll.ts`, `src/api/`, `src/lib/` | `redeem.yml` (`*/10 * * * *`) | STFC web-store API claims, exit-code semantics |
-| **Discord Monitor** | `src/discord/` | `discord-monitor.yml` (`15 */4 * * *`) | Promo code ingest, `!crew` command parser, dedup/cooldown state |
-| **Crew Optimizer** | `src/crew/`, `src/skills/optimizeCrew.ts` | `optimize-crew.yml` (push to `data/crew/**`), `!crew` commands | Roster, optimization scoring, progression, task synergies |
-| **Web Control Panel** | `api/`, `web/`, `shared/contracts/` | Azure SWA HTTPS requests | Read-only operator dashboard (Phase 1) |
-| **CI/CD** | `.github/workflows/`, `scripts/` | git events + cron | Tests, typecheck, lint, deploy, hygiene gates |
+| **Discord Monitor** | `src/discord/` | `discord-monitor.yml` (`15 */4 * * *`) | Configured-channel ingest, promo codes, digests, `!crew` commands |
+| **Crew Optimizer** | `src/crew/`, `src/skills/` | Local CLI and Discord monitor | Roster, optimization scoring, progression, knowledge retrieval |
+| **Discord Interaction Bridge** | `worker/`, `scripts/discord-handler.mjs` | Discord interactions → `repository_dispatch` | Signature verification, command handling, game-state uploads |
+| **Web Control Panel** | `api/`, `web/`, `shared/contracts/` | Azure SWA HTTPS requests | Authenticated operator dashboard |
+| **CI/CD** | `.github/workflows/`, `scripts/` | Git events, schedules, manual dispatch | Tests, typecheck, deploy, release, hygiene gates |
 
 ---
 
@@ -72,8 +77,8 @@ Only the meaningful top-level directories. Per-subsystem detail lives in §3.
 │   ├── lib/                   # Cross-cutting helpers (accounts, jwt, logger, outcomes)
 │   └── skills/                # Top-level "verbs" dispatched from cli.ts
 │
-├── api/                       # Azure Functions (Wave 3 Phase 1 web panel)
-│   ├── _lib/github-raw.ts     # ⚠️ Layout inconsistency w/ src/_lib (PR #124 finding)
+├── api/                       # Azure Functions for the web control panel
+│   ├── _lib/github-raw.ts     # GitHub data access
 │   └── src/_lib/{auth,respond}.ts  # SWA principal auth + JSON response helpers
 │
 ├── web/                       # Vite + Lit 3 SPA shell
@@ -84,7 +89,7 @@ Only the meaningful top-level directories. Per-subsystem detail lives in §3.
 ├── shared/contracts/          # AUTO-GENERATED TS types from JSON Schema
 │                              # (run `npm run build:contracts`; drift-checked by `check:contracts`)
 │
-├── tests/                     # 900+ node:test specs (run via tsx)
+├── tests/                     # node:test suite (run via tsx)
 ├── scripts/
 │   ├── pre-commit.mjs         # simple-git-hooks pre-commit (runs npm test)
 │   ├── pre-push.mjs           # pre-push checks
@@ -105,7 +110,9 @@ Only the meaningful top-level directories. Per-subsystem detail lives in §3.
 ├── .github/
 │   ├── copilot-instructions.md # Repository-wide coding guidance
 │   └── workflows/             # GitHub Actions workflows
-└── staticwebapp.config.json   # SWA route + role + CSP config
+├── worker/                    # Cloudflare Worker for Discord interactions
+├── staticwebapp.config.json   # SWA route + role + CSP config
+└── package.json               # CLI scripts and root dependencies
 ```
 
 ---
@@ -191,14 +198,15 @@ authoritative source. On error:
 - **429** → bounded retry in client (≤ 3×), else channel-errored.
 - **5xx** → `DiscordTransientError`, one retry already taken in client.
 
-**`!crew` command parser** (`src/discord/crewCommandParser.ts`):
+**`!crew` message commands** (`src/discord/crewCommandParser.ts`):
 
 - Prefix: `!crew`
 - Rate limit: **10/min per channel, 5/min per user** (`CHANNEL_LIMIT` /
   `USER_LIMIT` constants; rolling 60-second window via `pruneWindow`).
 - Allowlist class + rate-limit class + parser are unit-testable in
   isolation.
-- 8 read-only verbs (PR #92 in flight) — see §3.3 + `specs/004-crew-optimizer/`.
+- Read-only crew queries are routed to the crew skills; see §3.3 and
+  `docs/CREW-OPTIMIZER.md`.
 
 **Secret.** `DISCORD_BOT_TOKEN` is a GitHub Actions secret, **CI-only**.
 Codespaces cannot read it (the Codespaces-injected `GITHUB_TOKEN` lacks
@@ -232,25 +240,21 @@ a roster.
 **Authoritative spec.** `specs/004-crew-optimizer/` (`spec.md`,
 `plan.md`, `data-model.md`, `tasks.md`).
 
-**`!crew` Discord handlers.** Eight read-only verbs ship in PR #92
-(in-flight). Cross-reference handler routing via
-`src/discord/crewCommandParser.ts` + `src/skills/crewSkillSupport.ts`.
+**`!crew` Discord handlers.** Read-only message commands route through
+`src/discord/crewCommandParser.ts` and `src/skills/crewSkillSupport.ts`.
 
-**Knowledge-base embedding** is deferred to issue #93 (post-#92 ship).
-Includes Hugging Face transformer integration via `@huggingface/transformers`.
+**Knowledge retrieval** uses the committed `data/crew/knowledge-embeddings.json`
+artifact, rebuilt by `knowledge-rebuild.yml` when its source files change.
 
-**Per-account outputs.** `optimize-crew.yml` runs on push to `data/crew/**`
-and commits regenerated `docs/crew/*.md` recommendation files back to the
-branch.
+**Per-account outputs.** Run the optimizer or progression CLI locally to
+generate reports under `docs/crew/`; no workflow regenerates these reports.
 
 **Detailed runbook.** `docs/CREW-OPTIMIZER.md`.
 
 ### 3.4 Web Control Panel — `api/` + `web/` + `shared/contracts/`
 
-Phase 1 of the operator dashboard. Read-only Lit + Vite SPA backed by
-Azure Static Web Apps + Functions. Wave 3 (foundation) shipped via
-PR #124 on 2026-06-01; Wave 4 (data endpoints + invitation runbook)
-via PRs #125, #126.
+The operator dashboard is an authenticated Lit + Vite SPA backed by
+Azure Static Web Apps + Functions.
 
 **Topology:**
 
@@ -285,14 +289,12 @@ calls `requireAllowedUser`/`requireOwner` as its first non-trivial
 statement. Opt-out via
 `// @auth-anonymous-justification: <reason>`.
 
-**Frontend.** `web/src/app.ts` is a 118-LoC Lit 3 root that hash-routes
-between five tabs: `redeems`, `digests`, `telemetry`, `crew`, `runs`
-(`web/src/app.ts:9`). Each tab is its own `<stfc-*>` custom element.
+**Frontend.** `web/src/app.ts` is the Lit 3 root that hash-routes between
+the dashboard sections; each section is implemented as a custom element.
 
 **Bundle budget.** 81 920 bytes (= 80 KiB) gzipped JS,
-enforced by `scripts/ci/check-bundle-budget.mjs`. The `rag-index.json`
-(Phase 6 RAG) is excluded per spec. Note: `81920 = 80 × 1024` (KiB), not
-80 KB (= 80 000) — pending clarification per PR #124 LOW finding.
+enforced by `scripts/ci/check-bundle-budget.mjs`. The checker excludes
+`rag-index.json`.
 
 **Shared contracts.** TypeScript types + Zod schemas auto-generated from
 JSON Schema sources via `npm run build:contracts`; drift detected via
@@ -308,44 +310,32 @@ adding a contract.
 - Preview on PR open/sync/reopen targeting `main`.
 - Teardown on PR close.
 - Auth: `AZURE_STATIC_WEB_APPS_API_TOKEN` repository secret, required by the
-  pinned official Azure deploy action. Skips gracefully when it is unset
-  (issue #127).
+  pinned official Azure deploy action. Skips gracefully when it is unset.
 
 **Operator runbooks.**
 - Setup: `docs/SWA-SETUP.md`
-- Invitation: `docs/SWA-INVITATION-RUNBOOK.md` (PR #125)
 
-**Wave map.**
-- **Wave 3** (PR #124, merged 2026-06-01): foundation — auth lib +
-  grep gate, SWA bootstrap + config + roles, frontend shell, bundle
-  budget, shared contracts, deploy workflow.
-- **Wave 4** (PRs #125, #126): operator invitation runbook + initial
-  `/api/data/*` read endpoints.
-- **Wave 5+**: future (write endpoints, RAG-backed advisor, telemetry
-  drilldown).
-
-**Layout inconsistency to be aware of.** `api/_lib/github-raw.ts`
-(top-level) coexists with `api/src/_lib/auth.ts` (nested). Two roots
-typecheck via different paths. To be consolidated before Wave 4 work
-expands `api/` further (PR #124 finding #2).
+The API source currently has helpers in both `api/_lib/` and
+`api/src/_lib/`; account for both paths when navigating the function code.
 
 ### 3.5 CI/CD — `.github/workflows/` + `scripts/`
 
-The core application and required-check workflows are grouped by purpose:
+The repository has several focused workflows. Selected examples:
 
 | Workflow | Purpose | Trigger |
 |---|---|---|
-| `redeem.yml` | Gift redeemer cron | `*/10 * * * *` + dispatch |
-| `discord-monitor.yml` | Discord ingest cron | `15 */4 * * *` + dispatch |
-| `refresh-token.yml` | STFC JWT refresh via Playwright | weekly cron + dispatch |
-| `discord-ops.yml` | Manual Discord app metadata setter | dispatch **only** (constitution carve-out) |
-| `swa-deploy.yml` | Azure SWA deploy | push to `main`, PR open/sync/close |
-| `storage-size-monitor.yml` | Alert when `data/discord/game-state` exceeds 100 MB | `0 6 * * *` + dispatch |
-| `test-gate.yml` | Root and worker typecheck + tests; coverage uploads intentionally disabled | PR |
-| GitHub CodeQL default setup | Canonical `actions` + `javascript-typescript` security analysis | default branch + PRs |
-| `artifact-hygiene.yml` | Secret + JWT leak scanner | PR touching `specs/`, `docs/`, `.github/**/*.md` |
-| `release.yml` | Validate and publish releases | push to `main` |
-| `secrets-check.yml` | Diagnostic: which STFC_* secrets are set | dispatch |
+| `redeem.yml` | Gift redemption and state persistence | `*/10 * * * *` + manual dispatch |
+| `discord-monitor.yml` | Configured-channel ingest, code discovery, and digest | `15 */4 * * *` + manual dispatch |
+| `refresh-token.yml` | Manual token refresh attempt | Manual dispatch only; no schedule |
+| `discord-command-handler.yml` | Handle Discord slash-command dispatches | `repository_dispatch` |
+| `deploy-cloudflare-worker.yml` | Deploy the Discord interaction bridge | Worker changes + manual dispatch |
+| `knowledge-rebuild.yml` | Rebuild crew knowledge embeddings | Watched source changes + manual dispatch |
+| `swa-deploy.yml` | Azure Static Web Apps deploy and PR previews | `main` pushes and pull requests |
+| `test-gate.yml` | Root and Worker tests and typechecks | Pull requests |
+
+Other automation and maintenance workflows live under
+`.github/workflows/`; consult their triggers and conditions before relying on
+them. In particular, `refresh-token.yml` is not a scheduled auto-refresh.
 
 **Pre-commit.** `scripts/pre-commit.mjs` (installed by `simple-git-hooks`):
 
@@ -414,15 +404,15 @@ sequenceDiagram
   loop For each account
     Orch->>Orch: decodeJwt + describeExpiry
     alt token valid
-      Orch->>API: GET /me  (validate)
-      Orch->>API: GET /gifts (listGifts)
+      Orch->>API: GET /auth/me  (validate)
+      Orch->>API: GET /offers/gifts?available=true (listGifts)
       loop For each claimable gift
-        Orch->>API: POST /gifts/{id}/claim
+        Orch->>API: POST /offers/gifts/claim
         Orch->>Orch: classifyHttpError / classifyGiftSkip
       end
       Orch->>Repo: read promo-codes.txt
       loop For each promo code
-        Orch->>API: POST /promo (redeemCode)
+        Orch->>API: POST /redeem/claim (redeemCode)
         Orch->>Orch: classifyRedeemResult
       end
     else token expired
@@ -544,7 +534,7 @@ a linked `automation-state` worktree as its working repository:
 `/redeem-status` reads current history and `/game-state` reads/writes current
 game-state. `storage-size-monitor.yml` checks out that live ref directly.
 
-**Writer serialization (PR #250 review round 2; PR #266 review).**
+**Writer serialization.**
 `redeem.yml`, `discord-monitor.yml` and `refresh-token.yml` share one
 `stfc-gift-redeemer` concurrency group (`cancel-in-progress: false`) so their
 pushes to `automation-state` never interleave.
@@ -605,8 +595,7 @@ endpoint. The handler commits only small, diff-friendly metadata for new uploads
 daily `data/discord/game-state/YYYY-MM-DD/` folder:
 
 - `manifest.json` — R2 bucket/key, SHA-256, size, content type, signed-access
-  requirement, and retention (`forever` for this slice). The 90-day archive
-  option tracked by issue #164 is not implemented, so this PR leaves that issue open.
+  requirement, and retention (`forever` for the current implementation).
 - `<filename>.lineage.json` — Discord source, uploader, note, capture time, and
   the same R2 integrity fields.
 - `_index.json` — the daily query index used for lightweight browsing.
@@ -663,19 +652,8 @@ Operational rollback is forward-only: revert a bad state commit with
 of `data/promo-code-dead.json` on `automation-state`; deleting the frozen
 `main` copy has no effect. To roll back the architecture, first copy live
 allowlisted data back through a reviewed `main` PR, then revert this workflow
-change. No credential or ruleset cleanup is required. A minimal
-deletion/non-fast-forward-only ruleset for `automation-state` (no required
-checks and no bypass actors) is a proposal, not a live mutation. #247 remains
-optional and any future bypass actor requires explicit review.
-
-GitHub Actions has **zero CI execution evidence** for this revision while the
-account billing/spending block in #218 stops jobs before their first step.
-Local validation therefore runs targeted workflow/script tests, `npm test`,
-and `npm run typecheck` independently. After #218 is cleared, dispatch redeem
-twice and verify run 2 retains run 1's history, dispatch Discord monitor,
-exercise `/redeem-status` and `/game-state`, verify no-change/missing-cache
-paths, and prove `main`'s tip SHA is unchanged while state commits land on
-`automation-state`.
+change. Review the current repository ruleset and run history before making
+operational assumptions; their state is not represented by this source tree.
 
 ### 5.3 Operating constraints
 
@@ -693,10 +671,9 @@ paths, and prove `main`'s tip SHA is unchanged while state commits land on
 
 ### 5.4 Testing & quality gates
 
-- **900+ unit tests** via `node:test` + `tsx` (`npm test`, ~2-3 s
-  total). Single entrypoint `tests/index.test.ts` aggregates.
-- **Typecheck** via `npm run typecheck` (TypeScript `~5.7.2`, strict
-  mode).
+- **Unit tests** via `node:test` + `tsx` (`npm test`). The single entrypoint
+  `tests/index.test.ts` aggregates the root suite.
+- **Typecheck** via `npm run typecheck` (TypeScript 7; strict mode).
 - **Pre-commit hook** runs the full suite on every commit
   (`scripts/pre-commit.mjs`). `--no-verify` is forbidden.
 - **CI checks:** `test-gate.yml` ("npm test (required)") and GitHub
@@ -733,7 +710,7 @@ paths, and prove `main`'s tip SHA is unchanged while state commits land on
 | Feature specifications | `specs/NNN-feature-slug/` |
 | Repository rules | `.github/copilot-instructions.md` |
 | Web panel setup | `docs/SWA-SETUP.md` |
-| Web panel invitation runbook | `docs/SWA-INVITATION-RUNBOOK.md` |
+| Web panel invitation and setup | `docs/SWA-SETUP.md` |
 | Crew optimizer details | `docs/CREW-OPTIMIZER.md` |
 | Discord bot setup | `docs/DISCORD-BOT-SETUP.md` |
 | Initial env setup | `docs/SETUP.md` |
@@ -742,28 +719,13 @@ paths, and prove `main`'s tip SHA is unchanged while state commits land on
 
 ---
 
-## 7. Notable absences / known gaps
+## 7. Operational verification limits
 
-- **SWA deployment token unprovisioned** (issue #127 open) → SWA deploy
-  step skips when `AZURE_STATIC_WEB_APPS_API_TOKEN` is empty (workflow handles gracefully).
-- **Discord bot guild membership** in the operator's STFC server is
-  unconfirmed → issues #76 / #96 blocked until verified.
-- **Crew v1.5 OCR POC** pending (issue #85) → crew v1.5 implementation
-  phases gated on the POC verdict (issue #86).
-- **Crew v2 knowledge-base embedding** (issue #93) deferred until #92
-  handlers ship.
-- **Wave 4+ web panel endpoints** still in flight — `/api/data/*` shape
-  evolving across PRs #125, #126.
-- **`api/` layout consolidation** — `api/_lib/` (top-level) vs
-  `api/src/_lib/` (nested) inconsistency carried forward from PR #124;
-  to be resolved before Wave 4 expansion (PR #124 finding #2).
-- **Grep-gate vs first-statement promise** — `check-api-auth.mjs`
-  hardened to first-statement on 2026-06-01; older
-  copies of the gate documentation may still describe presence-only
-  checks. TODO: verify all consumer docs reflect the hardened semantics.
-- **Bundle budget unit ambiguity** — `web/bundle-budget.json` is 81 920
-  bytes = 80 KiB; spec text reads "80 KB" (= 80 000). TODO: clarify in
-  spec or update the JSON.
+Repository files describe intended workflows and application behavior, not
+whether external services are currently provisioned or reachable. Before
+operating the Azure deployment, Discord bot, or Cloudflare storage, check the
+latest workflow runs and the service configuration in its owning console.
+Never infer that a workflow ran successfully from its presence in this tree.
 
 ---
 

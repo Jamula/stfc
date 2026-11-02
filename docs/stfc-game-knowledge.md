@@ -4,7 +4,8 @@
 > at <https://startrekfleetcommand.com/new-user-guides/>,
 > <https://startrekfleetcommand.com/star-trek-fleet-command-database/>, and
 > <https://startrekfleetcommand.com/news/>.  
-> Last updated: May 2026.
+> Last reviewed: November 1, 2026. Game content changes frequently; use the
+> official links below to verify current availability and requirements.
 
 ---
 
@@ -243,7 +244,7 @@ accessed in-game via the Gifts icon).
 | `POST` | `/redeem/claim` | Submit a promo code (`promo_code`) |
 
 All endpoints are relative to `https://cdn-nv3-webstore-api.startrek.digitgaming.com/api/v2`
-and require an `Authorization: Bearer <JWT>` header.
+and require a bearer token in the `Authorization` header.
 
 ### Outcome vocabulary
 
@@ -257,38 +258,24 @@ and require an `Authorization: Bearer <JWT>` header.
 
 ---
 
-## 11. Latest News & Updates (as of May 2026)
+## 11. Latest News & Updates (reviewed November 1, 2026)
 
-### Update 90 — Starfleet Academy: Part 1 (May 4, 2026)
+The official news feed changes frequently. These recent announcements provide
+context, but time-limited events and game requirements should be checked in
+the source before acting:
 
-- New **Starfleet Academy Remote Campus** building (Ops 61+)
-- **G5 Scrapping** — reclaim resources from decommissioned G5 ships
-- New stat: **Critical Mitigation** (reduces incoming crit damage after other
-  bonuses)
-- **Duo Wave Defense** cooperative mode
-- "Claim All" Sigma Resource Refinery
-- Battle Pass and G3 Research/Station Daily Goal improvements
-- Bug fixes for ships, refinery, missions, academy systems, and scrapyard
-  operations
+- [Update 95 — Haven](https://startrekfleetcommand.com/news/patch-notes-update-95-haven/)
+  (September 17, 2026) introduces Haven, a planetary-base feature for Ops 61+
+  players, and the U.S.S. Kelcie Mae.
+- [Division 12 patch notes](https://startrekfleetcommand.com/news/division-12-patch-notes/)
+  (October 15, 2026) introduce new event content, refits, and Epic Officer
+  Villains Rose Harper.
+- [Infinite Incursions: The Griffin Calamity](https://startrekfleetcommand.com/news/infinite-incursions-the-griffin-calamity/)
+  (October 30, 2026) describes a limited-time event beginning October 31
+  (November 1 in APAC).
 
-### 2026 Roadmap themes
-
-- Stronger alliances
-- Clearer progression for all ops ranges
-- Bolder new frontiers (content and mechanics)
-- Continued stability and quality-of-life improvements driven by player
-  feedback
-
-### Independent Archives building (late 2024, still relevant)
-
-Available from Ops 16, this building significantly reduces daily grind and is
-especially useful for new and mid-game players catching up on key game systems.
-
-### Simplified progression (September 2025 update)
-
-Aimed at Ops 20–44 players: Battle Pass rewards, event tracks, and resource
-progression were streamlined so mid-game players can more easily identify
-which ships and upgrades to prioritize.
+For the latest announcements and full patch notes, see the
+[official STFC news feed](https://startrekfleetcommand.com/news/).
 
 ---
 

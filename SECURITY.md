@@ -1,21 +1,19 @@
 # Security Policy
 
-## Supported Versions
+## Supported versions
 
-Use this section to tell people about which versions of your project are
-currently being supported with security updates.
+Security fixes are made to the current release line. The latest published
+release is `v1.0.0`; users should upgrade to the latest release before
+reporting a vulnerability.
 
-| Version | Supported          |
-| ------- | ------------------ |
-| 5.1.x   | :white_check_mark: |
-| 5.0.x   | :x:                |
-| 4.0.x   | :white_check_mark: |
-| < 4.0   | :x:                |
+## Reporting a vulnerability
 
-## Reporting a Vulnerability
+Please check the repository's **Security** tab for **Report a vulnerability**.
+If private reporting is available, submit the report there. If it is not
+available, contact the maintainers and ask for a private reporting channel
+before sharing technical details. Do not disclose a suspected issue in a
+public issue or pull request.
 
-Use this section to tell people how to report a vulnerability.
-
-Tell them where to go, how often they can expect to get an update on a
-reported vulnerability, what to expect if the vulnerability is accepted or
-declined, etc.
+Maintainers will review the report, follow up through GitHub's private
+advisory process, and coordinate remediation and disclosure with the reporter.
+There is no fixed response-time commitment.

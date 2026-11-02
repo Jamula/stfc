@@ -17,9 +17,9 @@ also carries its own per-tab lineage block** (with the tab-specific URL and gid)
 | **Source URL** | <https://docs.google.com/spreadsheets/d/19gxHFoje5GGRWSmE9BtSp97j_zOnMY4jBP9gFr1zi90/edit> |
 | **Source name** | STFC Community Sheet — *Starfleet Academy, Athena & Duo Waves — M90 & M91* (whole workbook) |
 | **Author(s) / contributors** | JulesVern; Quasel; BlueMandalorian; STFC Officer Tool Discord `#data-collection` channel (invite: <https://discord.gg/BRhru6Vcnj>) |
-| **Captured on** | 2026-05-31 |
+| **Captured on** | 2026-11-02 (UTC) |
 | **License / attribution requirements** | Community-maintained reference. Upstream says **"MAKE A COPY"** for any use of the calculators; we mirror read-only. Preserve the author list above on every quote or excerpt; link back to the source URL. We do **not** modify the upstream sheet — contributions go through the authors via the Discord channel. |
-| **Refresh strategy** | Re-fetch all tabs via `node scripts/fetch-community-sheet.mjs` from the repo root. The script reads each tab's CSV via the public gviz endpoint, trims empty columns, and rewrites the per-tab files with an updated **Captured on** date. To check for upstream tab additions/removals, fetch `https://docs.google.com/spreadsheets/d/19gxHFoje5GGRWSmE9BtSp97j_zOnMY4jBP9gFr1zi90/htmlview` — its source contains the canonical tab list. |
+| **Refresh strategy** | Re-fetch all tabs via `node scripts/fetch-community-sheet.mjs` from the repo root. The script reads each tab's CSV via the public gviz endpoint, trims empty columns, and rewrites the per-tab files with an updated **Captured on** date using the UTC calendar date (`toISOString()`). This may differ from the local calendar date near midnight UTC. To check for upstream tab additions/removals, fetch `https://docs.google.com/spreadsheets/d/19gxHFoje5GGRWSmE9BtSp97j_zOnMY4jBP9gFr1zi90/htmlview` — its source contains the canonical tab list. |
 
 ## Why it's mirrored here
 
@@ -43,7 +43,7 @@ We honour that:
 - Suggestions for the sheet itself go through the authors via the Discord
   channel above, not via this repo.
 
-## Tabs ingested (M91, captured 2026-05-31)
+## Tabs ingested (M91, refreshed 2026-11-02 UTC)
 
 | # | Tab | gid | File |
 | -: | --- | --- | --- |
@@ -59,14 +59,12 @@ We honour that:
 | 10 | G5 Scrapping Guide             | 1369248894 | [10-g5-scrapping-guide.md](./10-g5-scrapping-guide.md) |
 | 11 | Critical Damage Mitigation     | 1179953085 | [11-critical-damage-mitigation.md](./11-critical-damage-mitigation.md) |
 
-### Tabs noted in the original issue but not currently present upstream
+### Tabs not mirrored
 
-The issue (#74) referenced *Facade Expansion* and *Emerald Chain Expansion* as
-"Other" tabs. As of 2026-05-31, the upstream sheet no longer exposes those
-tabs (they were either renamed, merged into another tab, or removed). If they
-reappear, add the new gid to the `TABS` array in
-[`scripts/fetch-community-sheet.mjs`](../../../scripts/fetch-community-sheet.mjs)
-and re-run the refresh.
+Earlier source notes mention *Facade Expansion* and *Emerald Chain Expansion*
+as "Other" tabs. They are not in the current `TABS` list, so this refresh did
+not capture them. Check the upstream tab list before adding them to
+[`scripts/fetch-community-sheet.mjs`](../../../scripts/fetch-community-sheet.mjs).
 
 ## What you'll find in each file
 

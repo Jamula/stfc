@@ -1,7 +1,7 @@
 # Crew Optimizer — Operator Guide
 
-> v1 shipped. v1.5 (iPhone → Discord OCR loop) and v2 (interactive Discord
-> `!crew` commands) are in development — see [Roadmap](#roadmap).
+> The optimizer, roster CLI, progression reports, local knowledge retrieval,
+> and read-only Discord `!crew` message commands are implemented.
 
 ## What it does
 
@@ -11,8 +11,9 @@ produces two outputs: a ranked list of the **best legal crew for a given
 task** (annotated with the scoring rationale), and a **progression report**
 identifying which officer investments will yield the largest marginal gain
 across the built-in task classes. No game-API traffic; no credentials required.
-All logic runs locally or in CI via the `optimize-crew.yml` workflow when
-it fires on changes to `data/crew/**`.
+The skills run locally. Discord `!crew` queries are handled by the Discord
+monitor workflow; the `knowledge-rebuild.yml` workflow separately refreshes
+the committed knowledge-embedding artifact when its source files change.
 
 ---
 
@@ -321,49 +322,19 @@ only when the input hash changes) and appends a job summary for CI.
 
 ---
 
-## Workflow
+## Automation
 
-> **Status:** `optimize-crew.yml` was tracked in PR #102.
-> The skills run manually today. This section documents the intended
-> workflow behavior once #102 lands.
-
-The `optimize-crew.yml` workflow triggers on:
-
-- **Push** to paths matching `data/crew/**`
-- **`workflow_dispatch`** (manual trigger)
-
-No cron. Concurrency group: `stfc-crew-optimizer`.
-
-On each run it:
-
-1. Computes an input hash per account (officers + tasks + roster).
-2. Runs `skill:optimize-crew --all` and `skill:progression --all` once per
-   push to `data/crew/**`. Per-task iteration is not in v1; file a follow-up
-   issue if needed.
-3. Regenerates `docs/crew/{account}-optimize.md` and
-   `docs/crew/{account}-progression.md` **only when the hash changed**.
-4. Commits the regenerated docs via rebase-before-push (Rule 4).
-5. Posts a job summary listing accounts that ran + accounts skipped
-   (hash unchanged).
-
-Permissions: `contents: write` for the commit step. All `uses:` pins are
-full commit SHAs.
-
-**Reading the output:** After a workflow run, the regenerated docs are at:
-
-```
-docs/crew/{account}-optimize.md
-docs/crew/{account}-progression.md
-```
-
-The job summary (GitHub Actions UI → the workflow run → Summary tab) lists
-which accounts regenerated and which were skipped.
+There is no `optimize-crew.yml` workflow in the repository. Run the optimizer
+and progression skills locally to generate reports under `docs/crew/`.
+`knowledge-rebuild.yml` only rebuilds `data/crew/knowledge-embeddings.json`;
+it does not run the optimizer or regenerate account reports.
 
 ---
 
 ## Discord v2 commands
 
-**Status:** v2 is complete, tracked in issues #92–#95 (shipped via PRs #129, #130, #132; PR #133 pending merge).
+The read-only Discord message commands are implemented and reuse the committed
+crew database, task definitions, and roster YAML.
 
 Read-only Discord commands reuse the committed crew database, task
 definitions, and roster YAML. Every account-scoped command requires
@@ -638,14 +609,10 @@ rebuilt: data/crew/knowledge-embeddings.json (<N> chunks, hash efgh5678…)
 
 ---
 
-## Roadmap
-
-| Version | Status | Notes |
-|---|---|---|
-| **v1** | ✅ Shipped | Pure-compute optimizer + `skill:roster` family + `skill:optimize-crew` + `skill:progression` + hand-curated 37-officer DB |
-| **v1.5 — iPhone OCR** | 🔬 In development | iPhone screenshot → Discord → OCR → PR loop for roster refresh. Gated on OCR POC passing its acceptance bar. Tracked in issues [#85](https://github.com/Jamula/stfc/issues/85)–[#90](https://github.com/Jamula/stfc/issues/90). |
-| **v2 — Discord commands** | ✅ Shipped | Read-only `!crew best`, `status`, `progression`, `explain`, `synergy`, `tasks`, `officers`, `roster show`, and `knowledge` interactive Discord commands. Includes auto-rebuild knowledge embeddings via `knowledge-rebuild.yml` CI workflow and manual `crew:knowledge:rebuild` CLI. Tracked in issues [#91](https://github.com/Jamula/stfc/issues/91)–[#95](https://github.com/Jamula/stfc/issues/95). |
-| **v3 — Slash commands** | 📋 Future | Planned migration from polling-transport Discord message-based commands to Discord Application Commands (slash commands) for improved UX + discoverable parameters. |
+The crew optimizer's Discord interface currently uses read-only `!crew`
+message commands. The separate Discord interaction bridge exposes the
+commands listed in `discord/commands.json`; crew slash commands are not
+defined there.
 
 See also `docs/stfc-game-knowledge.md` for the domain reference (officer
 stats, faction synergy groups, BDA role taxonomy) that underpins the

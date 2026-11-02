@@ -8,8 +8,8 @@ of this repository.
 - A Scopely account that you log in to the STFC web store with.
 - A fork (or clone) of this repository on GitHub with Actions enabled.
 - **Recommended:** Node.js 24+ locally to match the repository toolchain and use
-  the `capture-token` script. The Azure Static Web Apps managed API remains on
-  Node.js 22, the latest runtime supported by that platform. Optional: GitHub
+  the `capture-token` script. The Azure Static Web Apps managed API is
+  configured to use Node.js 22. Optional: GitHub
   CLI (`gh`) so the script can set the secret for
   you.
 
@@ -77,7 +77,7 @@ Once the secret is set:
 - **Manual:** repo → **Actions** → **Redeem gifts** → **Run workflow**.
 - **CLI:** `gh workflow run "Redeem gifts"` (followed by `gh run watch` to
   tail it).
-- **Cron:** every 15 minutes (~96 runs/day) automatically. The job summary on each run shows
+- **Cron:** every 10 minutes (144 runs/day) automatically. The job summary on each run shows
   what was claimed, which codes were already used, and any tokens that have
   expired.
 
@@ -86,64 +86,31 @@ Once the secret is set:
 If you can't install Node locally — or just want a quick one-off — open
 DevTools on the STFC store after logging in, switch to the **Network**
 tab, find any request to `cdn-nv3-webstore-api.startrek.digitgaming.com`,
-copy the `Authorization` header value (everything after `Bearer `), and
-paste it into the `STFC_ACCOUNTS` GitHub secret as
+copy the token portion from the `Authorization` header (remove the
+`Bearer ` prefix) and paste it into the `STFC_ACCOUNTS` GitHub secret as
 `[{"name":"main","token":"<that JWT>"}]`. The `capture-token` script
 automates exactly this and is strongly recommended over the manual
 approach.
 
-## Optional: fully automated token refresh in CI
+## Token refresh
 
-The store JWT lives ~30 days. If you'd rather never re-capture by hand,
-the **`Refresh token` workflow** (`.github/workflows/refresh-token.yml`) can
-run weekly in GitHub Actions, log in for you with Playwright, and update
-the `STFC_ACCOUNTS` secret automatically.
+The `Refresh token` workflow (`.github/workflows/refresh-token.yml`) is
+manual-only; its weekly schedule was removed when the login changed to
+email OTP. The workflow currently requires `STFC_EMAIL`,
+`STFC_PASSWORD` (or the legacy `cj_pwd` secret), and `STFC_REFRESH_PAT`.
+It also exposes an optional OTP input, but the passwordless login cannot
+use this workflow as currently configured.
 
-This is opt-in — it requires three additional secrets:
+For the current email-OTP flow, use the local visible-browser capture instead:
 
-| Secret               | What it is                                                                                       |
-|----------------------|---------------------------------------------------------------------------------------------------|
-| `STFC_EMAIL`         | The email address you log in to the Scopely store with.                                           |
-| `STFC_PASSWORD`      | Your Scopely password. (The workflow also accepts the legacy name `cj_pwd` if you've already set that.) |
-| `STFC_REFRESH_PAT`   | A **fine-grained PAT** with `Secrets: Read & write` permission for this repo. The default `GITHUB_TOKEN` cannot write secrets, hence the PAT requirement. |
+```bash
+npm run capture-token -- --name main
+```
 
-### Creating the PAT
-
-1. <https://github.com/settings/personal-access-tokens/new>
-2. **Resource owner**: `Jamula` (or whoever owns the fork).
-3. **Repository access**: *Only select repositories* → pick `stfc-gift-redeemer`.
-4. **Permissions** → **Repository permissions**:
-   - **Actions: Read** (default — keep it)
-   - **Secrets: Read and write** (set this; default is none)
-5. **Generate token** and copy the value.
-6. Go to your repo → *Settings → Secrets and variables → Actions* and add
-   it as **`STFC_REFRESH_PAT`**.
-
-### How it runs
-
-- **Weekly**: cron `0 4 * * 0` (Sunday 04:00 UTC).
-- **On demand**: the **Run workflow** button on the Actions tab. You can
-  pass a different `account_name` input if you have multiple accounts.
-
-The workflow is `concurrency`-grouped with the redeem workflow, so the two
-never race each other on writes.
-
-### When auto-refresh fails
-
-The most common failure is **Scopely serving a CAPTCHA or MFA challenge to
-the headless browser**. The workflow's job summary will say so explicitly
-and you can fall back to running `npm run capture-token` locally — that
-uses a visible browser and you can solve any challenge interactively.
-
-### A note on credential safety
-
-- The workflow masks the captured JWT (and any existing tokens in
-  `STFC_ACCOUNTS`) so they don't appear in the live log even if a step
-  prints them by accident.
-- The new value is piped into `gh secret set --body-file -` via stdin —
-  it never lands on a command line.
-- The PAT lives only in GitHub's encrypted secret store; the workflow
-  reads it as `${{ secrets.STFC_REFRESH_PAT }}`.
+Enter the one-time code in the browser. The script preserves other named
+accounts and can update `STFC_ACCOUNTS` through `gh` after confirmation.
+Otherwise, follow [Setting the GitHub secret manually](#setting-the-github-secret-manually).
+Do not paste tokens into chat, issues, or repository files.
 
 ## Troubleshooting
 
@@ -203,11 +170,11 @@ optional. When enabled, it runs every 4 hours to:
 - Extract candidate promo codes and feed them to the redeemer
 - Classify tips/tricks/hacks and produce a daily digest
 
-This feature requires two additional secrets:
+This feature requires one additional repository secret:
 
 | Secret               | What it is                                                                           |
 |----------------------|--------------------------------------------------------------------------------------|
-| `DISCORD_BOT_TOKEN`  | OAuth token from a Discord bot your Discord server admin has invited to the server. |
+| `DISCORD_BOT_TOKEN`  | Bot token from the Discord Developer Portal. |
 
 **Setup:**
 

@@ -7,7 +7,7 @@
 | **Source URL** | <https://docs.google.com/spreadsheets/d/19gxHFoje5GGRWSmE9BtSp97j_zOnMY4jBP9gFr1zi90/edit#gid=556376347> (gid `556376347`) |
 | **Source name** | STFC Community Sheet — *Starfleet Academy, Athena & Duo Waves — M90 & M91* — SF Academy Building tab |
 | **Author(s) / contributors** | JulesVern; Quasel; BlueMandalorian; STFC Officer Tool Discord `#data-collection` channel |
-| **Captured on** | 2026-05-31 |
+| **Captured on** | 2026-11-02 |
 | **License / attribution requirements** | Community-maintained reference. Upstream says **"MAKE A COPY"** for any use of the calculators; we mirror read-only. Preserve the author list above on every quote or excerpt; link back to the source URL. We do **not** modify the upstream sheet — contributions go through the authors via the Discord channel: https://discord.gg/BRhru6Vcnj |
 | **Refresh strategy** | Re-fetch via the public gviz CSV endpoint per tab: `node scripts/fetch-community-sheet.mjs` from the repo root rewrites every per-tab mirror and updates **Captured on**. If the upstream adds/renames/removes tabs, update the `TABS` array in that script first (gids come from the published `/htmlview` URL). |
 
@@ -21,7 +21,7 @@
 
 ```csv
 Starfleet [SF] Academy Building Overview ,Buffs Provided by Building,,,,,,One Time Gifts,,,"Starfleet [SF] Academy Building  By: JulesVern, Quasel, BlueMandalorian and the STFC community",,,,,,,Ops Range # of chests,,Avg. Drip ,Est. Days 
-,,,,,,,,Duo Wave,Speed Ups,,,35,,,"9,550",25000000%,,150%,54000%,"5,490"
+,,,,,,,,Duo Wave,Speed Ups,,,50,,,"10,000",75000000%,,250%,70000%,"6,860"
 ,,,,,,,,,,,,,Gas Materials,,,,,,,
 ,,,,,,,,Simulation Codes,[Σ] Total,FALSE,1,,6★ Com,"3,080",0,500,,,,
 ,,,,,,,,,,FALSE,2,,6★ Com,"4,540",80,520,,,,
@@ -43,36 +43,36 @@ Starfleet [SF] Academy Building Overview ,Buffs Provided by Building,,,,,,One Ti
 ,,,,,,,,,,FALSE,18,,6★ Com,"27,850",355,30.6K,,,,
 ,,,,,,,,,,FALSE,19,,6★ Com,"29,300",365,36.3K,,,,
 ,,,,,,,,,,FALSE,20,,6★ Com,"30,750",375,42.5K,50%,100%,,
-,,,,,,,,,,TRUE,21,,6★ Unc,"2,330",400,49.5K,53%,100%,,
-,,,,,,,,,,TRUE,22,,6★ Unc,"3,380",415,57.3K,56%,100%,,
-,,,,,,,,,,TRUE,23,,6★ Unc,"4,430",430,65.8K,59%,100%,,
-,,,,,,,,,,TRUE,24,,6★ Unc,"5,480",445,75.1K,62%,100%,,
-,,,,,,,,,,TRUE,25,,6★ Unc,"6,530",460,85.2K,65%,100%,,
-,,,,,,,,,,TRUE,26,,6★ Unc,"7,580",475,96.3K,68%,100%,,
-,,,,,,,,,,TRUE,27,,6★ Unc,"8,630",490,108.2K,71%,100%,,
-,,,,,,,,,,TRUE,28,,6★ Unc,"9,690",505,121.2K,74%,100%,,
-,,,,,,,,,,TRUE,29,,6★ Unc,"10,750",520,135.1K,77%,100%,,
-,,,,,,,,,,TRUE,30,,6★ Unc,"11,800",535,150.0K,85%,150%,500,"5,000"
-,,,,,,,,,,TRUE,31,,6★ Unc,"12,850",875,170.0K,88%,150%,500,"5,100"
-,,,,,,,,,,TRUE,32,,6★ Unc,"13,900",1000,190.0K,91%,150%,520,"5,100"
-,,,,,,,,,,TRUE,33,,6★ Unc,"14,950",1000,210.0K,94%,150%,520,"5,300"
-,,,,,,,,,,TRUE,34,,6★ Unc,"16,000",1000,230.0K,97%,150%,540,"5,300"
-,,,,,,,,,,TRUE,35,,6★ Unc,"17,050",1000,250.0K,100%,150%,540,"5,490"
+,,,,,,,,,,FALSE,21,,6★ Unc,"2,330",400,49.5K,53%,100%,,
+,,,,,,,,,,FALSE,22,,6★ Unc,"3,380",415,57.3K,56%,100%,,
+,,,,,,,,,,FALSE,23,,6★ Unc,"4,430",430,65.8K,59%,100%,,
+,,,,,,,,,,FALSE,24,,6★ Unc,"5,480",445,75.1K,62%,100%,,
+,,,,,,,,,,FALSE,25,,6★ Unc,"6,530",460,85.2K,65%,100%,,
+,,,,,,,,,,FALSE,26,,6★ Unc,"7,580",475,96.3K,68%,100%,,
+,,,,,,,,,,FALSE,27,,6★ Unc,"8,630",490,108.2K,71%,100%,,
+,,,,,,,,,,FALSE,28,,6★ Unc,"9,690",505,121.2K,74%,100%,,
+,,,,,,,,,,FALSE,29,,6★ Unc,"10,750",520,135.1K,77%,100%,,
+,,,,,,,,,,FALSE,30,,6★ Unc,"11,800",535,150.0K,85%,150%,500,"5,000"
+,,,,,,,,,,FALSE,31,,6★ Unc,"12,850",875,170.0K,88%,150%,500,"5,100"
+,,,,,,,,,,FALSE,32,,6★ Unc,"13,900",1000,190.0K,91%,150%,520,"5,100"
+,,,,,,,,,,FALSE,33,,6★ Unc,"14,950",1000,210.0K,94%,150%,520,"5,300"
+,,,,,,,,,,FALSE,34,,6★ Unc,"16,000",1000,230.0K,97%,150%,540,"5,300"
+,,,,,,,,,,FALSE,35,,6★ Unc,"17,050",1000,250.0K,100%,150%,540,"5,490"
 ,,,,,,,,,,FALSE,36,,6★ Unc,"18,100",1000,270.0K,103%,150%,560,"5,490"
 ,,,,,,,,,,FALSE,37,,6★ Unc,"19,150",1000,290.0K,106%,150%,560,"5,690"
 ,,,,,,,,,,FALSE,38,,6★ Unc,"20,200",1000,310.0K,109%,150%,580,"5,690"
 ,,,,,,,,,,FALSE,39,,6★ Unc,"21,250",1000,330.0K,112%,150%,580,"5,880"
 ,,,,,,,,,,FALSE,40,,6★ Unc,"22,300",1000,350.0K,125%,200%,600,"5,880"
-,,,,,,,,,,FALSE,41,,6★ Unc,"23,350",1000,390.0K,128%,200%,600,"6,080"
-,,,,,,,,,,FALSE,42,,6★ Unc,"24,400",1000,430.0K,131%,200%,620,"6,080"
-,,,,,,,,,,FALSE,43,,6★ Unc,"25,450",1000,470.0K,134%,200%,620,"6,280"
-,,,,,,,,,,FALSE,44,,6★ Unc,"26,500",1000,510.0K,137%,200%,640,"6,280"
-,,,,,,,,,,FALSE,45,,6★ Unc,"27,550",1000,550.0K,140%,200%,640,"6,470"
-,,,,,,,,,,FALSE,46,,6★ Unc,"28,600",1000,590.0K,143%,200%,660,"6,470"
-,,,,,,,,,,FALSE,47,,6★ Unc,"29,650",1000,630.0K,146%,200%,660,"6,670"
-,,,,,,,,,,FALSE,48,,6★ Unc,"30,700",1000,670.0K,149%,200%,680,"6,670"
-,,,,,,,,,,FALSE,49,,6★ Unc,"31,750",1000,710.0K,152%,200%,680,"6,860"
-,,,,,,,,,,FALSE,50,,6★ Unc,"32,800",1000,750.0K,170%,250%,700,"6,860"
+,,,,,,,,,,TRUE,41,,6★ Unc,"23,350",1000,390.0K,128%,200%,600,"6,080"
+,,,,,,,,,,TRUE,42,,6★ Unc,"24,400",1000,430.0K,131%,200%,620,"6,080"
+,,,,,,,,,,TRUE,43,,6★ Unc,"25,450",1000,470.0K,134%,200%,620,"6,280"
+,,,,,,,,,,TRUE,44,,6★ Unc,"26,500",1000,510.0K,137%,200%,640,"6,280"
+,,,,,,,,,,TRUE,45,,6★ Unc,"27,550",1000,550.0K,140%,200%,640,"6,470"
+,,,,,,,,,,TRUE,46,,6★ Unc,"28,600",1000,590.0K,143%,200%,660,"6,470"
+,,,,,,,,,,TRUE,47,,6★ Unc,"29,650",1000,630.0K,146%,200%,660,"6,670"
+,,,,,,,,,,TRUE,48,,6★ Unc,"30,700",1000,670.0K,149%,200%,680,"6,670"
+,,,,,,,,,,TRUE,49,,6★ Unc,"31,750",1000,710.0K,152%,200%,680,"6,860"
+,,,,,,,,,,TRUE,50,,6★ Unc,"32,800",1000,750.0K,170%,250%,700,"6,860"
 ,,,,,,,,,,FALSE,51,,6★ Unc,"33,850",1750,790.0K,173%,250%,700,"7,060"
 ,,,,,,,,,,FALSE,52,,6★ Unc,"34,900",1750,830.0K,176%,250%,720,"7,060"
 ,,,,,,,,,,FALSE,53,,6★ Unc,"36,000",1750,870.0K,179%,250%,720,"7,260"

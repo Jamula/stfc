@@ -1,8 +1,6 @@
 # SWA Setup — Operator Runbook
 
-**For:** `cyrusjamula` (or any delegated operator)
-**Tracking issue:** #115
-**Deployment-auth blocker:** #127 (owner provisioning still required)
+**For:** Repository maintainers and delegated operators
 **Contract:** `specs/005-web-control-panel/deploy-contract.md`
 
 ---
@@ -73,7 +71,7 @@ The pinned official `Azure/static-web-apps-deploy` action requires
 `azure_static_web_apps_api_token`. An Azure login using GitHub OIDC does not
 replace this action input, so this repository uses the SWA deployment token.
 
-For #127, first verify the existing target without retrieving credentials:
+First verify the intended target without retrieving credentials:
 
 ```bash
 az account set --subscription "<SUBSCRIPTION_ID>"
@@ -114,9 +112,9 @@ print or share secret values. Azure app registrations, federated credentials,
 `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, and `AZURE_SUBSCRIPTION_ID` are not needed
 for this workflow.
 
-**#127 remains blocked** until the owner provisions the intended SWA token and
-the upload and preview-close jobs succeed. A skipped deployment is not proof
-that provisioning is complete.
+The deployment workflow skips deployment and preview teardown when the
+repository secret is unavailable. Check the latest workflow summary before
+assuming that a deployment or teardown completed.
 
 ---
 
@@ -126,13 +124,13 @@ The SWA uses GitHub OAuth with a custom `stfc_operator` role.
 Roles are assigned via invitation links (Azure Portal only — CLI support
 is limited for the Free tier).
 
-> ⚠️ Wave 4 issue #118 will detail the full operator management workflow.
-> The steps below are for the initial bootstrap.
+The steps below invite an initial operator. Manage later role changes from
+the app's **Role Management** page in Azure Portal.
 
 1. Azure Portal → Static Web Apps → `stfc-control-panel`
 2. **Role Management** → **Invite**
 3. Authentication provider: `GitHub`
-4. GitHub login: `cyrusjamula`
+4. GitHub login: the operator's GitHub username
 5. Role: `stfc_operator`
 6. Click **Generate** → copy the invitation URL
 7. Open the invitation URL in a browser and sign in with GitHub
@@ -148,13 +146,10 @@ use case).
 
 After completing steps 1–4:
 
-1. Push any commit to `main` (or open a draft PR):
-   ```bash
-   git commit --allow-empty -m "chore: trigger first SWA deploy"
-   git push origin main
-   ```
-2. Watch the `Deploy SWA` workflow run in GitHub Actions.
-3. When green, visit the SWA URL:
+1. After an approved change reaches `main`, watch the `Deploy SWA` workflow
+   run in GitHub Actions. A pull request targeting `main` also creates a
+   preview deployment when the required secret is available.
+2. When deployment succeeds, visit the SWA URL:
    ```bash
    az staticwebapp show \
      --name stfc-control-panel \
@@ -162,11 +157,11 @@ After completing steps 1–4:
      --query defaultHostname -o tsv
    ```
    → `https://stfc-control-panel.<random>.azurestaticapps.net`
-4. The browser should redirect to GitHub OAuth login (the
+3. The browser should redirect to GitHub OAuth login (the
    `staticwebapp.config.json` deny-by-default rule).
-5. After signing in, you should see the placeholder landing page
-   (real UI lands in Wave 3, issue #119).
-6. Close the preview PR and confirm `teardown` succeeds. Fork PRs do not receive
+4. After signing in, verify the control panel loads and its expected routes
+   behave correctly.
+5. Close a preview PR and confirm `teardown` succeeds. Fork PRs do not receive
    repository secrets, so deployment and teardown intentionally skip for them.
 
 ---
@@ -207,13 +202,21 @@ The control panel uses a **two-layer authorization model** (threat-model S-1, E-
 Set these in Azure Portal → Static Web Apps → `stfc-control-panel` → **Configuration**,
 or via `az staticwebapp appsettings set`:
 
-Before deploying this change, configure both settings below. Earlier setting
-names are no longer read; without the new values, API access fails closed.
+Configure both settings before enabling API access. The handlers read these
+names and fail closed when values are missing.
 
 | Setting | Type | Description |
 |---|---|---|
 | `STFC_ALLOWED_USERS` | Comma-separated GitHub usernames | Users allowed to access the API (e.g. `cyrusjamula,teammate`). Must include every operator invited via SWA role management. |
-| `STFC_OWNER` | Single GitHub username | The owner with elevated privileges (refresh-token, owner-only UI). Must be `cyrusjamula`. |
+| `STFC_OWNER` | Single GitHub username | The owner with elevated privileges (refresh-token, owner-only UI). Set this to the authorized repository owner; for `Jamula/stfc`, that is `cyrusjamula`. |
+
+### GitHub OAuth provider settings
+
+The GitHub identity provider in `staticwebapp.config.json` also requires the
+`GITHUB_OAUTH_CLIENT_ID` and `GITHUB_OAUTH_CLIENT_SECRET` settings. Register or
+select the GitHub OAuth application for this SWA and configure its credentials
+in the Static Web App before expecting sign-in to work. Keep the client secret
+in the Azure configuration UI; never put it in repository files or logs.
 
 ```bash
 az staticwebapp appsettings set \
