@@ -238,6 +238,26 @@ For local development, add these to `api/local.settings.json` (git-ignored):
 }
 ```
 
+### Read-only dashboard sources
+
+The five tabs call GET `/api/data/{redeems,digests,telemetry,crew,runs}`.
+The Function rechecks both the allowlist and `stfc_operator` role before reading
+GitHub. Configure a read-only `GITHUB_TOKEN` Function app setting with access to
+repository contents and Actions when authenticated API access is required.
+It is a server-side setting, never a browser credential or URL parameter.
+Provision credentials only through the owner's approved local/portal process;
+do not paste values into chat.
+
+Redeem history and digests come from `automation-state`, not frozen `main`
+seeds. Crew reads the committed officer reference, not private account game
+state. Telemetry reports unavailable until an approved producer is defined.
+Runs show up to the requested limit, merging the latest 20 Actions executions
+per workflow with any valid committed run-result artifacts. Existing unmarked
+Actions runs remain uncorrelated and are never joined by run ID, event type,
+or timestamp. An artifact is merged only when its correlation ID explicitly
+matches the ID carried by an Actions run name.
+No endpoint triggers workflows or calls the game store or Discord.
+
 ### CI gate
 
 `scripts/ci/check-api-auth.mjs` (wired into `npm test`) fails the build if any

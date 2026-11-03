@@ -4,6 +4,7 @@
   "description": "STFC Control Panel — Azure Functions API.",
   "private": true,
   "type": "module",
+  "main": "dist/api/src/index.js",
   "engines": {
     "node": ">=22"
   },
