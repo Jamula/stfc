@@ -123,5 +123,5 @@ separately and must not be treated as a generated mirror.
 - Don't leave reusable knowledge in a retiring charter just because only one agent recorded it
 - Don't merge unrelated patterns into a single mega-skill
 - Don't remove Model preference line (coordinator needs it for model selection)
-- Don't touch `.squad/decisions.md` during reskill
+- Don't mutate the runtime-owned decision ledger during reskill; it is accessed through state key `decisions.md`
 - Don't remove the tagline blockquote — it's the charter's soul in one line

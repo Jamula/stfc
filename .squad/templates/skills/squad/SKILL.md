@@ -270,7 +270,7 @@ Proceed? (yes / no)
 ### Show Recent Decisions
 
 - **intent:** show decisions, recent decisions, what decisions were made, decision log
-- **summary:** Display recent entries from .squad/decisions.md
+- **summary:** Display recent entries from state key `decisions.md` through the configured state bridge
 - **action:** coordinator
 - **command:** Direct Mode — read decisions.md, answer
 - **args:** (none)

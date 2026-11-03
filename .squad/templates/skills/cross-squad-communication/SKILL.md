@@ -69,7 +69,7 @@ $targetRepo = "C:\repos\platform-squad-repo"
 $promptFile = New-TemporaryFile
 @"
 You are working in a Squad-enabled repository.
-Read .squad/team.md and .squad/decisions.md first.
+Read `.squad/team.md` first. For decisions, use the target squad's state bridge with key `decisions.md`; do not assume a local ledger file is current.
 
 [CROSS-SQUAD REQUEST]
 From: research-squad
@@ -157,7 +157,7 @@ while ($proc -and -not $proc.HasExited) {
 
 - New files appearing in the session log directory (e.g., `transcript.log`, `mcp-server-logs/`)
 - Log file size increasing (indicates active processing)
-- New or modified `.squad/` files in the target repo (e.g., `decisions/inbox.md`, `identity/history.md`)
+- New or modified state entries visible through the target repo's configured bridge (for example, logical key `decisions/inbox/`)
 - Process still running and consuming non-idle CPU time
 
 **Stall Detection (When to Intervene):**
@@ -186,7 +186,7 @@ For questions about another squad's architecture, decisions, or current state �
 
 **Protocol:**
 1. Read target repo's `.squad/team.md` → get stack, members, issue source
-2. Read `.squad/decisions.md` → get architectural decisions
+2. Ask the target squad's coordinator/session to read the `decisions.md` state key through its configured bridge → get architectural decisions
 3. Read `.squad/routing.md` → understand who handles what
 4. Read `.squad/identity/now.md` → get current focus
 5. Scan code structure if needed (csproj files, directory layout)
@@ -200,7 +200,7 @@ For questions about another squad's architecture, decisions, or current state �
 # Query another squad's architecture
 $targetRepo = "C:\repos\platform-squad-repo"
 Get-Content "$targetRepo\.squad\team.md"
-Get-Content "$targetRepo\.squad\decisions.md"
+# Read decision state through the target squad's configured state bridge, not a local file.
 Get-Content "$targetRepo\.squad\identity\now.md"
 ```
 
@@ -330,11 +330,11 @@ If `.squad/team.md` doesn't exist, the repo is not squad-enabled. Fall back to s
 # Step 1: Read metadata (Pattern 1)
 $target = "C:\repos\platform-squad-repo"
 $team = Get-Content "$target\.squad\team.md" -Raw
-$decisions = Get-Content "$target\.squad\decisions.md" -Raw
+# Ask the target squad's session to read logical state key `decisions.md` through its bridge.
 
 # Step 2: Extract answer from metadata
 # team.md reveals tech stack and member roles
-# decisions.md reveals architectural choices
+# The target session's `decisions.md` state key reveals architectural choices.
 
 # Step 3: If deeper analysis needed, create async request (Pattern 2)
 ```

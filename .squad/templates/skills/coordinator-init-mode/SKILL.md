@@ -69,18 +69,18 @@ No team exists yet. **Propose one — but DO NOT create any files until the user
 
 > If the user said "add someone" or "change a role," go back to Phase 1 step 3 and re-propose. **Do NOT enter Phase 2 until the user confirms.**
 
-6. Create the `.squad/` directory structure (see `.squad/templates/` for format guides or use the standard structure: `team.md`, `routing.md`, `ceremonies.md`, `decisions.md`, `decisions/inbox/`, `casting/`, `agents/`, `orchestration-log/`, `skills/`, `log/`, `rai/`).
+6. Create the `.squad/` directory structure (see `.squad/templates/` for format guides or use the standard structure: `team.md`, `routing.md`, `ceremonies.md`, `casting/`, `agents/`, `orchestration-log/`, `skills/`, `log/`, `rai/`). For the governed two-layer backend, decisions and proposals use state keys `decisions.md` and `decisions/inbox/` through the state bridge; do not create local files for them. Only the local-file backend uses `.squad/decisions/decisions.md` and a local `.squad/decisions/inbox/`.
 
 **Casting state initialization:** Copy `.squad/templates/casting-policy.json` to `.squad/casting/policy.json` (or create from defaults). Create `registry.json` (entries: persistent_name, universe, created_at, legacy_named: false, status: "active") and `history.json` (first assignment snapshot with unique assignment_id).
 
-**Seeding:** Each agent's `history.md` starts with the project description, tech stack, and the user's name so they have day-1 context. Agent folder names are the cast name in lowercase (e.g., `.squad/agents/ripley/`). The Scribe's charter includes maintaining `decisions.md` and cross-agent context sharing. Rai's charter is seeded from the `Rai-charter.md` template, and `.squad/rai/policy.md` is seeded from `rai-policy.md`. Fact Checker's charter is seeded from `fact-checker-charter.md` and `.squad/fact-checker/policy.md` is seeded from `fact-checker-policy.md`.
+**Seeding:** Each agent's `history.md` starts with the project description, tech stack, and the user's name so they have day-1 context. Agent folder names are the cast name in lowercase (e.g., `.squad/agents/ripley/`). The Scribe's charter describes read-only review of `decisions.md` and pending inbox proposals through the state bridge; it does not merge entries. Rai's charter is seeded from the `Rai-charter.md` template, and `.squad/rai/policy.md` is seeded from `rai-policy.md`. Fact Checker's charter is seeded from `fact-checker-charter.md` and `.squad/fact-checker/policy.md` is seeded from `fact-checker-policy.md`.
 
 **Team.md structure:** `team.md` MUST contain a section titled exactly `## Members` (not "## Team Roster" or other variations) containing the roster table. This header is hard-coded in GitHub workflows (`squad-heartbeat.yml`, `squad-issue-assign.yml`, `squad-triage.yml`, `sync-squad-labels.yml`) for label automation. If the header is missing or titled differently, label routing breaks.
 
-**Merge driver for append-only files:** Create or update `.gitattributes` at the repo root to enable conflict-free merging of `.squad/` state across branches:
+**Merge driver for append-only files (local-file backend only):** The local ledger path is `.squad/decisions/decisions.md`. The governed two-layer backend uses the state bridge key `decisions.md`; do not configure a filesystem merge rule for that runtime-owned state. For local-file state only, create or update `.gitattributes` at the repo root:
 
 ```
-.squad/decisions.md merge=union
+.squad/decisions/decisions.md merge=union
 .squad/agents/*/history.md merge=union
 .squad/log/** merge=union
 .squad/orchestration-log/** merge=union

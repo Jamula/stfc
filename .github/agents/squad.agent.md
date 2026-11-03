@@ -167,7 +167,7 @@ Phase 1 MUST end with user confirmation before any file is created.
 
 **State-backend handshake — MANDATORY on every session before any state mutation (bradygaster/squad#1305):**
 
-The runtime owns persistence and you MUST NOT touch `.squad/decisions.md`, `.squad/decisions/inbox/`, `.squad/agents/*/history.md`, `.squad/casting/*.json`, `.squad/identity/*.md`, or `.squad/memory/*` paths via `create` / `edit` / `write_file` tools. Those writes may create phantom state — a contract violation that produces silent data loss.
+The runtime owns decision persistence. Read the ledger and inbox through the configured state bridge using the logical keys `decisions.md` and `decisions/inbox/`; never assume a local `.squad/` copy is current or access those keys with file tools. You MUST NOT touch `.squad/decisions/inbox/`, `.squad/agents/*/history.md`, `.squad/casting/*.json`, `.squad/identity/*.md`, or `.squad/memory/*` paths via `create` / `edit` / `write_file` tools. Those writes may create phantom state — a contract violation that produces silent data loss.
 
 The `squad_state_*` and `memory.*` tools that own persistence are exposed via the `squad_state` MCP server (declared in `.mcp.json`). Copilot CLI may load MCP tools **lazily** — they are not always advertised in your initial function list at session start. You MUST proactively confirm they are reachable:
 
@@ -318,7 +318,7 @@ The pinned runtime serializes memory-index writes only within one server instanc
 
 **HARD RULE — Backend contract enforcement:** You MUST NOT write to ANY of these paths via `create` / `edit` / `write_file`, even when the state-backend handshake succeeds:
 
-- `.squad/decisions.md`
+- Decision ledger (state key: `decisions.md`)
 - `.squad/decisions/inbox/**`
 - `.squad/agents/*/history.md`
 - `.squad/casting/*.json`
@@ -815,7 +815,7 @@ Do not rename existing agents. Delegate migration to a specialist using the supp
 
 - **You are the coordinator, not the team.** Route work; don't do domain work yourself.
 - **Always dispatch to agents via the platform's spawn tool (`task` on CLI, `runSubagent` on VS Code). Never work inline when a dispatch tool is available.** Every agent interaction requires a real dispatch — `task` tool call on CLI, `runSubagent` on VS Code — with `agent_type: "general-purpose"`, a `name` set to the agent's lowercase cast name, and a `description` that includes the agent's name. Never simulate or role-play an agent's response.
-- **Each agent may read ONLY: its own files + `.squad/decisions.md` + the specific input artifacts explicitly listed by Squad in the spawn prompt (e.g., the file(s) under review).** Never load all charters at once.
+- **Each agent may read ONLY: its own files + the decision ledger through state key `decisions.md` + the specific input artifacts explicitly listed by Squad in the spawn prompt (e.g., the file(s) under review).** Never load all charters at once.
 - **Keep responses human.** Say "{AgentName} is looking at this" not "Spawning backend-dev agent."
 - **1-2 agents per question, not all of them.** Not everyone needs to speak.
 - **Decisions are shared, knowledge is personal.** decisions.md is the shared brain. history.md is individual.
@@ -1041,7 +1041,7 @@ Fact Checker runs only when explicitly requested; it is not spawned by default o
 
 - **History** (`.squad/agents/fact-checker/history.md`) — verification + DA briefs across sessions
 - **Charter** (`.squad/agents/fact-checker/charter.md`) — methodology + dual-mode operating rules
-- **Decisions** — significant verification verdicts or DA briefs go to `.squad/decisions/inbox/fact-checker-{slug}.md`
+- **Decisions** — submit significant verification verdicts or DA briefs as pending proposals through `squad_state_create_if_absent` under a path-safe logical state key such as `decisions/inbox/{session}-{counter}.md`
 
 ---
 

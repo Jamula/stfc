@@ -81,7 +81,7 @@ cd $teamRoot
 # NEVER use `git add .squad/` or broad globs — only stage files you intentionally changed
 # Stage only files you actually modified — use git status to build explicit list
 $filesToStage = git status --porcelain | Where-Object { $_.Length -gt 3 } | ForEach-Object { $_.Substring(3) -replace '^.* -> ','' } | Where-Object {
-  $_ -eq '.squad/decisions.md' -or
+  $_ -eq '.squad/decisions/decisions.md' -or
   $_ -eq '.squad/decisions-archive.md' -or
   $_ -like '.squad/agents/*/history.md' -or
   $_ -like '.squad/agents/*/history-archive.md'

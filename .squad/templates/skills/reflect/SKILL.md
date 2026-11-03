@@ -1,6 +1,6 @@
 ---
 name: reflect
-description: Learning capture system that extracts HIGH/MED/LOW confidence patterns from conversations to prevent repeating mistakes. Use after user corrections ("no", "wrong"), praise ("perfect", "exactly"), or when discovering edge cases. Complements .squad/agents/{agent}/history.md and .squad/decisions.md.
+description: Learning capture system that extracts HIGH/MED/LOW confidence patterns from conversations to prevent repeating mistakes. Use after user corrections ("no", "wrong"), praise ("perfect", "exactly"), or when discovering edge cases. Complements .squad/agents/{agent}/history.md and the runtime-owned decision ledger accessed through state key decisions.md.
 license: MIT
 version: 1.0.0-squad
 domain: team-memory, learning
@@ -227,6 +227,6 @@ User: "Perfect! This is exactly the format I want for all PRs"
 
 ## See Also
 
-- `.squad/decisions.md` — Runtime-backed team decisions
+- `decisions.md` state key — runtime-backed team decisions, read through the configured state bridge
 - `.github/agents/squad.agent.md` — Coordinator behavior
 - `.squad/routing.md` — Work assignment patterns

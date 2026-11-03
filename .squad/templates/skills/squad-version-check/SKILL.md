@@ -67,7 +67,7 @@ Reads the stamped version back from `squad.agent.md`:
 - Runs `runMigrations()` after file copy
 
 ### What is PRESERVED:
-- `team.md`, `routing.md`, `decisions.md`, `ceremonies.md` (user-owned)
+- `team.md`, `routing.md`, `ceremonies.md` (user-owned); `decisions.md` is runtime-owned state accessed through the configured state bridge
 - `agents/*/history.md` (individual agent memory)
 - `.squad/config.json` — **never touched**; `stateBackend` survives intact
 - User-added files not in TEMPLATE_MANIFEST

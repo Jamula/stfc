@@ -57,8 +57,9 @@ Example:
    before accepting it or spawning the next cycle.
 2. **Objective context forward**: each subsequent spawn includes a summary of what was tried
    and what is still missing — not just a repeat of the original task.
-3. **Cycle 3 exhausted** → escalate: write a summary to `.squad/decisions/inbox/`, label the
-   issue `status:needs-decision`, and notify the user.
+3. **Cycle 3 exhausted** → escalate: submit a summary as a pending proposal through
+   `squad_state_create_if_absent` under logical state key `decisions/inbox/{session}-{counter}.md`,
+   label the issue `status:needs-decision`, and notify the user.
 
 ---
 
@@ -115,7 +116,7 @@ concrete action before the cycle is closed. Acceptable follow-up actions:
 
 - GitHub issue created documenting the findings and next steps
 - PR opened implementing a recommendation
-- Decision recorded in `.squad/decisions/inbox/`
+- Decision proposal submitted through state key `decisions/inbox/{session}-{counter}.md`
 - Documented recommendation with a named assignee and due date
 
 **Pure analysis reports without actionable follow-up will be rejected during triage.**

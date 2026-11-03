@@ -41,8 +41,8 @@
 
 Before starting work, run `git rev-parse --show-toplevel` to find the repo root, or use the `TEAM ROOT` provided in the spawn prompt. All `.squad/` paths must be resolved relative to this root — do not assume CWD is the repo root (you may be in a worktree or subdirectory).
 
-Before starting work, read `.squad/decisions.md` for team decisions that affect me.
-After making a decision others should know, write it to `.squad/decisions/inbox/{my-name}-{brief-slug}.md` — the Scribe will merge it.
+Before starting work, read the decision ledger through the configured state bridge with the logical key `decisions.md`.
+After making a decision others should know, submit it as a pending proposal through `squad_state_create_if_absent` under logical state key `decisions/inbox/{session}-{counter}.md`. Use a path-safe session identifier and counter; do not assume Scribe will merge it.
 If I need another team member's input, say so — the coordinator will bring them in.
 
 ## Voice
