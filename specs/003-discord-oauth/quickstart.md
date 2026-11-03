@@ -116,6 +116,9 @@ recognises (e.g. `TESTCODE2026`). Within one scheduled cycle:
 If the code does **not** appear:
 
 - Check the digest health section for that channel.
+- Check the monitor log for a count-only warning if message text was empty.
+  Empty text does not by itself establish whether the content was unavailable
+  or the message was genuinely textless.
 - Verify the Developer Portal has **"Message Content Intent"** enabled
   for the bot — without it, `content` is empty in
   `GET /channels/{id}/messages` for messages the bot did not author

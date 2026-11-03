@@ -160,6 +160,85 @@ describe("discordMonitor / empty allowlist (FR-001)", () => {
   });
 });
 
+describe("discordMonitor / empty message content", () => {
+  let ds: DirSet;
+  let savedToken: string | undefined;
+
+  beforeEach(() => {
+    ds = setUpDirs();
+    writeAllowlist(ds.allowlist, [{ id: "222222222222222222", label: "promos" }]);
+    savedToken = process.env.DISCORD_BOT_TOKEN;
+    process.env.DISCORD_BOT_TOKEN = "x";
+  });
+
+  afterEach(() => {
+    fs.rmSync(ds.dir, { recursive: true, force: true });
+    if (savedToken === undefined) delete process.env.DISCORD_BOT_TOKEN;
+    else process.env.DISCORD_BOT_TOKEN = savedToken;
+  });
+
+  it("reports a count of empty-text messages without inferring the cause", async () => {
+    const client: IngestClient = {
+      getMe: async () => ({ id: "bot", username: "stfc-monitor" }),
+      getChannelMessages: async (channelId, opts) => {
+        if (opts.after !== undefined) return [];
+        return [
+          {
+            id: "411111111111111111",
+            channel_id: channelId,
+            content: "",
+            timestamp: "2026-05-16T07:00:00.000000+00:00",
+            edited_timestamp: null,
+            author: { id: "999999999999999999", username: "poster", bot: false },
+            type: 0,
+          },
+          {
+            id: "411111111111111112",
+            channel_id: channelId,
+            content: "ok",
+            timestamp: "2026-05-16T07:01:00.000000+00:00",
+            edited_timestamp: null,
+            author: { id: "999999999999999999", username: "poster", bot: false },
+            type: 0,
+          },
+        ];
+      },
+    };
+    const warnings: string[] = [];
+    const originalError = console.error;
+    console.error = (...args) => warnings.push(args.map(String).join(" "));
+
+    try {
+      const { result } = await discordMonitor({
+        accounts: [],
+        paths: {
+          allowlist: ds.allowlist,
+          commandChannels: path.join(ds.dir, "command-channels.json"),
+          cursors: ds.cursors,
+          candidates: ds.candidates,
+          tipsSeen: path.join(ds.dir, "tips-seen.jsonl"),
+          suppression: ds.suppression,
+          cooldowns: ds.cooldowns,
+          digestsDir: ds.digestsDir,
+          promoCodes: ds.promoCodes,
+        },
+        clientFactory: () => client,
+        now: () => NOW,
+        runId: "run-empty-content",
+      });
+
+      assert.equal(result.channelsRead, 1);
+      assert.equal(result.messagesScanned, 2);
+      assert.equal(result.candidatesExtracted, 0);
+      assert.deepEqual(warnings, [
+        "WARN [discordMonitor] 1 Discord message had empty text content; cause is undetermined.",
+      ]);
+    } finally {
+      console.error = originalError;
+    }
+  });
+});
+
 describe("discordMonitor / mixed fixture happy path", () => {
   let ds: DirSet;
   let savedToken: string | undefined;
