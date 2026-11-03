@@ -29,29 +29,27 @@ tokens, snowflakes, or anything resembling a JWT (Principle VII).
 
 ---
 
-## 2. Enable the required Privileged Intents
+## 2. Verify message-content access
 
-This is the most common reason a bot reads messages but sees empty
-`content` fields. The REST endpoint `GET /channels/{id}/messages`
-returns `content: ""` for any message the bot did not author **unless**
-the bot's application has the Message Content Intent enabled — even
-when the bot is not using a gateway connection.
+The monitor reads messages with Discord's REST API; it does not use a
+WebSocket gateway. Do not assume that REST polling bypasses Discord's
+current message-content restrictions, or that a portal toggle alone
+proves the bot can read a channel. Discord's
+[privileged-intent guidance](https://docs.discord.com/developers/gateway/you-might-not-need-a-privileged-intent)
+describes when message content fields are restricted and which
+exemptions apply.
 
-In **Bot → Privileged Gateway Intents**:
+After an administrator approves a specific channel and the bot has
+least-privilege read access, verify a bounded REST read of a known
+text-bearing message in that channel. Confirm that the response contains
+the expected `content` and record safe counts and the run link; do not
+copy message bodies or credentials into the evidence. If content is
+unavailable, check the current Discord policy and the application's
+intent eligibility/approval before changing settings. An empty `content`
+field or the monitor's count-only warning is not, by itself, proof of a
+permission or intent failure; a message may genuinely contain no text.
 
-- **Message Content Intent** → **ON** (required — without it, every
-  candidate code extraction silently fails because `content` is empty)
-- **Server Members Intent** → **ON** only if you need the bot to see
-  member-role information (not required for code monitoring; leave OFF
-  unless a future feature needs it)
-- **Presence Intent** → leave OFF (not needed)
-
-Click **Save Changes**. The change takes effect immediately for new
-REST calls.
-
-> Apps in 100+ servers must apply for intent verification with Discord.
-> The stfc bot is single-server / low-scale; verification is not
-> required.
+The monitor does not need Server Members or Presence intents.
 
 ---
 
@@ -166,7 +164,7 @@ No code change or redeploy is required.
 | Symptom                                                           | Likely cause                                                       | Fix                                                                                   |
 | ----------------------------------------------------------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------- |
 | `DiscordAuthError` at startup                                     | Token invalid, revoked, or not a bot token                         | Reset token in Developer Portal; re-run `gh secret set DISCORD_BOT_TOKEN`.            |
-| Messages ingested but `content` is empty                          | Message Content Intent may be disabled or not approved              | The monitor logs a count-only warning. Verify §2; empty text can also be legitimate, so the warning does not prove a permission problem. |
+| Messages ingested but `content` is empty                          | The message may be textless, or Discord may restrict content fields | Verify a known text-bearing message with a bounded REST read and consult current Discord intent policy. The count-only warning does not identify the cause. |
 | Health section shows `forbidden_guild` (Discord code `50001`)     | Bot is not a member of the target server                           | Send the server admin the URL from §3.                                                |
 | Health section shows `forbidden_channel` (Discord code `50013`)   | Bot is in the server but lacks per-channel View / Read History     | §3 — admin grants permissions via role or channel override.                           |
 | Health section shows `not_found` (Discord code `10003` / HTTP 404)| Channel ID is wrong, channel was deleted, or bot was never invited | Verify `channelId` in `config/discord-allowlist.json`; re-check the install in §3.    |

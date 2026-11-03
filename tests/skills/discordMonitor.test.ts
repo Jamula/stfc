@@ -106,21 +106,26 @@ function loadFixture(name: string): Array<{
 describe("discordMonitor / empty allowlist (FR-001)", () => {
   let ds: DirSet;
   let savedToken: string | undefined;
+  let savedSummaryPath: string | undefined;
 
   beforeEach(() => {
     ds = setUpDirs();
     writeEmptyAllowlist(ds.allowlist);
     savedToken = process.env.DISCORD_BOT_TOKEN;
+    savedSummaryPath = process.env.GITHUB_STEP_SUMMARY;
     process.env.DISCORD_BOT_TOKEN = "x";
+    process.env.GITHUB_STEP_SUMMARY = path.join(ds.dir, "summary.md");
   });
 
   afterEach(() => {
     fs.rmSync(ds.dir, { recursive: true, force: true });
     if (savedToken === undefined) delete process.env.DISCORD_BOT_TOKEN;
     else process.env.DISCORD_BOT_TOKEN = savedToken;
+    if (savedSummaryPath === undefined) delete process.env.GITHUB_STEP_SUMMARY;
+    else process.env.GITHUB_STEP_SUMMARY = savedSummaryPath;
   });
 
-  it("returns exitCode 0; zero Discord calls; digest mentions '0 channels configured'", async () => {
+  it("marks the scan not run in logs, the digest, and the job summary", async () => {
     let factoryCalls = 0;
     const client: IngestClient = {
       getMe: async () => {
@@ -136,6 +141,7 @@ describe("discordMonitor / empty allowlist (FR-001)", () => {
       accounts: [],
       paths: {
         allowlist: ds.allowlist,
+        commandChannels: path.join(ds.dir, "command-channels.json"),
         cursors: ds.cursors,
         candidates: ds.candidates,
         suppression: ds.suppression,
@@ -151,12 +157,23 @@ describe("discordMonitor / empty allowlist (FR-001)", () => {
     assert.equal(exitCode, 0);
     assert.equal(factoryCalls, 0, "no Discord calls when allowlist is empty");
     assert.equal(result.reason, "no-channels-configured");
+    assert.equal(result.promoChannelsConfigured, 0);
+    assert.equal(result.promoChannelsRead, 0);
     assert.equal(result.channelsConfigured, 0);
 
     const digestPath = path.join(ds.digestsDir, "2026-05-16.md");
     assert.ok(fs.existsSync(digestPath));
     const digest = fs.readFileSync(digestPath, "utf8");
     assert.match(digest, /0 channels configured/);
+    assert.match(
+      digest,
+      /Promo-code scan: NOT RUN .*no conclusion about code availability/,
+    );
+    const summary = fs.readFileSync(path.join(ds.dir, "summary.md"), "utf8");
+    assert.match(
+      summary,
+      /Promo-code scan \| NOT RUN .*no conclusion about code availability/,
+    );
   });
 });
 
@@ -320,7 +337,15 @@ describe("discordMonitor / mixed fixture happy path", () => {
 
     assert.equal(result.channelsConfigured, 1);
     assert.equal(result.channelsRead, 1);
+    assert.equal(result.promoChannelsConfigured, 1);
+    assert.equal(result.promoChannelsRead, 1);
     assert.ok(result.candidatesSubmitted >= 3);
+
+    const digest = fs.readFileSync(
+      path.join(ds.digestsDir, "2026-05-16.md"),
+      "utf8",
+    );
+    assert.match(digest, /Promo-code scan: COMPLETE — successfully read 1\/1 promo-code channels/);
   });
 
   it("redeemFn NOT called when fresh.length === 0 (all candidates known)", async () => {
@@ -756,6 +781,13 @@ describe("discordMonitor / RunHealth counters (T035 — US3)", () => {
 
     assert.equal(exitCode, 2, "exitCode must be 2 (DISCORD_MONITOR_EXIT_AUTH_FAILURE) on auth failure (issue-206)");
     assert.equal(result.errorsByClass["DiscordAuthError"], 1);
+    assert.equal(result.promoChannelsConfigured, 1);
+    assert.equal(result.promoChannelsRead, 0);
+    const digest = fs.readFileSync(
+      path.join(ds.digestsDir, "2026-05-16.md"),
+      "utf8",
+    );
+    assert.match(digest, /Promo-code scan: FAILED — no promo-code channels were successfully read \(0\/1\)/);
     // Redeemer is not called because there are zero fresh candidates (auth failed
     // before ingest could produce any), which is correct: redeemer still "runs"
     // in the sense that the pipeline reaches step 6 — it just has nothing to submit.
@@ -800,6 +832,7 @@ describe("discordMonitor / RunHealth counters (T035 — US3)", () => {
 
     // All counters must be non-negative integers.
     const numericFields: Array<keyof typeof result> = [
+      "promoChannelsConfigured", "promoChannelsRead",
       "channelsConfigured", "channelsRead", "messagesScanned",
       "candidatesExtracted", "candidatesSubmitted",
       "candidatesSuppressedDedup", "candidatesSuppressedCooldown",
@@ -1012,6 +1045,13 @@ describe("discordMonitor / RunHealth counters (T035 — US3)", () => {
     assert.equal(result.channelsConfigured, 2);
     assert.ok(result.channelsRead < result.channelsConfigured,
       `channelsRead (${result.channelsRead}) should be < channelsConfigured (${result.channelsConfigured})`);
+    assert.equal(result.promoChannelsConfigured, 2);
+    assert.equal(result.promoChannelsRead, 1);
+    const digest = fs.readFileSync(
+      path.join(ds.digestsDir, "2026-05-16.md"),
+      "utf8",
+    );
+    assert.match(digest, /Promo-code scan: PARTIAL — successfully read 1\/2 promo-code channels/);
   });
 
   it("candidatesSuppressedCooldown increments when code filtered by cooldowns.json", async () => {

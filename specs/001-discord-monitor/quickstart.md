@@ -15,9 +15,12 @@
 1. Visit <https://discord.com/developers/applications> and click
    **New Application**. Name it `STFC Monitor (cyrusj)` (or similar).
 2. Open **Bot** → **Add Bot**. Disable **Public Bot** (we never want a
-   third party to invite this token to their server). Disable
-   **Message Content Intent** is NOT possible — it MUST be **enabled**
-   (privileged intent) so we can read `content`. **Enable** it.
+   third party to invite this token to their server). Do not assume the
+   Message Content privileged intent is or is not required merely because
+   the monitor uses REST polling. Follow Discord's current
+   [intent guidance](https://docs.discord.com/developers/gateway/you-might-not-need-a-privileged-intent)
+   and verify a bounded read of a known text-bearing message in an
+   administrator-approved channel.
 3. Click **Reset Token**, copy the token. This is the only time it is
    shown. Treat it as a live secret immediately.
 4. **Bot permissions (OAuth2 → URL Generator):**
@@ -52,7 +55,10 @@ elsewhere, rotate it immediately at the Developer Portal.
 
 The allow-list ships empty. To monitor a channel:
 
-1. Get the server's guild ID and the channel ID (Discord client →
+1. Select a channel whose purpose as a promo/announcement source has been
+   confirmed with its guild/channel administrator. Do not infer approval
+   or suitability from a channel name or an ID mentioned elsewhere in the
+   repository. Get the approved server's guild ID and channel ID (Discord client →
    Settings → Advanced → Developer Mode → right-click → Copy ID).
 2. Edit `config/discord-allowlist.json`:
 
@@ -74,9 +80,12 @@ The allow-list ships empty. To monitor a channel:
 ```
 
 3. Open a PR. Allow-list edits are human-reviewed (no bot self-modifies it).
-4. Ensure the bot has been invited (Step 1.5) and that the target channel
-   is visible to the bot's role (Discord side: channel permissions →
-   add the bot's role with View Channel + Read Message History).
+4. Ensure the bot has been invited and that the target channel is visible
+   to the bot's role (Discord side: channel permissions → add the bot's
+   role with View Channel + Read Message History). Verify actual message
+   readability with a bounded REST read before treating the channel as
+   scanned. An empty allowlist means no promo-code scan occurred, not that
+   no promo codes exist.
 
 ## 4. Local dry-run (read-only, no auto-commit, no redeem)
 

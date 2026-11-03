@@ -27,6 +27,7 @@ import type {
   Tip,
   TipCategory,
 } from "../discord/schemas.ts";
+import { formatPromoScanStatus } from "../discord/scanStatus.ts";
 
 // ── Public surface ─────────────────────────────────────────────────────────
 
@@ -257,6 +258,9 @@ function mergeHealth(prior: RunHealth, next: RunHealth, runIds: string[]): RunHe
     runId: next.runId, // most-recent for display
     startedAt: earliest(prior.startedAt, next.startedAt),
     finishedAt: latest(prior.finishedAt, next.finishedAt),
+    // Scan status is per-run, so retain the latest run's configuration/read counts.
+    promoChannelsConfigured: next.promoChannelsConfigured ?? prior.promoChannelsConfigured,
+    promoChannelsRead: next.promoChannelsRead ?? prior.promoChannelsRead,
     channelsConfigured: Math.max(prior.channelsConfigured, next.channelsConfigured),
     channelsRead: prior.channelsRead + next.channelsRead,
     channelsErrored,
@@ -392,6 +396,7 @@ function render(d: DailyDigest): string {
     lines.push(`- Bot identity: ${d.botUsername}`);
   }
   const h = d.health;
+  lines.push(`- Promo-code scan: ${formatPromoScanStatus(h)}`);
   if (h.channelsConfigured === 0) {
     lines.push("- 0 channels configured");
   } else {
