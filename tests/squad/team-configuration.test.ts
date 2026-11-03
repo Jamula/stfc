@@ -170,6 +170,18 @@ describe("native Squad configuration", () => {
     }
   });
 
+  it("keeps agent handoff safety guidance in the canonical instructions", () => {
+    const policy = section(read(".github", "copilot-instructions.md"), "Squad operating policy");
+    assert.match(policy, /Secrets stay out of prompts and arguments[\s\S]*?command-line argument/);
+    assert.match(policy, /Keep Ralph briefs bounded[\s\S]*?per-cycle item limit[\s\S]*?continuation or stop condition defined by `\.squad\/templates\/ralph-reference\.md`[\s\S]*?user's authorization/);
+    assert.doesNotMatch(policy, /instead of open-ended monitoring/);
+    assert.match(policy, /Verify agent failure reports[\s\S]*?failure or success claim as unverified[\s\S]*?exit code/);
+    assert.match(policy, /least destructive command[\s\S]*?never run `git reset --hard`, `git clean`, a force push, or a checkout that discards changes without explicit user authorization/i);
+    assert.match(policy, /Keep code and review sessions separate[\s\S]*?does not approve it[\s\S]*?fresh review/);
+    const skill = read(".squad", "templates", "skills", "secret-handling", "SKILL.md");
+    assert.match(skill, /NEVER put a secret value in an agent prompt[\s\S]*?command-line argument/);
+  });
+
   it("requires fallback detection and basic probes of both state layers", () => {
     for (const file of [
       [".github", "agents", "squad.agent.md"],

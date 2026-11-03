@@ -70,6 +70,14 @@ Work autonomously within the user's request: address PR feedback, conflicts, fai
 
 Consider fleet mode when work can be split safely, and use separate worktrees for parallel changes. When PRs are requested, use app-native stacked PRs for suitable dependent layers rather than forcing a stack for a small independent change.
 
+Agent handoff safety:
+
+- **Secrets stay out of prompts and arguments.** Never put a token, password, key, or connection string in an agent prompt, command-line argument, log, or committed file; pass it by secret store, stdin, or environment reference, and use placeholders or `.env.example` in examples.
+- **Keep Ralph briefs bounded.** When Ralph is explicitly activated, give each brief a specific objective, an explicit scope and per-cycle item limit, and an explicit continuation or stop condition defined by `.squad/templates/ralph-reference.md`; do not extend a loop beyond that policy or the user's authorization. Require a concise report each cycle.
+- **Verify agent failure reports.** Treat a failure or success claim as unverified until checked against the actual command output, exit code, or repository state before acting on it or reporting it.
+- **Recover with the least destructive command.** Inspect with `git status` and `git diff` first, prefer reversible actions, and never run `git reset --hard`, `git clean`, a force push, or a checkout that discards changes without explicit user authorization.
+- **Keep code and review sessions separate.** The session that wrote a revision does not approve it; Data reviews the current revision in a distinct session, and a changed revision needs a fresh review.
+
 The `two-layer` backend owns mutable Squad state. Read and write decisions and histories through the Squad state bridge, and use the native atomic casting protocol for the registry/history pair. Do not use direct `.squad/` file or Git operations as a fallback if the bridge is unavailable.
 
 <!-- squad:copilot-instructions:start -->

@@ -35,6 +35,10 @@ Spawned agents have read access to the entire repository, including `.env` files
 
 **NEVER assume you can "just peek at .env to understand the schema."** Use `.env.example` or ask.
 
+### Prompts and Arguments
+
+**NEVER put a secret value in an agent prompt, spawn brief, or command-line argument** — these are logged, visible in process listings, and copied into history. Pass credentials by secret store, stdin, or environment-variable reference, and use placeholders (`<set in .env>`) in examples.
+
 ### Prohibited Output Patterns
 
 **NEVER write these to `.squad/` files:**
