@@ -143,15 +143,23 @@ twice against unchanged inputs and asserts the second run is a no-op
 
 ---
 
-### User Story 5 — iPhone → Discord → repo OCR loop (Priority: P3, v1.5 gated)
+### User Story 5 — iPhone → Discord → R2-backed OCR loop (Priority: P3, v1.5 gated)
 
-The operator snaps a roster screenshot on iPhone, shares it to a private
-Discord channel `#stfc-roster-{account}`, the `roster-sync.yml` workflow
-downloads it, OCRs name/level/rank/promotions, diffs against the current
-roster YAML, and opens a PR titled `Roster sync (main): N changes from M
-screenshots`. The operator reviews on GitHub mobile, merges → the v1
-optimizer re-runs and posts fresh recommendations to a Discord
-`#stfc-recommendations` channel.
+The operator submits roster screenshots through the existing `/game-state`
+capture path. Capture binaries are stored in private Cloudflare R2; only
+metadata, index, and lineage are committed to the `automation-state` branch.
+The `roster-sync.yml` workflow consumes the applicable private R2 objects,
+OCRs name/level/rank/promotions, diffs against the current roster YAML, and
+opens a PR titled `Roster sync (main): N changes from M screenshots`. It
+must use an authorized R2 access path, which remains to be implemented and
+verified. The committed metadata is not the binary source. The operator
+reviews on GitHub mobile, merges → the v1 optimizer re-runs and posts fresh
+recommendations to a Discord `#stfc-recommendations` channel.
+
+The capture-selection and account-association contract, including any
+roster-specific allowlist, remains to be specified in the gated v1.5 work.
+This spec does not define R2 access mechanics or assume that R2 is provisioned
+or production-accessible for OCR.
 
 **Why this priority**: This is the entire reason the v1 transport story
 isn't "edit YAML by hand." But it ships only if the OCR POC clears the
@@ -166,11 +174,14 @@ acceptance is the POC measurement table posted to issue #85.
 
 **Acceptance Scenarios**:
 
-1. **Given** an allowlisted roster channel and a screenshot attached to
-   a new message, **When** `roster-sync.yml` runs, **Then** the bot
-   downloads the image to runner tmpfs (never committed), runs the OCR
-   pipeline, diffs against `data/crew/roster/{account}.yaml`, and opens a
-   PR on `roster-sync/{account}-{timestamp}`.
+1. **Given** an eligible capture whose metadata is committed to
+   `automation-state` and whose binary is in private R2, **When**
+   `roster-sync.yml` runs with an authorized R2 access path, **Then** it
+   processes the binary from R2, diffs against
+   `data/crew/roster/{account}.yaml`, and opens a PR on
+   `roster-sync/{account}-{timestamp}`. Metadata, index, and lineage are
+   lookup/lineage records only; they are not image bytes. The access path
+   and capture/account selection contract remain implementation prerequisites.
 2. **Given** the OCR confidence on a field is below the per-field
    threshold, **When** the PR is opened, **Then** that field is annotated
    with a confidence flag in the PR body so the operator knows where to
@@ -232,12 +243,13 @@ scoping, and rate-limit enforcement.
 - **Roster YAML hand-edit drift** → `skill:roster validate` is the CI
   check; staleness warnings show in every output surface (CLI, workflow
   summary, per-account report header, optional Discord post).
-- **Discord CDN image URL rotation** (v1.5) → the PR body cites the
-  Discord *message* URL (stable) AND embeds the decoded fields, so the
-  screenshot itself is not needed post-merge.
-- **Bot lacks access to the roster channel** (v1.5) → standard Discord
-  403 path; logged once and the run continues per the existing
-  discord-monitor diagnostics.
+- **Discord CDN image URL rotation** (v1.5) → CDN URLs are not the
+  durable binary source; OCR reads the private R2 object referenced by
+  the capture metadata. The PR cites a stable capture reference when
+  available and includes the decoded fields.
+- **Authorized R2 access path is unavailable or unverified** (v1.5) →
+  OCR cannot proceed; the metadata location is not treated as image bytes.
+  Access and failure behavior must be established and verified in #88.
 - **Two `optimize-crew.yml` runs race** → concurrency group
   `stfc-crew-optimizer` serializes them; second run rebases before push
   per Rule 4.
@@ -326,16 +338,22 @@ scoping, and rate-limit enforcement.
 
 - **FR-016**: `skill:bootstrap-roster --account X --screenshots PATH`
   MUST run the same OCR pipeline locally that the workflow runs in CI.
-- **FR-017**: `roster-sync.yml` MUST poll allowlisted roster channels
-  (a new allowlist class distinct from the codes-channel allowlist),
-  filter messages for image attachments, download images to runner
-  tmpfs (NEVER committed), run the OCR pipeline, diff against the
-  current roster YAML, and open a PR on
+  This local path supports the POC and local use; it does not define the
+  workflow's production binary source or R2 access.
+- **FR-017**: `roster-sync.yml` MUST use capture metadata, index, and
+  lineage committed to `automation-state` to identify applicable capture
+  binaries stored in private R2, and process those binaries through an
+  authorized R2 access path. The access path and capture-selection and
+  account-association contract remain to be established in #87/#88.
+  Metadata files are not binary inputs; the workflow MUST NOT treat
+  repository folders or Discord CDN URLs as the screenshot source. It MUST
+  diff against the current roster YAML and open a PR on
   `roster-sync/{account}-{timestamp}` titled `Roster sync ({account}):
   N changes from M screenshots`.
 - **FR-018**: The PR body MUST include per-change diff + per-field
-  confidence flag + the Discord *message* URL (not the CDN image URL,
-  which can rotate).
+  confidence flag + a stable capture reference supported by the committed
+  metadata/lineage when available; it MUST NOT use a Discord CDN URL as
+  the durable binary reference.
 - **FR-019**: The roster-sync workflow MUST NOT auto-merge. Human review
   is the gate.
 - **FR-020**: The OCR POC MUST be measured against the acceptance bar
@@ -386,11 +404,12 @@ scoping, and rate-limit enforcement.
 
 ### API Contract *(N/A for v1)*
 
-v1 introduces no external API surface. v1.5 reuses the existing
-`https://discord.com/api/v10` outbound destination and additionally
-fetches image bytes from `https://cdn.discordapp.com` (constitution
-v1.5 amendment in issue #87). v2 reuses the v1.5 amendments plus
-optionally fetches the sentence-transformer model from
+v1 introduces no external API surface. v1.5 consumes image binaries from
+private Cloudflare R2 and metadata/index/lineage from `automation-state`.
+The authorized R2 access path and any additional network scope remain to
+be implemented and verified; this spec does not prescribe access mechanics
+or make `https://cdn.discordapp.com` the OCR binary source. v2 reuses the
+v1.5 amendments plus optionally fetches the sentence-transformer model from
 `https://huggingface.co/...` — confirm against the existing carve-out
 during the v2 constitution check.
 
@@ -405,8 +424,9 @@ during the v2 constitution check.
 - **No scheduled cron on `optimize-crew.yml`.**
 - **No combined-roster (multi-account aggregation) optimizer in v1.**
   Deferred to v2+ unless cheap. (Clarified Q4.)
-- **No screenshots committed to the repo.** Discord CDN is the
-  authoritative store; the repo holds only the derived YAML.
+- **No screenshot binaries committed to the repo.** Private R2 is the
+  binary store; `automation-state` holds only metadata, index, and lineage
+  for captures. The roster repo holds only derived YAML.
 - **No auto-merge of `roster-sync` PRs.** Human review is the gate.
 - **No LLM generation in `!crew knowledge`.** Retrieval-only.
 - **No slash commands in v2.** Deferred to v3 (requires public HTTPS

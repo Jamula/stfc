@@ -178,4 +178,7 @@ type KnowledgeChunk = {
   when the input hash changes (FR-013); rebased before push (Rule 4).
 - `data/crew/knowledge-embeddings.json` (v2) — committed; written by
   `knowledge-rebuild.yml` ONLY on the relevant input pushes.
-- No screenshot bytes are ever committed (v1.5 invariant; tmpfs only).
+- No screenshot binaries are committed to the repository. For v1.5,
+  private R2 is the binary source; capture metadata, index, and lineage
+  reside on `automation-state`. The authorized R2 access path and capture
+  selection contract remain to be implemented and verified.

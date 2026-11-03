@@ -102,11 +102,11 @@
 
 | T### | Maps to issue | Scope | Test acceptance |
 |---|---|---|---|
-| T200 | #85 | OCR POC spike — measure against the FR-020 acceptance bar on 20 real screenshots | POC measurement table posted to issue #85 |
-| T201 | #86 | POC gate decision: PASS → unblock #87..#90; FAIL → close #85..#90 as wontfix | Record the decision on the issue |
-| T202 | #87 | Constitution v1.5 amendment (`roster-sync.yml` workflow + `cdn.discordapp.com` inbound + `skill:bootstrap-roster` + roster-channel allowlist) + plan-template re-sync | Rule 1 grep is green post-amendment |
-| T203 | #88 | `src/crew/ocr.ts` + image-attachment ingestion + `.github/workflows/roster-sync.yml` + PR-opening logic + workflow pinning tests | `tests/crew/ocr.test.ts` + `tests/discord/imageAttachments.test.ts` + `tests/skills/rosterSync.test.ts`; re-check `tests/skills/discordMonitor.test.ts`; wire into `tests/index.test.ts` |
-| T204 | #89 | v1.5 operator docs (screenshot capture guide, device resolution, Discord channel setup, troubleshooting) | Doc-only |
+| T200 | #85 | Local OCR POC measured against every FR-020 criterion using 20 representative screenshots from actual gameplay. Prerequisite: production `/game-state` capture validation and operator upload per the #158/#85 blocker history; that validation is not part of this local OCR spike. | Post a measurement table to #85 covering field accuracy (≥95%), per-batch human review (≤2 minutes), compressed model size (≤500 MB), CPU `ubuntu-latest` runner time (≤30 seconds per screenshot), and cold start (≤2 minutes) |
+| T201 | #86 | Review #85 measurements and record the gate verdict before #87–#90 proceed; retain the outcome routing defined by the issue. | Verdict comment uses the exact Rule 9b header `**APPROVE**` or `**CHANGES_REQUESTED**` |
+| T202 | #87 | Proposed revised scope, pending reconciliation of #87's issue body: constitution v1.5 governance for the R2-backed OCR source, metadata/index/lineage on `automation-state`, and the still-undecided authorized access and capture-selection policy; preserve `skill:bootstrap-roster` and applicable template re-sync requirements. | Second constitution PR merged and Rule 1 re-sync evidence recorded after the issue scope and applicable template target are reconciled |
+| T203 | #88 | Proposed revised scope, pending reconciliation of #88's issue body: `src/crew/ocr.ts` + R2-backed image input and authorized access path + `.github/workflows/roster-sync.yml` + PR-opening logic and pinning tests; do not implement Discord CDN attachment ingestion as the OCR source. | End-to-end capture-to-human-reviewed-PR loop works on a test channel; OCR and diff-vs-overwrite tests, tests for the agreed R2/metadata input contract, PR-opening and pinning tests pass; re-check `tests/skills/discordMonitor.test.ts` only if shared behavior changes; wire new test files into `tests/index.test.ts` |
+| T204 | #89 | Proposed revised scope, pending reconciliation of #89's issue body: v1.5 operator docs for screenshot capture, device resolution, Discord guidance, and troubleshooting, based only on the source/access behavior verified by #88. | Doc-only, after #88 establishes supported behavior |
 | T205 | #90 | v1.5 review | Review the linked PRs before merging |
 
 ### v2 — Read-only interactive Discord commands (gated on v1 ship)

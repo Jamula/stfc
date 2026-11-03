@@ -134,6 +134,14 @@ batch, ≤500MB model, ≤30s per screenshot, ≤2-min cold start) is
 encoded as FR-020. If any criterion misses, v1.5 is dropped and v1
 stands alone.
 
+For the gated transport, `/game-state` stores capture binaries in private
+Cloudflare R2 and commits metadata, index, and lineage to `automation-state`.
+OCR consumes binaries from R2, not from a dated repository folder or a
+Discord CDN URL. The authorized access path and the metadata-based capture
+selection/account-association contract are unresolved implementation
+prerequisites for #87/#88; this research does not prescribe their mechanics
+or assume production R2 access is available.
+
 **Pre-decision:** if POC passes, use a deterministic detection pipeline
 (template-match for fixed sprites, OCR only the name + level fields)
 rather than a single end-to-end ML model. Template-matching for rank
@@ -179,7 +187,7 @@ per-phase test matrix from the source plan (Part 2) is reproduced in
 | Report | `tests/crew/report.test.ts` | Markdown byte-stability for fixed inputs. Snapshot against a checked-in golden. |
 | Pinning (workflow) | `tests/skills/optimizeCrew.test.ts` | Per Rule 3: `on:` triggers, concurrency group, action SHA pins. |
 | OCR (v1.5) | `tests/crew/ocr.test.ts` | Template-matching against fixture screenshots; diff-vs-overwrite logic. |
-| Discord ingestion (v1.5) | `tests/discord/imageAttachments.test.ts` | Mocked REST client; content-type filter; CDN download to tmpfs. |
+| R2-backed image input (v1.5) | `tests/crew/r2ImageInput.test.ts` | Verify metadata-driven input selection and authorized access behavior once the #87/#88 access contract is defined; do not model direct Discord CDN ingestion. |
 | PR-opening (v1.5) | `tests/skills/rosterSync.test.ts` | Mocked `gh` CLI; branch name; PR body; `Closes #N` line emission per Rule 6. |
 | Command parser (v2) | `tests/discord/commandParser.test.ts` | `!crew` prefix; allowlist; rate-limit; help output. |
 | Command handlers (v2) | `tests/crew/commandHandlers.test.ts` | One test per verb; mocked roster/DB; Discord-output snapshots. |
