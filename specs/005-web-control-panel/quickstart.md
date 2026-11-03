@@ -57,11 +57,11 @@ accepts `workflow=redeem|discord-monitor|refresh-token` and integer `limit=1..10
 optional run-artifact directory is valid because no-op cron executions exist
 only in Actions.
 
-Run names may carry an explicit `correlation_id=<id>` token. Without one,
-scheduled executions use `cron-{run_id}`; other executions use `run-{run_id}`.
-The reader never guesses manual correlations from timestamps. Current producers
-do not yet emit manual correlation markers, so unrelated artifact/API records
-are not falsely combined. No workflow producer or write capability is added here.
+Run names may carry an explicit `correlation_id=<id>` token. API rows without
+that marker remain uncorrelated and are shown separately; run IDs, trigger
+types, and timestamps are never used to invent a correlation. An artifact and
+Actions row are combined only when both provide the same explicit correlation
+ID. No workflow producer or write capability is added here.
 
 The Functions entrypoint is `api/dist/api/src/index.js`; the widened TypeScript
 root includes the shared contract types without duplicating them. For local checks:

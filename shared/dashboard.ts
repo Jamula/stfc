@@ -10,7 +10,7 @@ export interface DashboardDocument {
 }
 
 export interface DashboardRun {
-  correlation_id: string;
+  correlation_id: string | null;
   workflow: Workflow;
   actor: string;
   trigger: string;

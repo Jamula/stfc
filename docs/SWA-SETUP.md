@@ -253,7 +253,9 @@ seeds. Crew reads the committed officer reference, not private account game
 state. Telemetry reports unavailable until an approved producer is defined.
 Runs show up to the requested limit, merging the latest 20 Actions executions
 per workflow with any valid committed run-result artifacts. Existing unmarked
-manual runs retain a stable `run-{id}` identity instead of a guessed correlation.
+Actions runs remain uncorrelated and are never joined by run ID, event type,
+or timestamp. An artifact is merged only when its correlation ID explicitly
+matches the ID carried by an Actions run name.
 No endpoint triggers workflows or calls the game store or Discord.
 
 ### CI gate

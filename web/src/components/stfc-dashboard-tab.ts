@@ -53,7 +53,7 @@ export abstract class DashboardTabElement extends LitElement {
         <tbody>${this.data.runs.map(run => html`<tr>
           <td>${run.started_at ?? (['in_progress', 'completed'].includes(run.status) ? 'Start time unavailable' : 'Not started')}</td><td>${run.workflow}</td><td>${run.actor}</td>
           <td>${run.trigger}</td><td>${run.conclusion ?? run.status}</td>
-          <td>${run.correlation_id}</td>
+          <td>${run.correlation_id ?? 'Not correlated'}</td>
           <td><pre>${run.business_result ? JSON.stringify(run.business_result, null, 2) : 'Not emitted'}</pre></td>
         </tr>`)}</tbody>
       </table></div>`;

@@ -76,7 +76,7 @@ export function parseActions(value: unknown, workflow: Workflow): DashboardRun[]
         typeof run['display_title'] !== 'string') throw new Error('Invalid Actions run');
     const marker = /(?:^|\s)correlation_id=([A-Za-z0-9_-]+)(?=\s|$)/.exec(run['display_title']);
     return {
-      correlation_id: marker?.[1] ?? `${run['event'] === 'schedule' ? 'cron' : 'run'}-${run['id']}`,
+      correlation_id: marker?.[1] ?? null,
       workflow,
       actor: run['actor']['login'],
       trigger: run['event'],
@@ -111,12 +111,18 @@ export function mergeRuns(artifacts: RunResult[], actions: DashboardRun[], limit
   }
   // Latest Actions metadata wins (including reruns), but never loses the business result.
   for (const action of [...actions].sort((a, b) => Date.parse(a.started_at ?? a.created_at) - Date.parse(b.started_at ?? b.created_at) || (a.run_id ?? 0) - (b.run_id ?? 0))) {
+    if (action.correlation_id === null) continue;
     const existing = merged.get(action.correlation_id);
     if (existing && existing.workflow !== action.workflow) throw new Error('Conflicting run correlation');
     merged.set(action.correlation_id, { ...action, business_result: existing?.business_result ?? null });
   }
   return [...merged.values()]
-    .sort((a, b) => Date.parse(b.started_at ?? b.created_at) - Date.parse(a.started_at ?? a.created_at) || b.correlation_id.localeCompare(a.correlation_id))
+    .concat(actions.filter(action => action.correlation_id === null))
+    .sort((a, b) =>
+      Date.parse(b.started_at ?? b.created_at) - Date.parse(a.started_at ?? a.created_at) ||
+      (b.correlation_id ?? '').localeCompare(a.correlation_id ?? '') ||
+      (b.run_id ?? 0) - (a.run_id ?? 0),
+    )
     .slice(0, limit);
 }
 

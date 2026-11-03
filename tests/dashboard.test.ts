@@ -208,7 +208,7 @@ describe("dashboard run query and contract validation", () => {
 });
 
 describe("Actions run parsing and merge behavior", () => {
-  it("keeps the first 20 provider-ordered Actions results and uses only explicit correlation markers", () => {
+  it("keeps the first 20 provider-ordered Actions results without inventing correlation markers", () => {
     const runs = Array.from({ length: 25 }, (_, index) => {
       const id = 900 - index;
       return actionsItem(id, {
@@ -238,13 +238,36 @@ describe("Actions run parsing and merge behavior", () => {
     assert.equal(parsed[0]!.trigger, "workflow_dispatch");
     assert.equal(parsed[0]!.created_at, "2026-10-30T12:20:00Z");
     assert.equal(parsed[0]!.started_at, "2026-10-30T12:34:56Z", "Actions start time must come from run_started_at");
-    assert.equal(parsed[1]!.correlation_id, "cron-899");
+    assert.equal(parsed[1]!.correlation_id, null, "unmarked scheduled runs must remain uncorrelated");
     assert.equal(parsed[1]!.trigger, "schedule");
     assert.equal(parsed[1]!.created_at, "2026-10-30T12:59:00Z");
     assert.equal(parsed[1]!.started_at, null, "queued/no-start runs must not mislabel created_at as started_at");
     assert.equal(parsed[1]!.conclusion, null, "scheduled no-op runs remain represented");
     assert.equal(parsed[1]!.business_result, null);
-    assert.equal(parseActions({ workflow_runs: [actionsItem(7)] }, "redeem")[0]!.correlation_id, "run-7");
+    assert.equal(parseActions({ workflow_runs: [actionsItem(7)] }, "redeem")[0]!.correlation_id, null);
+  });
+
+  it("merges artifacts only when an Actions run carries the same explicit correlation id", () => {
+    const artifact = resultFixture({ correlation_id: "cron-899" });
+    const unmarked = parseActions({
+      workflow_runs: [actionsItem(899, {
+        event: "schedule",
+        display_title: "Scheduled run cron-899",
+      })],
+    }, "redeem")[0]!;
+    const uncorrelated = mergeRuns([artifact], [unmarked], 20);
+    assert.equal(uncorrelated.length, 2, "run ID or title resemblance must not infer a correlation");
+    assert.equal(uncorrelated.find(run => run.correlation_id === null)?.run_id, 899);
+
+    const explicitlyMarked = {
+      ...unmarked,
+      correlation_id: "cron-899",
+    };
+    const correlated = mergeRuns([artifact], [explicitlyMarked], 20);
+    assert.equal(correlated.length, 1);
+    assert.equal(correlated[0]!.correlation_id, artifact.correlation_id);
+    assert.equal(correlated[0]!.business_result && "claimed" in correlated[0]!.business_result
+      ? correlated[0]!.business_result.claimed : null, 4);
   });
 
   it("rejects malformed Actions responses and malformed run elements", () => {
@@ -524,7 +547,7 @@ describe("dashboard data source loading", () => {
     }, async calls => {
       const data = await loadDashboard("runs", { workflow: "redeem", limit: 1 });
       assert.equal(data.runs.length, 1);
-      assert.equal(data.runs[0]!.correlation_id, "cron-111");
+      assert.equal(data.runs[0]!.correlation_id, null, "scheduled no-op rows stay visible without an invented correlation");
       assert.equal(data.runs[0]!.workflow, "redeem");
       assert.equal(data.runs[0]!.trigger, "schedule");
       assert.equal(data.runs[0]!.conclusion, null);
@@ -699,7 +722,7 @@ describe("dashboard browser client validation", () => {
 });
 
 describe("dashboard tab browser rendering", () => {
-  it("loads all five real tabs, escapes HTML, handles empty/unavailable/error states, and shows cron fallback", async () => {
+  it("loads all five real tabs, escapes HTML, handles empty/unavailable/error states, and marks unmatched runs", async () => {
     const [{ createServer }, { chromium }] = await Promise.all([
       import("../web/node_modules/vite/dist/node/index.js"),
       import("playwright"),
@@ -757,7 +780,7 @@ describe("dashboard tab browser rendering", () => {
           });
         } else {
           body.runs = [{
-            correlation_id: "cron-900",
+            correlation_id: null,
             workflow: "redeem",
             actor: "schedule",
             trigger: "schedule",
@@ -768,7 +791,7 @@ describe("dashboard tab browser rendering", () => {
             run_id: 900,
             business_result: null,
           }, {
-            correlation_id: "run-901",
+            correlation_id: null,
             workflow: "redeem",
             actor: "alice",
             trigger: "workflow_dispatch",
@@ -827,13 +850,13 @@ describe("dashboard tab browser rendering", () => {
       assert.equal(await page.evaluate(() => (window as unknown as { dashboardPwned?: boolean }).dashboardPwned === true), false);
 
       await page.getByRole("tab", { name: "runs" }).click();
-      await waitForTabText("stfc-runs-tab", "cron-900");
+      await waitForTabText("stfc-runs-tab", "Not correlated");
       const runText = await readTabText("stfc-runs-tab");
       assert.match(runText, /schedule/);
-      assert.match(runText, /cron-900/);
+      assert.match(runText, /Not correlated/);
       assert.match(runText, /Not started/);
       assert.match(runText, /Start time unavailable/);
-      assert.match(runText, /run-901/);
+      assert.equal((await page.locator("stfc-runs-tab table tbody tr").count()), 2);
       assert.match(runText, /Not emitted/);
       assert.deepEqual(requests, ["redeems", "digests", "telemetry", "crew", "runs"]);
     } finally {

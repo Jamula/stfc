@@ -3,7 +3,7 @@ import type { DashboardData, DashboardRun, DashboardTab } from '../../shared/das
 function isRun(value: unknown): value is DashboardRun {
   if (typeof value !== 'object' || value === null) return false;
   const run = value as Record<string, unknown>;
-  return typeof run['correlation_id'] === 'string' &&
+  return (run['correlation_id'] === null || typeof run['correlation_id'] === 'string') &&
     ['redeem', 'discord-monitor', 'refresh-token'].includes(String(run['workflow'])) &&
     typeof run['actor'] === 'string' && typeof run['trigger'] === 'string' &&
     typeof run['created_at'] === 'string' && (run['started_at'] === null || typeof run['started_at'] === 'string') &&
