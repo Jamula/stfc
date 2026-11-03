@@ -5,7 +5,6 @@
 
 import { after, describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import type { HttpRequest, InvocationContext } from "../api/node_modules/@azure/functions/types/index.js";
@@ -728,11 +727,6 @@ describe("dashboard tab browser rendering", () => {
       import("../web/node_modules/vite/dist/node/index.js"),
       import("playwright"),
     ]);
-    if (!existsSync(chromium.executablePath())) {
-      t.skip("Chromium not installed");
-      return;
-    }
-
     const webRoot = resolve(import.meta.dirname, "../web");
     const server = await createServer({
       configFile: resolve(webRoot, "vite.config.ts"),
@@ -746,7 +740,19 @@ describe("dashboard tab browser rendering", () => {
       const address = server.httpServer?.address();
       assert.ok(address && typeof address === "object", "Vite must bind a loopback HTTP server");
       const baseUrl = `http://127.0.0.1:${address.port}`;
-      browser = await chromium.launch({ headless: true });
+      try {
+        browser = await chromium.launch({ headless: true });
+      } catch (error) {
+        if (
+          error instanceof Error &&
+          /Executable doesn't exist at .+/.test(error.message)
+        ) {
+          t.skip("Chromium executable not installed");
+          return;
+        }
+        throw error;
+      }
+
       const page = await browser.newPage();
       const requests: string[] = [];
 
