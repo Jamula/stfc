@@ -102,11 +102,11 @@
 
 | T### | Maps to issue | Scope | Test acceptance |
 |---|---|---|---|
-| T200 | #85 | OCR POC spike — measure against the FR-020 acceptance bar on 20 real screenshots | POC measurement table posted to issue #85 |
-| T201 | #86 | POC gate decision: PASS → unblock #87..#90; FAIL → close #85..#90 as wontfix | Record the decision on the issue |
-| T202 | #87 | Constitution v1.5 amendment (`roster-sync.yml` workflow + `cdn.discordapp.com` inbound + `skill:bootstrap-roster` + roster-channel allowlist) + plan-template re-sync | Rule 1 grep is green post-amendment |
-| T203 | #88 | `src/crew/ocr.ts` + image-attachment ingestion + `.github/workflows/roster-sync.yml` + PR-opening logic + workflow pinning tests | `tests/crew/ocr.test.ts` + `tests/discord/imageAttachments.test.ts` + `tests/skills/rosterSync.test.ts`; re-check `tests/skills/discordMonitor.test.ts`; wire into `tests/index.test.ts` |
-| T204 | #89 | v1.5 operator docs (screenshot capture guide, device resolution, Discord channel setup, troubleshooting) | Doc-only |
+| T200 | #85 | OCR POC spike — validate the production `/game-state` capture path and measure against the FR-020 acceptance bar on 20 real screenshots | Production-path validation and POC measurement evidence recorded |
+| T201 | #86 | POC gate decision after #85 evidence: explicit PASS → unblock #87..#90; FAIL → close #85..#90 as wontfix | Record an explicit PASS/FAIL verdict on the issue |
+| T202 | #87 | Constitution v1.5 amendment for the R2-backed OCR source, metadata/index/lineage on `automation-state`, authorized access and capture-selection policy, `skill:bootstrap-roster`, and any required workflow surface; re-sync applicable templates | Governance verdict and required re-sync evidence recorded |
+| T203 | #88 | `src/crew/ocr.ts` + R2-backed image input and authorized access path + `.github/workflows/roster-sync.yml` + PR-opening logic + workflow pinning tests; no direct Discord CDN ingestion | `tests/crew/ocr.test.ts` + tests for the agreed R2/metadata input contract + `tests/skills/rosterSync.test.ts`; re-check `tests/skills/discordMonitor.test.ts` only if shared behavior changes; wire new test files into `tests/index.test.ts` |
+| T204 | #89 | v1.5 operator docs for the supported screenshot capture and OCR source path, device resolution, Discord guidance, and troubleshooting; document only behavior verified by #88 | Doc-only, after #88 establishes supported behavior |
 | T205 | #90 | v1.5 review | Review the linked PRs before merging |
 
 ### v2 — Read-only interactive Discord commands (gated on v1 ship)

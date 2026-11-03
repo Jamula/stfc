@@ -10,10 +10,11 @@ Add a crew-optimizer capability to the headless TypeScript CLI. v1 ships
 the pure-compute optimizer + progression report + `skill:roster` family
 + `optimize-crew.yml` workflow, driven by hand-edited YAML rosters on a
 developer machine. v1.5 (gated on an OCR POC) adds the iPhone → Discord
-→ PR loop for roster ingestion. v2 (parallel-gated on v1 ship) adds
-read-only `!crew` Discord commands plus a retrieval-only freeform
-knowledge query. No new STFC API surface; v1 introduces no new outbound
-network destination.
+→ private-R2-backed OCR → PR loop for roster ingestion. v2
+(parallel-gated on v1 ship) adds read-only `!crew` Discord commands plus a
+retrieval-only freeform knowledge query. No new STFC API surface; v1
+introduces no new outbound network destination. The authorized R2 access
+path and its network scope for v1.5 remain to be implemented and verified.
 
 ## Technical Context
 
@@ -26,6 +27,11 @@ network destination.
 **Storage**: Committed JSON/YAML under `data/crew/` (officers, tasks,
   roster) plus generated reports under `docs/crew/`. v2 adds
   `data/crew/knowledge-embeddings.json` (regenerated artifact).
+  For gated v1.5 OCR, capture binaries are stored in private Cloudflare R2,
+  while metadata, index, and lineage are committed to `automation-state`.
+  The OCR consumer's authorized R2 access path and capture-selection contract
+  remain to be implemented and verified; this plan does not define their
+  mechanics or assume production OCR access to R2.
 **Testing**: `node:test` + `tsx` via `tests/index.test.ts` (existing
   pattern). All new test files MUST be imported in `tests/index.test.ts`
   in the same PR; this is non-negotiable. `tests/crew/realdata.test.ts`
@@ -148,6 +154,7 @@ tests/
 │   ├── diff.test.ts
 │   ├── report.test.ts
 │   ├── ocr.test.ts                # v1.5
+│   ├── r2ImageInput.test.ts       # v1.5
 │   ├── commandHandlers.test.ts    # v2
 │   ├── knowledge.test.ts          # v2
 │   └── fixtures/
@@ -161,7 +168,6 @@ tests/
 │   ├── rosterSync.test.ts         # NEW v1.5
 │   └── knowledgeRebuild.test.ts   # NEW v2
 └── discord/
-    ├── imageAttachments.test.ts   # NEW v1.5
     └── commandParser.test.ts      # NEW v2
 
 .github/workflows/
@@ -193,8 +199,9 @@ amends `.specify/memory/constitution.md`:
   `data/crew/**` and on `workflow_dispatch`, and is subject to the
   third-party action SHA-pinning rule.
 - **Outbound network scope:** no change for v1. The v1 amendment
-  explicitly notes that v1.5 (`cdn.discordapp.com` image fetch) and
-  v2 (re-confirmation of the `huggingface.co` carve-out for the
+  explicitly notes that v1.5 (authorized private-R2 image access; exact
+  access and network scope to be established) and v2 (re-confirmation of
+  the `huggingface.co` carve-out for the
   sentence-transformer model) will require **separate** amendments
   filed at the time those phases are unblocked.
 
