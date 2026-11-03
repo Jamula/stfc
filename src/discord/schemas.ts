@@ -372,6 +372,10 @@ export interface RunHealth {
   runId: string;
   startedAt: string;
   finishedAt: string;
+  /** Enabled entries in config/discord-allowlist.json for the latest run. */
+  promoChannelsConfigured?: number;
+  /** Promo-code channels successfully read in the latest run. */
+  promoChannelsRead?: number;
   channelsConfigured: number;
   channelsRead: number;
   channelsErrored: Array<{

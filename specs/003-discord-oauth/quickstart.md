@@ -119,10 +119,13 @@ If the code does **not** appear:
 - Check the monitor log for a count-only warning if message text was empty.
   Empty text does not by itself establish whether the content was unavailable
   or the message was genuinely textless.
-- Verify the Developer Portal has **"Message Content Intent"** enabled
-  for the bot — without it, `content` is empty in
-  `GET /channels/{id}/messages` for messages the bot did not author
-  (see `docs/DISCORD-BOT-SETUP.md` § Privileged Intents).
+- Confirm with the channel administrator that the selected channel is
+  approved for monitoring and that a bounded bot-authenticated REST read
+  actually returns `content` for a known text-bearing message. Consult
+  current Discord message-content intent policy and the application's
+  eligibility/approval if content is unavailable; do not infer the cause
+  from REST transport or an empty field alone
+  (see `docs/DISCORD-BOT-SETUP.md` § Verify message-content access).
 
 ---
 

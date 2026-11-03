@@ -65,6 +65,7 @@ import type {
 } from "../discord/schemas.ts";
 import { createHeuristicClassifier, type Classifier } from "../discord/classifier.ts";
 import { isExcludedByModeration } from "../discord/moderation.ts";
+import { formatPromoScanStatus } from "../discord/scanStatus.ts";
 import { redeemCodes, type RedeemCodesOptions } from "./redeemCodes.ts";
 import { writeDigest, DEFAULT_DIGESTS_DIR } from "../digest/index.ts";
 import { createHash } from "node:crypto";
@@ -149,6 +150,8 @@ export async function discordMonitor(
     runId,
     startedAt,
     finishedAt: startedAt,
+    promoChannelsConfigured: 0,
+    promoChannelsRead: 0,
     channelsConfigured: 0,
     channelsRead: 0,
     channelsErrored: [],
@@ -170,10 +173,16 @@ export async function discordMonitor(
   const allowlist = await loadAllowlist(allowlistPath);
   const commandChannels = await loadCommandChannelAllowlist(commandChannelsPath);
   const ingestAllowlist = withCommandChannels(allowlist, commandChannels, now);
+  const enabledPromoChannels = allowlist.entries.filter((entry) => entry.enabled);
   const codeChannelIds = new Set(
-    allowlist.entries.filter((entry) => entry.enabled).map((entry) => entry.channelId),
+    enabledPromoChannels.map((entry) => entry.channelId),
   );
+  health.promoChannelsConfigured = enabledPromoChannels.length;
   health.channelsConfigured = ingestAllowlist.entries.length;
+
+  if (enabledPromoChannels.length === 0) {
+    log.info(`promo-code scan not run — ${formatPromoScanStatus(health)}`);
+  }
 
   if (ingestAllowlist.entries.length === 0) {
     log.info("allowlists empty — graceful no-op (FR-001)");
@@ -234,6 +243,12 @@ export async function discordMonitor(
       newCursors = ingestOut.newCursors;
       botUsername = ingestOut.botIdentity.username;
       mergeHealth(health, ingestOut.health);
+      const erroredChannelIds = new Set(
+        (ingestOut.health.channelsErrored ?? []).map((entry) => entry.channelId),
+      );
+      health.promoChannelsRead = enabledPromoChannels.filter(
+        (entry) => !erroredChannelIds.has(entry.channelId),
+      ).length;
       // T015 [US3] — emit exactly one structured success-path auth log line
       // per run, after ingestDiscord resolves. Tests in
       // tests/skills/discordMonitor.test.ts pin the message text and count.
@@ -692,6 +707,7 @@ async function emitJobSummary(h: RunHealth): Promise<void> {
     `| Run ID | \`${h.runId}\` |`,
     `| Started | ${h.startedAt} |`,
     `| Finished | ${h.finishedAt} |`,
+    `| Promo-code scan | ${formatPromoScanStatus(h)} |`,
     `| Channels read | ${h.channelsRead} / ${h.channelsConfigured}${h.channelsErrored.length > 0 ? ` (${h.channelsErrored.length} errored)` : ""} |`,
     `| Messages scanned | ${h.messagesScanned} |`,
     `| Candidates extracted | ${h.candidatesExtracted} |`,
