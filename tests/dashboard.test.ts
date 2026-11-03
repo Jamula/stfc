@@ -5,6 +5,7 @@
 
 import { after, describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import type { HttpRequest, InvocationContext } from "../api/node_modules/@azure/functions/types/index.js";
@@ -722,11 +723,16 @@ describe("dashboard browser client validation", () => {
 });
 
 describe("dashboard tab browser rendering", () => {
-  it("loads all five real tabs, escapes HTML, handles empty/unavailable/error states, and marks unmatched runs", async () => {
+  it("loads all five real tabs, escapes HTML, handles empty/unavailable/error states, and marks unmatched runs", async (t) => {
     const [{ createServer }, { chromium }] = await Promise.all([
       import("../web/node_modules/vite/dist/node/index.js"),
       import("playwright"),
     ]);
+    if (!existsSync(chromium.executablePath())) {
+      t.skip("Chromium not installed");
+      return;
+    }
+
     const webRoot = resolve(import.meta.dirname, "../web");
     const server = await createServer({
       configFile: resolve(webRoot, "vite.config.ts"),
