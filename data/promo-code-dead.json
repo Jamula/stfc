@@ -257,5 +257,12 @@
     "accounts_tried": [
       "main"
     ]
+  },
+  "CADET": {
+    "marked_dead_at": "2026-11-05T22:54:51.351Z",
+    "first_seen_outcome": "CODE_INVALID_OR_EXPIRED",
+    "accounts_tried": [
+      "main"
+    ]
   }
 }
