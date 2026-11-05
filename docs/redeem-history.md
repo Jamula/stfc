@@ -7,6 +7,7 @@ inserted at the top**, so the most recent run is always visible first.
 
 | Date (UTC) | Time (UTC) | Account | Gifts claimed |
 | --- | --- | --- | --- |
+| 2026-11-05 | 02:24 | main | 4 Hr Free Chest, 10 Min Free Chest |
 | 2026-11-04 | 22:10 | main | 4 Hr Free Chest, 10 Min Free Chest, Officer Command Pass Points, Day of the Dead |
 | 2026-11-04 | 16:32 | main | 4 Hr Free Chest, 10 Min Free Chest |
 | 2026-11-04 | 08:32 | main | Daily Mission Key Drop, 10 Min Free Chest |
