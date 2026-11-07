@@ -80,3 +80,21 @@ pre-commit hook and `artifact-hygiene.yml` scan applicable files for leaks.
 The `test-gate.yml` workflow runs `npm run typecheck` and `npm test` for both
 the root package and the worker. Run the relevant commands locally and report
 the results in the pull request. The pre-commit hook runs the root test suite.
+
+Ready PRs from branches in this repository targeting the default branch are
+automatically enrolled in squash auto-merge. The workflow also reconciles open
+PRs every 15 minutes, including those created by GitHub Actions, and will
+re-enable auto-merge if it is manually disabled. Drafts and fork PRs are excluded.
+Use a draft to keep a same-repository PR from being enrolled.
+
+The default-branch ruleset must strictly require the GitHub Actions checks
+`npm test (required)` and `verify` (Protected paths). GitHub also enforces any
+other required checks, reviews, and rules before merging. Do not require checks
+from workflows that do not run on every PR; they can leave PRs blocked. The
+automation fails if its two baseline required checks are missing, and reports
+other API or permission failures in its workflow run. Configure the repository
+variable `AUTO_MERGE_APP_CLIENT_ID` and secret `AUTO_MERGE_APP_PRIVATE_KEY` for
+a GitHub App installed only on this repository with Contents and Pull requests
+write permissions and no ruleset bypass. The workflow uses this scoped App token
+for API and CLI operations so resulting merges trigger downstream workflows;
+it fails closed if the App can bypass a protected ruleset.

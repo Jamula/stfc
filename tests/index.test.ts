@@ -60,6 +60,7 @@ import "./workflows/discord-ops-workflow.test.ts";
 import "./workflows/secrets-check-workflow.test.ts";
 import "./workflows/redeem-workflow.test.ts";
 import "./workflows/workflow-consolidation.test.ts";
+import "./workflows/auto-merge.test.ts";
 import "./workflows/squad-release-templates.test.ts";
 import "./workflows/automation-state-workflows.test.ts";
 import "./workflows/automation-state-git.test.ts";

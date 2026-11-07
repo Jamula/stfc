@@ -1,0 +1,102 @@
+name: Enable PR auto-merge
+
+on:
+  pull_request_target:
+    types: [opened, reopened, ready_for_review, synchronize, edited]
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  auto-merge:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Create repository-scoped GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.AUTO_MERGE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.AUTO_MERGE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write
+          permission-pull-requests: write
+
+      - name: Enable squash auto-merge for eligible PRs
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        with:
+          github-token: ${{ steps.app-token.outputs.token }}
+          script: |
+            const { execFileSync } = require("node:child_process");
+            const { owner, repo } = context.repo;
+            const { data: repository } = await github.rest.repos.get({ owner, repo });
+            const { repository: mergePolicy } = await github.graphql(`
+              query($owner: String!, $repo: String!) {
+                repository(owner: $owner, name: $repo) {
+                  autoMergeAllowed
+                  squashMergeAllowed
+                }
+              }
+            `, { owner, repo });
+            if (!mergePolicy?.autoMergeAllowed || !mergePolicy?.squashMergeAllowed) {
+              throw new Error("Repository auto-merge and squash merging must both be enabled.");
+            }
+
+            const numbers = context.eventName === "pull_request_target"
+              ? [context.payload.pull_request.number]
+              : (await github.paginate(github.rest.pulls.list, {
+                  owner, repo, state: "open", base: repository.default_branch, per_page: 100,
+                })).map(pr => pr.number);
+
+            const candidates = [];
+            for (const pull_number of numbers) {
+              const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number });
+              if (pr.state !== "open" || pr.draft || pr.auto_merge ||
+                  pr.base.ref !== repository.default_branch || pr.head.repo?.id !== repository.id) {
+                core.notice(`Skipping ineligible or already configured PR #${pull_number}.`);
+                continue;
+              }
+              candidates.push(pr);
+            }
+            if (candidates.length === 0) return;
+
+            const { data: rules } = await github.request(
+              "GET /repos/{owner}/{repo}/rules/branches/{branch}",
+              { owner, repo, branch: repository.default_branch, per_page: 100 },
+            );
+            for (const ruleset_id of new Set(rules.map(rule => rule.ruleset_id))) {
+              const { data: ruleset } = await github.request(
+                "GET /repos/{owner}/{repo}/rulesets/{ruleset_id}",
+                { owner, repo, ruleset_id },
+              );
+              if (ruleset.current_user_can_bypass !== "never") {
+                throw new Error(`Auto-merge GitHub App must not bypass ruleset ${ruleset_id}.`);
+              }
+            }
+            const checks = rules.filter(rule => rule.type === "required_status_checks");
+            const required = ["npm test (required)", "verify"];
+            if (!required.every(name => checks.some(rule =>
+              rule.parameters?.strict_required_status_checks_policy &&
+              rule.parameters.required_status_checks?.some(check =>
+                check.context === name && check.integration_id === 15368)))) {
+              throw new Error("Default branch must strictly require GitHub Actions checks 'npm test (required)' and 'verify'.");
+            }
+
+            let failures = 0;
+            for (const pr of candidates) {
+              try {
+                execFileSync("gh", [
+                  "pr", "merge", String(pr.number), "--repo", `${owner}/${repo}`,
+                  "--auto", "--squash", "--match-head-commit", pr.head.sha,
+                ], { stdio: "inherit" });
+              } catch (error) {
+                failures++;
+                core.error(`Could not enable auto-merge for PR #${pr.number}: ${error.message}`);
+              }
+            }
+            if (failures) core.setFailed(`Auto-merge failed for ${failures} PR(s).`);
