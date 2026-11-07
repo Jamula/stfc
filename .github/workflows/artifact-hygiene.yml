@@ -55,6 +55,11 @@ jobs:
             "origin/${{ github.base_ref }}"...HEAD \
             > "$CHANGED_FILES"
 
+          if ! iconv -f UTF-8 -t UTF-8 "$CHANGED_FILES" > /dev/null; then
+            echo "Artifact hygiene: changed-file list contains a path that is not valid UTF-8." >&2
+            exit 1
+          fi
+
           extension_status=0
           grep -izE '\.(md|yaml|yml|txt|json|jsonl)$' "$CHANGED_FILES" \
             > "$FILTERED_FILES" || extension_status=$?
