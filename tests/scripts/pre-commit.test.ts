@@ -301,9 +301,47 @@ describe("checkWorkflowPinningTests", () => {
           encoding: "utf8",
           env: isolatedGitEnv,
         });
+        const output = `${result.stdout}${result.stderr}`;
         assert.equal(result.status, 1);
-        assert.match(result.stderr, /\[JWT\]/);
-        assert.doesNotMatch(result.stderr, new RegExp(stagedSecret.replaceAll(".", "\\.")));
+        assert.match(output, /\[JWT\]/);
+        assert.match(output, /matched content → <REDACTED-TOKEN>/);
+        assert.doesNotMatch(output, new RegExp(stagedSecret.replaceAll(".", "\\.")));
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it("scans staged JSONL runtime artifacts case-insensitively for raw token fields", () => {
+      const dir = mkdtempSync(join(tmpdir(), "stfc-hygiene-jsonl-"));
+      const scanner = resolve("scripts/check-artifact-hygiene.mjs");
+      const artifact = join(dir, "data", "discord", "records.JSONL");
+      const isolatedGitEnv = { ...process.env };
+      for (const key of Object.keys(isolatedGitEnv)) {
+        if (key.startsWith("GIT_")) delete isolatedGitEnv[key];
+      }
+      const secret = "sensitive-upstream-token-value";
+      try {
+        mkdirSync(join(dir, "data", "discord"), { recursive: true });
+        execFileSync("git", ["init", "--quiet"], {
+          cwd: dir,
+          env: isolatedGitEnv,
+        });
+        writeFileSync(artifact, `{"access_token":"${secret}"}\n`);
+        execFileSync("git", ["add", "data/discord/records.JSONL"], {
+          cwd: dir,
+          env: isolatedGitEnv,
+        });
+
+        const result = spawnSync(process.execPath, [scanner, "--staged"], {
+          cwd: dir,
+          encoding: "utf8",
+          env: isolatedGitEnv,
+        });
+        const output = `${result.stdout}${result.stderr}`;
+        assert.equal(result.status, 1);
+        assert.match(output, /\[STFC_RAW_UPSTREAM_RESPONSE\]/);
+        assert.match(output, /matched content → <REDACTED-TOKEN>/);
+        assert.doesNotMatch(output, new RegExp(secret));
       } finally {
         rmSync(dir, { recursive: true, force: true });
       }

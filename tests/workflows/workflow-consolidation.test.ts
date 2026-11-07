@@ -39,6 +39,8 @@ const workflows = workflowSources.map(({ file, source }) => ({
         if?: string;
         permissions?: Record<string, string>;
         steps?: Array<{
+          id?: string;
+          if?: string;
           "continue-on-error"?: boolean | string;
           run?: string;
           uses?: string;
@@ -673,6 +675,28 @@ describe("workflow consolidation", () => {
       steps.some((step) => step.run?.includes("node scripts/check-artifact-hygiene.mjs")),
       "the PR workflow must run the artifact scanner",
     );
+  });
+
+  it("scans changed runtime artifacts and JSONL files without a PR-body bypass", () => {
+    const source = workflowSources.find(({ file }) => file === "artifact-hygiene.yml")?.source;
+    const hygiene = workflows.find(({ file }) => file === "artifact-hygiene.yml");
+    assert.ok(source, "artifact-hygiene.yml source must exist");
+    assert.ok(hygiene, "artifact-hygiene.yml must exist");
+
+    const paths = hygiene.workflow.on?.pull_request?.paths ?? [];
+    assert.ok(paths.includes("data/digests/**"), "digest artifacts must trigger the scan");
+    assert.ok(paths.includes("data/discord/**"), "Discord runtime artifacts must trigger the scan");
+    assert.ok(paths.includes(".github/**"), "scanned GitHub configuration files must trigger the scan");
+    assert.doesNotMatch(source, /\[skip-token-scan\]/, "PR text must not bypass the scan");
+
+    const scan = Object.values(hygiene.workflow.jobs ?? {})
+      .flatMap((job) => job.steps ?? [])
+      .find((step) => step.id === "scan");
+    assert.ok(scan?.run, "the changed-file scanner step must exist");
+    assert.match(scan.run, /-izE .*json\|jsonl/, "the changed-file filter must include JSONL files case-insensitively");
+    assert.match(scan.run, /data\/digests\/\*.*data\/discord\/\*/, "the changed-file filter must include runtime artifact paths");
+    assert.match(scan.run, /set -o pipefail/, "diff collection failures must fail the workflow");
+    assert.equal(scan.if, undefined, "the scan step must not be conditional on a PR-body value");
   });
 
   it("does not publish npm packages from active workflows", () => {
