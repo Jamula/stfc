@@ -55,14 +55,15 @@ describe("loadDiscordToken", () => {
     const planted = "supersecret.JWTish-token.AAAAAAAA";
     process.env[ENV_VAR] = planted;
     delete process.env[ENV_VAR];
-    try {
-      loadDiscordToken();
-      assert.fail("expected throw");
-    } catch (err) {
-      const msg = (err as Error).message ?? "";
-      assert.doesNotMatch(msg, /supersecret/);
-      assert.doesNotMatch(msg, /JWTish/);
-      assert.doesNotMatch(msg, /Bearer/);
-    }
+    assert.throws(
+      () => loadDiscordToken(),
+      (err: unknown) => {
+        const msg = (err as Error).message ?? "";
+        assert.doesNotMatch(msg, /supersecret/);
+        assert.doesNotMatch(msg, /JWTish/);
+        assert.doesNotMatch(msg, /Bearer/);
+        return true;
+      },
+    );
   });
 });

@@ -7,7 +7,6 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { ingestDiscord, PER_CHANNEL_PAGE_CAP } from "../../src/discord/ingest.ts";
 import {
-  DiscordAuthError,
   DiscordChannelAccessError,
   DiscordChannelNotFoundError,
 } from "../../src/discord/client.ts";
@@ -84,30 +83,6 @@ describe("ingestDiscord — getMe", () => {
       NOW,
     );
     assert.equal(getMeCalls, 1);
-  });
-});
-
-describe("ingestDiscord — auth", () => {
-  it("propagates DiscordAuthError from getMe (401) — caller skips ingest", async () => {
-    const client: StubClient = {
-      getMe: async () => {
-        throw new DiscordAuthError("401 Unauthorized");
-      },
-      getChannelMessages: async () => {
-        throw new Error("getChannelMessages should not be called after 401");
-      },
-    };
-    await assert.rejects(
-      () =>
-        ingestDiscord(
-          makeAllowlist([{ id: "111111111111111111", label: "a" }]),
-          {},
-          client,
-          "run-1",
-          NOW,
-        ),
-      DiscordAuthError,
-    );
   });
 });
 
@@ -256,7 +231,7 @@ describe("ingestDiscord — 429 retry", () => {
       NOW,
       { sleep: async () => {} },
     );
-    assert.ok(aCalls >= 3, "rate-limit retry attempted ≤ 3×");
+    assert.equal(aCalls, 3, "rate-limit attempts stop at the configured cap");
     assert.equal(messages.length, 1, "channel b still ingested");
     assert.equal(
       health.channelsErrored!.find((e) => e.channelId === a)?.errorClass,

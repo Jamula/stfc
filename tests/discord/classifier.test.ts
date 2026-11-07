@@ -13,7 +13,14 @@
 
 import { afterEach, beforeEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import {
+  ClassifierIntegrityError,
+  ClassifierLoadError,
+  createTier2Classifier,
   createHeuristicClassifier,
   type Classifier,
 } from "../../src/discord/classifier.ts";
@@ -33,6 +40,19 @@ function stubFetch(): void {
 function restoreFetch(): void {
   if (origFetch !== undefined) globalThis.fetch = origFetch;
   origFetch = undefined;
+}
+
+async function withTemporaryModelRoot(run: (root: string) => Promise<void>): Promise<void> {
+  const root = await mkdtemp(path.join(tmpdir(), "classifier-model-test-"));
+  const previousHome = process.env["HF_HOME"];
+  process.env["HF_HOME"] = path.join(root, "hf");
+  try {
+    await run(root);
+  } finally {
+    if (previousHome === undefined) delete process.env["HF_HOME"];
+    else process.env["HF_HOME"] = previousHome;
+    await rm(root, { recursive: true, force: true });
+  }
 }
 
 describe("classifier / privacy invariant (FR-016, FR-017)", () => {
@@ -58,6 +78,136 @@ describe("classifier / privacy invariant (FR-016, FR-017)", () => {
     }
     assert.equal(fetchCallCount, 0, "classify() must not touch the network");
     await c.unload();
+  });
+});
+
+describe("classifier / tier-2 offline model integrity", () => {
+  beforeEach(stubFetch);
+  afterEach(restoreFetch);
+
+  it("rejects unreadable, malformed, and schema-invalid model configuration", async () => {
+    await withTemporaryModelRoot(async (root) => {
+      const missing = await createTier2Classifier({
+        modelConfigPath: path.join(root, "missing.json"),
+      });
+      await assert.rejects(
+        missing.load(),
+        (error: unknown) =>
+          error instanceof ClassifierLoadError &&
+          /Could not read classifier model config/.test(error.message),
+      );
+
+      const malformedPath = path.join(root, "malformed.json");
+      await writeFile(malformedPath, "{", "utf8");
+      const malformed = await createTier2Classifier({ modelConfigPath: malformedPath });
+      await assert.rejects(
+        malformed.load(),
+        (error: unknown) =>
+          error instanceof ClassifierLoadError && /Malformed JSON/.test(error.message),
+      );
+
+      const invalidPath = path.join(root, "invalid-schema.json");
+      await writeFile(invalidPath, JSON.stringify({ id: "incomplete" }), "utf8");
+      const invalid = await createTier2Classifier({ modelConfigPath: invalidPath });
+      await assert.rejects(
+        invalid.load(),
+        (error: unknown) =>
+          error instanceof ClassifierLoadError &&
+          /failed schema validation/.test(error.message),
+      );
+    });
+  });
+
+  it("accepts cached weights with the expected SHA and deletes a mismatched model", async () => {
+    await withTemporaryModelRoot(async (root) => {
+      const validBytes = Buffer.from("known offline model weights");
+      const validSha = createHash("sha256").update(validBytes).digest("hex");
+      const validModelPath = path.join(root, "valid-model.json");
+      const validWeightPath = path.join(
+        root,
+        "hf",
+        "hub",
+        "models--test--valid",
+        "snapshots",
+        "rev",
+        "model.onnx",
+      );
+      await mkdir(path.dirname(validWeightPath), { recursive: true });
+      await writeFile(validWeightPath, validBytes);
+      await writeFile(
+        validModelPath,
+        JSON.stringify({
+          id: "test/valid",
+          revision: "rev",
+          weightSha256: validSha,
+          task: "zero-shot-classification",
+          labels: ["tip"],
+          confidenceFloor: 0.55,
+        }),
+        "utf8",
+      );
+
+      const valid = await createTier2Classifier({ modelConfigPath: validModelPath });
+      await valid.load();
+      assert.deepEqual(
+        await valid.classify({ contentNormalized: "synthetic input", channelLabel: "test" }),
+        { label: "unclassified", confidence: 0, method: "heuristic", scores: {} },
+      );
+      await valid.unload();
+      await assert.rejects(
+        () => valid.classify({ contentNormalized: "synthetic input", channelLabel: "test" }),
+        /before load/i,
+      );
+
+      const invalidBytes = Buffer.from("corrupted offline model weights");
+      const actualInvalidSha = createHash("sha256").update(invalidBytes).digest("hex");
+      const wrongSha = actualInvalidSha === "a".repeat(64) ? "b".repeat(64) : "a".repeat(64);
+      const invalidModelPath = path.join(root, "invalid-model.json");
+      const invalidWeightPath = path.join(
+        root,
+        "hf",
+        "hub",
+        "models--test--invalid",
+        "snapshots",
+        "rev",
+        "model.onnx",
+      );
+      await mkdir(path.dirname(invalidWeightPath), { recursive: true });
+      await writeFile(invalidWeightPath, invalidBytes);
+      await writeFile(
+        invalidModelPath,
+        JSON.stringify({
+          id: "test/invalid",
+          revision: "rev",
+          weightSha256: wrongSha,
+          task: "zero-shot-classification",
+          labels: ["tip"],
+          confidenceFloor: 0.55,
+        }),
+        "utf8",
+      );
+
+      const invalid = await createTier2Classifier({ modelConfigPath: invalidModelPath });
+      await assert.rejects(
+        invalid.load(),
+        (error: unknown) =>
+          error instanceof ClassifierIntegrityError &&
+          /SHA-256 mismatch/.test(error.message),
+      );
+      await assert.rejects(
+        readFile(invalidWeightPath),
+        (error: unknown) =>
+          typeof error === "object" &&
+          error !== null &&
+          "code" in error &&
+          error.code === "ENOENT",
+      );
+      await assert.rejects(
+        () => invalid.classify({ contentNormalized: "synthetic input", channelLabel: "test" }),
+        /before load/i,
+      );
+      assert.equal(fetchCallCount, 0, "cache verification must not fetch model weights");
+    });
   });
 });
 
@@ -137,6 +287,10 @@ describe("classifier / lifecycle", () => {
     await c.unload();
     await c.unload();
     await c.unload();
+    await assert.rejects(
+      () => c.classify({ contentNormalized: "Tip: a valid tip", channelLabel: "x" }),
+      /before load/i,
+    );
   });
 
   it("load() is idempotent", async () => {
@@ -147,7 +301,8 @@ describe("classifier / lifecycle", () => {
       contentNormalized: "Tip: research the navigation tree first if you're under ops 30.",
       channelLabel: "stfc-strategy",
     });
-    assert.notEqual(out.label, "chatter");
+    assert.equal(out.label, "tip");
+    assert.equal(out.method, "heuristic");
   });
 });
 
@@ -194,6 +349,67 @@ describe("classifier / tier-1 useful classifications", () => {
     assert.equal(out.label, "hack");
     await c.unload();
   });
+
+  it("classifies event-info and patch-note markers with their own scores", async () => {
+    const c = createHeuristicClassifier();
+    await c.load();
+    for (const [contentNormalized, label] of [
+      ["Event info: the next event starts Friday.", "event-info"],
+      ["Patch note: the refinery queue is now fixed.", "patch-note"],
+    ] as const) {
+      const out = await c.classify({ contentNormalized, channelLabel: "stfc-strategy" });
+      assert.deepEqual(out, {
+        label,
+        confidence: 0.9,
+        method: "heuristic",
+        scores: { [label]: 0.9 },
+      });
+    }
+    await c.unload();
+  });
+
+  it("pins blank, short-alpha, and greeting chatter boundaries", async () => {
+    const c = createHeuristicClassifier();
+    await c.load();
+    const cases = [
+      { contentNormalized: " \t ", label: "chatter", confidence: 0, scores: { chatter: 1 } },
+      { contentNormalized: "blip", label: "chatter", confidence: 0, scores: { chatter: 1 } },
+      { contentNormalized: "blips", label: "unclassified", confidence: 0, scores: { tip: 0 } },
+      {
+        contentNormalized: `hello ${"x".repeat(13)}`,
+        label: "chatter",
+        confidence: 0,
+        scores: { chatter: 1 },
+      },
+      {
+        contentNormalized: `hello ${"x".repeat(14)}`,
+        label: "unclassified",
+        confidence: 0,
+        scores: { tip: 0 },
+      },
+    ] as const;
+    for (const { contentNormalized, ...expected } of cases) {
+      const out = await c.classify({ contentNormalized, channelLabel: "stfc-chat" });
+      assert.deepEqual(out, { ...expected, method: "heuristic" });
+    }
+    await c.unload();
+  });
+
+  it("caps accumulated STFC vocabulary confidence at 0.85", async () => {
+    const c = createHeuristicClassifier();
+    await c.load();
+    const out = await c.classify({
+      contentNormalized: "Armada hostile crew officer shipyard research blueprint.",
+      channelLabel: "stfc-strategy",
+    });
+    assert.deepEqual(out, {
+      label: "tip",
+      confidence: 0.85,
+      method: "heuristic",
+      scores: { tip: 0.85 },
+    });
+    await c.unload();
+  });
 });
 
 describe("classifier / confidence floor → unclassified", () => {
@@ -226,10 +442,9 @@ describe("classifier / confidence floor → unclassified", () => {
     await c.unload();
   });
 
-  it("unclassified results are not surfaced into digests (caller contract)", async () => {
-    // This documents — not enforces — the caller invariant. The digest writer
-    // tests in tests/digest/digest.test.ts assert that tips with label
-    // `unclassified` or `chatter` are dropped before rendering.
+  it("classifies a short acknowledgement as chatter before digest filtering", async () => {
+    // Digest filtering is asserted by tests/digest/digest.test.ts; this pins the
+    // classifier's own observable result instead of claiming caller coverage.
     const c = createHeuristicClassifier();
     await c.load();
     const out = await c.classify({
@@ -238,7 +453,12 @@ describe("classifier / confidence floor → unclassified", () => {
     });
     // "ok" is sub-20-char chatter; the orchestrator filters these out before
     // building Tip[] entries.
-    assert.equal(out.label, "chatter");
+    assert.deepEqual(out, {
+      label: "chatter",
+      confidence: 0,
+      method: "heuristic",
+      scores: { chatter: 1 },
+    });
     await c.unload();
   });
 });

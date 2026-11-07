@@ -337,18 +337,19 @@ describe("ApiClient", () => {
       baseUrl: "https://example.com",
       token: "supersecrettoken",
     });
-    try {
-      await client.request({
+    await assert.rejects(
+      () => client.request({
         path: "/x",
         method: "POST",
         body: { authorization: "Bearer supersecrettoken" },
         schema: OkSchema,
-      });
-      assert.fail("expected throw");
-    } catch (err) {
-      const msg = (err as Error).message ?? "";
-      assert.doesNotMatch(msg, /Bearer/);
-      assert.doesNotMatch(msg, /supersecrettoken/);
-    }
+      }),
+      (err: unknown) => {
+        const msg = (err as Error).message ?? "";
+        assert.doesNotMatch(msg, /Bearer/);
+        assert.doesNotMatch(msg, /supersecrettoken/);
+        return true;
+      },
+    );
   });
 });

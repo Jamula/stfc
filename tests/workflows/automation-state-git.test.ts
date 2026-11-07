@@ -183,6 +183,10 @@ describe("automation-state linked-worktree bootstrap", () => {
       process.env.GIT_CONFIG_VALUE_0 = "Retry Bot";
       process.env.GIT_CONFIG_KEY_1 = "user.email";
       process.env.GIT_CONFIG_VALUE_1 = "retry@example.invalid";
+      delete process.env.GIT_AUTHOR_NAME;
+      delete process.env.GIT_AUTHOR_EMAIL;
+      delete process.env.GIT_COMMITTER_NAME;
+      delete process.env.GIT_COMMITTER_EMAIL;
       let mode: Awaited<ReturnType<typeof reconcileAutomationStateAfterPushFailure>>;
       try {
         mode = await reconcileAutomationStateAfterPushFailure({
@@ -253,7 +257,11 @@ describe("automation-state linked-worktree bootstrap", () => {
       git(writer, "config", "core.hooksPath", path.dirname(hookPath));
 
       const rejected = gitResult(state, "push", "origin", "HEAD:automation-state");
-      assert.notEqual(rejected.status, 0, "push without --no-verify must fail");
+      assert.notEqual(
+        rejected.status,
+        0,
+        `push without --no-verify must fail; stdout=${rejected.stdout}; stderr=${rejected.stderr}`,
+      );
       assert.match(
         `${rejected.stdout}${rejected.stderr}`,
         /MODULE_NOT_FOUND|Cannot find module/,
