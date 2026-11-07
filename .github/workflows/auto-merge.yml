@@ -25,7 +25,15 @@ jobs:
             const { execFileSync } = require("node:child_process");
             const { owner, repo } = context.repo;
             const { data: repository } = await github.rest.repos.get({ owner, repo });
-            if (!repository.allow_auto_merge || !repository.allow_squash_merge) {
+            const { repository: mergePolicy } = await github.graphql(`
+              query($owner: String!, $repo: String!) {
+                repository(owner: $owner, name: $repo) {
+                  autoMergeAllowed
+                  squashMergeAllowed
+                }
+              }
+            `, { owner, repo });
+            if (!mergePolicy?.autoMergeAllowed || !mergePolicy?.squashMergeAllowed) {
               throw new Error("Repository auto-merge and squash merging must both be enabled.");
             }
 
