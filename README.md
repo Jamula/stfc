@@ -33,12 +33,11 @@ and player tips, harvesting both into a daily digest.
    on the cron schedule (every 10 minutes) from then on. You can also trigger
    it manually with the **Run workflow** button to verify everything works.
 
-> **Optional 1:** a manually triggered `Refresh token` workflow is present,
-> but automatic refresh is currently unavailable for the passwordless
-> email-OTP login. Use the local browser-based `capture-token` flow when a
-> token expires; see [docs/SETUP.md](docs/SETUP.md#token-refresh).
+> **Token expiry:** the current email-OTP login requires the visible-browser
+> `capture-token` flow. The legacy `Refresh token` workflow cannot complete
+> that login; see [docs/SETUP.md](docs/SETUP.md#token-refresh).
 
-> **Optional 2:** if you want to harvest promo codes and tips from the STFC
+> **Optional:** if you want to harvest promo codes and tips from the STFC
 > Discord community automatically, enable the **`Discord monitor` workflow**
 > and configure your allow-list. See
 > [specs/001-discord-monitor/quickstart.md](specs/001-discord-monitor/quickstart.md)
@@ -63,10 +62,6 @@ For each account it performs roughly:
 
 The bearer token is sent in the `Authorization` header. It is captured from your normal browser session (via `npm run capture-token`) and stored as a GitHub Actions secret named `STFC_ACCOUNTS`.
 
-The `Refresh token` workflow is manual-only. Because the current login flow
-uses email OTP, refresh the token locally with the visible browser flow in
-[docs/SETUP.md](docs/SETUP.md#token-refresh).
-
 ---
 
 ## Discord monitor (optional)
@@ -80,8 +75,6 @@ When configured, a scheduled workflow (`discord-monitor.yml`) runs every 4 hours
 - Classify non-code messages as "tips/tricks/hacks" vs chatter
 - Produce a daily digest summarizing: codes attempted + outcomes, classified guidance, ingestion health
 
-The monitor ingests configured channels, extracts and deduplicates candidate
-codes, feeds eligible codes into redemption, and produces a daily digest.
 Discord slash-command interactions are handled separately by the Worker and
 GitHub Actions bridge; see [`discord/RUNBOOK.md`](discord/RUNBOOK.md).
 
@@ -92,9 +85,9 @@ This feature is entirely optional — the core redemption workflow works without
 
 ## Discord slash commands
 
-Discord slash commands (e.g. `/redeem-status`, `/trigger-redeem`) are bridged via a Cloudflare Worker. The Worker verifies the Ed25519 signature, defers the interaction, and fires a `repository_dispatch` so the actual work runs in GitHub Actions.
-
-**To set up the pipeline from scratch, see [`discord/RUNBOOK.md`](discord/RUNBOOK.md).** For technical details on the Worker, see [`worker/README.md`](worker/README.md).
+Discord slash commands are bridged by a Cloudflare Worker and handled by
+GitHub Actions. See the [operator runbook](discord/RUNBOOK.md) for setup and
+[`worker/README.md`](worker/README.md) for Worker details.
 
 ---
 
@@ -143,40 +136,9 @@ For local diagnostics you can run individual steps:
 
 ---
 
-## Project layout
-
-```
-.
-├── .github/
-│   └── workflows/
-│       ├── redeem.yml              # scheduled gift redemption (every 10 min, 144/day)
-│       ├── discord-monitor.yml     # optional: harvest codes & tips from Discord (every 4 hours)
-│       ├── refresh-token.yml       # manually triggered token refresh
-│       ├── discord-command-handler.yml # slash-command interaction handler
-│       ├── deploy-cloudflare-worker.yml # Discord interaction bridge
-│       ├── swa-deploy.yml          # web control panel deployment
-│       └── test-gate.yml           # root and worker tests + typechecks
-├── docs/
-│   ├── SETUP.md                    # end-to-end setup guide
-│   ├── stfc-game-knowledge.md      # STFC game domain reference (Scopely sources)
-│   ├── stfc-knowledge/
-│   │   ├── README.md                       # knowledge-base lineage convention (6 fields)
-│   │   └── community-reference-sheet/      # mirror of the JulesVern/Quasel/BlueMandalorian sheet
-│   └── redeem-history.md           # frozen main seed; live log is on automation-state
-├── specs/
-│   └── 001-discord-monitor/
-│       ├── spec.md                 # feature specification
-│       ├── plan.md                 # architecture and design
-│       └── quickstart.md           # operator setup for Discord monitor
-├── scripts/
-│   ├── capture-token.mjs           # Playwright-driven JWT capture
-│   └── fetch-community-sheet.mjs   # refresh docs/stfc-knowledge community sheet mirror
-├── src/                            # TypeScript source (api client, orchestrator, skills)
-├── tests/                          # node:test suite
-├── promo-codes.txt                 # human-maintained seed; operational copy is on automation-state
-├── package.json
-└── README.md
-```
+For system design, deployment, and workflow details, see
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Setup guides are in `docs/`,
+`discord/`, and `worker/`.
 
 ---
 
@@ -200,106 +162,21 @@ Capture each token from a different browser profile (cookies are profile-scoped)
 
 ## Promo codes and automation state
 
-Humans add and edit codes in `promo-codes.txt` on `main`. The scheduled
-workflows keep their live operational copy, current redeem history, dead-code
-cache, Discord state, and digests on the `automation-state` branch. The format
-is dead simple:
-
-- One code per line.
-- Lines starting with `#` are ignored.
-- Inline comments after a code (whitespace + `#`) are stripped.
-
-```
-# Star Trek Day 2024 promo
-STARTREKDAY2024
-FLEETCMD-WELCOME    # one-time welcome bonus
-```
-
-Each redeem and Discord-monitor run builds an additive union rooted in
-`automation-state`:
-
-1. start from the operational `automation-state` file, preserving its existing
-   order and line representation (including Discord discoveries); then
-2. append any *main-only* seed codes beneath `# --- seeded from main@<sha> ---`.
-
-Codes are keyed by `trim().toUpperCase()` after stripping `#` comments.
-Duplicate normalized lines are collapsed within each input before merging. For
-a duplicate across both inputs, the `automation-state` line wins. Removing or
-editing a code on `main` does **not** rewrite or delete the operational copy;
-true deletion is intentionally deferred. The dead-cache lookup remains
-case-sensitive and is a separate known limitation.
-
-Codes are resubmitted on every scheduled run. If a code returns
-`CODE_INVALID_OR_EXPIRED`, the orchestrator marks it dead in
-`data/promo-code-dead.json` and skips it on future runs (no per-code API call
-for skipped entries). Deleting the frozen file on `main` no longer resets
-anything. To re-attempt all codes, make a normal forward commit on
-`automation-state` that removes `data/promo-code-dead.json`.
-
-### Automation-state operations
-
-- **First run:** the writer creates a linked worktree from the authenticated
-  checkout, switches it to an orphan `automation-state` branch, clears the
-  inherited index, and commits only allowlisted state. No PAT, deploy key,
-  bypass actor, or standalone `git init` repository is used.
-- **Consumers:** `/redeem-status` reads live `docs/redeem-history.md`;
-  `/game-state` reads and writes live `data/discord/game-state`; the storage
-  monitor checks out `automation-state` directly.
-- **Writer serialization:** `redeem.yml`, `discord-monitor.yml`,
-  `refresh-token.yml`, and the `/game-state` path of
-  `discord-command-handler.yml` share one `stfc-gift-redeemer` concurrency
-  group so their `automation-state` pushes never interleave (a monitor run
-  fetching the tip after a handler push landed previously let a wholesale
-  directory replace silently delete the handler's upload). All four declare
-  `queue: max`: up to 100 runs wait pending in FIFO order instead of the
-  default `single`, which keeps only one pending run and lets a newer
-  shared-group run cancel it. Past 100 pending runs the extra run is
-  **cancelled visibly by Actions** and needs an operator re-dispatch — a
-  loss-bounded queue, not a durable one. `queue: max` must never be combined
-  with `cancel-in-progress: true`. `/redeem-status` and `/trigger-redeem`
-  never write `automation-state` themselves, so each is isolated on its own
-  per-command group instead of queuing behind scheduled runs.
-- **Reset:** use `git revert` on `automation-state` to undo a bad state commit.
-  Do not force-push. A proposed deletion/non-fast-forward-only ruleset (no
-  required checks or bypass actors) is not installed and still requires
-  explicit approval.
-- **Rollback:** preserve the live allowlisted files in a reviewed `main` PR,
-  then revert the workflow change. The state branch can remain for audit; there
-  are no credentials or live ruleset changes to unwind.
-- **Validation:** check the latest GitHub Actions run and summary for live
-  evidence; availability can depend on repository billing and runner access.
-  Local gates are `npm test` and `npm run typecheck`. After a successful
-  workflow run, verify that state commits land on `automation-state`, not
-  `main`.
-
-Promo-code redemption retries transient failures up to **3 total attempts**
-(initial + 2 retries), sleeping **1s then 2s** by default:
-
-- Transient: network errors (`ECONNRESET`, `ETIMEDOUT`, `ENOTFOUND`,
-  `EAI_AGAIN`, `ECONNREFUSED`), HTTP `500/502/503/504` (and other 5xx), and
-  HTTP `429` (uses `Retry-After` when present, otherwise default sleep).
-- Non-transient: HTTP 4xx except 429, `TOKEN_EXPIRED`, and
-  `CODE_INVALID_OR_EXPIRED` (dead-code path, not retried).
+Maintain seed codes in `promo-codes.txt`. Scheduled runs merge them with
+operational state on the `automation-state` branch; removing a code from the
+seed does not remove its operational copy. Invalid or expired codes are cached
+to avoid repeated API requests. Transient failures retry twice, with 1s and 2s
+delays. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for merge, recovery,
+and serialization behavior.
 
 ---
 
 ## Token expiry
 
-JWTs from the STFC store have an `exp` claim (typically a few weeks out). The
-orchestrator decodes every token at the start of a run and prints something
-like:
-
-```
-[main] token expires in 12 days
-```
-
-When a token has fewer than a few days left it is highlighted, and once it
-actually expires the run summary clearly flags it as **TOKEN_EXPIRED** so you
-know to re-capture and update the secret. Expired tokens for one account do
-**not** stop other accounts from being processed. If every configured account
-returns **TOKEN_EXPIRED** and there are no infrastructure errors, the
-`run-all` skill exits with code **2** so the workflow fails as a clear
-secret-rotation signal. Mixed runs still exit 0; infrastructure failures exit 1.
+Expired tokens are reported per account without stopping other accounts.
+Re-capture an expired token with `npm run capture-token -- --name <account>`
+and update `STFC_ACCOUNTS`. `run-all` exits 2 when every account is expired
+and 1 for infrastructure errors.
 
 ---
 
@@ -347,6 +224,6 @@ then run e.g. `npm run skill:check-auth`. The `.env` file is gitignored.
 
 ## Control panel
 
-A web-based operator dashboard is in progress under `web/` (frontend) and `api/` (Azure
-Functions). It is deployed as an Azure Static Web App — see **[docs/SWA-SETUP.md](docs/SWA-SETUP.md)**
-for the one-time Azure resource creation runbook and deployment-token setup.
+The operator dashboard lives in `web/` (frontend) and `api/` (Azure
+Functions). See [docs/SWA-SETUP.md](docs/SWA-SETUP.md) for deployment and
+operator setup.
