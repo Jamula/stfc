@@ -71,18 +71,10 @@ describe("check-api-auth CI gate", () => {
     );
   });
 
-  it("skips files inside _lib/ subdirectory", () => {
-    // The good fixture has good/_lib/auth.ts (no @azure/functions import — excluded anyway).
-    // We also confirm the overall gate still exits 0 for the good fixture.
-    const result = runGate(join(FIXTURES, "good"));
+  it("excludes _lib handlers and non-handler TypeScript files", () => {
+    const result = runGate(join(FIXTURES, "skipped"));
     assert.equal(result.status, 0, result.stderr);
-  });
-
-  it("skips non-handler TS files (no @azure/functions import)", () => {
-    // The _lib stub doesn't import @azure/functions; even if scanned it's not a handler.
-    // This test confirms the gate correctly ignores plain TS files.
-    const result = runGate(join(FIXTURES, "good"));
-    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /0 handler\(s\) checked/);
   });
 
   // ── Position-aware enforcement ────────────────────────────────────────────

@@ -112,6 +112,20 @@ describe("stfc-discord-bridge worker", () => {
     expect(await res.text()).toBe("Timestamp too skewed");
   });
 
+  it("rejects future timestamp beyond 5 min skew with 401", async () => {
+    const now = 1_700_000_000_000;
+    const nowSpy = vi.spyOn(Date, "now").mockReturnValue(now);
+    try {
+      const req = await buildRequest({ type: 1 }, { skewSeconds: 301 });
+      const ctx = makeMockCtx();
+      const res = await worker.fetch(req, testEnv, ctx as unknown as ExecutionContext);
+      expect(res.status).toBe(401);
+      expect(await res.text()).toBe("Timestamp too skewed");
+    } finally {
+      nowSpy.mockRestore();
+    }
+  });
+
   it("rejects corrupted Ed25519 signature with 401", async () => {
     const req = await buildRequest({ type: 1 }, { corruptSig: true });
     const ctx = makeMockCtx();
@@ -422,20 +436,25 @@ describe("/game-state command", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("non-CDN attachment URL → ephemeral error, no dispatch fired", async () => {
+  it("rejects non-CDN and lookalike attachment hosts without dispatch", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
 
-    const body = makeGameStateBody({ attachmentUrl: "https://evil.example.com/payload.exe" });
-    const req = await buildRequest(body);
-    const ctx = makeMockCtx();
+    for (const attachmentUrl of [
+      "https://evil.example.com/payload.exe",
+      "https://cdn.discordapp.com.evil.example/attachments/ch-456/payload.exe",
+    ]) {
+      const body = makeGameStateBody({ attachmentUrl });
+      const req = await buildRequest(body);
+      const ctx = makeMockCtx();
 
-    const res = await worker.fetch(req, gameStateEnv, ctx as unknown as ExecutionContext);
-    expect(res.status).toBe(200);
-    const json = await res.json() as { type: number; data: { flags: number } };
-    expect(json.type).toBe(4);
-    expect(json.data.flags).toBe(64);
-    expect(ctx.waitUntil).not.toHaveBeenCalled();
+      const res = await worker.fetch(req, gameStateEnv, ctx as unknown as ExecutionContext);
+      expect(res.status).toBe(200);
+      const json = await res.json() as { type: number; data: { flags: number } };
+      expect(json.type).toBe(4);
+      expect(json.data.flags).toBe(64);
+      expect(ctx.waitUntil).not.toHaveBeenCalled();
+    }
     expect(fetchMock).not.toHaveBeenCalled();
   });
 

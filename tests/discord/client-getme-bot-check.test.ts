@@ -94,15 +94,16 @@ describe("DiscordClient.getMe — bot:false rejects (T009 / contract §4.2)", ()
         bot: false,
       }),
     );
-    try {
-      await client.getMe();
-      assert.fail("expected throw");
-    } catch (err) {
-      const msg = (err as Error).message ?? "";
-      assert.doesNotMatch(msg, /abcdefghijklmnop/);
-      assert.doesNotMatch(msg, /qrstuvwxyz012345/);
-      assert.doesNotMatch(msg, /6789ABCDEFGHIJKL/);
-    }
+    await assert.rejects(
+      () => client.getMe(),
+      (err: unknown) => {
+        const msg = (err as Error).message ?? "";
+        assert.doesNotMatch(msg, /abcdefghijklmnop/);
+        assert.doesNotMatch(msg, /qrstuvwxyz012345/);
+        assert.doesNotMatch(msg, /6789ABCDEFGHIJKL/);
+        return true;
+      },
+    );
   });
 });
 
@@ -119,14 +120,15 @@ describe("DiscordClient.getMe — malformed body (T009 / contract §4.1)", () =>
     const client = makeClient(async () =>
       jsonResponse({ username: "x", discriminator: "0", bot: true }),
     );
-    try {
-      await client.getMe();
-      assert.fail("expected throw");
-    } catch (err) {
-      const msg = (err as Error).message ?? "";
-      assert.doesNotMatch(msg, /abcdefghijklmnop/);
-      assert.doesNotMatch(msg, /qrstuvwxyz012345/);
-    }
+    await assert.rejects(
+      () => client.getMe(),
+      (err: unknown) => {
+        const msg = (err as Error).message ?? "";
+        assert.doesNotMatch(msg, /abcdefghijklmnop/);
+        assert.doesNotMatch(msg, /qrstuvwxyz012345/);
+        return true;
+      },
+    );
   });
 });
 

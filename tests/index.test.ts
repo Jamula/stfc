@@ -12,6 +12,7 @@ import "./api/client.test.ts";
 import "./api/github-raw.test.ts";
 import "./skills/runAll.test.ts";
 import "./skills/redeemCodes.test.ts";
+import "./skills/diagnosticSkills.test.ts";
 import "./skills/cleanupOldRuns.test.ts";
 import "./discord/schemas.test.ts";
 import "./discord/state.test.ts";
