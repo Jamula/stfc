@@ -15,11 +15,22 @@ type PullRequest = {
 const workflow = parse(readFileSync(".github/workflows/auto-merge.yml", "utf8")) as {
   on: Record<string, unknown>;
   permissions: Record<string, string>;
-  jobs: { "auto-merge": { steps: Array<{ uses: string; with: { script: string } }> } };
+  jobs: {
+    "auto-merge": {
+      steps: Array<{
+        uses: string;
+        env?: Record<string, string>;
+        with: Record<string, unknown> & { script?: string };
+      }>;
+    };
+  };
 };
-const step = workflow.jobs["auto-merge"].steps[0];
-assert.ok(step, "auto-merge workflow must contain a step");
-const script = step.with.script;
+const [appTokenStep, scriptStep] = workflow.jobs["auto-merge"].steps;
+assert.ok(appTokenStep, "auto-merge workflow must create an App token");
+assert.ok(scriptStep, "auto-merge workflow must contain a script step");
+assert.equal(typeof scriptStep.with.script, "string", "script step must contain a script");
+const script = scriptStep.with.script;
+assert.ok(script);
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor as new (
   ...args: string[]
 ) => (...args: unknown[]) => Promise<void>;
@@ -97,9 +108,26 @@ describe("auto-merge workflow", () => {
   it("uses trusted PR events and periodic reconciliation without checking out PR code", () => {
     assert.ok(workflow.on.pull_request_target);
     assert.ok(workflow.on.schedule);
-    assert.deepEqual(workflow.permissions, { contents: "write", "pull-requests": "write" });
-    assert.equal(workflow.jobs["auto-merge"].steps.length, 1);
-    assert.match(step.uses, /^actions\/github-script@[0-9a-f]{40}$/);
+    assert.deepEqual(workflow.permissions, {});
+    assert.equal(workflow.jobs["auto-merge"].steps.length, 2);
+    assert.match(scriptStep.uses, /^actions\/github-script@[0-9a-f]{40}$/);
+  });
+
+  it("uses a repository-scoped GitHub App token for API and CLI operations", () => {
+    assert.equal(
+      appTokenStep.uses,
+      "actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510",
+    );
+    assert.deepEqual(appTokenStep.with, {
+      "client-id": "${{ vars.AUTO_MERGE_APP_CLIENT_ID }}",
+      "private-key": "${{ secrets.AUTO_MERGE_APP_PRIVATE_KEY }}",
+      owner: "${{ github.repository_owner }}",
+      repositories: "${{ github.event.repository.name }}",
+      "permission-contents": "write",
+      "permission-pull-requests": "write",
+    });
+    assert.equal(scriptStep.with.token, "${{ steps.app-token.outputs.token }}");
+    assert.equal(scriptStep.env?.GH_TOKEN, "${{ steps.app-token.outputs.token }}");
   });
 
   it("enables squash auto-merge for the current eligible PR with a matching head SHA", async () => {
@@ -143,7 +171,7 @@ describe("auto-merge workflow", () => {
     assert.deepEqual(h.commands, []);
   });
 
-  it("fails closed when the workflow token can bypass a ruleset", async () => {
+  it("fails closed when the GitHub App token can bypass a ruleset", async () => {
     const h = harness([pr(1)], undefined, true, undefined, "always");
     await assert.rejects(h.run("schedule"), /must not bypass ruleset 42/);
     assert.deepEqual(h.commands, []);

@@ -7,20 +7,30 @@ on:
     - cron: "*/15 * * * *"
   workflow_dispatch:
 
-permissions:
-  contents: write
-  pull-requests: write
+permissions: {}
 
 jobs:
   auto-merge:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
+      - name: Create repository-scoped GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.AUTO_MERGE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.AUTO_MERGE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write
+          permission-pull-requests: write
+
       - name: Enable squash auto-merge for eligible PRs
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
         with:
+          token: ${{ steps.app-token.outputs.token }}
           script: |
             const { execFileSync } = require("node:child_process");
             const { owner, repo } = context.repo;
@@ -65,7 +75,7 @@ jobs:
                 { owner, repo, ruleset_id },
               );
               if (ruleset.current_user_can_bypass !== "never") {
-                throw new Error(`Workflow token must not bypass ruleset ${ruleset_id}.`);
+                throw new Error(`Auto-merge GitHub App must not bypass ruleset ${ruleset_id}.`);
               }
             }
             const checks = rules.filter(rule => rule.type === "required_status_checks");

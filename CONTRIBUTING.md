@@ -92,5 +92,9 @@ The default-branch ruleset must strictly require the GitHub Actions checks
 other required checks, reviews, and rules before merging. Do not require checks
 from workflows that do not run on every PR; they can leave PRs blocked. The
 automation fails if its two baseline required checks are missing, and reports
-other API or permission failures in its workflow run. GitHub Actions must be
-allowed to create and approve pull requests for its token to enable auto-merge.
+other API or permission failures in its workflow run. Configure the repository
+variable `AUTO_MERGE_APP_CLIENT_ID` and secret `AUTO_MERGE_APP_PRIVATE_KEY` for
+a GitHub App installed only on this repository with Contents and Pull requests
+write permissions and no ruleset bypass. The workflow uses this scoped App token
+for API and CLI operations so resulting merges trigger downstream workflows;
+it fails closed if the App can bypass a protected ruleset.
