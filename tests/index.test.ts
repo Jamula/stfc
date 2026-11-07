@@ -57,6 +57,7 @@ import "./scripts/discord-ops/set-discord-app-metadata.test.ts";
 import "./scripts/discord-ops/partial-success.test.ts";
 import "./scripts/discord-ops/endpoint-narrowing.test.ts";
 import "./workflows/discord-ops-workflow.test.ts";
+import "./workflows/secrets-check-workflow.test.ts";
 import "./workflows/redeem-workflow.test.ts";
 import "./workflows/workflow-consolidation.test.ts";
 import "./workflows/squad-release-templates.test.ts";
