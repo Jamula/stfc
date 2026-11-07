@@ -572,6 +572,10 @@ describe("workflow consolidation", () => {
         webInstallIndex < rootTypecheckIndex,
       "API and web deps must be installed before root typecheck",
     );
+    assert.ok(
+      apiInstallIndex < rootTestIndex && webInstallIndex < rootTestIndex,
+      "API and web deps must be installed before root tests",
+    );
 
     const workerInstallIndex = steps.findIndex(
       (step) =>
