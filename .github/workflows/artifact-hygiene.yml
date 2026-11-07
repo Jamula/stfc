@@ -3,8 +3,7 @@
 # Scans files changed in a PR for JWT tokens, API keys, bearer credentials,
 # and STFC account data. Fails the PR and posts remediation guidance on match.
 #
-# Trigger: pull_request touching spec/plan/task/doc files.
-# Override: add "[skip-token-scan]" to the PR description for false positives.
+# Trigger: pull_request touching spec/plan/task/doc files or runtime artifacts.
 #
 # Secrets are NEVER printed; all matched content is redacted to <REDACTED-TOKEN>.
 name: Artifact Hygiene
@@ -16,7 +15,9 @@ on:
       - 'plans/**'
       - 'tasks/**'
       - 'docs/**'
-      - '.github/**/*.md'
+      - '.github/**'
+      - 'data/digests/**'
+      - 'data/discord/**'
 
 permissions:
   contents: read
@@ -37,45 +38,56 @@ jobs:
         with:
           node-version-file: .nvmrc
 
-      # Check whether the PR author opted out of this scan.
-      - name: Check for [skip-token-scan] override
-        id: skip
-        env:
-          PR_BODY: ${{ github.event.pull_request.body }}
-        run: |
-          if printf '%s' "$PR_BODY" | grep -qF '[skip-token-scan]'; then
-            echo "bypass=true" >> "$GITHUB_OUTPUT"
-            echo "::warning::Artifact hygiene scan bypassed via [skip-token-scan] in PR description."
-          else
-            echo "bypass=false" >> "$GITHUB_OUTPUT"
-          fi
-
       # Collect the files changed in this PR that fall within watched paths.
       # The three-dot diff gives us only changes introduced by the PR branch,
       # not additional commits made on the base branch after the branch point.
       - name: Scan changed files for secrets
         id: scan
-        if: steps.skip.outputs.bypass != 'true'
         run: |
+          set -o pipefail
           git fetch --no-tags --quiet origin "${{ github.base_ref }}"
 
-          FILES=$(git diff --name-only \
-            "origin/${{ github.base_ref }}"...HEAD \
-            | grep -E '\.(md|yaml|yml|txt|json)$' \
-            | grep -E '^(specs/|plans/|tasks/|docs/|\.github/)' \
-            || true)
+          CHANGED_FILES=$(mktemp)
+          FILTERED_FILES=$(mktemp)
+          trap 'rm -f "$CHANGED_FILES" "$FILTERED_FILES"' EXIT
 
-          if [ -z "$FILES" ]; then
+          git diff --name-only -z \
+            "origin/${{ github.base_ref }}"...HEAD \
+            > "$CHANGED_FILES"
+
+          if ! iconv -f UTF-8 -t UTF-8 "$CHANGED_FILES" > /dev/null; then
+            echo "Artifact hygiene: changed-file list contains a path that is not valid UTF-8." >&2
+            exit 1
+          fi
+
+          extension_status=0
+          grep -izE '\.(md|yaml|yml|txt|json|jsonl)$' "$CHANGED_FILES" \
+            > "$FILTERED_FILES" || extension_status=$?
+          if [ "$extension_status" -gt 1 ]; then
+            exit "$extension_status"
+          fi
+
+          mapfile -d '' CANDIDATES < "$FILTERED_FILES"
+          FILES=()
+          for file in "${CANDIDATES[@]}"; do
+            case "$file" in
+              specs/*|plans/*|tasks/*|docs/*|.github/*|data/digests/*|data/discord/*)
+                FILES+=("$file")
+                ;;
+            esac
+          done
+
+          if [ "${#FILES[@]}" -eq 0 ]; then
             echo "Artifact hygiene: no applicable files changed in this PR. ✓"
             exit 0
           fi
 
           echo "Files to scan:"
-          echo "$FILES"
+          printf '%s\n' "${FILES[@]}"
           echo "---"
 
-          # Pass file list to the scanner. Content matches are redacted in output.
-          echo "$FILES" | xargs node scripts/check-artifact-hygiene.mjs
+          # Pass NUL-delimited paths to preserve spaces and other valid filename characters.
+          printf '%s\0' "${FILES[@]}" | xargs -0 node scripts/check-artifact-hygiene.mjs
 
       # Post human-readable remediation guidance as a PR comment when blocked.
       - name: Post remediation guidance
@@ -105,8 +117,7 @@ jobs:
               '   for writing spec sections that reference API shapes.',
               '',
               '### If this is a false positive',
-              'Add `[skip-token-scan]` to this PR description and document why.',
-              'A reviewer should confirm the bypass in code review.',
+              'Propose a narrowly-scoped scanner rule update with a regression test; this gate cannot be bypassed.',
             ].join('\n');
 
             await github.rest.issues.createComment({

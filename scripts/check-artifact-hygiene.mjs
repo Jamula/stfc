@@ -17,8 +17,7 @@
  *   1   One or more violations found — remediate before committing / merging
  *
  * FALSE POSITIVES
- *   Add [skip-token-scan] to your PR description to bypass the CI gate.
- *   Document why it is a false positive in the PR body.
+ *   Propose a narrowly-scoped scanner rule update with a regression test.
  *
  * Principle VII — Artifact Hygiene
  *   Development artifacts MUST NOT contain real tokens, JWTs, or
@@ -229,7 +228,7 @@ if (totalViolations > 0) {
     `  1. Replace real token/key values with <REDACTED> placeholders.\n` +
     `  2. Move raw API captures to .env or an untracked local location.\n` +
     `  3. Use tests/fixtures/artifact-hygiene/clean-spec.md as a spec template.\n` +
-    `  4. For false positives: add [skip-token-scan] to your PR description.\n\n` +
+    `  4. For false positives: refine the scanner rule and add a regression test.\n\n` +
     `See: .github/copilot-instructions.md — Artifact Hygiene\n`,
   );
   process.exit(1);
