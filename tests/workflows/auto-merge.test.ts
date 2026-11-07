@@ -60,7 +60,7 @@ function harness(
   const github = {
     rest: {
       repos: { get: async () => ({ data: {
-        id: 1, default_branch: "main", allow_auto_merge: true, allow_squash_merge: true,
+        id: 1, default_branch: "main",
       } }) },
       pulls: {
         list,
@@ -69,6 +69,9 @@ function harness(
         }),
       },
     },
+    graphql: async () => ({
+      repository: { autoMergeAllowed: true, squashMergeAllowed: true },
+    }),
     paginate: async () => pulls,
     request: async (route: string) => route.includes("/rulesets/")
       ? { data: { current_user_can_bypass: bypass } }
@@ -130,7 +133,7 @@ describe("auto-merge workflow", () => {
     assert.equal(scriptStep.env?.GH_TOKEN, "${{ steps.app-token.outputs.token }}");
   });
 
-  it("enables squash auto-merge for the current eligible PR with a matching head SHA", async () => {
+  it("uses GraphQL merge policy when REST fields are omitted and enables squash auto-merge", async () => {
     const h = harness([pr(1), pr(2)]);
     await h.run("pull_request_target");
     assert.deepEqual(h.commands, [[
