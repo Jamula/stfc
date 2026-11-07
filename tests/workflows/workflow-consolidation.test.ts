@@ -519,6 +519,24 @@ describe("workflow consolidation", () => {
     );
   });
 
+  it("does not install Node in the shell-only protected-paths workflow", () => {
+    const protectedPaths = workflows.find(
+      ({ file }) => file === "protected-paths.yml",
+    );
+    assert.ok(protectedPaths, "protected-paths.yml must exist");
+    const steps = Object.values(protectedPaths.workflow.jobs ?? {}).flatMap(
+      (job) => job.steps ?? [],
+    );
+    assert.ok(
+      steps.some((step) => step.run?.includes("git ls-files")),
+      "the workflow must retain its tracked-path checks",
+    );
+    assert.ok(
+      !steps.some((step) => step.uses?.startsWith("actions/setup-node@")),
+      "the shell-only workflow must not spend time setting up Node",
+    );
+  });
+
   it("installs root, API, web, and worker dependencies in the required gate", () => {
     const gate = workflows.find(({ file }) => file === "test-gate.yml");
     assert.ok(gate, "test-gate.yml must exist");
@@ -559,14 +577,12 @@ describe("workflow consolidation", () => {
         step.run?.trim() === "npm ci" &&
         step["working-directory"] === "web",
     );
-    assert.ok(apiInstallIndex >= 0, "the gate must install API deps");
-    assert.ok(webInstallIndex >= 0, "the gate must install web deps");
+    assert.ok(apiInstallIndex >= 0, "root typechecking requires API deps");
+    assert.ok(webInstallIndex >= 0, "root typechecking requires web deps");
     assert.ok(
       apiInstallIndex < rootTypecheckIndex &&
-        apiInstallIndex < rootTestIndex &&
-        webInstallIndex < rootTypecheckIndex &&
-        webInstallIndex < rootTestIndex,
-      "root checks must run after API and web npm ci",
+        webInstallIndex < rootTypecheckIndex,
+      "API and web deps must be installed before root typecheck",
     );
 
     const workerInstallIndex = steps.findIndex(

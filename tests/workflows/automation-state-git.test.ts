@@ -162,8 +162,20 @@ describe("automation-state linked-worktree bootstrap", () => {
           "GIT_CONFIG_KEY_1",
           "GIT_CONFIG_VALUE_1",
           "GIT_INDEX_FILE",
+          "GIT_AUTHOR_NAME",
+          "GIT_AUTHOR_EMAIL",
+          "GIT_COMMITTER_NAME",
+          "GIT_COMMITTER_EMAIL",
         ].map((key) => [key, process.env[key]]),
       );
+      for (const key of [
+        "GIT_AUTHOR_NAME",
+        "GIT_AUTHOR_EMAIL",
+        "GIT_COMMITTER_NAME",
+        "GIT_COMMITTER_EMAIL",
+      ]) {
+        delete process.env[key];
+      }
       process.env.GIT_DIR = remote;
       process.env.GIT_INDEX_FILE = path.join(stateB, ".git", "index");
       process.env.GIT_CONFIG_COUNT = "2";
@@ -238,6 +250,7 @@ describe("automation-state linked-worktree bootstrap", () => {
       const hookPath = path.join(resolveGitCommonDir(writer), "hooks", "pre-push");
       writeFileSync(hookPath, "#!/bin/sh\nnode scripts/pre-push.mjs\n");
       chmodSync(hookPath, 0o755);
+      git(writer, "config", "core.hooksPath", path.dirname(hookPath));
 
       const rejected = gitResult(state, "push", "origin", "HEAD:automation-state");
       assert.notEqual(rejected.status, 0, "push without --no-verify must fail");
