@@ -129,7 +129,7 @@ describe("auto-merge workflow", () => {
       "permission-contents": "write",
       "permission-pull-requests": "write",
     });
-    assert.equal(scriptStep.with.token, "${{ steps.app-token.outputs.token }}");
+    assert.equal(scriptStep.with["github-token"], "${{ steps.app-token.outputs.token }}");
     assert.equal(scriptStep.env?.GH_TOKEN, "${{ steps.app-token.outputs.token }}");
   });
 
