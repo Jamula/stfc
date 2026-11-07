@@ -13,9 +13,27 @@ jobs:
   auto-merge:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
     steps:
+      - name: Check GitHub App credentials
+        id: app-config
+        env:
+          APP_CLIENT_ID: ${{ vars.AUTO_MERGE_APP_CLIENT_ID }}
+          APP_PRIVATE_KEY: ${{ secrets.AUTO_MERGE_APP_PRIVATE_KEY }}
+        shell: bash
+        run: |
+          if [[ -n "$APP_CLIENT_ID" && -n "$APP_PRIVATE_KEY" ]]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::GitHub App credentials are not configured; using GITHUB_TOKEN."
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Create repository-scoped GitHub App token
         id: app-token
+        if: steps.app-config.outputs.configured == 'true'
         uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
         with:
           client-id: ${{ vars.AUTO_MERGE_APP_CLIENT_ID }}
@@ -28,9 +46,9 @@ jobs:
       - name: Enable squash auto-merge for eligible PRs
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token || github.token }}
         with:
-          github-token: ${{ steps.app-token.outputs.token }}
+          github-token: ${{ steps.app-token.outputs.token || github.token }}
           script: |
             const { execFileSync } = require("node:child_process");
             const { owner, repo } = context.repo;
