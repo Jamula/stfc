@@ -30,7 +30,7 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         with:
-          token: ${{ steps.app-token.outputs.token }}
+          github-token: ${{ steps.app-token.outputs.token }}
           script: |
             const { execFileSync } = require("node:child_process");
             const { owner, repo } = context.repo;
