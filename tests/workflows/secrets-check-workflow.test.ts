@@ -22,11 +22,11 @@ const EXPECTED_SCRIPT_LINES = [
   'echo "## Repo secrets check"',
   'echo ""',
   "echo '```'",
-  "report STFC_ACCOUNTS_VAL",
-  "report STFC_EMAIL_VAL",
-  "report STFC_PASSWORD_VAL",
-  "report CJ_PWD_VAL",
-  "report STFC_REFRESH_PAT_VAL",
+  "report S1",
+  "report S2",
+  "report S3",
+  "report S4",
+  "report S5",
   "echo '```'",
   '} | tee -a "$GITHUB_STEP_SUMMARY"',
 ];
@@ -38,16 +38,20 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
   return value as Record<string, unknown>;
 }
 
-function getReportScript(yaml: string): string | undefined {
+function getReportStep(yaml: string): Record<string, unknown> | undefined {
   const root = asRecord(parse(yaml));
   const jobs = asRecord(root?.jobs);
   const checkJob = asRecord(jobs?.check);
   const steps = checkJob?.steps;
   if (!Array.isArray(steps)) return undefined;
 
-  const reportStep = steps
+  return steps
     .map(asRecord)
     .find((step) => step?.name === "Report which secrets are defined");
+}
+
+function getReportScript(yaml: string): string | undefined {
+  const reportStep = getReportStep(yaml);
   return typeof reportStep?.run === "string" ? reportStep.run : undefined;
 }
 
@@ -64,11 +68,40 @@ function assertSafeOutputContract(script: string): void {
 }
 
 const yaml = fs.readFileSync(WORKFLOW, "utf8");
+const reportStep = getReportStep(yaml);
 const script = getReportScript(yaml);
 
 describe(".github/workflows/secrets-check.yml", () => {
   it("contains the secret-reporting step", () => {
     assert.ok(script, `expected a reporting script in ${WORKFLOW}`);
+  });
+
+  it("uses opaque environment aliases in runner-visible metadata", () => {
+    assert.ok(reportStep, "expected a secret-reporting step");
+    const env = asRecord(reportStep.env);
+    assert.ok(env, "expected environment mappings on the reporting step");
+    assert.deepEqual(Object.keys(env), ["S1", "S2", "S3", "S4", "S5"]);
+    assert.deepEqual(Object.values(env), [
+      "${{ secrets.STFC_ACCOUNTS }}",
+      "${{ secrets.STFC_EMAIL }}",
+      "${{ secrets.STFC_PASSWORD }}",
+      "${{ secrets.cj_pwd }}",
+      "${{ secrets.STFC_REFRESH_PAT }}",
+    ]);
+    assert.ok(script, "expected a reporting script");
+    const runnerVisibleMetadata = [script, ...Object.keys(env)].join("\n");
+    for (const identifier of [
+      "STFC_ACCOUNTS",
+      "STFC_EMAIL",
+      "STFC_PASSWORD",
+      "cj_pwd",
+      "STFC_REFRESH_PAT",
+    ]) {
+      assert.ok(
+        !runnerVisibleMetadata.includes(identifier),
+        `runner-visible metadata must not contain ${identifier}`,
+      );
+    }
   });
 
   it("reports only generic set/unset statuses without identifying metadata", () => {
@@ -81,11 +114,11 @@ describe(".github/workflows/secrets-check.yml", () => {
     assert.match(script, /local variable="\$1"/);
     assert.match(script, /if \[ -n "\$\{!variable:-\}" \]; then/);
     for (const env of [
-      "STFC_ACCOUNTS_VAL",
-      "STFC_EMAIL_VAL",
-      "STFC_PASSWORD_VAL",
-      "CJ_PWD_VAL",
-      "STFC_REFRESH_PAT_VAL",
+      "S1",
+      "S2",
+      "S3",
+      "S4",
+      "S5",
     ]) {
       assert.match(script, new RegExp(`report ${env}(?:\\r?$)`, "m"));
       assert.doesNotMatch(script, new RegExp(`report .*\\$${env}`));
@@ -121,11 +154,11 @@ describe(".github/workflows/secrets-check.yml", () => {
     assert.equal(bash.status, 0, "bash must be runnable");
 
     const secrets = [
-      ["STFC_ACCOUNTS", "STFC_ACCOUNTS_VAL"],
-      ["STFC_EMAIL", "STFC_EMAIL_VAL"],
-      ["STFC_PASSWORD", "STFC_PASSWORD_VAL"],
-      ["cj_pwd", "CJ_PWD_VAL"],
-      ["STFC_REFRESH_PAT", "STFC_REFRESH_PAT_VAL"],
+      ["STFC_ACCOUNTS", "S1"],
+      ["STFC_EMAIL", "S2"],
+      ["STFC_PASSWORD", "S3"],
+      ["cj_pwd", "S4"],
+      ["STFC_REFRESH_PAT", "S5"],
     ] as const;
     const emptyEnv: Record<string, string> = Object.fromEntries(
       secrets.map(([, env]) => [env, ""]),
