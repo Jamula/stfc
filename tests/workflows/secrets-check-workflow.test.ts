@@ -11,23 +11,22 @@ const WORKFLOW = path.join(REPO_ROOT, ".github", "workflows", "secrets-check.yml
 const EXPECTED_SCRIPT_LINES = [
   "set -e",
   "report() {",
-  'local name="$1"',
-  'local val="$2"',
-  'if [ -n "${val:-}" ]; then',
-  'echo "  ✅ $name (SET)"',
+  'local variable="$1"',
+  'if [ -n "${!variable:-}" ]; then',
+  'echo "SET"',
   "else",
-  'echo "  ❌ $name (NOT SET or empty)"',
+  'echo "UNSET"',
   "fi",
   "}",
   "{",
   'echo "## Repo secrets check"',
   'echo ""',
   "echo '```'",
-  'report "STFC_ACCOUNTS"     "$STFC_ACCOUNTS_VAL"',
-  'report "STFC_EMAIL"        "$STFC_EMAIL_VAL"',
-  'report "STFC_PASSWORD"     "$STFC_PASSWORD_VAL"',
-  'report "cj_pwd"            "$CJ_PWD_VAL"',
-  'report "STFC_REFRESH_PAT"  "$STFC_REFRESH_PAT_VAL"',
+  "report STFC_ACCOUNTS_VAL",
+  "report STFC_EMAIL_VAL",
+  "report STFC_PASSWORD_VAL",
+  "report CJ_PWD_VAL",
+  "report STFC_REFRESH_PAT_VAL",
   "echo '```'",
   '} | tee -a "$GITHUB_STEP_SUMMARY"',
 ];
@@ -60,7 +59,7 @@ function assertSafeOutputContract(script: string): void {
   assert.deepEqual(
     scriptLines,
     EXPECTED_SCRIPT_LINES,
-    "workflow output must contain only fixed text, static labels, and set/unset status",
+    "workflow output must contain only fixed text and generic set/unset status",
   );
 }
 
@@ -72,25 +71,44 @@ describe(".github/workflows/secrets-check.yml", () => {
     assert.ok(script, `expected a reporting script in ${WORKFLOW}`);
   });
 
-  it("reports static secret labels and set/unset status without value metadata", () => {
+  it("reports only generic set/unset statuses without identifying metadata", () => {
     assert.ok(script, "expected a reporting script");
     assertSafeOutputContract(script);
   });
 
-  it("rejects secret-value output and value-derived metadata", () => {
+  it("passes only environment-variable names to the status helper", () => {
+    assert.ok(script, "expected a reporting script");
+    assert.match(script, /local variable="\$1"/);
+    assert.match(script, /if \[ -n "\$\{!variable:-\}" \]; then/);
+    for (const env of [
+      "STFC_ACCOUNTS_VAL",
+      "STFC_EMAIL_VAL",
+      "STFC_PASSWORD_VAL",
+      "CJ_PWD_VAL",
+      "STFC_REFRESH_PAT_VAL",
+    ]) {
+      assert.match(script, new RegExp(`report ${env}(?:\\r?$)`, "m"));
+      assert.doesNotMatch(script, new RegExp(`report .*\\$${env}`));
+    }
+  });
+
+  it("rejects secret labels, values, and value-derived metadata", () => {
     assert.ok(script, "expected a reporting script");
     const unsafeValueScript = script.replace(
-      'echo "  ✅ $name (SET)"',
-      'echo "  ✅ $name (SET): $val"',
+      'echo "SET"',
+      'echo "SET: $STFC_ACCOUNTS_VAL"',
     );
     const unsafeMetadataScript = script.replace(
-      'echo "  ✅ $name (SET)"',
-      'echo "  ✅ $name (SET, length=${#val})"',
+      'echo "SET"',
+      'echo "SET: length=${#STFC_ACCOUNTS_VAL}"',
     );
+    const unsafeLabelScript = script.replace('echo "SET"', 'echo "STFC_ACCOUNTS: SET"');
     assert.notEqual(unsafeValueScript, script, "value mutation must change the source");
     assert.notEqual(unsafeMetadataScript, script, "metadata mutation must change the source");
+    assert.notEqual(unsafeLabelScript, script, "label mutation must change the source");
     assert.throws(() => assertSafeOutputContract(unsafeValueScript));
     assert.throws(() => assertSafeOutputContract(unsafeMetadataScript));
+    assert.throws(() => assertSafeOutputContract(unsafeLabelScript));
   });
 
   it("emits only set/unset diagnostics in actual logs and appended summaries", (t) => {
@@ -153,9 +171,7 @@ describe(".github/workflows/secrets-check.yml", () => {
           "## Repo secrets check",
           "",
           "```",
-          ...secrets.map(([name, env]) =>
-            secretEnv[env] ? `  ✅ ${name} (SET)` : `  ❌ ${name} (NOT SET or empty)`,
-          ),
+          ...secrets.map(([, env]) => (secretEnv[env] ? "SET" : "UNSET")),
           "```",
           "",
         ].join("\n");
@@ -163,11 +179,26 @@ describe(".github/workflows/secrets-check.yml", () => {
         assert.equal(result.status, 0, "workflow report must succeed");
         assert.equal(result.stderr, "", "workflow stderr must not reveal values or metadata");
         assert.equal(result.stdout, expected, "workflow logs must contain only fixed status diagnostics");
+        for (const [name, env] of secrets) {
+          assert.ok(!result.stdout.includes(name), `workflow logs must not reveal ${name}`);
+          const value = secretEnv[env];
+          if (value) {
+            assert.ok(!result.stdout.includes(value), `workflow logs must not reveal ${name}'s value`);
+          }
+        }
         assert.equal(
           fs.readFileSync(summaryPath, "utf8"),
           previousSummary + expected,
           "workflow summary must append only fixed status diagnostics",
         );
+        const summary = fs.readFileSync(summaryPath, "utf8");
+        for (const [name, env] of secrets) {
+          assert.ok(!summary.includes(name), `workflow summary must not reveal ${name}`);
+          const value = secretEnv[env];
+          if (value) {
+            assert.ok(!summary.includes(value), `workflow summary must not reveal ${name}'s value`);
+          }
+        }
       }
     } finally {
       fs.rmSync(summaryPath, { force: true });
