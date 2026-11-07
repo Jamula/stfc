@@ -1,5 +1,15 @@
 import assert from "node:assert/strict";
-import { readdirSync, readFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { describe, it } from "node:test";
 import path from "node:path";
 import { parse as parseYaml } from "yaml";
@@ -39,6 +49,8 @@ const workflows = workflowSources.map(({ file, source }) => ({
         if?: string;
         permissions?: Record<string, string>;
         steps?: Array<{
+          id?: string;
+          if?: string;
           "continue-on-error"?: boolean | string;
           run?: string;
           uses?: string;
@@ -507,6 +519,24 @@ describe("workflow consolidation", () => {
     );
   });
 
+  it("does not install Node in the shell-only protected-paths workflow", () => {
+    const protectedPaths = workflows.find(
+      ({ file }) => file === "protected-paths.yml",
+    );
+    assert.ok(protectedPaths, "protected-paths.yml must exist");
+    const steps = Object.values(protectedPaths.workflow.jobs ?? {}).flatMap(
+      (job) => job.steps ?? [],
+    );
+    assert.ok(
+      steps.some((step) => step.run?.includes("git ls-files")),
+      "the workflow must retain its tracked-path checks",
+    );
+    assert.ok(
+      !steps.some((step) => step.uses?.startsWith("actions/setup-node@")),
+      "the shell-only workflow must not spend time setting up Node",
+    );
+  });
+
   it("installs root, API, web, and worker dependencies in the required gate", () => {
     const gate = workflows.find(({ file }) => file === "test-gate.yml");
     assert.ok(gate, "test-gate.yml must exist");
@@ -547,14 +577,12 @@ describe("workflow consolidation", () => {
         step.run?.trim() === "npm ci" &&
         step["working-directory"] === "web",
     );
-    assert.ok(apiInstallIndex >= 0, "the gate must install API deps");
-    assert.ok(webInstallIndex >= 0, "the gate must install web deps");
+    assert.ok(apiInstallIndex >= 0, "root typechecking requires API deps");
+    assert.ok(webInstallIndex >= 0, "root typechecking requires web deps");
     assert.ok(
       apiInstallIndex < rootTypecheckIndex &&
-        apiInstallIndex < rootTestIndex &&
-        webInstallIndex < rootTypecheckIndex &&
-        webInstallIndex < rootTestIndex,
-      "root checks must run after API and web npm ci",
+        webInstallIndex < rootTypecheckIndex,
+      "API and web deps must be installed before root typecheck",
     );
 
     const workerInstallIndex = steps.findIndex(
@@ -674,6 +702,145 @@ describe("workflow consolidation", () => {
       "the PR workflow must run the artifact scanner",
     );
   });
+
+  it("scans changed runtime artifacts and JSONL files without a PR-body bypass", () => {
+    const source = workflowSources.find(({ file }) => file === "artifact-hygiene.yml")?.source;
+    const hygiene = workflows.find(({ file }) => file === "artifact-hygiene.yml");
+    assert.ok(source, "artifact-hygiene.yml source must exist");
+    assert.ok(hygiene, "artifact-hygiene.yml must exist");
+
+    const paths = hygiene.workflow.on?.pull_request?.paths ?? [];
+    assert.ok(paths.includes("data/digests/**"), "digest artifacts must trigger the scan");
+    assert.ok(paths.includes("data/discord/**"), "Discord runtime artifacts must trigger the scan");
+    assert.ok(paths.includes(".github/**"), "scanned GitHub configuration files must trigger the scan");
+    assert.doesNotMatch(source, /\[skip-token-scan\]/, "PR text must not bypass the scan");
+
+    const scan = Object.values(hygiene.workflow.jobs ?? {})
+      .flatMap((job) => job.steps ?? [])
+      .find((step) => step.id === "scan");
+    assert.ok(scan?.run, "the changed-file scanner step must exist");
+    assert.equal(scan.if, undefined, "the scan step must not be conditional on a PR-body value");
+  });
+
+  it(
+    "executes the artifact scan block and fails closed on changed-file collection errors",
+    { skip: process.platform === "win32" ? "the workflow scan runs in Bash on Ubuntu" : false },
+    () => {
+      const hygiene = workflows.find(({ file }) => file === "artifact-hygiene.yml");
+      const scan = Object.values(hygiene?.workflow.jobs ?? {})
+        .flatMap((job) => job.steps ?? [])
+        .find((step) => step.id === "scan");
+      assert.ok(scan?.run, "the changed-file scanner step must exist");
+
+      const run = scan.run.replaceAll("${{ github.base_ref }}", "main");
+      assert.ok(
+        !run.includes("${{"),
+        "the parsed workflow scan block must not contain unresolved GitHub expressions",
+      );
+
+      const tempRoot = mkdtempSync(path.join(process.cwd(), ".artifact-hygiene-test-"));
+      try {
+        const bin = path.join(tempRoot, "bin");
+        const capture = path.join(tempRoot, "scanner-args");
+        const diffFixture = path.join(tempRoot, "diff-output");
+        const realGrep = spawnSync("bash", ["-c", "command -v grep"], {
+          encoding: "utf8",
+        }).stdout.trim();
+        assert.ok(realGrep, "grep must be available to execute the workflow block");
+        mkdirSync(bin);
+        const writeExecutable = (name: string, contents: string) => {
+          const file = path.join(bin, name);
+          writeFileSync(file, contents);
+          chmodSync(file, 0o755);
+        };
+        // The workflow's actual parsed shell block runs against these controlled
+        // commands; only git output, filter errors, and scanner arguments are faked.
+        const gitShim = path.join(bin, "git");
+        const grepShim = path.join(bin, "grep");
+        const nodeShim = path.join(bin, "node");
+        writeExecutable(
+          "git",
+          "#!/bin/sh\nif [ \"$1\" = fetch ]; then exit 0; fi\nif [ \"$1\" = diff ]; then /bin/cat \"$DIFF_FIXTURE\"; exit \"$DIFF_STATUS\"; fi\nexit 90\n",
+        );
+        writeExecutable(
+          "grep",
+          "#!/bin/sh\nif [ \"$FILTER_ERROR\" = 1 ]; then exit 2; fi\nexec \"$REAL_GREP\" \"$@\"\n",
+        );
+        writeExecutable(
+          "node",
+          "#!/bin/sh\nprintf '%s\\0' \"$@\" > \"$SCANNER_CAPTURE\"\n",
+        );
+        assert.ok(existsSync(gitShim) && existsSync(grepShim) && existsSync(nodeShim));
+
+        const executeScan = (diffOutput: Buffer, {
+          diffStatus = 0,
+          filterError = false,
+        }: { diffStatus?: number; filterError?: boolean } = {}) => {
+          writeFileSync(diffFixture, diffOutput);
+          rmSync(capture, { force: true });
+          return spawnSync(
+            "bash",
+            ["--noprofile", "--norc", "-e", "-o", "pipefail", "-c", run],
+            {
+              encoding: "utf8",
+              env: {
+                ...process.env,
+                PATH: `${bin}${path.delimiter}${process.env.PATH ?? ""}`,
+                TMPDIR: tempRoot,
+                DIFF_FIXTURE: diffFixture,
+                DIFF_STATUS: String(diffStatus),
+                FILTER_ERROR: filterError ? "1" : "0",
+                REAL_GREP: realGrep,
+                SCANNER_CAPTURE: capture,
+              },
+            },
+          );
+        };
+
+        const filenames = [
+          "data/discord/channel log.jsonl",
+          ".github/workflows/quick-check.YML",
+        ];
+        const scanned = executeScan(Buffer.from(`${filenames.join("\0")}\0`));
+        assert.equal(scanned.status, 0, scanned.stderr);
+        assert.deepEqual(
+          readFileSync(capture).toString("utf8").split("\0").filter(Boolean),
+          ["scripts/check-artifact-hygiene.mjs", ...filenames],
+          "the scanner must receive the exact changed filenames as separate arguments",
+        );
+
+        const invalidUtf8 = executeScan(
+          Buffer.concat([
+            Buffer.from("data/discord/invalid-"),
+            Buffer.from([0xff]),
+            Buffer.from(".jsonl\0"),
+          ]),
+        );
+        assert.notEqual(invalidUtf8.status, 0, "invalid UTF-8 paths must fail the scan");
+        assert.match(invalidUtf8.stderr, /not valid UTF-8/);
+        assert.equal(existsSync(capture), false, "invalid paths must never reach the scanner");
+
+        const diffFailure = executeScan(Buffer.from("data/discord/valid.jsonl\0"), {
+          diffStatus: 23,
+        });
+        assert.notEqual(diffFailure.status, 0, "git diff failures must fail the scan");
+        assert.equal(existsSync(capture), false, "diff failures must not invoke the scanner");
+
+        const filterFailure = executeScan(Buffer.from("data/discord/valid.jsonl\0"), {
+          filterError: true,
+        });
+        assert.notEqual(filterFailure.status, 0, "grep exit 2 must fail the scan");
+        assert.equal(existsSync(capture), false, "filter errors must not invoke the scanner");
+
+        const noMatches = executeScan(Buffer.from("notes/readme.rst\0"));
+        assert.equal(noMatches.status, 0, noMatches.stderr);
+        assert.match(noMatches.stdout, /no applicable files changed/);
+        assert.equal(existsSync(capture), false, "a genuine grep exit 1 must succeed without scanning");
+      } finally {
+        rmSync(tempRoot, { recursive: true, force: true });
+      }
+    },
+  );
 
   it("does not publish npm packages from active workflows", () => {
     for (const { file, step } of workflowSteps) {
