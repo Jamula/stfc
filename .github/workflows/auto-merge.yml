@@ -24,12 +24,11 @@ jobs:
           APP_PRIVATE_KEY: ${{ secrets.AUTO_MERGE_APP_PRIVATE_KEY }}
         shell: bash
         run: |
-          if [[ -n "$APP_CLIENT_ID" && -n "$APP_PRIVATE_KEY" ]]; then
-            echo "configured=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "::notice::GitHub App credentials are not configured; auto-merge is disabled."
-            echo "configured=false" >> "$GITHUB_OUTPUT"
+          if [[ -z "$APP_CLIENT_ID" || -z "$APP_PRIVATE_KEY" ]]; then
+            echo "::error::GitHub App credentials are required for auto-merge."
+            exit 1
           fi
+          echo "configured=true" >> "$GITHUB_OUTPUT"
 
       - name: Create repository-scoped GitHub App token
         id: app-token

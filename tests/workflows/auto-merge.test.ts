@@ -125,15 +125,17 @@ describe("auto-merge workflow", () => {
     assert.match(scriptStep.uses ?? "", /^actions\/github-script@[0-9a-f]{40}$/);
   });
 
-  it("disables auto-merge when GitHub App credentials are unavailable", () => {
+  it("requires GitHub App credentials and does not fall back to GITHUB_TOKEN", () => {
     assert.equal(appConfigStep.id, "app-config");
     assert.deepEqual(appConfigStep.env, {
       APP_CLIENT_ID: "${{ vars.AUTO_MERGE_APP_CLIENT_ID }}",
       APP_PRIVATE_KEY: "${{ secrets.AUTO_MERGE_APP_PRIVATE_KEY }}",
     });
-    assert.match(appConfigStep.run ?? "", /\[\[ -n "\$APP_CLIENT_ID" && -n "\$APP_PRIVATE_KEY" \]\]/);
-    assert.match(appConfigStep.run ?? "", /configured=false/);
-    assert.match(appConfigStep.run ?? "", /auto-merge is disabled/);
+    assert.match(appConfigStep.run ?? "", /\[\[ -z "\$APP_CLIENT_ID" \|\| -z "\$APP_PRIVATE_KEY" \]\]/);
+    assert.match(appConfigStep.run ?? "", /::error::GitHub App credentials are required/);
+    assert.match(appConfigStep.run ?? "", /exit 1/);
+    assert.match(appConfigStep.run ?? "", /configured=true/);
+    assert.doesNotMatch(appConfigStep.run ?? "", /configured=false|GITHUB_TOKEN/);
     assert.equal(appTokenStep.if, "steps.app-config.outputs.configured == 'true'");
     assert.equal(
       appTokenStep.uses,
