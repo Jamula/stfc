@@ -140,7 +140,7 @@ cli.ts → skills/runAll.ts → for each account: api/endpoints.ts → STFC stor
 |---|---|
 | **0** | One or more accounts succeeded — or partial success per account. Per-account outcomes (`CODE_USED`, `ALREADY_CLAIMED`, etc.) do **not** fail the workflow. |
 | **1** | Infrastructure error (malformed `STFC_ACCOUNTS`, schema mismatch, uncaught crash). `report.errors.length > 0`. |
-| **2** | All accounts have `TOKEN_EXPIRED`. Cron fires this when every JWT is stale, prompting a manual or scheduled `refresh-token.yml` run. |
+| **2** | All accounts have `TOKEN_EXPIRED`. Re-capture the affected tokens with the local visible-browser flow. |
 
 **Auth flow.** `STFC_ACCOUNTS` repo secret = JSON array of `{name, token}`.
 Each `token` is a JWT against the Scopely store API. `src/lib/jwt.ts`

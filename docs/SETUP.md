@@ -94,14 +94,10 @@ approach.
 
 ## Token refresh
 
-The `Refresh token` workflow (`.github/workflows/refresh-token.yml`) is
-manual-only; its weekly schedule was removed when the login changed to
-email OTP. The workflow currently requires `STFC_EMAIL`,
-`STFC_PASSWORD` (or the legacy `cj_pwd` secret), and `STFC_REFRESH_PAT`.
-It also exposes an optional OTP input, but the passwordless login cannot
-use this workflow as currently configured.
+The manual `Refresh token` workflow uses legacy password-based login and
+cannot complete the current email-OTP flow.
 
-For the current email-OTP flow, use the local visible-browser capture instead:
+For the current flow, use the local visible-browser capture:
 
 ```bash
 npm run capture-token -- --name main
@@ -139,22 +135,15 @@ this error, you most likely pasted the wrong value into the secret. Re-run
 JWT the API accepts.
 
 ### `TOKEN_EXPIRED` outcome on a workflow run
-Your stored JWT's `exp` claim is in the past. Either:
-- Trigger the **Refresh token** workflow manually (if you've set up the
-  three secrets above), or
-- Re-run `npm run capture-token -- --name <accountName>` locally for the
-  affected account. The script preserves your other accounts and only
-  touches the named one. Then update the GitHub secret (the script does
-  this for you if `gh` is available).
+Your stored JWT's `exp` claim is in the past. Re-run
+`npm run capture-token -- --name <accountName>` locally for the affected
+account. The script preserves your other accounts and only updates the named
+one. It can update the GitHub secret if `gh` is available.
 
 If every configured account returns `TOKEN_EXPIRED` and there are no
 infrastructure errors, `run-all` exits with code **2** so the workflow fails as
 a clear secret-rotation signal. Mixed runs (some valid, some expired) still
 exit 0; infrastructure failures exit 1.
-
-### `Refresh token` workflow says "Scopely served a CAPTCHA"
-Headless-browser bot detection. Run `npm run capture-token` locally with
-the visible browser and solve the challenge there.
 
 ### Workflow doesn't run on schedule
 GitHub Actions disables scheduled workflows on forks after **60 days of
