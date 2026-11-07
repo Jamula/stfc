@@ -68,7 +68,7 @@ function captureConsole(): string[] {
 describe("diagnostic skills", () => {
   it("checkAuth reports valid, expired, malformed-token, and sanitized error outcomes", async () => {
     const accounts: Account[] = [
-      { name: "valid", token: makeToken(undefined, "valid") },
+      { name: "valid", token: makeToken(Math.floor(Date.now() / 1000) + 90_000, "valid") },
       { name: "expired", token: makeToken(Math.floor(Date.now() / 1000) - 60, "expired") },
       { name: "malformed", token: "not-a-jwt" },
       { name: "error", token: makeToken(undefined, "error") },
@@ -200,7 +200,7 @@ describe("diagnostic skills", () => {
       ],
       [
         accounts[1]!.token,
-        makeClient({ listGifts: async () => { throw new Error("temporary list failure"); } }),
+        makeClient({ listGifts: async () => { throw new Error("Authorization: fixture"); } }),
       ],
     ]);
     const logs = captureConsole();
@@ -228,8 +228,9 @@ describe("diagnostic skills", () => {
     assert.deepEqual(output.result.rows[1], {
       accountName: "unavailable",
       attempts: [],
-      error: "Error: temporary list failure",
+      error: "Error: Authorization: [REDACTED]",
     });
+    assert.ok(logs.some((line) => line.includes("Authorization: [REDACTED]")));
     assert.equal(`${JSON.stringify(output)} ${logs.join(" ")}`.includes(secret), false);
   });
 });
