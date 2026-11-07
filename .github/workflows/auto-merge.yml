@@ -27,7 +27,7 @@ jobs:
           if [[ -n "$APP_CLIENT_ID" && -n "$APP_PRIVATE_KEY" ]]; then
             echo "configured=true" >> "$GITHUB_OUTPUT"
           else
-            echo "::warning::GitHub App credentials are not configured; using GITHUB_TOKEN."
+            echo "::notice::GitHub App credentials are not configured; auto-merge is disabled."
             echo "configured=false" >> "$GITHUB_OUTPUT"
           fi
 
@@ -44,11 +44,12 @@ jobs:
           permission-pull-requests: write
 
       - name: Enable squash auto-merge for eligible PRs
+        if: steps.app-config.outputs.configured == 'true'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token || github.token }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
         with:
-          github-token: ${{ steps.app-token.outputs.token || github.token }}
+          github-token: ${{ steps.app-token.outputs.token }}
           script: |
             const { execFileSync } = require("node:child_process");
             const { owner, repo } = context.repo;

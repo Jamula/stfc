@@ -125,7 +125,7 @@ describe("auto-merge workflow", () => {
     assert.match(scriptStep.uses ?? "", /^actions\/github-script@[0-9a-f]{40}$/);
   });
 
-  it("uses the GitHub App when configured and falls back to GITHUB_TOKEN otherwise", () => {
+  it("disables auto-merge when GitHub App credentials are unavailable", () => {
     assert.equal(appConfigStep.id, "app-config");
     assert.deepEqual(appConfigStep.env, {
       APP_CLIENT_ID: "${{ vars.AUTO_MERGE_APP_CLIENT_ID }}",
@@ -133,6 +133,7 @@ describe("auto-merge workflow", () => {
     });
     assert.match(appConfigStep.run ?? "", /\[\[ -n "\$APP_CLIENT_ID" && -n "\$APP_PRIVATE_KEY" \]\]/);
     assert.match(appConfigStep.run ?? "", /configured=false/);
+    assert.match(appConfigStep.run ?? "", /auto-merge is disabled/);
     assert.equal(appTokenStep.if, "steps.app-config.outputs.configured == 'true'");
     assert.equal(
       appTokenStep.uses,
@@ -146,11 +147,13 @@ describe("auto-merge workflow", () => {
       "permission-contents": "write",
       "permission-pull-requests": "write",
     });
+    assert.equal(scriptStep.if, "steps.app-config.outputs.configured == 'true'");
     assert.equal(
       scriptStep.with["github-token"],
-      "${{ steps.app-token.outputs.token || github.token }}",
+      "${{ steps.app-token.outputs.token }}",
     );
-    assert.equal(scriptStep.env?.GH_TOKEN, "${{ steps.app-token.outputs.token || github.token }}");
+    assert.equal(scriptStep.env?.GH_TOKEN, "${{ steps.app-token.outputs.token }}");
+    assert.doesNotMatch(JSON.stringify(scriptStep), /github\.token/);
   });
 
   it("uses GraphQL merge policy when REST fields are omitted and enables squash auto-merge", async () => {
