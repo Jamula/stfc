@@ -1,6 +1,6 @@
 {
   "name": "stfc-control-panel-api",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "STFC Control Panel — Azure Functions API.",
   "private": true,
   "type": "module",

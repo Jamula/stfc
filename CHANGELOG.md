@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Set the repository package metadata to `0.1.0` for the requested stable release.
+- Set the root package metadata to `0.1.0` for the requested stable release.
   The existing `v1.0.0` release remains unchanged.
 
 ## [1.0.0] - 2026-06-26
