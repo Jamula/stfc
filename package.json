@@ -1,7 +1,7 @@
 {
 	"name": "stfc-gift-redeemer",
 	"private": true,
-	"version": "1.0.0",
+	"version": "0.1.0",
 	"description": "Headless redemption of Star Trek Fleet Command web-store gifts and promo codes, runnable as a scheduled GitHub Action.",
 	"type": "module",
 	"engines": {

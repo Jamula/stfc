@@ -1002,14 +1002,26 @@ describe("workflow consolidation", () => {
     }
   });
 
-  it("installs locked dependencies before release validation", () => {
+  it("installs root, API, and web dependencies before release validation", () => {
     const release = workflows.find(({ file }) => file === "release.yml");
     assert.ok(release, "release.yml must exist");
     const steps = Object.values(release!.workflow.jobs ?? {}).flatMap(
       (job) => job.steps ?? [],
     );
-    const installIndex = steps.findIndex(
-      (step) => step.run?.trim() === "npm ci",
+    const rootInstallIndex = steps.findIndex(
+      (step) =>
+        step.run?.trim() === "npm ci" &&
+        step["working-directory"] === undefined,
+    );
+    const apiInstallIndex = steps.findIndex(
+      (step) =>
+        step.run?.trim() === "npm ci" &&
+        step["working-directory"] === "api",
+    );
+    const webInstallIndex = steps.findIndex(
+      (step) =>
+        step.run?.trim() === "npm ci" &&
+        step["working-directory"] === "web",
     );
     const typecheckIndex = steps.findIndex(
       (step) => step.run?.trim() === "npm run typecheck",
@@ -1018,11 +1030,19 @@ describe("workflow consolidation", () => {
       (step) => step.run?.trim() === "npm test",
     );
 
-    assert.ok(installIndex >= 0, "release.yml must run npm ci");
-    assert.ok(
-      installIndex < typecheckIndex && installIndex < testIndex,
-      "release.yml must install dependencies before typecheck and tests",
-    );
+    assert.ok(rootInstallIndex >= 0, "release.yml must install root dependencies");
+    assert.ok(apiInstallIndex >= 0, "release.yml must install API dependencies");
+    assert.ok(webInstallIndex >= 0, "release.yml must install web dependencies");
+    for (const installIndex of [
+      rootInstallIndex,
+      apiInstallIndex,
+      webInstallIndex,
+    ]) {
+      assert.ok(
+        installIndex < typecheckIndex && installIndex < testIndex,
+        "release.yml must install dependencies before typecheck and tests",
+      );
+    }
   });
 
   it("pins npm's \"test\" script to the concrete tests/index.test.ts entry point, not a glob (#242, #222)", () => {

@@ -1,6 +1,6 @@
 {
   "name": "stfc-control-panel-web",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "description": "STFC Control Panel — Lit+Vite frontend.",
   "private": true,
   "type": "module",
