@@ -7,6 +7,7 @@ inserted at the top**, so the most recent run is always visible first.
 
 | Date (UTC) | Time (UTC) | Account | Gifts claimed |
 | --- | --- | --- | --- |
+| 2026-11-08 | 02:00 | main | 4 Hr Free Chest, 10 Min Free Chest |
 | 2026-11-07 | 22:55 | main | Incursion Prep, 10 Min Free Chest |
 | 2026-11-07 | 19:28 | main | Officer Command Pass Points, 4 Hr Free Chest, 10 Min Free Chest, Saturday Duty Report Gift |
 | 2026-11-07 | 15:13 | main | Daily Mission Key Drop, 4 Hr Free Chest, 10 Min Free Chest |
