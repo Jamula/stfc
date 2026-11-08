@@ -264,5 +264,12 @@
     "accounts_tried": [
       "main"
     ]
+  },
+  "HONOR26": {
+    "marked_dead_at": "2026-11-08T08:54:32.553Z",
+    "first_seen_outcome": "CODE_INVALID_OR_EXPIRED",
+    "accounts_tried": [
+      "main"
+    ]
   }
 }
