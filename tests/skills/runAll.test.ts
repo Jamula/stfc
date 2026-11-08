@@ -524,6 +524,68 @@ describe("runAll", () => {
     });
   });
 
+  it("enforces the migrated v1 cooldown for legacy streaks at or above the threshold", async () => {
+    for (const streak of [3, 4]) {
+      const stateFile = path.join(dir, `degraded-state-v1-${streak}.json`);
+      const accountName = "legacy-account";
+      const accountKey = createHash("sha256").update(accountName).digest("hex");
+      let now = new Date("2026-02-01T00:00:00.000Z");
+      const nextAttemptAt = "2026-02-02T00:00:00.000Z";
+      let claims = 0;
+      fs.writeFileSync(
+        stateFile,
+        JSON.stringify({ version: 1, accounts: { [accountKey]: { "30 Day Loyalty Chest": streak } } }),
+      );
+      const fake = makeFakeClient({
+        listGifts: async () => ({
+          items: [{ bundleId: 77, title: "30 Day Loyalty Chest", isClaimable: true }],
+        }),
+        claimGift: async () => {
+          claims += 1;
+          return { success: true };
+        },
+      });
+      const options = {
+        accounts: [{ name: accountName, token: makeJwt({ exp: 9999999999 }) }],
+        clientFactory: () => fake as unknown as ApiClient,
+        degradedStatePath: stateFile,
+        now: () => new Date(now),
+      };
+      const expectedState = {
+        version: 3,
+        accounts: {
+          [accountKey]: {
+            "77": { streak, title: "30 Day Loyalty Chest", nextAttemptAt, legacy: true },
+          },
+        },
+      };
+
+      const migrated = await runAll(options);
+      assert.equal(claims, 0, `v1 streak ${streak} must not issue a claim during migration`);
+      assert.equal(migrated.exitCode, 0);
+      assert.deepEqual(migrated.result.accounts[0]!.items, [{
+        id: "30 Day Loyalty Chest",
+        stateKey: "77",
+        outcome: Outcomes.TRANSIENT,
+        detail: `claim deferred until ${nextAttemptAt} after ${streak} consecutive transient failures`,
+        deferred: true,
+      }]);
+      assert.deepEqual(JSON.parse(fs.readFileSync(stateFile, "utf8")), expectedState);
+
+      now = new Date(Date.parse(nextAttemptAt) - 1);
+      const deferred = await runAll(options);
+      assert.equal(claims, 0, "the migrated deadline must remain enforced until its final millisecond");
+      assert.equal(deferred.result.accounts[0]!.items[0]!.deferred, true);
+      assert.deepEqual(JSON.parse(fs.readFileSync(stateFile, "utf8")), expectedState);
+
+      now = new Date(nextAttemptAt);
+      const recovered = await runAll(options);
+      assert.equal(claims, 1, "the first run at the migrated deadline must attempt the claim once");
+      assert.equal(recovered.result.accounts[0]!.items[0]!.outcome, Outcomes.CLAIMED);
+      assert.deepEqual(JSON.parse(fs.readFileSync(stateFile, "utf8")), { version: 3, accounts: {} });
+    }
+  });
+
   it("migrates current v2 streaks by starting a 24-hour cooldown", async () => {
     const stateFile = path.join(dir, "degraded-state-v2.json");
     const accountName = "current-state-account";

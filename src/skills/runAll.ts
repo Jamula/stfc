@@ -380,7 +380,10 @@ async function processOneGift(
   }
 
   const accountKey = createHash("sha256").update(accountName).digest("hex");
-  const prior = degradedState?.accounts[accountKey]?.[stateKey];
+  const previous = degradedState?.accounts[accountKey] ?? {};
+  const prior =
+    previous[stateKey] ??
+    Object.values(previous).find((entry) => entry.legacy && entry.title === id);
   if (prior?.nextAttemptAt && Date.parse(prior.nextAttemptAt) > runAt.getTime()) {
     return {
       ...itemIdentity,
