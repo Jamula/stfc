@@ -512,4 +512,8 @@ describe("/game-state command", () => {
     expect(await res.json()).toEqual({ type: 5 });
     expect(ctx.waitUntil).toHaveBeenCalledOnce();
   });
+
+  it("temporary gate proof fails the worker test step", () => {
+    expect(false).toBe(true);
+  });
 });
