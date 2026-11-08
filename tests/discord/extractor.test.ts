@@ -35,11 +35,11 @@ describe("extractor regex constant", () => {
 describe("extractor / promo-codes.txt coverage", () => {
   const entries = readPromoCodesTxtEntries();
 
-  it("loads exactly 38 non-comment entries from promo-codes.txt", () => {
-    assert.equal(entries.length, 38, `entries:\n${entries.join("\n")}`);
+  it("loads exactly 39 non-comment entries from promo-codes.txt", () => {
+    assert.equal(entries.length, 39, `entries:\n${entries.join("\n")}`);
     for (const code of [
       "SPOCK", "CADET", "KIRK", "WARPSPEED", "COMMANDER",
-      "CANDE2", "CANDE3", "BLASTAARLEGEND", "OOPS",
+      "CANDE2", "CANDE3", "BLASTAARLEGEND", "OOPS", "HONOR26",
     ]) {
       assert.equal(entries.filter((entry) => entry === code).length, 1, `${code} must appear exactly once`);
     }
