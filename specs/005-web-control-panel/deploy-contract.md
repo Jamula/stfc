@@ -33,12 +33,22 @@ Rotate it if compromised.
 ### Managed API runtime
 
 `staticwebapp.config.json` selects `node:22` for the SWA-managed Functions API,
-and `api/package.json` requires Node.js 22 or newer. Node 22 is the newest
-runtime currently listed for SWA-managed APIs in Microsoft's
-[supported languages and runtimes](https://learn.microsoft.com/en-us/azure/static-web-apps/languages-runtimes).
-The repository build and workflow toolchain remains on Node 24 via `.nvmrc`;
-revisit the API runtime when Static Web Apps supports Node 24, so the managed
-API matches the toolchain target rather than trailing it.
+and `api/package.json` requires Node.js 22 or newer. As of 2026-11-07, the
+[SWA managed API runtime matrix](https://learn.microsoft.com/en-us/azure/static-web-apps/languages-runtimes)
+also lists .NET 10 isolated (`dotnet-isolated:10.0`), but not Node.js 24.
+Azure Functions lists Node.js 22 support through April 30, 2027 and .NET 10
+support through November 14, 2028 in its
+[runtime support table](https://learn.microsoft.com/en-us/azure/azure-functions/supported-languages).
+
+The root CLI uses Node 24 via `.nvmrc`. In `.github/workflows/swa-deploy.yml`,
+the API validation job uses Node 22 via `api/.nvmrc`, while
+`FORCE_JAVASCRIPT_ACTIONS_TO_NODE24` selects Node 24 for JavaScript actions.
+These tool and action runtimes are separate from the managed API runtime
+selected above. Moving this API to .NET 10 isolated is technically possible
+on the managed SWA API runtime, but requires a separately approved port of the
+API and its contracts and tests; do not infer a migration from runtime
+availability alone. Reassess the API runtime before the current Node 22
+support window ends.
 
 ---
 
