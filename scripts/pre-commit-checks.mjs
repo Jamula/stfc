@@ -109,6 +109,10 @@ export function checkPortableFilenames(staged, exists = defaultExists) {
 export function grepTestsForWorkflow(basename) {
   const matches = [];
   const pending = ['tests'];
+  const escapedBasename = basename.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const filenamePattern = new RegExp(
+    `(?:^|[^A-Za-z0-9_-])${escapedBasename}(?=$|[^A-Za-z0-9_-])`,
+  );
 
   while (pending.length > 0) {
     const dir = pending.pop();
@@ -127,7 +131,7 @@ export function grepTestsForWorkflow(basename) {
         pending.push(filePath);
       } else if (entry.isFile()) {
         try {
-          if (fs.readFileSync(filePath, 'utf8').includes(basename)) {
+          if (filenamePattern.test(fs.readFileSync(filePath, 'utf8'))) {
             matches.push(filePath.replaceAll(path.sep, '/'));
           }
         } catch {

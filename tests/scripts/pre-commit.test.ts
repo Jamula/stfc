@@ -445,4 +445,10 @@ describe("checkWorkflowPinningTests", () => {
       ["tests/scripts/pre-commit.test.ts"],
     );
   });
+
+  it("does not confuse a suffixed workflow name with an exact filename", () => {
+    const matches = grepTestsForWorkflow("release.yml");
+    assert.ok(matches.includes("tests/workflows/workflow-consolidation.test.ts"));
+    assert.ok(!matches.includes("tests/workflows/squad-release-templates.test.ts"));
+  });
 });

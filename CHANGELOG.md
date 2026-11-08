@@ -5,6 +5,13 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0] - 2026-11-08
+
+### Changed
+
+- Set the root package metadata to `0.1.0` for the requested stable release.
+  The existing `v1.0.0` release remains unchanged.
+
 ## [1.0.0] - 2026-06-26
 
 Initial tagged release of the STFC gift redeemer.
@@ -27,4 +34,5 @@ Initial tagged release of the STFC gift redeemer.
 - Additional skills: `check-auth`, `list-gifts`, `claim-gifts`, `redeem-codes`,
   `discord-monitor`, `roster`, `optimize-crew`, `progression`, and `telemetry`.
 
+[0.1.0]: https://github.com/Jamula/stfc/releases/tag/v0.1.0
 [1.0.0]: https://github.com/Jamula/stfc/releases/tag/v1.0.0
