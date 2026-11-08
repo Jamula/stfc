@@ -15,7 +15,7 @@ export function parseDegradedState(raw) {
     !parsed ||
     typeof parsed !== 'object' ||
     Array.isArray(parsed) ||
-    (parsed.version !== 1 && parsed.version !== 2) ||
+    (parsed.version !== 1 && parsed.version !== 2 && parsed.version !== 3) ||
     !parsed.accounts ||
     typeof parsed.accounts !== 'object' ||
     Array.isArray(parsed.accounts)
@@ -38,8 +38,15 @@ export function parseDegradedState(raw) {
       if (typeof gift !== 'string') {
         throw new Error('degraded-gift-alert: gift entries need a title and positive integer streak');
       }
-      if (parsed.version === 2 && rawEntry?.legacy !== undefined && rawEntry.legacy !== true) {
+      if (parsed.version >= 2 && rawEntry?.legacy !== undefined && rawEntry.legacy !== true) {
         throw new Error('degraded-gift-alert: legacy markers must be true when present');
+      }
+      if (
+        parsed.version === 3 &&
+        rawEntry?.nextAttemptAt !== undefined &&
+        (typeof rawEntry.nextAttemptAt !== 'string' || !Number.isFinite(Date.parse(rawEntry.nextAttemptAt)))
+      ) {
+        throw new Error('degraded-gift-alert: retry times must be valid timestamps');
       }
       if (streak >= PERSISTENT_TRANSIENT_RUNS) {
         failures.push({ gift, ...(legacy ? {} : { giftId }), streak });

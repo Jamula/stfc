@@ -57,6 +57,40 @@ describe("degraded-gift-alert", () => {
     );
   });
 
+  it("keeps the existing alert open for a deferred v3 failure streak", () => {
+    const updates: Array<{ number: number; body: string }> = [];
+    const state = {
+      version: 3,
+      accounts: {
+        accountHash: {
+          "771": {
+            streak: PERSISTENT_TRANSIENT_RUNS,
+            title: "30 Day Loyalty Chest",
+            nextAttemptAt: "2026-11-08T12:00:00.000Z",
+          },
+        },
+      },
+    };
+
+    assert.deepEqual(
+      parseDegradedState(JSON.stringify(state)),
+      [{ gift: "30 Day Loyalty Chest", giftId: "771", streak: PERSISTENT_TRANSIENT_RUNS }],
+    );
+    const result = syncDegradedGiftAlert({
+      state,
+      listIssues: () => [{ number: 42, title: DEGRADED_ALERT_TITLE, labels: DEGRADED_ALERT_LABELS }],
+      createIssue: () => assert.fail("a deferred claim must not create a duplicate alert"),
+      closeIssue: () => assert.fail("a deferred claim must not resolve its alert"),
+      updateIssue: (number, body) => updates.push({ number, body }),
+      log: () => {},
+    });
+
+    assert.equal(result.status, "already-open");
+    assert.equal(result.persistentCount, 1);
+    assert.equal(updates.length, 1);
+    assert.match(updates[0]!.body, /30 Day Loyalty Chest \(bundle 771\) — 3 consecutive runs/);
+  });
+
   it("does not treat migrated legacy display names as bundle identifiers", () => {
     assert.deepEqual(
       parseDegradedState(

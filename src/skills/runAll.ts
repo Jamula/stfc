@@ -43,6 +43,7 @@ import type { Gift } from "../api/schemas.ts";
 const log = createLogger("runAll");
 const DEFAULT_DEAD_CODES_PATH = "data/promo-code-dead.json";
 const PERSISTENT_TRANSIENT_RUNS = 3;
+const GIFT_CLAIM_BACKOFF_MS = 24 * 60 * 60 * 1000;
 const RETRY_DELAYS_MS = [1000, 2000] as const;
 const TRANSIENT_NETWORK_CODES = new Set(["ECONNRESET", "ETIMEDOUT", "ENOTFOUND", "EAI_AGAIN", "ECONNREFUSED"]);
 
@@ -60,6 +61,8 @@ export interface ItemResult {
   stateKey?: string;
   outcome: Outcome;
   detail?: string;
+  deferred?: true;
+  transientAt?: string;
 }
 
 export interface PromoResult {
@@ -115,6 +118,8 @@ export interface RunAllOptions {
 
 export async function runAll(opts: RunAllOptions): Promise<RunAllOutput> {
   const report: RunAllReport = { accounts: [], errors: [] };
+  const clock = opts.now ?? (() => new Date());
+  const runAt = clock();
   const factory =
     opts.clientFactory ?? ((account: Account) => new ApiClient({ token: account.token, fetchImpl: opts.fetchImpl }));
   const sleep = opts.sleep ?? defaultSleep;
@@ -126,9 +131,25 @@ export async function runAll(opts: RunAllOptions): Promise<RunAllOutput> {
     } catch (err) {
       if (err instanceof PromoCodesFileError) {
         report.errors.push({ message: redactForLog(err) });
-        return finalize(report, opts.summary, opts.historyPath, opts.now, opts.degradedStatePath, false);
+        return finalize(report, opts.summary, opts.historyPath, runAt, undefined, undefined, false, false);
       }
       throw err;
+    }
+  }
+
+  let degradedState: DegradedGiftState | undefined;
+  let degradedStateReady = !opts.degradedStatePath;
+  if (opts.degradedStatePath) {
+    try {
+      degradedState = await readDegradedGiftState(opts.degradedStatePath, runAt);
+      // Validate both the current schema and the actual persistence path before
+      // issuing side-effecting claims. This also commits any legacy migration.
+      await writeDegradedGiftState(opts.degradedStatePath, degradedState);
+      degradedStateReady = true;
+    } catch (err) {
+      const detail = redactForLog(err);
+      log.error(`could not load persistent degraded-gift state: ${detail}`);
+      report.errors.push({ message: `could not load persistent degraded-gift state: ${detail}` });
     }
   }
 
@@ -150,11 +171,25 @@ export async function runAll(opts: RunAllOptions): Promise<RunAllOutput> {
       deadCodesPath,
       deadCodeCache,
       sleep,
+      degradedState,
+      Boolean(opts.degradedStatePath),
+      degradedStateReady,
+      runAt,
+      clock,
     );
     report.accounts.push(accountReport);
   }
 
-  return finalize(report, opts.summary, opts.historyPath, opts.now, opts.degradedStatePath, true);
+  return finalize(
+    report,
+    opts.summary,
+    opts.historyPath,
+    runAt,
+    opts.degradedStatePath,
+    degradedState,
+    degradedStateReady,
+    true,
+  );
 }
 
 async function processAccount(
@@ -165,6 +200,11 @@ async function processAccount(
   deadCodesPath: string,
   deadCodeCache: DeadCodeCache,
   sleep: SleepFn,
+  degradedState: DegradedGiftState | undefined,
+  stateRequired: boolean,
+  stateReady: boolean,
+  runAt: Date,
+  clock: () => Date,
 ): Promise<AccountReport> {
   const expiryHuman = describeAccountExpiry(account.token);
   const items: ItemResult[] = [];
@@ -177,7 +217,16 @@ async function processAccount(
   let effectiveTokenStatus = tokenStatus;
 
   if (tokenStatus === Outcomes.TOKEN_VALID) {
-    const giftsResult = await processGifts(client, account.name, report);
+    const giftsResult = await processGifts(
+      client,
+      account.name,
+      report,
+      degradedState,
+      stateRequired,
+      stateReady,
+      runAt,
+      clock,
+    );
     items.push(...giftsResult.items);
     // /auth/me can answer 200 with a JWT the store itself rejects. Trust the
     // endpoint that does the real work, so the run reports "rotate the
@@ -236,6 +285,11 @@ async function processGifts(
   client: ApiClient,
   accountName: string,
   report: RunAllReport,
+  degradedState: DegradedGiftState | undefined,
+  stateRequired: boolean,
+  stateReady: boolean,
+  runAt: Date,
+  clock: () => Date,
 ): Promise<{ items: ItemResult[]; schemaMismatch: boolean }> {
   let gifts: Gift[];
   try {
@@ -272,8 +326,22 @@ async function processGifts(
 
   const items: ItemResult[] = [];
   for (const gift of gifts) {
-    const result = await processOneGift(client, gift, accountName, report);
-    log.info(`[${accountName}] gift "${result.id}" → ${result.outcome}${result.detail ? ` (${result.detail})` : ""}`);
+    const result = await processOneGift(
+      client,
+      gift,
+      accountName,
+      report,
+      degradedState,
+      stateRequired,
+      stateReady,
+      runAt,
+      clock,
+    );
+    if (result.deferred) {
+      log.warn(`[${accountName}] skipped gift "${result.id}": ${result.detail}`);
+    } else {
+      log.info(`[${accountName}] gift "${result.id}" → ${result.outcome}${result.detail ? ` (${result.detail})` : ""}`);
+    }
     items.push(result);
   }
   return { items, schemaMismatch: false };
@@ -284,6 +352,11 @@ async function processOneGift(
   gift: Gift,
   accountName: string,
   report: RunAllReport,
+  degradedState: DegradedGiftState | undefined,
+  stateRequired: boolean,
+  stateReady: boolean,
+  runAt: Date,
+  clock: () => Date,
 ): Promise<ItemResult> {
   const id = describeGift(gift);
   const bundleId = gift.bundleId ?? gift.bundle_id ?? gift.id;
@@ -294,8 +367,27 @@ async function processOneGift(
     return { ...itemIdentity, outcome: skip };
   }
 
-  if (bundleId === undefined) {
+  if (bundleId === undefined || stateKey === undefined) {
     return { ...itemIdentity, outcome: Outcomes.UNKNOWN_RESULT, detail: "no bundleId/bundle_id/id field" };
+  }
+
+  if (stateRequired && !stateReady) {
+    return {
+      ...itemIdentity,
+      outcome: Outcomes.UNKNOWN_RESULT,
+      detail: "persistent degraded-gift state is unavailable; claim not attempted",
+    };
+  }
+
+  const accountKey = createHash("sha256").update(accountName).digest("hex");
+  const prior = degradedState?.accounts[accountKey]?.[stateKey];
+  if (prior?.nextAttemptAt && Date.parse(prior.nextAttemptAt) > runAt.getTime()) {
+    return {
+      ...itemIdentity,
+      outcome: Outcomes.TRANSIENT,
+      detail: `claim deferred until ${prior.nextAttemptAt} after ${prior.streak} consecutive transient failures`,
+      deferred: true,
+    };
   }
 
   try {
@@ -317,7 +409,12 @@ async function processOneGift(
       // We do not replay ambiguous gift-claim POSTs inside the same run
       // without stronger idempotency evidence. The scheduled workflow will
       // naturally re-attempt claimable gifts on the next cycle.
-      return { ...itemIdentity, outcome: Outcomes.TRANSIENT, detail: redactForLog(err) };
+      return {
+        ...itemIdentity,
+        outcome: Outcomes.TRANSIENT,
+        detail: redactForLog(err),
+        transientAt: clock().toISOString(),
+      };
     }
     return { ...itemIdentity, outcome: classifyHttpError(err), detail: redactForLog(err) };
   }
@@ -393,13 +490,15 @@ async function finalize(
   report: RunAllReport,
   summary: SummaryWriter | undefined,
   historyPath: string | undefined,
-  now: (() => Date) | undefined,
+  now: Date,
   degradedStatePath: string | undefined,
+  degradedState: DegradedGiftState | undefined,
+  degradedStateReady: boolean,
   pruneMissingAccounts: boolean,
 ): Promise<RunAllOutput> {
-  if (degradedStatePath) {
+  if (degradedStatePath && degradedStateReady && degradedState) {
     try {
-      await updateDegradedGiftState(degradedStatePath, report, pruneMissingAccounts);
+      await updateDegradedGiftState(degradedStatePath, degradedState, report, pruneMissingAccounts, now);
     } catch (err) {
       report.errors.push({
         message: `could not update persistent degraded-gift state: ${redactForLog(err)}`,
@@ -417,7 +516,7 @@ async function finalize(
   }
   if (historyPath) {
     try {
-      await appendHistory(historyPath, report, now ? now() : new Date());
+      await appendHistory(historyPath, report, now);
     } catch (err) {
       log.warn("could not append history:", redactForLog(err));
     }
@@ -564,22 +663,24 @@ function getReportedGifts(items: ItemResult[]): ItemResult[] {
 }
 
 interface DegradedGiftState {
-  version: 2;
+  version: 3;
   accounts: Record<string, Record<string, PersistedGiftStreak>>;
 }
 
 interface PersistedGiftStreak {
   streak: number;
   title: string;
+  nextAttemptAt?: string;
   legacy?: true;
 }
 
 async function updateDegradedGiftState(
   filePath: string,
+  state: DegradedGiftState,
   report: RunAllReport,
   pruneMissingAccounts: boolean,
+  now: Date,
 ): Promise<void> {
-  const state = await readDegradedGiftState(filePath);
   let observedAccount = false;
   const configuredAccountKeys = new Set(
     report.accounts.map((account) => createHash("sha256").update(account.name).digest("hex")),
@@ -604,15 +705,27 @@ async function updateDegradedGiftState(
       const prior =
         previous[gift.stateKey] ??
         Object.values(previous).find((entry) => entry.legacy && entry.title === gift.id);
+      if (gift.deferred) {
+        if (prior) current[gift.stateKey] = prior;
+        continue;
+      }
       const previousStreak = prior?.streak;
       if (gift.outcome === Outcomes.TRANSIENT) {
-        current[gift.stateKey] = { streak: (previousStreak ?? 0) + 1, title: gift.id };
+        const streak = (previousStreak ?? 0) + 1;
+        const failureAt = gift.transientAt ? new Date(gift.transientAt) : now;
+        current[gift.stateKey] = {
+          streak,
+          title: gift.id,
+          ...(streak >= PERSISTENT_TRANSIENT_RUNS
+            ? { nextAttemptAt: new Date(failureAt.getTime() + GIFT_CLAIM_BACKOFF_MS).toISOString() }
+            : {}),
+        };
       } else if (
         prior !== undefined &&
         prior.streak >= PERSISTENT_TRANSIENT_RUNS &&
         !isExpectedOutcome(gift.outcome)
       ) {
-        current[gift.stateKey] = { streak: prior.streak, title: gift.id };
+        current[gift.stateKey] = prior;
       }
     }
 
@@ -631,18 +744,15 @@ async function updateDegradedGiftState(
 
   if (!observedAccount && !prunedAccount) return;
 
-  await fs.mkdir(path.dirname(filePath), { recursive: true });
-  const temporaryPath = `${filePath}.tmp`;
-  await fs.writeFile(temporaryPath, `${JSON.stringify(state, null, 2)}\n`, "utf8");
-  await fs.rename(temporaryPath, filePath);
+  await writeDegradedGiftState(filePath, state);
 }
 
-async function readDegradedGiftState(filePath: string): Promise<DegradedGiftState> {
+async function readDegradedGiftState(filePath: string, now: Date): Promise<DegradedGiftState> {
   let raw: string;
   try {
     raw = await fs.readFile(filePath, "utf8");
   } catch (err) {
-    if (isNotFoundError(err)) return { version: 2, accounts: {} };
+    if (isNotFoundError(err)) return { version: 3, accounts: {} };
     throw err;
   }
 
@@ -653,7 +763,7 @@ async function readDegradedGiftState(filePath: string): Promise<DegradedGiftStat
 
   const candidate = parsed as { version?: unknown; accounts?: unknown };
   if (
-    (candidate.version !== 1 && candidate.version !== 2) ||
+    (candidate.version !== 1 && candidate.version !== 2 && candidate.version !== 3) ||
     !candidate.accounts ||
     typeof candidate.accounts !== "object" ||
     Array.isArray(candidate.accounts)
@@ -672,30 +782,60 @@ async function readDegradedGiftState(filePath: string): Promise<DegradedGiftStat
         if (typeof rawStreak !== "number" || !Number.isInteger(rawStreak) || rawStreak < 1) {
           throw new Error("persistent degraded-gift streaks must be positive integers");
         }
-        gifts[giftKey] = { streak: rawStreak, title: giftKey, legacy: true };
+        const streak = rawStreak;
+        gifts[giftKey] = {
+          streak,
+          title: giftKey,
+          ...(streak >= PERSISTENT_TRANSIENT_RUNS
+            ? { nextAttemptAt: new Date(now.getTime() + GIFT_CLAIM_BACKOFF_MS).toISOString() }
+            : {}),
+          legacy: true,
+        };
         continue;
       }
 
       if (!rawStreak || typeof rawStreak !== "object" || Array.isArray(rawStreak)) {
         throw new Error("persistent degraded-gift entry must be an object");
       }
-      const entry = rawStreak as { streak?: unknown; title?: unknown; legacy?: unknown };
+      const entry = rawStreak as {
+        streak?: unknown;
+        title?: unknown;
+        legacy?: unknown;
+        nextAttemptAt?: unknown;
+      };
       if (typeof entry.streak !== "number" || !Number.isInteger(entry.streak) || entry.streak < 1) {
         throw new Error("persistent degraded-gift streaks must be positive integers");
       }
       if (typeof entry.title !== "string" || (entry.legacy !== undefined && entry.legacy !== true)) {
         throw new Error("persistent degraded-gift entry must include a title");
       }
+      let nextAttemptAt: string | undefined;
+      if (entry.nextAttemptAt !== undefined) {
+        if (typeof entry.nextAttemptAt !== "string" || !Number.isFinite(Date.parse(entry.nextAttemptAt))) {
+          throw new Error("persistent degraded-gift retry time must be a valid timestamp");
+        }
+        nextAttemptAt = entry.nextAttemptAt;
+      } else if (entry.streak >= PERSISTENT_TRANSIENT_RUNS) {
+        nextAttemptAt = new Date(now.getTime() + GIFT_CLAIM_BACKOFF_MS).toISOString();
+      }
       gifts[giftKey] = {
         streak: entry.streak,
         title: entry.title,
+        ...(nextAttemptAt !== undefined ? { nextAttemptAt } : {}),
         ...(entry.legacy === true ? { legacy: true } : {}),
       };
     }
     accounts[accountKey] = gifts;
   }
 
-  return { version: 2, accounts };
+  return { version: 3, accounts };
+}
+
+async function writeDegradedGiftState(filePath: string, state: DegradedGiftState): Promise<void> {
+  await fs.mkdir(path.dirname(filePath), { recursive: true });
+  const temporaryPath = `${filePath}.tmp`;
+  await fs.writeFile(temporaryPath, `${JSON.stringify(state, null, 2)}\n`, "utf8");
+  await fs.rename(temporaryPath, filePath);
 }
 
 function determineExitCode(report: RunAllReport): number {
