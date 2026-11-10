@@ -7,6 +7,7 @@ inserted at the top**, so the most recent run is always visible first.
 
 | Date (UTC) | Time (UTC) | Account | Gifts claimed |
 | --- | --- | --- | --- |
+| 2026-11-10 | 03:38 | main | 4 Hr Free Chest, 10 Min Free Chest |
 | 2026-11-09 | 21:18 | main | One Fleet: WOK Carol Marcus, 4 Hr Free Chest, 10 Min Free Chest, Officer Command Pass Points, Alliance Tournaments Sigma Refresh!, Daily Mission Key Drop |
 | 2026-11-09 | 10:57 | main | 10 Min Free Chest |
 | 2026-11-09 | 02:56 | main | 4 Hr Free Chest, 10 Min Free Chest |
