@@ -7,6 +7,7 @@ inserted at the top**, so the most recent run is always visible first.
 
 | Date (UTC) | Time (UTC) | Account | Gifts claimed |
 | --- | --- | --- | --- |
+| 2026-11-11 | 04:29 | main | 4 Hr Free Chest, 10 Min Free Chest |
 | 2026-11-10 | 23:53 | main | Daily Mission Key Drop, 4 Hr Free Chest, 10 Min Free Chest, Alliance Tournaments Sigma Refresh! |
 | 2026-11-10 | 18:53 | main | One Fleet: SNW D'Chok, 4 Hr Free Chest, 10 Min Free Chest, Officer Command Pass Points |
 | 2026-11-10 | 11:45 | main | 7 Day Loyalty Chest, 10 Min Free Chest |
