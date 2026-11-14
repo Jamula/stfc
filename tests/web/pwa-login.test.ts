@@ -4,8 +4,9 @@ import { DemoTokenStore } from '../../shared/pwa-demo.js';
 import { chromium, webkit, type Browser } from 'playwright';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { createServer } from 'node:net';
-import { resolve } from 'node:path';
+import { resolve, join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
+import { readFile, readdir, writeFile, rm } from 'node:fs/promises';
 
 describe('synthetic PWA capture store', () => {
   it('binds a capture to the verified demo account without exposing its token', () => {
@@ -42,7 +43,14 @@ describe('synthetic PWA capture store', () => {
     describe('local PWA browser relay', { skip: process.env.PWA_DEMO_E2E !== '1' }, () => {
       let child: ChildProcess;
       let origin: string;
+      const assetDir = resolve(import.meta.dirname, '../../web/dist-demo/assets');
+      const underscoredAsset = join(assetDir, 'index_fixture_hash_with_underscores.js');
+      let expectedModule: string;
       before(async () => {
+        const entry = (await readdir(assetDir)).find((file) => file.endsWith('.js'));
+        assert.ok(entry, 'Build the demo before running browser-relay checks');
+        expectedModule = await readFile(join(assetDir, entry), 'utf8');
+        await writeFile(underscoredAsset, expectedModule);
         const probe = createServer();
         await new Promise<void>((done) => probe.listen(0, '127.0.0.1', done));
         const address = probe.address();
@@ -74,6 +82,7 @@ describe('synthetic PWA capture store', () => {
           child.kill();
           await exited;
         }
+        await rm(underscoredAsset, { force: true });
       });
 
       async function api(action: string, body: object, requestOrigin = origin) {
@@ -84,6 +93,14 @@ describe('synthetic PWA capture store', () => {
         });
         return { status: response.status, body: await response.json() };
       }
+
+      it('serves built JavaScript with underscores in its asset filename without allowing traversal', async () => {
+        const response = await fetch(`${origin}/assets/index_fixture_hash_with_underscores.js`);
+        assert.equal(response.status, 200);
+        assert.equal(response.headers.get('content-type'), 'text/javascript');
+        assert.equal(await response.text(), expectedModule);
+        assert.equal((await fetch(`${origin}/assets/%2e%2e/%2e%2e/package.json`)).status, 404);
+      });
 
       it('rejects cross-origin access, real account inputs, stale captures and cancelled sessions', async () => {
         assert.equal((await api('start', { account: 'alpha' }, 'https://example.invalid')).status, 403);

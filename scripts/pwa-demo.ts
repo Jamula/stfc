@@ -139,7 +139,7 @@ const server = createServer(async (req, res) => {
     }
     if (req.method !== 'GET') return respond(res, 405, { error: 'Method not allowed' });
     const path = url.pathname === '/pwa-demo/' ? '/pwa-demo/index.html' : url.pathname;
-    if (!/^\/(?:pwa-demo\/[a-zA-Z0-9.-]+|assets\/[a-zA-Z0-9.-]+)$/.test(path)) {
+    if (!/^\/(?:pwa-demo\/[a-zA-Z0-9_.-]+|assets\/[a-zA-Z0-9_.-]+)$/.test(path)) {
       return respond(res, 404, { error: 'Open /pwa-demo/ on this local server' });
     }
     let contents: Buffer;
