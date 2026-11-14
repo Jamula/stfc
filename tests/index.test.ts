@@ -42,6 +42,7 @@ import "./skills/optimizeCrew.test.ts";
 import "./skills/progression.test.ts";
 import "./scripts/pre-commit.test.ts";
 import "./scripts/pre-push.test.ts";
+import "./scripts/communitySheetLinks.test.ts";
 import "./squad/team-configuration.test.ts";
 import "./squad/distributed-mesh-sync.test.ts";
 import "./squad/coordinator-ledger-guard.test.ts";

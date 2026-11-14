@@ -1,106 +1,15 @@
-# SF Academy Building
+# SF Academy Building — Source Link
 
 ## Lineage
 
 | Field | Value |
 | --- | --- |
-| **Source URL** | <https://docs.google.com/spreadsheets/d/19gxHFoje5GGRWSmE9BtSp97j_zOnMY4jBP9gFr1zi90/edit#gid=556376347> (gid `556376347`) |
-| **Source name** | STFC Community Sheet — *Starfleet Academy, Athena & Duo Waves — M90 & M91* — SF Academy Building tab |
-| **Author(s) / contributors** | JulesVern; Quasel; BlueMandalorian; STFC Officer Tool Discord `#data-collection` channel |
-| **Captured on** | 2026-11-02 |
-| **License / attribution requirements** | Community-maintained reference. Upstream says **"MAKE A COPY"** for any use of the calculators; we mirror read-only. Preserve the author list above on every quote or excerpt; link back to the source URL. We do **not** modify the upstream sheet — contributions go through the authors via the Discord channel: https://discord.gg/BRhru6Vcnj |
-| **Refresh strategy** | Re-fetch via the public gviz CSV endpoint per tab: `node scripts/fetch-community-sheet.mjs` from the repo root rewrites every per-tab mirror and updates **Captured on**. If the upstream adds/renames/removes tabs, update the `TABS` array in that script first (gids come from the published `/htmlview` URL). |
+| **Source URL** | <https://docs.google.com/spreadsheets/d/19gxHFoje5GGRWSmE9BtSp97j_zOnMY4jBP9gFr1zi90/edit#gid=556376347> |
+| **Source name** | STFC Community Sheet — SF Academy Building tab |
+| **Author(s) / contributors** | Previously recorded: JulesVern; Quasel; BlueMandalorian; STFC Officer Tool Discord `#data-collection` community. See [source attribution](./README.md#lineage). |
+| **Captured on** | Not applicable — source link only; previous snapshot removed. |
+| **License / attribution requirements** | Redistribution permission has not been established; no upstream content is reproduced here. |
+| **Refresh strategy** | Check the original source; update this link manually if needed. Do not re-ingest. |
 
-> Read-only mirror — **do not modify this file by hand**; your edits will be
-> overwritten on the next refresh. The upstream tab contains visual /
-> screenshot content (charts, embedded images) that does **not** survive
-> CSV export. The block below is the machine-readable subset; consult the
-> source URL for full visual context.
-
-## Data (CSV mirror, empty columns trimmed)
-
-```csv
-Starfleet [SF] Academy Building Overview ,Buffs Provided by Building,,,,,,One Time Gifts,,,"Starfleet [SF] Academy Building  By: JulesVern, Quasel, BlueMandalorian and the STFC community",,,,,,,Ops Range # of chests,,Avg. Drip ,Est. Days 
-,,,,,,,,Duo Wave,Speed Ups,,,50,,,"10,000",75000000%,,250%,70000%,"6,860"
-,,,,,,,,,,,,,Gas Materials,,,,,,,
-,,,,,,,,Simulation Codes,[Σ] Total,FALSE,1,,6★ Com,"3,080",0,500,,,,
-,,,,,,,,,,FALSE,2,,6★ Com,"4,540",80,520,,,,
-10,"1,565","5,000",,,,,1,"1,400",-,FALSE,3,,6★ Com,"5,990",100,550,,,,
-20,"4,820","42,500",50%,100%,,,2,"2,800",4h,FALSE,4,,6★ Com,"7,450",120,670,,,,
-30,"9,495","150,000",85%,150%,500,"5,000",2,"2,800",4h,FALSE,5,,6★ Com,"8,910",160,890,,,,
-40,"19,370","350,000",125%,200%,600,"5,880",2,"2,800",4h,FALSE,6,,6★ Com,"10,350",185,"1,300",,,,
-50,"29,370","750,000",170%,250%,700,"6,860",2,"4,200",21h,FALSE,7,,6★ Com,"11,850",205,"1,800",,,,
-60,"49,820","1,150,000",220%,300%,800,"7,840",2,"4,200",2d 18h,FALSE,8,,6★ Com,"13,250",220,"2,600",,,,
-65,"78,200","1,362,500",240%,300%,840,"8,430",,-,-,FALSE,9,,6★ Com,"14,750",240,"3,600",,,,
-70,"119,580","1,575,000",260%,300%,900,"8,820",2,?,?,FALSE,10,,6★ Com,"16,150",255,"5,000",,,,
-75,"168,960","1,787,500",280%,300%,940,"9,410",,-,-,FALSE,11,,6★ Com,"17,650",270,"6,600",,,,
-80,"222,710","2,000,000",300%,300%,"1,000","10,000",,?,?,FALSE,12,,6★ Com,"19,100",285,"8,700",,,,
-,,,,,,,,Update: 4/28/2026,,FALSE,13,,6★ Com,"20,550",295,11.0K,,,,
-,,,,,,,,,,FALSE,14,,6★ Com,"22,000",310,13.9K,,,,
-,,,,,,,,,,FALSE,15,,6★ Com,"23,450",320,17.3K,,,,
-,,,,,,,,,,FALSE,16,,6★ Com,"24,950",335,21.1K,,,,
-,,,,,,,,,,FALSE,17,,6★ Com,"26,400",345,25.6K,,,,
-,,,,,,,,,,FALSE,18,,6★ Com,"27,850",355,30.6K,,,,
-,,,,,,,,,,FALSE,19,,6★ Com,"29,300",365,36.3K,,,,
-,,,,,,,,,,FALSE,20,,6★ Com,"30,750",375,42.5K,50%,100%,,
-,,,,,,,,,,FALSE,21,,6★ Unc,"2,330",400,49.5K,53%,100%,,
-,,,,,,,,,,FALSE,22,,6★ Unc,"3,380",415,57.3K,56%,100%,,
-,,,,,,,,,,FALSE,23,,6★ Unc,"4,430",430,65.8K,59%,100%,,
-,,,,,,,,,,FALSE,24,,6★ Unc,"5,480",445,75.1K,62%,100%,,
-,,,,,,,,,,FALSE,25,,6★ Unc,"6,530",460,85.2K,65%,100%,,
-,,,,,,,,,,FALSE,26,,6★ Unc,"7,580",475,96.3K,68%,100%,,
-,,,,,,,,,,FALSE,27,,6★ Unc,"8,630",490,108.2K,71%,100%,,
-,,,,,,,,,,FALSE,28,,6★ Unc,"9,690",505,121.2K,74%,100%,,
-,,,,,,,,,,FALSE,29,,6★ Unc,"10,750",520,135.1K,77%,100%,,
-,,,,,,,,,,FALSE,30,,6★ Unc,"11,800",535,150.0K,85%,150%,500,"5,000"
-,,,,,,,,,,FALSE,31,,6★ Unc,"12,850",875,170.0K,88%,150%,500,"5,100"
-,,,,,,,,,,FALSE,32,,6★ Unc,"13,900",1000,190.0K,91%,150%,520,"5,100"
-,,,,,,,,,,FALSE,33,,6★ Unc,"14,950",1000,210.0K,94%,150%,520,"5,300"
-,,,,,,,,,,FALSE,34,,6★ Unc,"16,000",1000,230.0K,97%,150%,540,"5,300"
-,,,,,,,,,,FALSE,35,,6★ Unc,"17,050",1000,250.0K,100%,150%,540,"5,490"
-,,,,,,,,,,FALSE,36,,6★ Unc,"18,100",1000,270.0K,103%,150%,560,"5,490"
-,,,,,,,,,,FALSE,37,,6★ Unc,"19,150",1000,290.0K,106%,150%,560,"5,690"
-,,,,,,,,,,FALSE,38,,6★ Unc,"20,200",1000,310.0K,109%,150%,580,"5,690"
-,,,,,,,,,,FALSE,39,,6★ Unc,"21,250",1000,330.0K,112%,150%,580,"5,880"
-,,,,,,,,,,FALSE,40,,6★ Unc,"22,300",1000,350.0K,125%,200%,600,"5,880"
-,,,,,,,,,,TRUE,41,,6★ Unc,"23,350",1000,390.0K,128%,200%,600,"6,080"
-,,,,,,,,,,TRUE,42,,6★ Unc,"24,400",1000,430.0K,131%,200%,620,"6,080"
-,,,,,,,,,,TRUE,43,,6★ Unc,"25,450",1000,470.0K,134%,200%,620,"6,280"
-,,,,,,,,,,TRUE,44,,6★ Unc,"26,500",1000,510.0K,137%,200%,640,"6,280"
-,,,,,,,,,,TRUE,45,,6★ Unc,"27,550",1000,550.0K,140%,200%,640,"6,470"
-,,,,,,,,,,TRUE,46,,6★ Unc,"28,600",1000,590.0K,143%,200%,660,"6,470"
-,,,,,,,,,,TRUE,47,,6★ Unc,"29,650",1000,630.0K,146%,200%,660,"6,670"
-,,,,,,,,,,TRUE,48,,6★ Unc,"30,700",1000,670.0K,149%,200%,680,"6,670"
-,,,,,,,,,,TRUE,49,,6★ Unc,"31,750",1000,710.0K,152%,200%,680,"6,860"
-,,,,,,,,,,TRUE,50,,6★ Unc,"32,800",1000,750.0K,170%,250%,700,"6,860"
-,,,,,,,,,,FALSE,51,,6★ Unc,"33,850",1750,790.0K,173%,250%,700,"7,060"
-,,,,,,,,,,FALSE,52,,6★ Unc,"34,900",1750,830.0K,176%,250%,720,"7,060"
-,,,,,,,,,,FALSE,53,,6★ Unc,"36,000",1750,870.0K,179%,250%,720,"7,260"
-,,,,,,,,,,FALSE,54,,6★ Unc,"37,050",1820,910.0K,182%,250%,740,"7,260"
-,,,,,,,,,,FALSE,55,,6★ Unc,"38,100",1990,950.0K,185%,250%,740,"7,450"
-,,,,,,,,,,FALSE,56,,6★ Unc,"39,150",2090,990.0K,188%,250%,760,"7,450"
-,,,,,,,,,,FALSE,57,,6★ Unc,"40,200",2190,1.0M,191%,250%,760,"7,650"
-,,,,,,,,,,FALSE,58,,6★ Unc,"41,250",2280,1.1M,194%,250%,780,"7,650"
-,,,,,,,,,,FALSE,59,,6★ Unc,"42,300",2370,1.1M,197%,250%,780,"7,840"
-,,,,,,,,,,FALSE,60,,6★ Unc,"43,350",2460,1.2M,220%,300%,800,"7,840"
-,,,,,,,,,,FALSE,61,,6★ Unc,"44,400",3620,1.2M,224%,300%,800,"8,040"
-,,,,,,,,,,FALSE,62,,6★ Unc,"46,150",5270,1.2M,228%,300%,820,"8,040"
-,,,,,,,,,,FALSE,63,,6★ Unc,"47,650",6000,1.3M,232%,300%,820,"8,240"
-,,,,,,,,,,FALSE,64,,6★ Rare,"20,200",6530,1.3M,236%,300%,840,"8,240"
-,,,,,,,,,,FALSE,65,,6★ Rare,"26,200",6960,1.4M,240%,300%,840,"8,430"
-,,,,,,,,,,FALSE,66,,6★ Rare,"32,750",7680,1.4M,244%,300%,860,"8,430"
-,,,,,,,,,,FALSE,67,,6★ Rare,"39,750",8010,1.4M,248%,300%,860,"8,630"
-,,,,,,,,,,FALSE,68,,6★ Rare,"47,100",8310,1.5M,252%,300%,880,"8,630"
-,,,,,,,,,,FALSE,69,,6★ Rare,"54,500",8570,1.5M,256%,300%,880,"8,820"
-,,,,,,,,,,FALSE,70,,6★ Rare,"61,750",8810,1.6M,260%,300%,900,"8,820"
-,,,,,,,,,,FALSE,71,,7★ Com,"178,700",9460,1.6M,264%,300%,900,"9,020"
-,,,,,,,,,,FALSE,72,,7★ Unc,"87,150",9680,1.7M,268%,300%,920,"9,020"
-,,,,,,,,,,FALSE,73,,7★ Unc,"96,050",9890,1.7M,272%,300%,920,"9,220"
-,,,,,,,,,,FALSE,74,,7★ Unc,"105,200",10100,1.7M,276%,300%,940,"9,220"
-,,,,,,,,,,FALSE,75,,7★ Unc,"118,700",10250,1.8M,280%,300%,940,"9,410"
-,,,,,,,,,,FALSE,76,,7★ Rare,"17,450",10450,1.8M,284%,300%,960,"9,410"
-,,,,,,,,,,FALSE,77,,7★ Rare,"21,450",10600,1.9M,288%,300%,960,"9,610"
-,,,,,,,,,,FALSE,78,,7★ Rare,"24,400",10750,1.9M,292%,300%,980,"9,610"
-,,,,,,,,,,FALSE,79,,7★ Rare,"27,400",10900,2.0M,296%,300%,980,"9,800"
-,,,,,,,,,,FALSE,80,,7★ Rare,"30,550",11050,2.0M,300%,300%,1000,"10,000"
-```
+Open the **Source URL** for the tab's content. No local CSV data is available.
+See the [source index](./README.md) for the replacement rationale and limitations.

@@ -4,6 +4,11 @@ Reference snapshots ingested from Discord channels in the STFC community servers
 Each channel that has been ingested (or attempted) lives in its own sub-directory
 following the naming convention `{guild-slug}-{channel-slug}/`.
 
+No channel content is currently ingested. The procedures below are historical
+access guidance, not authorization to collect or redistribute content.
+Verify reuse terms and obtain applicable authorization before any capture;
+bot membership and attribution alone are insufficient (see [#402](https://github.com/Jamula/stfc/issues/402)).
+
 ## Access model
 
 All channel reads use the project's Discord bot (`DISCORD_BOT_TOKEN`, a GitHub
@@ -29,7 +34,7 @@ For Discord channels the fields map as follows:
 | **Source name** | `{Guild name} Discord — #{channel-name} channel` |
 | **Author(s) / contributors** | Discord username (stable handle, not display name). List all contributors quoted in the artifact. |
 | **Captured on** | ISO date (YYYY-MM-DD) the snapshot was taken. Refreshes update this. |
-| **License / attribution requirements** | `Mirrored from the {Guild name} community Discord. Original authors retain credit. Do not modify mirrored content; refresh via re-ingestion.` |
+| **License / attribution requirements** | Verified reuse terms and evidence, or `Redistribution permission not established; source link only`. |
 | **Refresh strategy** | `node scripts/fetch-discord-channel.mjs` (requires `DISCORD_BOT_TOKEN` in env); re-fetches pins + recent messages and rewrites the snapshot files. |
 
 ## What's here today
@@ -88,11 +93,12 @@ repository.
    # Expect: "1115978499400933473"
    ```
 
-4. Then run `node scripts/fetch-discord-channel.mjs` from the repo root.
+4. Only after verified reuse terms and applicable authorization, run
+   `node scripts/fetch-discord-channel.mjs` from the repo root.
 
 **Who to ask:** A maintainer or moderator of the STFC Officer Tool Discord.
 
-## Refresh procedure (once access is available)
+## Refresh procedure (only after access, reuse verification, and authorization)
 
 ```bash
 export DISCORD_BOT_TOKEN="<your-bot-token>"

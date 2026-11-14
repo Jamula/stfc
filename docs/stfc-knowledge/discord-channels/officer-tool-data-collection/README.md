@@ -14,8 +14,8 @@
 | **Source name** | STFC Officer Tool Discord — `#data-collection` channel (guild `639255937869152267`, channel `1115978499400933473`) |
 | **Author(s) / contributors** | Community contributors in the STFC Officer Tool Discord `#data-collection` channel (usernames not collected; no snapshot exists) |
 | **Captured on** | 2026-05-31 (stub only — no content ingested) |
-| **License / attribution requirements** | Mirrored from the STFC Officer Tool community Discord. Original authors retain credit. Do not modify mirrored content; refresh via re-ingestion. |
-| **Refresh strategy** | `node scripts/fetch-discord-channel.mjs` from the repo root (requires `DISCORD_BOT_TOKEN` env var set to a bot token that is a member of guild `639255937869152267`). Fetches pins first (`GET /channels/1115978499400933473/pins`), then paginates history (`GET /channels/1115978499400933473/messages?limit=100&before={id}`). |
+| **License / attribution requirements** | Redistribution permission has not been established; no content is mirrored here. Bot access and attribution do not establish reuse permission. |
+| **Refresh strategy** | Maintain source links only unless reuse terms are verified and capture is separately authorized. Historical capture tooling: `node scripts/fetch-discord-channel.mjs` (requires bot membership/access and `DISCORD_BOT_TOKEN`). |
 
 ## What this channel contains (anticipated)
 
@@ -30,14 +30,15 @@ Discord is where:
 - Strategy discussions and data corrections relevant to game mechanics are
   recorded as pins and high-reply-count threads.
 
-This content is the upstream source for the Google Sheet already mirrored at
-`docs/stfc-knowledge/community-reference-sheet/`. Ingesting this channel
-would add the *source-of-source* lineage and any informal knowledge not yet
-promoted to the sheet.
+The previous sheet provenance credits this community; it does not independently
+verify the channel's contents or establish redistribution permission.
+The sheet is now [source links only](../../community-reference-sheet/README.md),
+not a local mirror.
 
-## Ingest plan (pending bot access)
+## Historical ingest plan (pending reuse verification, authorization, and bot access)
 
-Once the bot is in the guild:
+Only if capture is separately authorized, reuse terms are verified, and the
+bot has access:
 
 1. **Fetch pins first** — these are the highest-signal, editor-curated posts:
    ```bash
@@ -62,6 +63,6 @@ Once the bot is in the guild:
 ## Related
 
 - [discord-channels/ README](../README.md) — blocker details + unblock steps
-- [community-reference-sheet/](../../community-reference-sheet/README.md) — the Google Sheet mirror that credits this channel as a source
+- [community-reference-sheet/](../../community-reference-sheet/README.md) — original Google Sheet links and previously recorded community attribution
 - [fetch-discord-channel.mjs](../../../../scripts/fetch-discord-channel.mjs) — ingest script (requires bot token)
 - Issue [#76](https://github.com/Jamula/stfc/issues/76) — tracking issue
