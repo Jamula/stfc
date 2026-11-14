@@ -1,11 +1,10 @@
 # stfc-gift-redeemer
 
 A headless TypeScript CLI that automatically redeems web-store gifts and promo
-codes from the **Star Trek Fleet Command** store. It is designed to run as a
-scheduled GitHub Action every 10 minutes (144 runs/day), so daily login bonuses,
-free packs, and promotional codes are claimed without you ever opening the store
-in a browser. Optionally monitors configured Discord channels for new promo codes
-and player tips, harvesting both into a daily digest.
+codes from the **Star Trek Fleet Command** store. GitHub Actions requests a
+scheduled run every 10 minutes, but schedule delivery is best-effort—not a
+10-minute guarantee. Optionally monitors configured Discord channels for new
+promo codes and player tips, harvesting both into a daily digest.
 
 ---
 
@@ -29,9 +28,10 @@ and player tips, harvesting both into a daily digest.
    `capture-token` use `gh`, it's already done. Otherwise, paste the JSON
    `capture-token` wrote to `.env` into *Settings → Secrets and variables →
    Actions → STFC_ACCOUNTS*.
-3. **Enable the `Redeem gifts` workflow** under the Actions tab. It will run
-   on the cron schedule (every 10 minutes) from then on. You can also trigger
-   it manually with the **Run workflow** button to verify everything works.
+3. **Enable the `Redeem gifts` workflow** under the Actions tab. GitHub
+   requests a run every 10 minutes, but may delay or drop scheduled runs.
+   You can also trigger it manually with the **Run workflow** button to verify
+   everything works.
 
 > **Token expiry:** the current email-OTP login requires the visible-browser
 > `capture-token` flow. The legacy `Refresh token` workflow cannot complete
