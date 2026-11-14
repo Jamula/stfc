@@ -741,7 +741,11 @@ describe("workflow consolidation", () => {
     const paths = hygiene.workflow.on?.pull_request?.paths ?? [];
     assert.ok(paths.includes("data/digests/**"), "digest artifacts must trigger the scan");
     assert.ok(paths.includes("data/discord/**"), "Discord runtime artifacts must trigger the scan");
+    assert.ok(paths.includes("config/**"), "configuration changes must trigger the scan");
+    assert.ok(paths.includes("data/crew/roster/**"), "crew roster changes must trigger the scan");
+    assert.ok(paths.includes("discord/**"), "Discord source changes must trigger the scan");
     assert.ok(paths.includes(".github/**"), "scanned GitHub configuration files must trigger the scan");
+    assert.ok(paths.includes("CHANGELOG.md"), "root changelog changes must trigger the scan");
     assert.ok(paths.includes("README.md"), "root README changes must trigger the scan");
     assert.ok(paths.includes("SECURITY.md"), "security policy changes must trigger the scan");
     assert.ok(paths.includes("CONTRIBUTING.md"), "contribution guidance changes must trigger the scan");
@@ -834,6 +838,10 @@ describe("workflow consolidation", () => {
 
         const filenames = [
           "SECURITY.md",
+          "CHANGELOG.md",
+          "config/discord-allowlist.json",
+          "data/crew/roster/demo.yaml",
+          "discord/commands.json",
           "data/discord/channel log.jsonl",
           ".github/workflows/quick-check.YML",
           "src/handler.ts",
