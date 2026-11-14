@@ -1,4 +1,4 @@
-// Loader and validator for the STFC_ACCOUNTS environment variable.
+// Loader and validator for STFC_ACCOUNTS or STFC_ACCOUNTS_FILE.
 //
 // Format (single JSON value):
 //   [{"name":"main","token":"<JWT>"}, {"name":"alt","token":"<JWT>"}]
@@ -7,6 +7,7 @@
 // from here are infrastructure-class (the orchestrator exits non-zero).
 
 import { z } from "zod";
+import { readFileSync } from "node:fs";
 import { isJwtShaped } from "./jwt.ts";
 
 export class AccountsConfigError extends Error {
@@ -27,14 +28,30 @@ export interface Account {
 
 export interface LoadAccountsOptions {
   envValue?: string | undefined;
+  filePath?: string | undefined;
 }
 
 export function loadAccounts(opts: LoadAccountsOptions = {}): Account[] {
-  const raw = opts.envValue ?? process.env.STFC_ACCOUNTS;
+  const envValue = opts.envValue ?? process.env.STFC_ACCOUNTS;
+  const filePath = opts.filePath ?? process.env.STFC_ACCOUNTS_FILE;
+  if (envValue && filePath) {
+    throw new AccountsConfigError("Set only one of STFC_ACCOUNTS and STFC_ACCOUNTS_FILE.");
+  }
+  let raw = envValue;
+  if (!raw && filePath) {
+    try {
+      raw = readFileSync(filePath, "utf8");
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : "unknown file error";
+      throw new AccountsConfigError(
+        `STFC_ACCOUNTS_FILE could not be read: ${detail}. See docs/SETUP.md for token-store configuration.`,
+      );
+    }
+  }
   if (!raw || raw.trim().length === 0) {
     throw new AccountsConfigError(
-      "STFC_ACCOUNTS environment variable is not set. " +
-      "See docs/SETUP.md for how to capture a JWT and configure the secret.",
+      "Neither STFC_ACCOUNTS nor STFC_ACCOUNTS_FILE is set. " +
+      "See docs/SETUP.md for token-store configuration.",
     );
   }
 
@@ -44,7 +61,7 @@ export function loadAccounts(opts: LoadAccountsOptions = {}): Account[] {
   } catch (err) {
     const detail = err instanceof Error ? err.message : String(err);
     throw new AccountsConfigError(
-      `STFC_ACCOUNTS is not valid JSON: ${detail}. ` +
+      `Account data from STFC_ACCOUNTS or STFC_ACCOUNTS_FILE is not valid JSON: ${detail}. ` +
       `When pasting into a GitHub Secret, paste the raw JSON without surrounding quotes — ` +
       `e.g. [{"name":"main","token":"eyJ..."}]`,
     );
@@ -54,7 +71,7 @@ export function loadAccounts(opts: LoadAccountsOptions = {}): Account[] {
   if (!result.success) {
     const issues = result.error.issues.map((i) => `  - ${i.path.join(".") || "(root)"}: ${i.message}`).join("\n");
     throw new AccountsConfigError(
-      `STFC_ACCOUNTS structure is invalid:\n${issues}\n` +
+      `Account data structure is invalid:\n${issues}\n` +
       `Expected an array of {name, token} objects, e.g. [{"name":"main","token":"eyJ..."}].`,
     );
   }
@@ -69,7 +86,7 @@ export function loadAccounts(opts: LoadAccountsOptions = {}): Account[] {
   }
   if (dupes.length > 0) {
     throw new AccountsConfigError(
-      `STFC_ACCOUNTS has duplicate account name(s): ${[...new Set(dupes)].join(", ")}. ` +
+      `Account data has duplicate account name(s): ${[...new Set(dupes)].join(", ")}. ` +
       `Each account must have a unique name.`,
     );
   }
@@ -78,7 +95,7 @@ export function loadAccounts(opts: LoadAccountsOptions = {}): Account[] {
     if (!isJwtShaped(a.token)) {
       throw new AccountsConfigError(
         `Account "${a.name}" token is not JWT-shaped (expected three base64url segments separated by dots). ` +
-        `Run \`npm run capture-token\` to capture a valid token.`,
+        `Run \`npm run capture-token\` locally or use the STFC token PWA to capture a valid token.`,
       );
     }
   }

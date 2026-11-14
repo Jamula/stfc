@@ -627,7 +627,7 @@ describe("discordMonitor / cooldown writes only", () => {
 describe("discordMonitor / workflow YAML assertions (T027)", () => {
   // T018 sub-assertion that needs T027's YAML to exist. Read the workflow
   // once and verify the bit-for-bit values that the spec requires.
-  // refresh-token.yml: schedule removed (passwordless OTP login); manual dispatch only.
+  // refresh-token.yml is the manual-only legacy-store migration workflow.
   const yamlPath = path.resolve(
     import.meta.dirname,
     "..",
@@ -663,10 +663,11 @@ describe("discordMonitor / workflow YAML assertions (T027)", () => {
     assert.match(yaml, /cron:\s*["']\*\/10 \* \* \* \*["']/);
   });
 
-  it("refresh-token.yml remains manual-only while passwordless OTP is required", () => {
+  it("the legacy token-store migration remains manual-only", () => {
     const yaml = fs.readFileSync(refreshTokenYamlPath, "utf8");
-    assert.match(yaml, /^ {2}workflow_dispatch:/m, "manual refresh must remain available");
-    assert.doesNotMatch(yaml, /^ {2}schedule:/m, "do not re-enable unattended refresh without an authenticator");
+    assert.match(yaml, /^ {2}workflow_dispatch:/m, "migration must require manual dispatch");
+    assert.doesNotMatch(yaml, /^ {2}schedule:/m, "migration must never run unattended");
+    assert.doesNotMatch(yaml, /STFC_OTP|otp:/i, "the legacy OTP-input flow must stay retired");
   });
 
   it("concurrency group is `stfc-gift-redeemer` bit-for-bit (matches redeem.yml and refresh-token.yml)", () => {
@@ -706,10 +707,11 @@ describe("discordMonitor / workflow YAML assertions (T027)", () => {
     }
   });
 
-  it("DISCORD_BOT_TOKEN + STFC_ACCOUNTS env vars are wired from secrets", () => {
+  it("Discord credentials and the private token-store file are wired without exposing token secrets", () => {
     const yaml = fs.readFileSync(yamlPath, "utf8");
     assert.match(yaml, /DISCORD_BOT_TOKEN:\s*\$\{\{\s*secrets\.DISCORD_BOT_TOKEN\s*\}\}/);
-    assert.match(yaml, /STFC_ACCOUNTS:\s*\$\{\{\s*secrets\.STFC_ACCOUNTS\s*\}\}/);
+    assert.match(yaml, /STFC_ACCOUNTS_FILE:\s*\$\{\{\s*runner\.temp\s*\}\}\/stfc-accounts\.json/);
+    assert.doesNotMatch(yaml, /STFC_ACCOUNTS:\s*\$\{\{\s*secrets\.STFC_ACCOUNTS\s*\}\}/);
   });
 
   it("permissions include `contents: write` (required for commit-on-write step)", () => {

@@ -233,7 +233,7 @@ async function processAccount(
     // secret" instead of a healthy token that silently claims nothing.
     if (items.some((i) => i.outcome === Outcomes.TOKEN_EXPIRED)) {
       effectiveTokenStatus = Outcomes.TOKEN_EXPIRED;
-      log.error(`[${account.name}] token passed /auth/me but was rejected by the store — re-capture STFC_ACCOUNTS`);
+      log.error(`[${account.name}] token passed /auth/me but was rejected by the store — update it in the STFC token PWA`);
     } else if (!giftsResult.schemaMismatch) {
       codes.push(...(await processCodes(client, promoCodes, account.name, report, deadCodesPath, deadCodeCache, sleep)));
     }
@@ -268,7 +268,7 @@ async function checkAuth(client: ApiClient, accountName: string, report: RunAllR
     return Outcomes.TOKEN_VALID;
   } catch (err) {
     if (err instanceof TokenExpiredError) {
-      log.error(`[${accountName}] auth/me rejected the token — re-capture STFC_ACCOUNTS`);
+      log.error(`[${accountName}] auth/me rejected the token — update it in the STFC token PWA`);
       return Outcomes.TOKEN_EXPIRED;
     }
     if (err instanceof SchemaMismatchError) {
@@ -621,7 +621,7 @@ function renderSummary(report: RunAllReport, exitCode: number): string {
 
   if (exitCode === 2) {
     parts.push(heading(2, "Secret rotation needed"));
-    parts.push("All accounts returned TOKEN_EXPIRED. Re-capture tokens and update STFC_ACCOUNTS.\n");
+    parts.push("All accounts returned TOKEN_EXPIRED. Sign in again in the STFC token PWA to update the private token store.\n");
   }
 
   if (report.errors.length > 0) {

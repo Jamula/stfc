@@ -1,0 +1,19 @@
+{
+  "id": "/",
+  "name": "STFC Control Panel",
+  "short_name": "STFC Control",
+  "description": "Authenticated STFC operations and token updates",
+  "start_url": "/#token-update",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#075a9c",
+  "icons": [
+    {
+      "src": "/pwa-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

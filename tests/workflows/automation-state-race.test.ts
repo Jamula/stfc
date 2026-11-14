@@ -6,7 +6,7 @@
 // game-state upload. This suite reproduces that exact interleaving against
 // real git plumbing (not YAML text) and proves:
 //   1. the production allowlist helper (scripts/discord-monitor-state.mjs,
-//      as wired into discord-monitor.yml's persist step) survives it
+//      as wired into the monitor workflow's persist step) survives it
 //      (game-state preserved, monitor-owned files still update, push
 //      succeeds on the first fast-forward attempt — no rebase needed to
 //      expose the bug); and
@@ -14,8 +14,8 @@
 //      under the identical interleaving, so this is a real regression guard.
 //
 // Round 2 (PR #250 review): the shared stfc-gift-redeemer
-// concurrency group across redeem.yml/discord-monitor.yml/discord-command-
-// handler.yml (for /game-state) is the PRIMARY fix — it makes this
+// concurrency group across the redemption, monitor, and Discord command
+// handler workflows (for /game-state) is the PRIMARY fix — it makes this
 // interleaving impossible in production because the handler and monitor
 // jobs can never run concurrently. This suite intentionally does not (and
 // cannot) exercise that GitHub Actions scheduling guarantee; it proves the
@@ -174,14 +174,14 @@ describe("automation-state writer race (PR #250 review)", () => {
         "precondition: the freshly fetched tip must already contain the handler's push",
       );
 
-      // Exercises the exact helper discord-monitor.yml's persist step calls
+      // Exercises the exact helper the monitor workflow's persist step calls
       // (`node scripts/discord-monitor-state.mjs persist "$GITHUB_WORKSPACE" "$STATE_DIR"`).
       await persistDiscordMonitorState({
         workspaceRoot: monitorWorkspace,
         stateRoot: stateDir,
       });
 
-      // Mirror discord-monitor.yml's exact per-file staging: an allowlist
+      // Mirror the monitor workflow's exact per-file staging: an allowlist
       // of monitor-owned files, never a broad `git add -A -- data/discord`
       // that could stage a deletion of game-state.
       await git(stateDir, "add", "-A", "--", "data/discord/cursors.json");

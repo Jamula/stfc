@@ -110,16 +110,33 @@ const refreshToken = loadWorkflow(".github/workflows/refresh-token.yml");
 const refreshTokenSource = readFileSync(".github/workflows/refresh-token.yml", "utf8");
 const storage = loadWorkflow(".github/workflows/storage-size-monitor.yml");
 
-describe("manual token refresh constraint", () => {
-  it("keeps OTP refresh manual and documents the supported runbook", () => {
+describe("legacy account-store migration workflow", () => {
+  it("is manual-only and uploads the legacy secret only when the Blob does not exist", () => {
     assert.match(refreshTokenSource, /^\s{2}workflow_dispatch:/m);
     assert.doesNotMatch(refreshTokenSource, /^\s{2}schedule:/m);
-    assert.match(refreshTokenSource, /manual dispatch only/i);
-    assert.match(refreshTokenSource, /passwordless email OTP/i);
-    assert.match(
-      refreshTokenSource,
-      /To refresh the token manually:[\s\S]*npm run capture-token[\s\S]*gh secret set STFC_ACCOUNTS/i,
-    );
+    assert.match(refreshTokenSource, /name: Migrate token store/);
+    assert.doesNotMatch(refreshTokenSource, /STFC_OTP|otp:/i);
+    assert.doesNotMatch(refreshTokenSource, /STFC_EMAIL|STFC_PASSWORD/);
+    assert.match(refreshTokenSource, /actions\/checkout@[0-9a-f]{40}/);
+    assert.match(refreshTokenSource, /azure\/login@[0-9a-f]{40}/);
+    assert.match(refreshTokenSource, /secrets\.STFC_ACCOUNTS/);
+    assert.match(refreshTokenSource, /node scripts\/validate-token-accounts\.mjs "\$account_file"/);
+    assert.doesNotMatch(refreshTokenSource, /jq -e/);
+    assert.match(refreshTokenSource, /az storage blob upload[\s\S]*--overwrite false/);
+    assert.match(refreshTokenSource, /unset STFC_ACCOUNTS/);
+    assert.match(refreshTokenSource, /Remove temporary account-token file/);
+    assert.match(refreshTokenSource, /AZURE_MIGRATION_CLIENT_ID/);
+
+    const migrationSteps = steps(refreshToken);
+    const validate = migrationSteps.findIndex((step) => step.name === "Validate existing account tokens");
+    const login = migrationSteps.findIndex((step) => step.uses?.startsWith("azure/login@"));
+    const upload = migrationSteps.findIndex((step) => step.name === "Upload account tokens");
+    assert.ok(validate >= 0 && login > validate && upload > login,
+      "validate the shared account schema before Azure login and upload");
+    const uploadRun = migrationSteps[upload]?.run ?? "";
+    assert.match(uploadRun, /--file "\$RUNNER_TEMP\/stfc-accounts\.json"/);
+    assert.doesNotMatch(uploadRun, /--file "\$account_file"/,
+      "step-local shell variables do not persist into the upload step");
   });
 });
 
@@ -161,6 +178,32 @@ const scheduled = [
 ] as const;
 
 describe("automation-state scheduled workflow contract", () => {
+  it("reads account tokens from private Blob Storage through OIDC without mapping token secrets", () => {
+    for (const [label, workflow] of [
+      ["redeem.yml", redeem],
+      ["discord-monitor.yml", monitor],
+    ] as const) {
+      const source = readFileSync(path.join(WORKFLOW_DIR, label), "utf8");
+      assert.match(source, /id-token:\s*write/, `${label} must request OIDC`);
+      assert.match(source, /az storage blob download[\s\S]*--auth-mode login/);
+      assert.match(source, /chmod 600 "\$RUNNER_TEMP\/stfc-accounts\.json"/);
+      assert.match(source, /STFC_ACCOUNTS_FILE:\s*\$\{\{\s*runner\.temp\s*\}\}\/stfc-accounts\.json/);
+      assert.match(source, /Remove account-token file/);
+      assert.doesNotMatch(source, /STFC_ACCOUNTS:\s*\$\{\{\s*secrets\.STFC_ACCOUNTS/);
+      assert.ok(workflow.jobs, `${label} must parse as a workflow`);
+
+      const workflowSteps = steps(workflow);
+      const install = workflowSteps.findIndex((step) => step.run?.trim() === "npm ci");
+      const login = workflowSteps.findIndex((step) => step.uses?.startsWith("azure/login@"));
+      const download = workflowSteps.findIndex((step) => step.name === "Download account tokens");
+      const consume = label === "redeem.yml"
+        ? workflowSteps.findIndex((step) => step.name === "Redeem")
+        : workflowSteps.findIndex((step) => step.run?.includes("npm run skill:discord-monitor"));
+      assert.ok(install >= 0 && login > install && download > login && consume > download,
+        `${label} must install dependencies before Azure login and download, then consume tokens`);
+    }
+  });
+
   for (const config of scheduled) {
     it(`${config.name} gates always() persistence on a complete restore`, () => {
       const restore = namedStep(
