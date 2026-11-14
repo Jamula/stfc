@@ -208,7 +208,7 @@ names and fail closed when values are missing.
 | Setting | Type | Description |
 |---|---|---|
 | `STFC_ALLOWED_USERS` | Comma-separated GitHub usernames | Users allowed to access the API (e.g. `cyrusjamula,teammate`). Must include every operator invited via SWA role management. |
-| `STFC_OWNER` | Single GitHub username | The owner with elevated privileges (refresh-token, owner-only UI). Set this to the authorized repository owner; for `Jamula/stfc`, that is `cyrusjamula`. |
+| `STFC_OWNER` | Single GitHub username | The owner allowed to use the token-update PWA and other owner-only UI. Set this to the authorized repository owner; for `Jamula/stfc`, that is `cyrusjamula`. |
 
 ### GitHub OAuth provider settings
 
@@ -257,6 +257,16 @@ Actions runs remain uncorrelated and are never joined by run ID, event type,
 or timestamp. An artifact is merged only when its correlation ID explicitly
 matches the ID carried by an Actions run name.
 No endpoint triggers workflows or calls the game store or Discord.
+
+### STFC token-update PWA
+
+The **STFC token update** tab uses the owner-only `/api/token-session/{action}`
+Functions gateway to call the token API Container App. Configure
+`STFC_PWA_BACKEND_URL` and `STFC_PWA_BACKEND_KEY` as Static Web App Function
+settings only after following the separate
+[STFC token PWA runbook](STFC-TOKEN-PWA.md). The API key must never be exposed
+to the browser. The browser relay must remain on internal Container Apps
+ingress and must not receive a Blob identity.
 
 ### CI gate
 

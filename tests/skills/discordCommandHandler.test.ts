@@ -41,7 +41,7 @@ describe(".github/workflows/discord-command-handler.yml", () => {
     () => {
       // /game-state is the only command
       // that writes automation-state directly from this job, so it alone
-      // must share the writer lock with redeem.yml/discord-monitor.yml —
+      // must share the writer lock with the scheduled redemption and monitor jobs —
       // a static per-workflow group here (whether always-shared or always-
       // isolated) is wrong for at least one command.
       assert.match(

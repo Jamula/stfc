@@ -11,7 +11,6 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
-// @ts-expect-error - plain .mjs helper without type declarations
 import { mergeIntoEnv } from "../../scripts/capture-token.mjs";
 
 // ---------------------------------------------------------------------------
@@ -137,6 +136,6 @@ describe("mergeIntoEnv error redaction (issue #211)", () => {
 
     assert.ok(Array.isArray(result), "Should return an array on force=true");
     assert.equal(result.length, 1);
-    assert.equal(result[0].name, "test-account");
+    assert.equal(result[0]?.name, "test-account");
   });
 });

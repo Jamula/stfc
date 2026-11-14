@@ -30,7 +30,7 @@ flowchart LR
 
   subgraph State
     Repo[("Git repo state<br/>promo-codes.txt, data/, docs/")]
-    Secrets[("GitHub Actions secrets")]
+    TokenStore[("Private Azure Blob<br/>accounts.json")]
     Azure[("Azure SWA + Functions")]
   end
 
@@ -42,11 +42,15 @@ flowchart LR
   Worker -->|repository_dispatch| CI
   Monitor -->|new codes| Repo
   Monitor -->|!crew dispatch| Crew
-  Redeemer -->|reads STFC_ACCOUNTS| Secrets
+  Redeemer -->|OIDC read| TokenStore
+  Monitor -->|OIDC read| TokenStore
   Redeemer -->|appends redeem-history| Repo
   Push --> SWA
   HTTP --> Azure
   Azure --> SWA
+  SWA -->|owner-authenticated gateway| TokenAPI["Token API Container App"]
+  TokenAPI -->|ETag update| TokenStore
+  TokenAPI -->|private relay| BrowserRelay["Chromium relay Container App"]
   SWA -->|approved data reads| Repo
   CI --> Repo
 ```
@@ -139,11 +143,14 @@ cli.ts → skills/runAll.ts → for each account: api/endpoints.ts → STFC stor
 | Code | Meaning |
 |---|---|
 | **0** | One or more accounts succeeded — or partial success per account. Per-account outcomes (`CODE_USED`, `ALREADY_CLAIMED`, etc.) do **not** fail the workflow. |
-| **1** | Infrastructure error (malformed `STFC_ACCOUNTS`, schema mismatch, uncaught crash). `report.errors.length > 0`. |
+| **1** | Infrastructure error (malformed account-store data, schema mismatch, uncaught crash). `report.errors.length > 0`. |
 | **2** | All accounts have `TOKEN_EXPIRED`. Re-capture the affected tokens with the local visible-browser flow. |
 
-**Auth flow.** `STFC_ACCOUNTS` repo secret = JSON array of `{name, token}`.
-Each `token` is a JWT against the Scopely store API. `src/lib/jwt.ts`
+**Auth flow.** The private Azure Blob `accounts.json` contains the JSON array
+of `{name, token}` records. Scheduled workflows use GitHub OIDC and a
+read-only Blob identity; the owner-only PWA writes through the authenticated
+Functions gateway to a separate token API identity using ETag-conditioned
+updates. Each `token` is a JWT against the Scopely store API. `src/lib/jwt.ts`
 decodes + describes expiry; expired tokens become `TOKEN_EXPIRED` outcomes
 (non-fatal per-account).
 
@@ -304,6 +311,14 @@ statement. Opt-out via
 **Frontend.** `web/src/app.ts` is the Lit 3 root that hash-routes between
 the dashboard sections; each section is implemented as a custom element.
 
+**STFC token update PWA.** The owner-only tab opens a short-lived sign-in
+session in a separate self-hosted Chromium relay. The relay has no Blob
+identity; the token API validates the captured token against the
+non-destructive `/offers/gifts?available=true` endpoint used by redemption,
+then updates the private account Blob conditionally. OTPs and tokens are never
+returned to the PWA or persisted in browser storage. The relay must use
+internal Container Apps ingress; only the token API may call it.
+
 **Bundle budget.** 81 920 bytes (= 80 KiB) gzipped JS,
 enforced by `scripts/ci/check-bundle-budget.mjs`. The checker excludes
 `rag-index.json`.
@@ -338,7 +353,7 @@ The repository has several focused workflows. Selected examples:
 |---|---|---|
 | `redeem.yml` | Gift redemption and state persistence | `*/10 * * * *` + manual dispatch |
 | `discord-monitor.yml` | Configured-channel ingest, code discovery, and digest | `15 */4 * * *` + manual dispatch |
-| `refresh-token.yml` | Manual token refresh attempt | Manual dispatch only; no schedule |
+| `refresh-token.yml` | One-time migration of the legacy account secret to Blob | Manual dispatch only; no schedule |
 | `discord-command-handler.yml` | Handle Discord slash-command dispatches | `repository_dispatch` |
 | `deploy-cloudflare-worker.yml` | Deploy the Discord interaction bridge | Worker changes + manual dispatch |
 | `knowledge-rebuild.yml` | Rebuild crew knowledge embeddings | Watched source changes + manual dispatch |
@@ -347,7 +362,8 @@ The repository has several focused workflows. Selected examples:
 
 Other automation and maintenance workflows live under
 `.github/workflows/`; consult their triggers and conditions before relying on
-them. In particular, `refresh-token.yml` is not a scheduled auto-refresh.
+them. In particular, `refresh-token.yml` no longer performs a provider login
+or refresh; token updates happen in the owner-only PWA.
 
 **Pre-commit.** `scripts/pre-commit.mjs` (installed by `simple-git-hooks`):
 
@@ -411,7 +427,7 @@ sequenceDiagram
   Cron->>Runner: redeem.yml fires (*/10 * * * *)
   Runner->>Runner: actions/checkout + setup-node + npm ci
   Runner->>CLI: npm run skill:run-all
-  CLI->>CLI: loadAccounts(STFC_ACCOUNTS secret)
+  CLI->>CLI: loadAccounts(STFC_ACCOUNTS_FILE downloaded from Blob)
   CLI->>Orch: runAll(accounts, summaryWriter)
   loop For each account
     Orch->>Orch: decodeJwt + describeExpiry
@@ -517,8 +533,8 @@ telemetry artifact producer exists; it does not invent metrics.
 
 ### 5.1 Secret management
 
-- **CI secrets** (`DISCORD_BOT_TOKEN`, `STFC_ACCOUNTS`, `STFC_EMAIL`,
-  `STFC_PASSWORD`, `STFC_REFRESH_PAT`, `AZURE_STATIC_WEB_APPS_API_TOKEN`): set via
+- **CI secrets** (`DISCORD_BOT_TOKEN`, legacy `STFC_ACCOUNTS` during migration,
+  `AZURE_STATIC_WEB_APPS_API_TOKEN`): set via
   `gh secret set <NAME> --repo Jamula/stfc` from a **LOCAL terminal
   only** (Rule 21). `gh` prompts with hidden input.
 - **Codespaces token scopes.** The Codespaces-injected `GITHUB_TOKEN`
@@ -551,7 +567,7 @@ a linked `automation-state` worktree as its working repository:
 game-state. `storage-size-monitor.yml` checks out that live ref directly.
 
 **Writer serialization.**
-`redeem.yml`, `discord-monitor.yml` and `refresh-token.yml` share one
+`redeem.yml`, `discord-monitor.yml` and the one-time `refresh-token.yml` share one
 `stfc-gift-redeemer` concurrency group (`cancel-in-progress: false`) so their
 pushes to `automation-state` never interleave.
 `discord-command-handler.yml`'s concurrency group is

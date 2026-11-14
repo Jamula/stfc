@@ -5,9 +5,18 @@ import './components/stfc-digests-tab.js';
 import './components/stfc-telemetry-tab.js';
 import './components/stfc-crew-tab.js';
 import './components/stfc-runs-tab.js';
+import './components/stfc-token-update-tab.js';
 
-type Tab = 'redeems' | 'digests' | 'telemetry' | 'crew' | 'runs';
-const TABS: readonly Tab[] = ['redeems', 'digests', 'telemetry', 'crew', 'runs'] as const;
+type Tab = 'redeems' | 'digests' | 'telemetry' | 'crew' | 'runs' | 'token-update';
+const TABS: readonly Tab[] = ['redeems', 'digests', 'telemetry', 'crew', 'runs', 'token-update'] as const;
+const TAB_LABELS: Record<Tab, string> = {
+  redeems: 'Redeems',
+  digests: 'Digests',
+  telemetry: 'Telemetry',
+  crew: 'Crew',
+  runs: 'Runs',
+  'token-update': 'Token update',
+};
 
 function readHash(): Tab {
   const hash = location.hash.replace('#', '') as Tab;
@@ -28,6 +37,7 @@ export class StfcApp extends LitElement {
     nav {
       display: flex;
       gap: 0.5rem;
+      overflow-x: auto;
       border-bottom: 2px solid #333;
       margin-bottom: 1rem;
     }
@@ -58,6 +68,7 @@ export class StfcApp extends LitElement {
   `;
 
   @state() private _tab: Tab = readHash();
+  @state() private _tokenTabOpened = this._tab === 'token-update';
 
   override connectedCallback(): void {
     super.connectedCallback();
@@ -74,6 +85,7 @@ export class StfcApp extends LitElement {
   };
 
   private _selectTab(tab: Tab): void {
+    if (tab === 'token-update') this._tokenTabOpened = true;
     location.hash = tab;
     this._tab = tab;
   }
@@ -90,12 +102,15 @@ export class StfcApp extends LitElement {
               role="tab"
               aria-selected=${this._tab === tab ? 'true' : 'false'}
               @click=${() => this._selectTab(tab)}
-            >${tab}</button>
+            >${TAB_LABELS[tab]}</button>
           `,
         )}
       </nav>
       <div class="tab-content" role="tabpanel">
         ${this._renderTab()}
+      </div>
+      <div ?hidden=${this._tab !== 'token-update'}>
+        ${this._tokenTabOpened ? html`<stfc-token-update-tab></stfc-token-update-tab>` : ''}
       </div>
     `;
   }
@@ -107,6 +122,7 @@ export class StfcApp extends LitElement {
       case 'telemetry': return html`<stfc-telemetry-tab></stfc-telemetry-tab>`;
       case 'crew':      return html`<stfc-crew-tab></stfc-crew-tab>`;
       case 'runs':      return html`<stfc-runs-tab></stfc-runs-tab>`;
+      case 'token-update': return html``;
     }
   }
 }

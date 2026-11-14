@@ -17,8 +17,8 @@
 //      GET /auth/me. If valid, decodes the JWT exp and proceeds.
 //   4. Merges the validated token into a local .env (preserving any
 //      other accounts already in STFC_ACCOUNTS).
-//   5. If `gh` CLI is available, offers (y/N) to set the GitHub repo
-//      secret STFC_ACCOUNTS via `gh secret set STFC_ACCOUNTS`,
+//   5. If `gh` CLI is available, offers (y/N) to set the legacy GitHub
+//      secret STFC_ACCOUNTS for one-time token-store migration only,
 //      passing the JSON via stdin (so the token never lands on a
 //      command line, in shell history, or in a process listing).
 //
@@ -146,45 +146,50 @@ function humanDelta(seconds) {
 // Network capture.
 // ----------------------------------------------------------------------------
 
-async function captureToken({ context, timeoutMs }) {
-  let resolve;
-  const captured = new Promise((r) => { resolve = r; });
-  let done = false;
-  const win = (token, source) => {
-    if (done) return;
-    done = true;
-    resolve({ token, source });
-  };
-
-  context.on("response", async (res) => {
-    try {
-      const url = res.url();
-      const req = res.request();
-      if (req.method() !== "POST") return;
-      if (!url.includes(`${API_HOST}/api/v2/auth/login`)) return;
-      const body = await res.json().catch(() => null);
-      if (body && typeof body.accessToken === "string" && body.accessToken.length > 0) {
-        win(body.accessToken, "POST /auth/login response.accessToken");
-      }
-    } catch {
-      // ignore body-read failures (redirects, aborted, non-JSON, etc.)
+async function captureToken({ context, timeoutMs, signal }) {
+  return new Promise((resolve) => {
+    let done = false;
+    const timer = setTimeout(() => finish({ token: null, source: "timeout" }), timeoutMs);
+    const finish = (result) => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", onAbort);
+      resolve(result);
+    };
+    const onAbort = () => finish({ token: null, source: "aborted" });
+    if (signal?.aborted) {
+      onAbort();
+      return;
     }
-  });
+    signal?.addEventListener("abort", onAbort, { once: true });
 
-  context.on("request", (req) => {
-    try {
-      const url = req.url();
-      if (!url.includes(API_HOST)) return;
-      const auth = req.headers()["authorization"];
-      if (typeof auth === "string" && auth.startsWith("Bearer ")) {
-        const token = auth.slice("Bearer ".length).trim();
-        if (token.length > 0) win(token, `request header on ${new URL(url).pathname}`);
+    context.on("response", async (res) => {
+      try {
+        const url = new URL(res.url());
+        if (res.request().method() !== "POST" || url.hostname !== API_HOST ||
+            url.pathname !== "/api/v2/auth/login") return;
+        const body = await res.json().catch(() => null);
+        if (body && typeof body.accessToken === "string" && body.accessToken.length > 0) {
+          finish({ token: body.accessToken, source: "POST /auth/login response.accessToken" });
+        }
+      } catch {
+        // Ignore body-read failures (redirects, aborted, non-JSON, etc.).
       }
-    } catch { /* noop */ }
-  });
+    });
 
-  const timeout = new Promise((r) => setTimeout(() => r({ token: null, source: "timeout" }), timeoutMs));
-  return Promise.race([captured, timeout]);
+    context.on("request", (req) => {
+      try {
+        const url = new URL(req.url());
+        if (url.hostname !== API_HOST) return;
+        const auth = req.headers()["authorization"];
+        if (typeof auth === "string" && auth.startsWith("Bearer ")) {
+          const token = auth.slice("Bearer ".length).trim();
+          if (token.length > 0) finish({ token, source: `request header on ${url.pathname}` });
+        }
+      } catch { /* Ignore malformed request URLs. */ }
+    });
+  });
 }
 
 async function validateToken(token) {
@@ -294,7 +299,7 @@ async function mergeIntoEnv({ name, token, force, _envPath = ENV_PATH }) {
 }
 
 // ----------------------------------------------------------------------------
-// `gh secret set` (consent-gated, secret via stdin only).
+// `gh secret set` for one-time legacy migration (consent-gated, secret via stdin only).
 // ----------------------------------------------------------------------------
 
 async function ghAvailable() {
@@ -432,7 +437,7 @@ async function findOtpEntry(page) {
 // correctly even when they don't.
 async function fillOtp(page, entry, code) {
   if (entry.kind === "single") {
-    await entry.el.fill(code).catch(() => {});
+    await entry.el.fill(code);
     return;
   }
 
@@ -573,49 +578,7 @@ async function promptAndSubmitOtp({ page, entry, log, maxAttempts = 3, headless 
 }
 
 async function tryAutoLogin(page, { email, password, log, err, ci, headless = false }) {
-  // Stage A: dismiss the OneTrust cookie banner if present (it intercepts
-  // clicks on the page-level Sign-in button).
-  log("auto-login: dismissing cookie banner if present");
-  for (const sel of ["#onetrust-accept-btn-handler", "#onetrust-reject-all-handler"]) {
-    const el = await page.$(sel).catch(() => null);
-    if (el && (await el.isVisible().catch(() => false))) {
-      await el.click().catch(() => {});
-      await page.waitForTimeout(1000);
-      break;
-    }
-  }
-
-  // Stage B: click "Sign in with Scopely" inside the modal (the page-level
-  // duplicate is hidden behind the modal). `.last()` reliably picks the
-  // visible one.
-  log("auto-login: clicking Sign in with Scopely (modal)");
-  try {
-    const btn = page.locator("#log-in-button").last();
-    await btn.waitFor({ state: "visible", timeout: 30_000 });
-    await btn.click({ timeout: 10_000 });
-  } catch (e) {
-    log(`auto-login: could not click Sign in with Scopely (${e.message?.slice(0, 100)}); falling back to interactive login.`);
-    return false;
-  }
-
-  // Stage C: wait for the Scopely Okta email form, fill, click Continue.
-  log("auto-login: waiting for Scopely email form…");
-  const emailField = await waitForFirstSelector(page, [
-    'input[name="email"]',
-    'input[type="email"]',
-    'input.ant-input',
-  ], 60_000);
-  if (!emailField) {
-    log("auto-login: no email field appeared within 60s — falling back to interactive login.");
-    return false;
-  }
-  log("auto-login: filling email and clicking Continue");
-  await emailField.fill(email);
-  await clickFirstAvailable(page, [
-    'button:has-text("Continue")',
-    'button[type="submit"]',
-    'button.ant-btn-primary',
-  ]);
+  if (!(await beginEmailLogin(page, email, log))) return false;
 
   // Stage D: after Continue, wait up to 15s for EITHER a "Sign in with
   // password instead" link (password-capable account) OR an OTP/passcode
@@ -728,11 +691,52 @@ async function clickFirstAvailable(page, selectors) {
   for (const sel of selectors) {
     const el = await page.$(sel).catch(() => null);
     if (el && (await el.isVisible().catch(() => false)) && (await el.isEnabled().catch(() => false))) {
-      await el.click().catch(() => {});
-      return true;
+      try {
+        await el.click();
+        return true;
+      } catch { /* Try the next known submit control. */ }
     }
   }
   return false;
+}
+
+async function beginEmailLogin(page, email, log = () => {}) {
+  log("auto-login: dismissing cookie banner if present");
+  for (const sel of ["#onetrust-accept-btn-handler", "#onetrust-reject-all-handler"]) {
+    const el = await page.$(sel).catch(() => null);
+    if (el && (await el.isVisible().catch(() => false))) {
+      await el.click().catch(() => {});
+      await page.waitForTimeout(1000);
+      break;
+    }
+  }
+
+  log("auto-login: clicking Sign in with Scopely (modal)");
+  try {
+    const btn = page.locator("#log-in-button").last();
+    await btn.waitFor({ state: "visible", timeout: 30_000 });
+    await btn.click({ timeout: 10_000 });
+  } catch (e) {
+    log(`auto-login: could not click Sign in with Scopely (${e.message?.slice(0, 100)}).`);
+    return false;
+  }
+
+  log("auto-login: waiting for Scopely email form");
+  const emailField = await waitForFirstSelector(page, [
+    'input[name="email"]',
+    'input[type="email"]',
+    'input.ant-input',
+  ], 60_000);
+  if (!emailField) {
+    log("auto-login: no email field appeared within 60s.");
+    return false;
+  }
+  await emailField.fill(email);
+  return clickFirstAvailable(page, [
+    'button:has-text("Continue")',
+    'button[type="submit"]',
+    'button.ant-btn-primary',
+  ]);
 }
 
 async function clickWithRetry(page, selector, timeoutMs) {
@@ -940,20 +944,20 @@ async function main() {
   const ghOk = await ghAvailable();
   if (ghOk) {
     console.log("");
-    if (await confirm("Set the GitHub repo secret STFC_ACCOUNTS via gh now?", false)) {
+    if (await confirm("Set the legacy STFC_ACCOUNTS secret for one-time migration only?", false)) {
       try {
         await ghSetSecret(JSON.stringify(merged));
-        console.log(`GitHub secret STFC_ACCOUNTS set successfully.`);
+        console.log("Legacy STFC_ACCOUNTS secret set. This does not update the canonical token store.");
       } catch (err) {
         console.error(`gh failed: ${err instanceof Error ? err.message : err}`);
-        console.error(`You can set the secret manually: GitHub repo → Settings → Secrets and variables → Actions → STFC_ACCOUNTS.`);
+        console.error(`For one-time migration only, set the legacy secret in GitHub repo → Settings → Secrets and variables → Actions → STFC_ACCOUNTS.`);
       }
     } else {
-      console.log(`Skipped. Set the secret manually when you're ready: GitHub repo → Settings → Secrets and variables → Actions → STFC_ACCOUNTS.`);
+      console.log(`Skipped. The hosted token store is not updated by this local capture.`);
     }
   } else {
     console.log(`\n'gh' CLI not found on PATH.`);
-    console.log(`Set the secret manually: GitHub repo → Settings → Secrets and variables → Actions → STFC_ACCOUNTS.`);
+    console.log(`The hosted token store is not updated by this local capture.`);
     console.log(`The value to paste is the JSON now in your local .env file.`);
   }
 
@@ -972,4 +976,15 @@ if (isDirectRun) {
   });
 }
 
-export { findOtpEntry, fillOtp, OTP_SELECTORS, SPLIT_OTP_SELECTOR, mergeIntoEnv };
+export {
+  findOtpEntry,
+  fillOtp,
+  OTP_SELECTORS,
+  SPLIT_OTP_SELECTOR,
+  mergeIntoEnv,
+  captureToken,
+  validateToken,
+  waitForFirstSelector,
+  clickFirstAvailable,
+  beginEmailLogin,
+};

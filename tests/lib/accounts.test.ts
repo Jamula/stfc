@@ -1,5 +1,8 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { loadAccounts, AccountsConfigError } from "../../src/lib/accounts.ts";
 
 function b64url(s: string): string {
@@ -39,12 +42,39 @@ describe("loadAccounts", () => {
     assert.equal(accounts[1]!.token, b);
   });
 
+  it("loads accounts from the private token-store file path", () => {
+    const jwt = makeJwt({ stored: true });
+    const directory = mkdtempSync(join(tmpdir(), "stfc-accounts-test-"));
+    const filePath = join(directory, "accounts.json");
+    try {
+      writeFileSync(filePath, JSON.stringify([{ name: "main", token: jwt }]), "utf8");
+      assert.deepEqual(loadAccounts({ filePath }), [{ name: "main", token: jwt }]);
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects ambiguous env and file sources", () => {
+    const directory = mkdtempSync(join(tmpdir(), "stfc-accounts-test-"));
+    const filePath = join(directory, "accounts.json");
+    try {
+      writeFileSync(filePath, "[]", "utf8");
+      assert.throws(
+        () => loadAccounts({ envValue: "[]", filePath }),
+        (err: unknown) =>
+          err instanceof AccountsConfigError && /Set only one/.test(err.message),
+      );
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
   it("missing envValue throws", () => {
     assert.throws(
       () => loadAccounts({ envValue: undefined }),
       (err: unknown) =>
         err instanceof AccountsConfigError &&
-        /STFC_ACCOUNTS environment variable is not set/.test((err as Error).message),
+        /Neither STFC_ACCOUNTS nor STFC_ACCOUNTS_FILE is set/.test((err as Error).message),
       // also covers process.env.STFC_ACCOUNTS being unset; if it's set in CI we still get an error if invalid
     );
   });
@@ -54,7 +84,7 @@ describe("loadAccounts", () => {
       () => loadAccounts({ envValue: "" }),
       (err: unknown) =>
         err instanceof AccountsConfigError &&
-        /STFC_ACCOUNTS environment variable is not set/.test((err as Error).message),
+        /Neither STFC_ACCOUNTS nor STFC_ACCOUNTS_FILE is set/.test((err as Error).message),
     );
   });
 

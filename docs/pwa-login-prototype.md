@@ -1,10 +1,14 @@
 # Synthetic PWA login prototype
 
+This document covers only the isolated, synthetic demo described below. The
+separate real STFC token-update PWA is implemented in the control panel; see
+the [STFC token PWA runbook](STFC-TOKEN-PWA.md) for its architecture and
+external hosting requirements. Do not enter real credentials in this demo.
+
 This is an isolated local feasibility experiment, not production authentication.
-The existing Lit/Vite control panel, Azure API and Discord Worker are unchanged.
-No cloud resources, external configuration, real credentials or redemption are used.
-The opt-in `build:demo` emits `web/dist-demo`; the normal `build` and deployment
-output exclude the demo HTML, manifest and service worker.
+No cloud resources, external configuration, real credentials or redemption are
+used by this demo. The opt-in `build:demo` emits `web/dist-demo`; the normal
+build includes the production PWA shell but excludes the synthetic demo page.
 
 ## Run locally
 
@@ -48,18 +52,6 @@ capabilities. Do not expose it via a tunnel or public server. The local page can
 be reached from an iPhone, and the existing static-site configuration does not
 provide this Node/Chromium service. No deployment is included.
 
-## Remaining feasibility gates
-
-A normal PWA cannot inspect cross-origin STFC login. A remotely hosted browser
-would require an explicitly authorized evaluation of interactive browser support,
-cost/quota, latency, provider terms and actual STFC compatibility. Cloudflare free
-browser-minute claims are not validated by this local experiment.
-
-Before real use: operator authentication, ownership/verified account binding,
-isolated remote sessions, rate limits, secret storage with encryption and retention,
-atomic persistent updates and a narrowly authorized redemption-workflow integration.
-No choice of production backend or free-tier suitability has been made here.
-
 ## Focused checks
 
 ```sh
@@ -71,9 +63,8 @@ npm --prefix web run build:demo
 ```
 
 The store tests are also registered in the root test aggregator.
-The always-run web shell suite builds the normal app and rejects any emitted
-demo HTML, manifest, icon or service worker. Its assertion was exercised against
-a temporary real public artifact and correctly failed; the fixture was removed.
+The always-run web shell suite builds the normal app, verifies the production
+manifest and network-only service worker, and rejects the synthetic demo page.
 For the opt-in end-to-end checks, run both builds above, install the existing
 Playwright Chromium and WebKit binaries, and run the same test file with
 `PWA_DEMO_E2E=1` in the environment (PowerShell:

@@ -10,8 +10,24 @@ promo codes and player tips, harvesting both into a daily digest.
 
 ## Quick start
 
-1. **Capture your store token (recommended).** Run the Playwright-driven
-   capture script:
+1. **Configure the private account-token store.** Follow
+   [docs/STFC-TOKEN-PWA.md](docs/STFC-TOKEN-PWA.md) to provision the owner-only
+   PWA services, private Azure Blob container and GitHub OIDC reader identity.
+   The workflow cannot run until those external resources and settings exist.
+2. **Initialize the token store once.** Set the legacy `STFC_ACCOUNTS` secret
+   temporarily, then manually dispatch **Migrate token store**. The workflow
+   uploads it only if the canonical Blob does not already exist. Remove the
+   legacy secret after confirming migration.
+3. **Enable the `Redeem gifts` workflow** under the Actions tab. Scheduled
+   delivery is best-effort; you can also trigger it manually.
+
+> **Token expiry:** after the PWA is deployed and configured, sign in through
+> its **STFC token update** tab to replace a token in the private store. The
+> `refresh-token.yml` no longer performs a provider login; the **Migrate token
+> store** workflow is only the one-time migration path.
+
+> **Local development:** the Playwright-driven capture script remains useful
+> for local CLI work:
 
    ```bash
    npm install
@@ -19,23 +35,8 @@ promo codes and player tips, harvesting both into a daily digest.
    npm run capture-token        # opens browser, watches network, writes .env
    ```
 
-   It opens a Chromium window pointing at the STFC store. Log in normally;
-   the script captures the JWT from the network traffic, validates it, and
-   writes it to your local `.env`. If `gh` is on your `PATH`, it also
-   offers to set the GitHub repo secret for you. See
-   [docs/SETUP.md](docs/SETUP.md) for multi-account and flag options.
-2. **Confirm the `STFC_ACCOUNTS` GitHub secret is set.** If you let
-   `capture-token` use `gh`, it's already done. Otherwise, paste the JSON
-   `capture-token` wrote to `.env` into *Settings → Secrets and variables →
-   Actions → STFC_ACCOUNTS*.
-3. **Enable the `Redeem gifts` workflow** under the Actions tab. GitHub
-   requests a run every 10 minutes, but may delay or drop scheduled runs.
-   You can also trigger it manually with the **Run workflow** button to verify
-   everything works.
-
-> **Token expiry:** the current email-OTP login requires the visible-browser
-> `capture-token` flow. The legacy `Refresh token` workflow cannot complete
-> that login; see [docs/SETUP.md](docs/SETUP.md#token-refresh).
+   It writes to a local `.env`; it does not update the canonical hosted store.
+   See [docs/SETUP.md](docs/SETUP.md) for local CLI instructions.
 
 > **Optional:** if you want to harvest promo codes and tips from the STFC
 > Discord community automatically, enable the **`Discord monitor` workflow**
@@ -60,7 +61,9 @@ For each account it performs roughly:
 - `POST /offers/gifts/claim`  — claim each pending gift.
 - `POST /redeem/claim`        — submit each promo code from `promo-codes.txt`.
 
-The bearer token is sent in the `Authorization` header. It is captured from your normal browser session (via `npm run capture-token`) and stored as a GitHub Actions secret named `STFC_ACCOUNTS`.
+The bearer token is sent in the `Authorization` header. Scheduled workflows
+read the account list from private Azure Blob Storage using GitHub OIDC.
+The owner-only PWA updates that store after validating a real STFC login.
 
 ---
 
