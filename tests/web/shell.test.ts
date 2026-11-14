@@ -155,6 +155,13 @@ describe('vite build', () => {
     const jsFiles = await findJs(distDir);
     assert.ok(jsFiles.length > 0, 'Expected at least one JS file in dist/ or subdirs');
   });
+
+  it('excludes the local-only login prototype from normal deployment output', async () => {
+    for (const file of ['index.html', 'sw.js', 'manifest.webmanifest', 'icon.svg']) {
+      await assert.rejects(stat(join(WEB_DIR, 'dist', 'pwa-demo', file)), { code: 'ENOENT' },
+        `Normal web build must not ship pwa-demo/${file}`);
+    }
+  });
 });
 
 // ---------------------------------------------------------------------------
