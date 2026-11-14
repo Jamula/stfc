@@ -259,7 +259,8 @@ describe("scripts/discord-handler.mjs", () => {
     assert.match(postedBody, /Redeem triggered — run ID 123456/);
     assert.match(postedBody, /actions\/runs\/123456/);
     // /trigger-redeem may only be exempted from the shared writer lock if it never writes
-    // automation-state itself — it only dispatches redeem.yml (which is
+    // automation-state itself — it only dispatches the scheduled redemption
+    // workflow (which is
     // already serialized under that lock) via gh, not git.
     assert.deepEqual(gitCalls, [], "trigger-redeem must not touch git at all");
   });

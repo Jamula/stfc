@@ -397,3 +397,31 @@ This skill was originally drafted against two prototype squad setups (a GitHub-h
 | CLI invocation (sync) + Liveness Protocol | ✅ Works — session launches successfully; log monitoring prevents false timeouts |
 
 **Confidence: MEDIUM** — Synchronous CLI pattern (Pattern 0) validated end-to-end. Liveness protocol provides operational robustness against slow MCP initialization. Git-based async (Pattern 2) and issue-based (Pattern 3) untested end-to-end. Production readiness requires Ralph integration on both sides.
+
+## Attribution and license
+
+This skill includes adapted material from
+[tamirdresher/squad-skills at `9d871664`](https://github.com/tamirdresher/squad-skills/blob/9d871664073990d792ecb160290eebe4d841c011/plugins/cross-squad-communication/SKILL.md).
+The following notice applies to that upstream material:
+
+MIT License
+
+Copyright (c) 2025 Tamir Dresher
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

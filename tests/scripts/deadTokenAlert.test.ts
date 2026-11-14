@@ -1,7 +1,7 @@
 // Executable behaviour tests for scripts/dead-token-alert.mjs.
 //
 // The previous version of this coverage only regex-matched YAML substrings in
-// .github/workflows/redeem.yml, which cannot distinguish a correct predicate
+// the scheduled redemption workflow, which cannot distinguish a correct predicate
 // from a semantically broken one that happens to contain the same text (and
 // cannot see a single `gh issue close` sitting inside a loop). These tests run
 // the real selection and close path against fixture `gh issue list --json
@@ -220,7 +220,7 @@ describe("dead-token-alert — find", () => {
   });
 
   it("stays idempotent across a burst of queued runs (queue: max, PR #266)", () => {
-    // .github/workflows/redeem.yml now serializes on `stfc-gift-redeemer`
+    // The scheduled redemption workflow now serializes on `stfc-gift-redeemer`
     // with `queue: max`, so up to 100 redeem runs can queue and then execute
     // back-to-back where the old `queue: single` silently dropped all but the
     // newest pending one. A burst of consecutive exit-2 runs must therefore

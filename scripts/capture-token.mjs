@@ -19,10 +19,7 @@
 //      GET /auth/me. If valid, decodes the JWT exp and proceeds.
 //   4. Merges the validated token into a local .env (preserving any
 //      other accounts already in STFC_ACCOUNTS).
-//   5. If `gh` CLI is available, offers (y/N) to set the GitHub repo
-//      secret STFC_ACCOUNTS via `gh secret set STFC_ACCOUNTS`,
-//      passing the JSON via stdin (so the token never lands on a
-//      command line, in shell history, or in a process listing).
+//   5. Writes only to the local .env. Hosted token updates use the owner-only PWA.
 //
 // We ALWAYS use a fresh, non-persistent browser context. You will need to
 // log in fresh every run; this is by design — it forces /auth/login to
@@ -30,7 +27,6 @@
 
 import { chromium } from "playwright";
 import { promises as fs, existsSync } from "node:fs";
-import { spawn } from "node:child_process";
 import { createInterface } from "node:readline/promises";
 import { StringDecoder } from "node:string_decoder";
 import { stdin as input, stdout as output } from "node:process";
@@ -146,7 +142,7 @@ function humanDelta(seconds) {
 // Network capture.
 // ----------------------------------------------------------------------------
 
-async function captureToken({ context, timeoutMs, closeAfterCapture }) {
+async function captureToken({ context, timeoutMs, closeAfterCapture, signal }) {
   let resolve;
   const captured = new Promise((r) => { resolve = r; });
   let first = null, changed = false, ambiguous = false;
@@ -196,8 +192,14 @@ async function captureToken({ context, timeoutMs, closeAfterCapture }) {
   context.on("request", onRequest);
   let timer;
   const timeout = new Promise((r) => { timer = setTimeout(() => r({ token: null, source: "timeout" }), timeoutMs); });
+  let onAbort;
+  const aborted = signal ? new Promise((r) => {
+    onAbort = () => r({ token: null, source: "aborted" });
+    if (signal.aborted) onAbort();
+    else signal.addEventListener("abort", onAbort, { once: true });
+  }) : new Promise(() => {});
   try {
-    const result = await Promise.race([captured, timeout]);
+    const result = await Promise.race([captured, timeout, aborted]);
     if (result.token && closeAfterCapture) {
       await closeAfterCapture();
       await Promise.all([...pending]);
@@ -206,6 +208,7 @@ async function captureToken({ context, timeoutMs, closeAfterCapture }) {
     return result;
   } finally {
     clearTimeout(timer);
+    if (onAbort) signal.removeEventListener("abort", onAbort);
     context.off("response", onResponse);
     context.off("request", onRequest);
   }
@@ -438,55 +441,6 @@ function validateRecoveryBaseline(raw, name) {
 }
 
 // ----------------------------------------------------------------------------
-// `gh secret set` (consent-gated, secret via stdin only).
-// ----------------------------------------------------------------------------
-
-async function ghAvailable() {
-  return new Promise((resolve) => {
-    const p = spawn("gh", ["--version"], { stdio: "ignore", shell: process.platform === "win32" });
-    p.on("error", () => resolve(false));
-    p.on("exit", (code) => resolve(code === 0));
-  });
-}
-
-async function ghSetSecret(secretJson, spawnProcess = spawn) {
-  return new Promise((resolve, reject) => {
-    // gh reads the secret value from stdin when --body is omitted. Older gh
-    // releases don't support --body-file, so rely on the stdin path here.
-    const p = spawnProcess("gh", ["secret", "set", "STFC_ACCOUNTS", "--repo", "github.com/Jamula/stfc"], {
-      stdio: ["pipe", "ignore", "ignore"],
-      shell: process.platform === "win32",
-    });
-    p.on("error", reject);
-    p.on("exit", (code) => {
-      if (code === 0) resolve();
-      else reject(new Error(`gh exited with code ${code}`));
-    });
-    p.stdin.on("error", reject);
-    p.stdin.end(secretJson);
-  });
-}
-
-async function updateGithubSecret({ secretJson, expectedRaw, envPath = ENV_PATH, ask = confirm, setSecret = ghSetSecret, error = console.error }) {
-  if (!await ask("Is your backup current AND have you stopped all redemption workflows and other .env and STFC_ACCOUNTS updates until this finishes?")) {
-    return "skipped";
-  }
-  if ((await readEnv(envPath)).raw !== expectedRaw) {
-    error(".env changed after capture; GitHub secret was not updated.");
-    process.exitCode = 1;
-    return "failed";
-  }
-  try {
-    await setSecret(secretJson);
-    return "updated";
-  } catch {
-    error("GitHub secret update failed or could not be confirmed.");
-    process.exitCode = 1;
-    return "failed";
-  }
-}
-
-// ----------------------------------------------------------------------------
 // Diagnostics dump (redacted; no raw values).
 // ----------------------------------------------------------------------------
 
@@ -648,7 +602,7 @@ async function findOtpEntry(page) {
 // correctly even when they don't.
 async function fillOtp(page, entry, code) {
   if (entry.kind === "single") {
-    await entry.el.fill(code).catch(() => {});
+    await entry.el.fill(code);
     return;
   }
 
@@ -789,49 +743,7 @@ async function promptAndSubmitOtp({ page, entry, log, maxAttempts = 3, headless 
 }
 
 async function tryAutoLogin(page, { email, password, log, err, ci, headless = false }) {
-  // Stage A: dismiss the OneTrust cookie banner if present (it intercepts
-  // clicks on the page-level Sign-in button).
-  log("auto-login: dismissing cookie banner if present");
-  for (const sel of ["#onetrust-accept-btn-handler", "#onetrust-reject-all-handler"]) {
-    const el = await page.$(sel).catch(() => null);
-    if (el && (await el.isVisible().catch(() => false))) {
-      await el.click().catch(() => {});
-      await page.waitForTimeout(1000);
-      break;
-    }
-  }
-
-  // Stage B: click "Sign in with Scopely" inside the modal (the page-level
-  // duplicate is hidden behind the modal). `.last()` reliably picks the
-  // visible one.
-  log("auto-login: clicking Sign in with Scopely (modal)");
-  try {
-    const btn = page.locator("#log-in-button").last();
-    await btn.waitFor({ state: "visible", timeout: 30_000 });
-    await btn.click({ timeout: 10_000 });
-  } catch (e) {
-    log(`auto-login: could not click Sign in with Scopely (${e.message?.slice(0, 100)}); falling back to interactive login.`);
-    return false;
-  }
-
-  // Stage C: wait for the Scopely Okta email form, fill, click Continue.
-  log("auto-login: waiting for Scopely email form…");
-  const emailField = await waitForFirstSelector(page, [
-    'input[name="email"]',
-    'input[type="email"]',
-    'input.ant-input',
-  ], 60_000);
-  if (!emailField) {
-    log("auto-login: no email field appeared within 60s — falling back to interactive login.");
-    return false;
-  }
-  log("auto-login: filling email and clicking Continue");
-  await emailField.fill(email);
-  await clickFirstAvailable(page, [
-    'button:has-text("Continue")',
-    'button[type="submit"]',
-    'button.ant-btn-primary',
-  ]);
+  if (!(await beginEmailLogin(page, email, log))) return false;
 
   // Stage D: after Continue, wait up to 15s for EITHER a "Sign in with
   // password instead" link (password-capable account) OR an OTP/passcode
@@ -944,11 +856,52 @@ async function clickFirstAvailable(page, selectors) {
   for (const sel of selectors) {
     const el = await page.$(sel).catch(() => null);
     if (el && (await el.isVisible().catch(() => false)) && (await el.isEnabled().catch(() => false))) {
-      await el.click().catch(() => {});
-      return true;
+      try {
+        await el.click();
+        return true;
+      } catch { /* Try the next known submit control. */ }
     }
   }
   return false;
+}
+
+async function beginEmailLogin(page, email, log = () => {}) {
+  log("auto-login: dismissing cookie banner if present");
+  for (const sel of ["#onetrust-accept-btn-handler", "#onetrust-reject-all-handler"]) {
+    const el = await page.$(sel).catch(() => null);
+    if (el && (await el.isVisible().catch(() => false))) {
+      await el.click().catch(() => {});
+      await page.waitForTimeout(1000);
+      break;
+    }
+  }
+
+  log("auto-login: clicking Sign in with Scopely (modal)");
+  try {
+    const btn = page.locator("#log-in-button").last();
+    await btn.waitFor({ state: "visible", timeout: 30_000 });
+    await btn.click({ timeout: 10_000 });
+  } catch (e) {
+    log(`auto-login: could not click Sign in with Scopely (${e.message?.slice(0, 100)}).`);
+    return false;
+  }
+
+  log("auto-login: waiting for Scopely email form");
+  const emailField = await waitForFirstSelector(page, [
+    'input[name="email"]',
+    'input[type="email"]',
+    'input.ant-input',
+  ], 60_000);
+  if (!emailField) {
+    log("auto-login: no email field appeared within 60s.");
+    return false;
+  }
+  await emailField.fill(email);
+  return clickFirstAvailable(page, [
+    'button:has-text("Continue")',
+    'button[type="submit"]',
+    'button.ant-btn-primary',
+  ]);
 }
 
 async function clickWithRetry(page, selector, timeoutMs) {
@@ -1181,7 +1134,7 @@ async function main(argv = process.argv.slice(2), dependencies = {}) {
       verify: (candidate, expected) => verifyAccountId(candidate, expected, dependencies.fetchIdentity ?? fetch),
     });
   } catch {
-    err("Identity verification or local update failed; no GitHub secret update was attempted.");
+    err("Identity verification or local update failed; the hosted token store was not changed.");
     await browser.close().catch(() => {});
     process.exitCode = 1;
     return;
@@ -1189,34 +1142,8 @@ async function main(argv = process.argv.slice(2), dependencies = {}) {
 
   log(`\nUpdated the local account backup (${merged.length} account(s)).`);
 
-  const ghOk = await (dependencies.ghAvailable ?? ghAvailable)();
-  let githubUpdated = false;
-  if (ghOk) {
-    console.log("");
-    if (await ask("Set STFC_ACCOUNTS on github.com/Jamula/stfc via gh now?", false)) {
-      const result = await updateGithubSecret({ secretJson: merged.secretJson, expectedRaw: merged.envRaw, envPath, ask, setSecret: dependencies.setSecret ?? ghSetSecret });
-      if (result === "updated") {
-        githubUpdated = true;
-        console.log(`GitHub secret STFC_ACCOUNTS set successfully.`);
-      } else if (result === "skipped") {
-        console.error(`GitHub secret was not updated.`);
-        process.exitCode = 1;
-      } else {
-        console.error(`GitHub update failed or could not be confirmed; the secret may have changed. Establish its current baseline before retrying.`);
-        process.exitCode = 1;
-      }
-    } else {
-      console.log(`GitHub secret update skipped.`);
-      process.exitCode = 1;
-    }
-  } else {
-    console.log(`\n'gh' CLI not found on PATH.`);
-    console.log(`GitHub secret update was not attempted.`);
-    process.exitCode = 1;
-  }
-
   await browser.close();
-  console.log(githubUpdated ? "\nDone. GitHub secret update confirmed." : "\nDone. The GitHub secret was not confirmed updated.");
+  console.log("\nDone. The canonical token store was not updated; use the owner-only PWA for hosted token updates.");
 }
 
 // Only run the CLI when invoked directly, so tests can import the OTP
@@ -1230,4 +1157,21 @@ if (isDirectRun) {
   });
 }
 
-export { findOtpEntry, fillOtp, OTP_SELECTORS, SPLIT_OTP_SELECTOR, mergeIntoEnv, mergeAfterIdentityConfirmation, captureToken, ghSetSecret, updateGithubSecret, verifyAccountId, validateRecoveryBaseline, readAccountName, readExpectedAccountId, main };
+export {
+  findOtpEntry,
+  fillOtp,
+  OTP_SELECTORS,
+  SPLIT_OTP_SELECTOR,
+  mergeIntoEnv,
+  mergeAfterIdentityConfirmation,
+  captureToken,
+  verifyAccountId,
+  validateRecoveryBaseline,
+  readAccountName,
+  readExpectedAccountId,
+  validateToken,
+  waitForFirstSelector,
+  clickFirstAvailable,
+  beginEmailLogin,
+  main,
+};

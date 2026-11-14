@@ -33,6 +33,7 @@ describe('stfc-* custom element prefix convention', () => {
     { file: 'stfc-telemetry-tab.ts', name: 'stfc-telemetry-tab' },
     { file: 'stfc-crew-tab.ts',      name: 'stfc-crew-tab' },
     { file: 'stfc-runs-tab.ts',      name: 'stfc-runs-tab' },
+    { file: 'stfc-token-update-tab.ts', name: 'stfc-token-update-tab' },
   ] as const;
 
   for (const { file, name } of expectedElements) {
@@ -61,9 +62,9 @@ describe('stfc-app root component', () => {
     assert.ok(src.includes("@customElement('stfc-app')"), "Expected @customElement('stfc-app') in app.ts");
   });
 
-  it('app.ts imports all 5 tab components', async () => {
+  it('app.ts imports all 6 tab components', async () => {
     const src = await readFile(join(WEB_DIR, 'src', 'app.ts'), 'utf8');
-    const tabs = ['redeems', 'digests', 'telemetry', 'crew', 'runs'];
+    const tabs = ['redeems', 'digests', 'telemetry', 'crew', 'runs', 'token-update'];
     for (const tab of tabs) {
       assert.ok(
         src.includes(`stfc-${tab}-tab`),
@@ -161,6 +162,24 @@ describe('vite build', () => {
       await assert.rejects(stat(join(WEB_DIR, 'dist', 'pwa-demo', file)), { code: 'ENOENT' },
         `Normal web build must not ship pwa-demo/${file}`);
     }
+  });
+
+  it('emits an installable, network-only PWA shell in the production build', async () => {
+    const manifest = JSON.parse(await readFile(join(WEB_DIR, 'dist', 'manifest.webmanifest'), 'utf8')) as {
+      start_url?: string;
+      scope?: string;
+      display?: string;
+      icons?: { src: string; sizes: string }[];
+    };
+    assert.equal(manifest.start_url, '/#token-update');
+    assert.equal(manifest.scope, '/');
+    assert.equal(manifest.display, 'standalone');
+    assert.ok(manifest.icons?.some((icon) => icon.src === '/pwa-icon.svg' && icon.sizes === 'any'));
+    const serviceWorker = await readFile(join(WEB_DIR, 'dist', 'sw.js'), 'utf8');
+    assert.match(serviceWorker, /skipWaiting/);
+    assert.match(serviceWorker, /clients\.claim/);
+    assert.doesNotMatch(serviceWorker, /caches\.open|cache\.put|cache\.add/i);
+    assert.match(await readFile(join(WEB_DIR, 'dist', 'index.html'), 'utf8'), /rel="manifest"/);
   });
 });
 

@@ -34,9 +34,12 @@ const WATCHED_PREFIXES = [
   'plans/',
   'tasks/',
   'docs/',
+  'config/',
   '.github/',
   'data/digests/',
   'data/discord/',
+  'data/crew/roster/',
+  'discord/',
   'src/',
   'scripts/',
   'tests/',
@@ -48,6 +51,7 @@ const WATCHED_PREFIXES = [
 
 const WATCHED_ROOT_FILES = new Set([
   'README.md',
+  'CHANGELOG.md',
   'SECURITY.md',
   'CONTRIBUTING.md',
 ]);

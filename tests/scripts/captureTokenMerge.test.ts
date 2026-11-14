@@ -11,10 +11,8 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync, copyFileSync, mkdirSy
 import { dirname, join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { EventEmitter } from "node:events";
-import { Writable } from "node:stream";
 
-// @ts-expect-error - plain .mjs helper without type declarations
-import { mergeIntoEnv, mergeAfterIdentityConfirmation, captureToken, ghSetSecret, updateGithubSecret, verifyAccountId, validateRecoveryBaseline, readAccountName, readExpectedAccountId, main } from "../../scripts/capture-token.mjs";
+import { mergeIntoEnv, mergeAfterIdentityConfirmation, captureToken, verifyAccountId, validateRecoveryBaseline, readAccountName, readExpectedAccountId, main } from "../../scripts/capture-token.mjs";
 
 // ---------------------------------------------------------------------------
 // Fake fixture values — clearly not real credentials.
@@ -139,7 +137,7 @@ describe("mergeIntoEnv error redaction (issue #211)", () => {
 
     assert.ok(Array.isArray(result), "Should return an array on force=true");
     assert.equal(result.length, 1);
-    assert.equal(result[0].name, "test-account");
+    assert.equal(result[0]?.name, "test-account");
   });
 
   it("preserves unrelated metadata exactly, including unsafe numbers and escaped strings", async () => {
@@ -307,67 +305,6 @@ describe("mergeIntoEnv error redaction (issue #211)", () => {
     }
   });
 
-  it("requires a current exclusive backup and refuses a changed env before GitHub", async () => {
-    const envFile = makeTmpEnv("changed\n");
-    tmpDirs.push(dirname(envFile));
-    let calls = 0;
-    const setSecret = async () => { calls++; };
-    const priorExitCode = process.exitCode;
-    try {
-      const askNo = await updateGithubSecret({ secretJson: "fake", expectedRaw: "changed\n", envPath: envFile, ask: async () => false, setSecret });
-      assert.equal(askNo, "skipped");
-      assert.equal(calls, 0);
-      const messages: string[] = [];
-      const changed = await updateGithubSecret({ secretJson: "fake", expectedRaw: "original\n", envPath: envFile, ask: async () => true, setSecret, error: (m: string) => messages.push(m) });
-      assert.equal(changed, "failed");
-      assert.equal(process.exitCode, 1);
-      assert.match(messages.join("\n"), /changed after capture/);
-      assert.equal(calls, 0);
-    } finally { process.exitCode = priorExitCode; }
-  });
-
-  it("sends the preserved JSON to GitHub and reports command failure as nonzero", async () => {
-    const envFile = makeTmpEnv("current\n");
-    tmpDirs.push(dirname(envFile));
-    const secretJson = `[{"name":"other","id":9007199254740993}]`;
-    let sent = "";
-    let question = "";
-    const priorExitCode = process.exitCode;
-    try {
-      const updated = await updateGithubSecret({ secretJson, expectedRaw: "current\n", envPath: envFile, ask: async (q: string) => { question = q; return true; }, setSecret: async (value: string) => { sent = value; } });
-      assert.match(question, /backup current.*stopped all redemption workflows and other \.env and STFC_ACCOUNTS/);
-      assert.equal(updated, "updated");
-      assert.equal(sent, secretJson);
-      const messages: string[] = [];
-      const failed = await updateGithubSecret({ secretJson, expectedRaw: "current\n", envPath: envFile, ask: async () => true, setSecret: async () => { throw new Error("offline"); }, error: (m: string) => messages.push(m) });
-      assert.equal(failed, "failed");
-      assert.equal(process.exitCode, 1);
-      assert.match(messages.join("\n"), /GitHub secret update failed/);
-    } finally { process.exitCode = priorExitCode; }
-  });
-
-  it("sends the secret only through stdin to the explicit repository and rejects gh failures", async () => {
-    for (const exitCode of [0, 1]) {
-      let destination = "", body = "";
-      const spawnProcess = (command: string, args: string[], options: { stdio: string[] }) => {
-        destination = `${command} ${args.join(" ")}`;
-        assert.deepEqual(options.stdio, ["pipe", "ignore", "ignore"]);
-        const process = Object.assign(new EventEmitter(), {
-          stdin: new Writable({
-            write(chunk, _encoding, callback) { body += chunk.toString(); callback(); },
-            final(callback) { callback(); queueMicrotask(() => process.emit("exit", exitCode)); },
-          }),
-        });
-        return process;
-      };
-      const upload = ghSetSecret("fixture-secret", spawnProcess);
-      if (exitCode === 0) await upload;
-      else await assert.rejects(upload, /gh exited with code 1/);
-      assert.equal(destination, "gh secret set STFC_ACCOUNTS --repo github.com/Jamula/stfc");
-      assert.equal(body, "fixture-secret");
-    }
-  });
-
   it("removes listeners and clears the capture timer on success", async () => {
     const context = new EventEmitter();
     const promise = captureToken({ context, timeoutMs: 30_000 });
@@ -441,7 +378,7 @@ describe("mergeIntoEnv error redaction (issue #211)", () => {
     const other = `{"name":"other","token":"old.other.token","extra":9007199254740993}`;
     const accountName = "café";
     const original = `STFC_ACCOUNTS='[{"name":"${accountName}","token":"old.main.token"},${other}]'\n`;
-    const cases = ["matched", "mismatched", "changed", "offline", "upload-failed", "env-changed"] as const;
+    const cases = ["matched", "mismatched", "changed", "offline", "env-changed"] as const;
     for (const scenario of cases) {
       const envFile = makeTmpEnv(original);
       tmpDirs.push(dirname(envFile));
@@ -449,7 +386,7 @@ describe("mergeIntoEnv error redaction (issue #211)", () => {
       const request = (token: string) => ({ url: () => "https://cdn-nv3-webstore-api.startrek.digitgaming.com/api/v2/test", headers: () => ({ authorization: `Bearer ${token}` }) });
       const page = { goto: async () => { context.emit("request", request("new.main.token")); } };
       const fakeContext = Object.assign(context, { newPage: async () => page });
-      let closed = false, uploads = 0, correctToken = false;
+      let closed = false, uploads = 0, ghChecks = 0, correctToken = false;
       const browser = {
         newContext: async () => fakeContext,
         close: async () => {
@@ -457,7 +394,6 @@ describe("mergeIntoEnv error redaction (issue #211)", () => {
           closed = true;
         },
       };
-      let sent = "";
       const messages: string[] = [];
       const priorExitCode = process.exitCode;
       const priorLog = console.log, priorError = console.error;
@@ -487,24 +423,19 @@ describe("mergeIntoEnv error redaction (issue #211)", () => {
             if (scenario === "env-changed") writeFileSync(envFile, `${original}OTHER=value\n`);
             return new Response(scenario === "mismatched" ? '{"payload":{"accountId":"other-fixture-id"}}' : '{"payload":{"accountId":"expected-fixture-id"}}');
           },
-          ghAvailable: async () => true,
-          setSecret: async (value: string) => {
-            uploads++;
-            sent = value;
-            if (scenario === "upload-failed") throw new Error("offline");
-          },
+          ghAvailable: async () => { ghChecks++; return true; },
+          setSecret: async () => { uploads++; },
         });
         assert.equal(process.exitCode, scenario === "matched" ? 0 : 1, `${scenario} exit status`);
-        assert.equal(uploads, scenario === "matched" || scenario === "upload-failed" ? 1 : 0, `${scenario} upload count`);
+        assert.equal(ghChecks, 0, "local recovery must not check or update the hosted secret");
+        assert.equal(uploads, 0, "local recovery must not upload the backup");
         if (scenario !== "changed") assert.equal(correctToken, true, `${scenario} must verify the captured token`);
-        if (scenario === "matched" || scenario === "upload-failed") {
-          assert.equal(sent, `[{"name":"${accountName}","token":"new.main.token"},${other}]`);
-          assert.equal(readFileSync(envFile, "utf8"), `STFC_ACCOUNTS='${sent}'\n`);
+        if (scenario === "matched") {
+          assert.equal(readFileSync(envFile, "utf8"), `STFC_ACCOUNTS='[{"name":"${accountName}","token":"new.main.token"},${other}]'\n`);
         } else {
           assert.equal(readFileSync(envFile, "utf8"), scenario === "env-changed" ? `${original}OTHER=value\n` : original);
         }
         assert.doesNotMatch(messages.join("\n"), /expected-fixture-id|other-fixture-id|new\.main\.token|changed\.main\.token/);
-        if (scenario === "upload-failed") assert.match(messages.join("\n"), /secret may have changed/);
       } finally {
         console.log = priorLog;
         console.error = priorError;
@@ -615,7 +546,7 @@ function Read-Host {
 function gh { }
 function node {
   if ($args -contains '--input-type=module') { $global:LASTEXITCODE = 0; return }
-  if ($env:GH_REPO -ne 'Jamula/stfc' -or $env:GH_HOST -ne 'github.com' -or $env:STFC_EMAIL -or $env:STFC_PASSWORD -or $env:STFC_OTP -or $env:STFC_DEBUG_DIR) { throw 'incorrect child environment' }
+  if ($env:GH_REPO -ne 'original/repo' -or $env:GH_HOST -ne 'original.host' -or $env:STFC_EMAIL -or $env:STFC_PASSWORD -or $env:STFC_OTP -or $env:STFC_DEBUG_DIR) { throw 'incorrect child environment' }
   $envPath = Join-Path $PSScriptRoot '.env'
   & '${executable}' "--env-file=$envPath" -e "if (process.env.STFC_ACCOUNTS !== process.env.CAPTURE_TEST_BASELINE) process.exit(3)"
   if ($LASTEXITCODE -ne 0) { throw 'invalid env value' }

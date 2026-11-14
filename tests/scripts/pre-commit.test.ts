@@ -379,6 +379,13 @@ describe("checkWorkflowPinningTests", () => {
         });
 
         writeFileSync(join(dir, "SECURITY.md"), "Safe reporting guidance.\n");
+        writeFileSync(join(dir, "CHANGELOG.md"), "Safe change log.\n");
+        mkdirSync(join(dir, "config"));
+        writeFileSync(join(dir, "config", "discord-allowlist.json"), "{}\n");
+        mkdirSync(join(dir, "data", "crew", "roster"), { recursive: true });
+        writeFileSync(join(dir, "data", "crew", "roster", "demo.yaml"), "account: demo\n");
+        mkdirSync(join(dir, "discord"));
+        writeFileSync(join(dir, "discord", "commands.json"), "{}\n");
         mkdirSync(join(dir, "src"));
         writeFileSync(join(dir, "src", "example.ts"), "export const account = {};\n");
         mkdirSync(join(dir, "scripts"));
@@ -394,6 +401,10 @@ describe("checkWorkflowPinningTests", () => {
         });
 
         writeFileSync(join(dir, "SECURITY.md"), `Token: ${secret}\n`);
+        writeFileSync(join(dir, "CHANGELOG.md"), `Token: ${secret}\n`);
+        writeFileSync(join(dir, "config", "discord-allowlist.json"), `{"token":"${secret}"}\n`);
+        writeFileSync(join(dir, "data", "crew", "roster", "demo.yaml"), `token: ${secret}\n`);
+        writeFileSync(join(dir, "discord", "commands.json"), `{"token":"${secret}"}\n`);
         writeFileSync(
           join(dir, "src", "example.ts"),
           `const token = "${secret}";\nconst account = {${accountField}};\n`,
@@ -415,6 +426,10 @@ describe("checkWorkflowPinningTests", () => {
         const output = `${result.stdout}${result.stderr}`;
         assert.equal(result.status, 1);
         assert.match(output, /SECURITY\.md:\d+  \[JWT\]/);
+        assert.match(output, /CHANGELOG\.md:\d+  \[JWT\]/);
+        assert.match(output, /config[\\/]discord-allowlist\.json:1  \[JWT\]/);
+        assert.match(output, /data[\\/]crew[\\/]roster[\\/]demo\.yaml:1  \[JWT\]/);
+        assert.match(output, /discord[\\/]commands\.json:1  \[JWT\]/);
         assert.match(output, /src[\\/]example\.ts:1  \[JWT\]/);
         assert.match(output, /src[\\/]example\.ts:2  \[STFC_ACCOUNT_DATA\]/);
         assert.match(output, /scripts[\\/]types\.d\.mts:1  \[JWT\]/);
@@ -425,6 +440,10 @@ describe("checkWorkflowPinningTests", () => {
         assert.doesNotMatch(output, /12345/);
 
         writeFileSync(join(dir, "SECURITY.md"), "Safe reporting guidance.\n");
+        writeFileSync(join(dir, "CHANGELOG.md"), "Safe change log.\n");
+        writeFileSync(join(dir, "config", "discord-allowlist.json"), "{}\n");
+        writeFileSync(join(dir, "data", "crew", "roster", "demo.yaml"), "account: demo\n");
+        writeFileSync(join(dir, "discord", "commands.json"), "{}\n");
         writeFileSync(join(dir, "src", "example.ts"), "export const account = {};\n");
         writeFileSync(join(dir, "scripts", "types.d.mts"), "export {};\n");
         writeFileSync(join(dir, "shared", "example.ts"), "export const token = 'safe';\n");
@@ -435,7 +454,7 @@ describe("checkWorkflowPinningTests", () => {
           env: isolatedGitEnv,
         });
         assert.equal(cleanArtifact.status, 0, cleanArtifact.stderr);
-        assert.match(cleanArtifact.stdout, /5 file\(s\) scanned, 0 violations/);
+        assert.match(cleanArtifact.stdout, /9 file\(s\) scanned, 0 violations/);
       } finally {
         rmSync(dir, { recursive: true, force: true });
       }

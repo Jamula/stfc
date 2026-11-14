@@ -5,8 +5,8 @@ if ($PSVersionTable.PSVersion.Major -lt 7) {
     exit 1
 }
 
-if (-not (Get-Command node -ErrorAction SilentlyContinue) -or -not (Get-Command gh -ErrorAction SilentlyContinue)) {
-    Write-Host 'Stopped: Node.js and GitHub CLI are required before recovery. Nothing was written.'
+if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
+    Write-Host 'Stopped: Node.js is required before recovery. Nothing was written.'
     exit 1
 }
 Push-Location $PSScriptRoot
@@ -70,15 +70,10 @@ try {
     exit 1
 }
 
-Write-Host "Backup contains $($names.Count) account(s). GitHub cannot show you its current secret."
-Write-Host 'Continue only if this backup is the CURRENT complete secret and all redemption workflows and other .env and secret updates are stopped until completion.'
+Write-Host "Backup contains $($names.Count) account(s)."
+Write-Host 'Continue only if this is the current complete backup and all redemption workflows and concurrent .env updates are stopped until completion.'
 if ((Read-Host 'Type YES to confirm both conditions') -cne 'YES') {
     Write-Host 'Stopped. Nothing was written.'
-    exit 1
-}
-Write-Host 'The only possible GitHub upload target is github.com/Jamula/stfc.'
-if ((Read-Host 'Type YES to confirm that target') -cne 'YES') {
-    Write-Host 'Stopped: repository target not confirmed. Nothing was written.'
     exit 1
 }
 
@@ -89,21 +84,19 @@ try {
         try { $writer.WriteLine("STFC_ACCOUNTS='$baseline'") } finally { $writer.Dispose() }
     } finally { $stream.Dispose() }
 } catch {
-    Write-Host 'Stopped: could not safely create .env. No secret was sent to GitHub.'
+    Write-Host 'Stopped: could not safely create .env. No account data was sent to GitHub.'
     exit 1
 } finally {
     $baseline = $null
     $document.Dispose()
 }
 
-$environmentNames = @('GH_REPO', 'GH_HOST', 'STFC_EMAIL', 'STFC_PASSWORD', 'STFC_OTP', 'STFC_DEBUG_DIR')
+$environmentNames = @('STFC_EMAIL', 'STFC_PASSWORD', 'STFC_OTP', 'STFC_DEBUG_DIR')
 $previousEnvironment = @{}
 foreach ($key in $environmentNames) {
     $previousEnvironment[$key] = [Environment]::GetEnvironmentVariable($key, 'Process')
 }
 try {
-    [Environment]::SetEnvironmentVariable('GH_REPO', 'Jamula/stfc', 'Process')
-    [Environment]::SetEnvironmentVariable('GH_HOST', 'github.com', 'Process')
     foreach ($key in @('STFC_EMAIL', 'STFC_PASSWORD', 'STFC_OTP', 'STFC_DEBUG_DIR')) {
         [Environment]::SetEnvironmentVariable($key, $null, 'Process')
     }
@@ -117,6 +110,6 @@ try {
     }
 }
 if ($captureExitCode -ne 0) {
-    Write-Host 'Capture failed or the update could not be confirmed. Check the preceding message; establish the current secret baseline before retrying.'
+    Write-Host 'Capture failed or the local backup could not be updated. Check the preceding message before retrying.'
     exit $captureExitCode
 }

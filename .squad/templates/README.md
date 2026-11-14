@@ -4,7 +4,8 @@ This directory is **read at runtime** by the Squad coordinator and agents. Do no
 from it — doing so breaks coordinator behavior that depends on lazy-loading these references.
 
 The templates are derived from Squad; see `../LICENSE.squad`. Some agent charters are adapted
-from agency-agents; see `../LICENSE.agency-agents`.
+from agency-agents; see `../LICENSE.agency-agents`. In this repository, the consolidated
+record for adapted tamirdresher/squad-skills material is `../LICENSE.squad-skills`.
 
 If you want to customize coordinator behavior, edit the relevant file here. Do not run
 `squad upgrade` in this repository: the pinned CLI overwrites the coordinator contract
@@ -79,6 +80,8 @@ wholesale — each has a distinct consumer.
 | `scripts/` | User copy-source | Documented for users to copy from — `cp -r .squad/templates/scripts/notes/ scripts/notes/` (see the state-backends doc). |
 | `skills/` | Bootstrap template | Source for skills the `TEMPLATE_MANIFEST` installs **to `.github/skills/`** (destinations are `../.github/skills/...`). The installed copy under `.github/skills/` is what agents load. |
 | `workflows/` | User copy-source | Documented for users to copy from — `cp .squad/templates/workflows/*.yml .github/workflows/` (see the CI/CD integration doc). |
+
+The skill manifest copies each listed `SKILL.md` file to `.github/skills/` individually; it does not copy sibling notice files. The two templates adapted from tamirdresher/squad-skills therefore include the complete MIT notice in their own `SKILL.md` files, so the notice travels with any generated copy. Keep the embedded notices with those source files; generated copies must not rely on this repository's separate `../LICENSE.squad-skills` file.
 
 ---
 

@@ -538,7 +538,7 @@ describe("workflow consolidation", () => {
     );
   });
 
-  it("installs root, API, web, and worker dependencies in the required gate", () => {
+  it("installs root, API, web, worker, and PWA dependencies in the required gate", () => {
     const gate = workflows.find(({ file }) => file === "test-gate.yml");
     assert.ok(gate, "test-gate.yml must exist");
     assert.deepEqual(gate.workflow.on?.pull_request?.branches, ["**"]);
@@ -578,12 +578,26 @@ describe("workflow consolidation", () => {
         step.run?.trim() === "npm ci" &&
         step["working-directory"] === "web",
     );
+    const browserInstallIndex = steps.findIndex(
+      (step) =>
+        step.run?.trim() === "npm ci" &&
+        step["working-directory"] === "pwa-browser",
+    );
+    const tokenApiInstallIndex = steps.findIndex(
+      (step) =>
+        step.run?.trim() === "npm ci" &&
+        step["working-directory"] === "pwa-token-api",
+    );
     assert.ok(apiInstallIndex >= 0, "root typechecking requires API deps");
     assert.ok(webInstallIndex >= 0, "root typechecking requires web deps");
+    assert.ok(browserInstallIndex >= 0, "the gate must install browser-relay deps");
+    assert.ok(tokenApiInstallIndex >= 0, "the gate must install token-API deps");
     assert.ok(
       apiInstallIndex < rootTypecheckIndex &&
-        webInstallIndex < rootTypecheckIndex,
-      "API and web deps must be installed before root typecheck",
+        webInstallIndex < rootTypecheckIndex &&
+        browserInstallIndex < rootTypecheckIndex &&
+        tokenApiInstallIndex < rootTypecheckIndex,
+      "all package dependencies must be installed before root typecheck",
     );
 
     const workerInstallIndex = steps.findIndex(
@@ -611,6 +625,17 @@ describe("workflow consolidation", () => {
       workerTestIndex > workerInstallIndex,
       "worker Vitest must run after worker npm ci",
     );
+    for (const [directory, installIndex] of [
+      ["pwa-browser", browserInstallIndex],
+      ["pwa-token-api", tokenApiInstallIndex],
+    ] as const) {
+      const typecheckIndex = steps.findIndex(
+        (step) =>
+          step.run?.trim() === "npm run typecheck" &&
+          step["working-directory"] === directory,
+      );
+      assert.ok(typecheckIndex > installIndex, `${directory} typecheck must follow its install`);
+    }
     assert.equal(
       workerPackageJson.scripts?.typecheck,
       "tsc --noEmit",
@@ -638,7 +663,9 @@ describe("workflow consolidation", () => {
       cacheDependencyFiles.includes("package-lock.json") &&
         cacheDependencyFiles.includes("api/package-lock.json") &&
         cacheDependencyFiles.includes("web/package-lock.json") &&
-        cacheDependencyFiles.includes("worker/package-lock.json"),
+        cacheDependencyFiles.includes("worker/package-lock.json") &&
+        cacheDependencyFiles.includes("pwa-browser/package-lock.json") &&
+        cacheDependencyFiles.includes("pwa-token-api/package-lock.json"),
       "npm cache must track each package lockfile used by the gate",
     );
   });
@@ -741,7 +768,11 @@ describe("workflow consolidation", () => {
     const paths = hygiene.workflow.on?.pull_request?.paths ?? [];
     assert.ok(paths.includes("data/digests/**"), "digest artifacts must trigger the scan");
     assert.ok(paths.includes("data/discord/**"), "Discord runtime artifacts must trigger the scan");
+    assert.ok(paths.includes("config/**"), "configuration changes must trigger the scan");
+    assert.ok(paths.includes("data/crew/roster/**"), "crew roster changes must trigger the scan");
+    assert.ok(paths.includes("discord/**"), "Discord source changes must trigger the scan");
     assert.ok(paths.includes(".github/**"), "scanned GitHub configuration files must trigger the scan");
+    assert.ok(paths.includes("CHANGELOG.md"), "root changelog changes must trigger the scan");
     assert.ok(paths.includes("README.md"), "root README changes must trigger the scan");
     assert.ok(paths.includes("SECURITY.md"), "security policy changes must trigger the scan");
     assert.ok(paths.includes("CONTRIBUTING.md"), "contribution guidance changes must trigger the scan");
@@ -834,6 +865,10 @@ describe("workflow consolidation", () => {
 
         const filenames = [
           "SECURITY.md",
+          "CHANGELOG.md",
+          "config/discord-allowlist.json",
+          "data/crew/roster/demo.yaml",
+          "discord/commands.json",
           "data/discord/channel log.jsonl",
           ".github/workflows/quick-check.YML",
           "src/handler.ts",

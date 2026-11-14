@@ -10,28 +10,33 @@ promo codes and player tips, harvesting both into a daily digest.
 
 ## Quick start
 
-> **Token recovery requires an independently verified account identifier.** See
-> [docs/SETUP.md](docs/SETUP.md#recommended-path-npm-run-capture-token-playwright-driven)
-> before attempting recovery.
+1. **Configure the private account-token store.** Follow
+   [docs/STFC-TOKEN-PWA.md](docs/STFC-TOKEN-PWA.md) to provision the owner-only
+   PWA services, private Azure Blob container and GitHub OIDC reader identity.
+   The workflow cannot run until those external resources and settings exist.
+2. **Initialize the token store once.** Set the legacy `STFC_ACCOUNTS` secret
+   temporarily, then manually dispatch **Migrate token store**. The workflow
+   uploads it only if the canonical Blob does not already exist. Remove the
+   legacy secret after confirming migration.
+3. **Enable the `Redeem gifts` workflow** under the Actions tab. Scheduled
+   delivery is best-effort; you can also trigger it manually.
 
-1. **Recover a token** using the private, identity-bound procedure:
+> **Token expiry:** after the PWA is deployed and configured, sign in through
+> its **STFC token update** tab to replace a token in the private store. The
+> `refresh-token.yml` no longer performs a provider login; the **Migrate token
+> store** workflow is only the one-time migration path.
+
+> **Local development:** run `pwsh -NoProfile -File .\recover-auth.ps1` for the
+> guided, identity-bound recovery. With a prepared local `.env`, you can also
+> run the capture script directly:
 
    ```bash
-   pwsh -NoProfile -File .\recover-auth.ps1
+   npm run capture-token
    ```
 
-   See [docs/SETUP.md](docs/SETUP.md) for prerequisites and safeguards.
-2. **Confirm the `STFC_ACCOUNTS` GitHub secret is set.** Before any
-   replacement, verify that your full backup is current and complete and
-   pause all concurrent secret and `.env` updates.
-3. **Enable the `Redeem gifts` workflow** under the Actions tab. GitHub
-   requests a run every 10 minutes, but may delay or drop scheduled runs.
-   You can also trigger it manually with the **Run workflow** button to verify
-   everything works.
-
-> **Token expiry:** the current email-OTP login cannot use the legacy
-> `Refresh token` workflow;
-> see [docs/SETUP.md](docs/SETUP.md#token-refresh).
+   The flow requires independently verifying the account identifier and writes
+   only to a local `.env`; hosted token updates use the owner-only PWA.
+   See [docs/SETUP.md](docs/SETUP.md) for local CLI instructions.
 
 > **Optional:** if you want to harvest promo codes and tips from the STFC
 > Discord community automatically, enable the **`Discord monitor` workflow**
@@ -56,8 +61,9 @@ For each account it performs roughly:
 - `POST /offers/gifts/claim`  — claim each pending gift.
 - `POST /redeem/claim`        — submit each promo code from `promo-codes.txt`.
 
-The bearer token is sent in the `Authorization` header and stored as a GitHub
-Actions secret named `STFC_ACCOUNTS`.
+The bearer token is sent in the `Authorization` header. Scheduled workflows
+read the account list from private Azure Blob Storage using GitHub OIDC.
+The owner-only PWA updates that store after validating a real STFC login.
 
 ---
 
@@ -141,9 +147,10 @@ For system design, deployment, and workflow details, see
 
 ## Multi-account support
 
-`STFC_ACCOUNTS` is a JSON **array**, one entry per account. The orchestrator
-iterates the entire array, so you can manage as many accounts as you like with
-a single secret:
+The orchestrator accepts a JSON array from `STFC_ACCOUNTS` for local runs or
+`STFC_ACCOUNTS_FILE` for scheduled workflows. Scheduled workflows load the
+account list from private Azure Blob Storage using GitHub OIDC; the legacy
+`STFC_ACCOUNTS` secret is used only for the one-time migration:
 
 ```json
 [
@@ -153,7 +160,7 @@ a single secret:
 ]
 ```
 
-Capture each token from a different browser profile (cookies are profile-scoped).
+The local capture utility opens a fresh browser context for each account.
 
 ---
 

@@ -49,6 +49,22 @@ describe(".github/workflows/redeem.yml", () => {
   });
 
   it(
+    "installs dependencies before Azure login and token download, then removes tokens after redemption",
+    { skip: yaml === undefined },
+    () => {
+      const installIdx = yaml!.indexOf("      - run: npm ci");
+      const loginIdx = yaml!.indexOf("      - name: Sign in to Azure with GitHub OIDC");
+      const downloadIdx = yaml!.indexOf("      - name: Download account tokens");
+      const redeemIdx = yaml!.indexOf("      - name: Redeem");
+      const cleanupIdx = yaml!.indexOf("      - name: Remove account-token file");
+
+      assert.ok(installIdx >= 0 && loginIdx > installIdx && downloadIdx > loginIdx &&
+        redeemIdx > downloadIdx && cleanupIdx > redeemIdx);
+      assert.match(getNamedStep(yaml!, "Remove account-token file"), /if:\s*always\(\)/);
+    },
+  );
+
+  it(
     "restores state from automation-state before running the redeemer",
     { skip: yaml === undefined },
     () => {

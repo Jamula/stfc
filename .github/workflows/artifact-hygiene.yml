@@ -3,7 +3,8 @@
 # Scans files changed in a PR for JWT tokens, API keys, bearer credentials,
 # and STFC account data. Fails the PR and posts remediation guidance on match.
 #
-# Trigger: pull_request touching spec/plan/task/doc files or runtime artifacts.
+# Trigger: pull_request touching contribution docs, configuration, source files,
+# or runtime artifacts.
 #
 # Secrets are NEVER printed; all matched content is redacted to <REDACTED-TOKEN>.
 name: Artifact Hygiene
@@ -18,9 +19,13 @@ on:
       - 'README.md'
       - 'SECURITY.md'
       - 'CONTRIBUTING.md'
+      - 'CHANGELOG.md'
+      - 'config/**'
       - '.github/**'
       - 'data/digests/**'
       - 'data/discord/**'
+      - 'data/crew/roster/**'
+      - 'discord/**'
       - 'src/**'
       - 'scripts/**'
       - 'tests/**'
@@ -81,8 +86,9 @@ jobs:
           FILES=()
           for file in "${CANDIDATES[@]}"; do
             case "$file" in
-              README.md|SECURITY.md|CONTRIBUTING.md|\
-              specs/*|plans/*|tasks/*|docs/*|.github/*|data/digests/*|data/discord/*|\
+              README.md|CHANGELOG.md|SECURITY.md|CONTRIBUTING.md|\
+              specs/*|plans/*|tasks/*|docs/*|config/*|.github/*|data/digests/*|data/discord/*|\
+              data/crew/roster/*|discord/*|\
               src/*|scripts/*|tests/*|api/*|web/*|worker/*|shared/*)
                 FILES+=("$file")
                 ;;

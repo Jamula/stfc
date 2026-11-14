@@ -5,93 +5,72 @@ of this repository.
 
 ## Prerequisites
 
-- A Scopely account that you log in to the STFC web store with.
-- A fork (or clone) of this repository on GitHub with Actions enabled.
-- **Recommended:** Node.js 24+ locally to match the repository toolchain and use
-  the `capture-token` script. The Azure Static Web Apps managed API is
-  configured to use Node.js 22. Optional: GitHub
-  CLI (`gh`) so the script can set the secret for
-  you.
+- An STFC account with access to the web store and a GitHub repository with Actions enabled.
+- The private Azure resources and owner-only PWA configured as described in
+  [STFC token PWA setup](STFC-TOKEN-PWA.md). No Azure configuration or deployment
+  is performed by this guide.
+- Node.js 24+ locally for CLI development and the local `capture-token` utility.
 
-## Recommended path: `npm run capture-token` (Playwright-driven)
+## Hosted token setup
 
-Interactive recovery compares the captured token's `/auth/me`
-`payload.accountId` with an identifier obtained independently from the
-official signed-in session. This field is observed in that response, not a
-documented guarantee that identifiers never change. An absent, unsupported,
-ambiguous or different identifier stops recovery. Non-CI `--headless` is
-refused. Do not use the legacy `--ci` path or `Refresh token` workflow for
-this recovery.
+The scheduled workflows read `accounts.json` from private Azure Blob Storage
+through GitHub OIDC; they do not consume `STFC_ACCOUNTS` directly. After the
+owner configures the OIDC identities and storage settings, initialize the
+empty store once:
 
-The Windows recovery entry point requires PowerShell 7 or later:
+1. Keep the existing JSON array in the temporary `STFC_ACCOUNTS` GitHub Actions
+   secret.
+2. Manually dispatch **Migrate token store**. It validates the data and uploads
+   only when the canonical Blob does not already exist.
+3. Confirm migration, then delete the legacy `STFC_ACCOUNTS` secret.
+4. Once deployed, sign in through the authenticated control panel's **STFC
+   token update** tab for all subsequent token updates.
+
+Do not paste tokens into chat, issues, repository files, or workflow logs. The
+owner PWA validates the real STFC login token and updates the private Blob
+without returning the token to the browser.
+
+## Local CLI token capture
+
+The Playwright capture script is for local CLI use only. It writes the updated
+account list to the ignored local `.env`; hosted token updates must use the
+owner-only PWA described in [STFC-TOKEN-PWA.md](STFC-TOKEN-PWA.md).
 
 ```powershell
 pwsh -NoProfile -File .\recover-auth.ps1
 ```
 
-Ensure Node.js 24+, GitHub CLI, project dependencies, and Playwright's
-Chromium are installed before starting. If dependencies or Chromium are
-missing, install them first with `npm ci` and `npm run playwright:install`;
-`npm ci` also installs this repository's Git hooks. The launcher checks
-dependencies and Chromium before requesting the backup.
+The recovery launcher requires PowerShell 7 or later, Node.js 24+, project
+dependencies, and Playwright's Chromium. Install missing project dependencies
+with `npm ci` and Chromium with `npm run playwright:install`.
+The launcher checks prerequisites before requesting the backup.
 
-First confirm that the full backup is current and complete, and wait for any
-redemption workflow to finish. Pause all redemption workflows and concurrent
-`.env` and `STFC_ACCOUNTS` updates until completion. GitHub cannot reveal
-the current secret. Never share the backup, identifier, response, email, OTP,
-or tokens in chat or screenshots.
+Before recovery, provide the current complete backup and confirm that all
+redemption workflows and concurrent `.env` and secret updates are stopped.
+GitHub cannot show the current secret. In an independent private official-store
+session, verify the intended account and obtain `payload.accountId` from its
+`/auth/me` response; do not use a display name or email as a substitute.
+At the hidden prompts, enter the exact existing account label and this
+independently obtained identifier, then sign in with email and OTP only in the
+newly opened official browser window.
 
-1. In an independent private official-store session, verify the intended
-   account and find `payload.accountId` in its `/auth/me` response. Keep it
-   private; do not rely on the current browser's display name or email alone.
-2. In a private PowerShell 7 terminal, run the command above. If this
-   worktree already has an `.env`, the launcher stops without overwriting it.
-   At its masked prompt, provide the complete backup; confirm the safeguards
-   and the explicit `github.com/Jamula/stfc` upload target. The backup is
-   stored as plaintext in the ignored local `.env`.
-3. Confirm the safeguards again, enter the exact existing account label at
-   the hidden prompt, and enter the independently obtained `accountId` at
-   the next hidden prompt. Sign in with email and OTP only in the newly
-   opened official browser window.
-4. The browser closes after capture. The script sends the exact captured
-   token to `/auth/me`, compares its identifier, and only then updates the
-   local backup. If prompted, approve the GitHub update and reconfirm the
-   backup and concurrency conditions. A failed or unconfirmed upload exits
-   nonzero; establish the current secret baseline before retrying. An
-   interrupted local write may leave an ignored `.env.local` staging file;
-   treat it as sensitive and remove it only after confirming it is not
-   another user's file.
+The script sends the captured token to `/auth/me` and updates the local backup
+only when the returned account identifier matches. A missing, unsupported,
+ambiguous, or different identifier stops the update. A successful response
+does not guarantee that the store will accept the token for gift operations.
+The launcher updates only the local `.env`, never the GitHub secret or hosted
+Blob. Use the PWA for hosted token updates. Treat the plaintext `.env` and any
+interrupted `.env.local` staging file as sensitive; never commit or share them.
 
-The comparison identifies the response associated with the token; an HTTP 200
-alone does not guarantee the store will accept the token for gift operations.
-
-### Multiple accounts
-
-Each run requires an existing complete local backup and an exact existing
-account name. Unselected account JSON is preserved; ambiguous or duplicate
-accounts and additional selected-account fields are rejected. If the launcher
-already created the backup and stopped before the GitHub update, establish
-the current baseline first, then use `npm run capture-token` in a private
-terminal to retry without overwriting the existing `.env`.
-
-### Useful flags
-
-- `--timeout <seconds>` — how long to wait for login (default 300).
-- `--name`, `--debug`, `--force`, and non-CI `--headless` are rejected for
-  interactive recovery; account labels are entered privately.
-
-### Setting the GitHub secret manually
-
-If you don't have `gh` installed (or just prefer the UI):
-
-1. Copy the JSON from the local `.env` securely; the script does not print it.
-2. Go to your repo on GitHub → **Settings → Secrets and variables → Actions
-   → New repository secret**.
-3. **Name:** `STFC_ACCOUNTS`. **Value:** paste the JSON array.
+Each recovery requires a complete existing account list and an exact existing
+account name. Unselected account JSON is preserved; duplicate accounts and
+additional fields on the selected account are rejected. For the one-time
+migration, follow the workflow steps above rather than setting a replacement
+secret manually.
 
 ## Triggering the workflow
 
-Once the secret is set:
+Once the private token store and Azure OIDC identities are initialized:
 
 - **Manual:** repo → **Actions** → **Redeem gifts** → **Run workflow**.
 - **CLI:** `gh workflow run "Redeem gifts"` (followed by `gh run watch` to
@@ -101,12 +80,7 @@ Once the secret is set:
   run shows what was claimed, which codes were already used, and any tokens
   that have expired.
 
-## Fallback path: manual JWT extraction (browser-only, no install)
-
-This is not an automated recovery procedure. Before changing the secret,
-confirm the full backup is current and complete and pause all concurrent
-updates. Replacing the whole secret with a single account discards the others.
-If you manually verify token ownership, open
+<!-- The legacy manual token-extraction instructions below are obsolete. Use the identity-bound local recovery above or the owner-only PWA for hosted updates.
 DevTools on the STFC store after logging in, switch to the **Network**
 tab, find any request to `cdn-nv3-webstore-api.startrek.digitgaming.com`,
 copy the token portion from the `Authorization` header (remove the
@@ -115,13 +89,13 @@ copy the token portion from the `Authorization` header (remove the
 intended secret. Do not rely on the current browser identity alone to verify
 ownership of a token captured earlier.
 
+-->
+
 ## Token refresh
 
-The manual `Refresh token` workflow uses legacy password-based login and
-cannot complete the current email-OTP flow.
-
-Use the identity-bound visible-browser procedure above. Do not run a secret
-update based only on the current browser identity or an account label.
+Use the owner-only PWA to refresh hosted tokens. The **Migrate token store**
+workflow is not a login or refresh flow; it only imports the legacy secret to
+an uninitialized Blob. For local-only CLI use, run `npm run capture-token`.
 
 ## Troubleshooting
 
@@ -136,24 +110,25 @@ window before logging in. Re-run with `--debug` and accept the diagnostic
 dump prompt to capture redacted info about what *was* in storage —
 that data helps us improve the script if the site changed.
 
-### `STFC_ACCOUNTS not valid JSON` (workflow error)
-Make sure you pasted **raw JSON** into the secret value, with no
-surrounding quotes and no leading/trailing whitespace. The value should
-start with `[` and end with `]`. (`capture-token` writes the right format
-automatically — this only happens with manual edits.)
+### Token store is not initialized
 
-### `token is not JWT-shaped` (workflow error)
-A JWT has exactly three base64url segments separated by `.`. If you see
-this error, you most likely pasted the wrong value into the secret. HTTP validation
-alone does not establish which account a token belongs to.
+Run **Migrate token store** while the legacy `STFC_ACCOUNTS` secret is
+available. If migration reports that the Blob already exists, do not overwrite
+or recreate it; stop and have the repository owner review the canonical store.
+
+### `token is not JWT-shaped` (local CLI error)
+
+A JWT has exactly three base64url segments separated by `.`. If you see this
+error locally, re-run `npm run capture-token`. For the hosted store, sign in
+again through the owner-only PWA.
 
 ### `TOKEN_EXPIRED` outcome on a workflow run
-Your stored JWT's `exp` claim is in the past. Follow the identity-bound
-recovery procedure above.
+Your stored JWT's `exp` claim is in the past. Sign in through the owner-only
+PWA and update the affected account label.
 
 If every configured account returns `TOKEN_EXPIRED` and there are no
 infrastructure errors, `run-all` exits with code **2** so the workflow fails as
-a clear secret-rotation signal. Mixed runs (some valid, some expired) still
+a clear token-store update signal. Mixed runs (some valid, some expired) still
 exit 0; infrastructure failures exit 1.
 
 ### Workflow doesn't run on schedule
