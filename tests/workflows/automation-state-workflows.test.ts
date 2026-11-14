@@ -107,7 +107,21 @@ const redeem = loadWorkflow(".github/workflows/redeem.yml");
 const monitor = loadWorkflow(".github/workflows/discord-monitor.yml");
 const handler = loadWorkflow(".github/workflows/discord-command-handler.yml");
 const refreshToken = loadWorkflow(".github/workflows/refresh-token.yml");
+const refreshTokenSource = readFileSync(".github/workflows/refresh-token.yml", "utf8");
 const storage = loadWorkflow(".github/workflows/storage-size-monitor.yml");
+
+describe("manual token refresh constraint", () => {
+  it("keeps OTP refresh manual and documents the supported runbook", () => {
+    assert.match(refreshTokenSource, /^\s{2}workflow_dispatch:/m);
+    assert.doesNotMatch(refreshTokenSource, /^\s{2}schedule:/m);
+    assert.match(refreshTokenSource, /manual dispatch only/i);
+    assert.match(refreshTokenSource, /passwordless email OTP/i);
+    assert.match(
+      refreshTokenSource,
+      /To refresh the token manually:[\s\S]*npm run capture-token[\s\S]*gh secret set STFC_ACCOUNTS/i,
+    );
+  });
+});
 
 describe("game-state effective bucket wiring", () => {
   it("passes the optional non-secret bucket override to the state-worktree handler", () => {

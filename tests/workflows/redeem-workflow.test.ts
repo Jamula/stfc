@@ -192,6 +192,19 @@ describe(".github/workflows/redeem.yml", () => {
   );
 
   it(
+    "documents the declared cron as a best-effort target with measured history",
+    { skip: yaml === undefined },
+    () => {
+      assert.match(yaml!, /cron:\s*"\*\/10 \* \* \* \*"/);
+      assert.match(yaml!, /GitHub scheduled delivery is best-effort, not a 10-minute guarantee/i);
+      assert.match(
+        yaml!,
+        /Issue #184 measured 34 runs in 22 complete hours \(1\.55\/hour vs 6\/hour expected\) during 2026-08-20\/21/i,
+      );
+    },
+  );
+
+  it(
     "serializes on the shared writer group with a bounded FIFO queue, never the lossy default",
     { skip: yaml === undefined },
     () => {

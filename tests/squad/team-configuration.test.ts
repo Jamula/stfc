@@ -228,8 +228,40 @@ describe("native Squad configuration", () => {
     assert.match(contract, /stacked PRs/);
     assert.match(contract, /explicit approval before spending money/);
     assert.match(contract, /native atomic casting protocol/);
+    assert.match(
+      contract,
+      /Never include secret values.*tokens or OTPs.*agent prompts.*command-line arguments.*logs.*issue comments/,
+    );
+    assert.match(contract, /implementation and independent review in separate sessions/i);
+    assert.match(contract, /reviewers are read-only and inspect the exact current revision/i);
+    assert.match(
+      contract,
+      /Never use broad destructive recovery.*`git reset --hard`.*`git clean`.*`git checkout -- \.`.*explicit user authorization/i,
+    );
     assert.doesNotMatch(coordinator, /work inline \(fallback only/i);
     assert.doesNotMatch(coordinator, /original author is locked out/i);
+  });
+
+  it("keeps Ralph briefs bounded and verifies agent failure reports", () => {
+    for (const file of [
+      [".github", "agents", "squad.agent.md"],
+      [".squad", "templates", "squad.agent.md.template"],
+    ]) {
+      const content = read(...file);
+      const afterAgentWork = between(content, "### After Agent Work", "### Ceremonies");
+      assert.match(
+        afterAgentWork,
+        /Failure reports are evidence.*verify the exact command or test output.*workspace state.*label the claim unverified/is,
+        file.join("/"),
+      );
+
+      const ralph = between(content, "## Ralph — Work Monitor", "## Rai — RAI Reviewer");
+      assert.match(
+        ralph,
+        /each brief must define the objective, bounded scope, time or iteration limit, stop condition, and any prohibited external actions/i,
+        file.join("/"),
+      );
+    }
   });
 
   it("keeps optional ceremonies and support agents inactive by default", () => {

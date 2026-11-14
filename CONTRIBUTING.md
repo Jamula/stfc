@@ -75,7 +75,10 @@ implementation.
 
 Review changes for correctness, security, and coverage of the documented
 acceptance criteria. Do not commit credentials or real account data: the
-pre-commit hook and `artifact-hygiene.yml` scan applicable files for leaks.
+pre-commit hook and `artifact-hygiene.yml` scan supported changed files under
+documentation, runtime-artifact, and code directories for known token patterns
+and selected STFC account-data fields. Findings redact matched content; this
+heuristic cannot guarantee detection of every secret or personal-data leak.
 
 The `test-gate.yml` workflow runs `npm run typecheck` and `npm test` for both
 the root package and the worker. Run the relevant commands locally and report

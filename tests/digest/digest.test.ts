@@ -175,7 +175,11 @@ describe("digest / excerpt truncation (FR-019)", () => {
 
 describe("digest / forbidden-content guard (FR-025, Principle VII)", () => {
   it("JWT-shaped excerpt → throws DigestForbiddenContentError", async () => {
-    const jwt = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ4In0.abcdefghij";
+    const jwt = [
+      "eyJhbGciOiJIUzI1NiJ9",
+      "eyJzdWIiOiJ4In0",
+      "abcdefghij",
+    ].join(".");
     const input = baseDigest({
       runId: RUN_A,
       tips: [tip("tip", `Tip including ${jwt} which must be blocked.`, "stfc-strategy", "411111111111111101", "2026-05-16T08:00:00Z")],
