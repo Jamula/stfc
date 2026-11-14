@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 // Interactive Playwright JWT capture for the STFC web store.
+// Interactive recovery verifies the captured token against an independently
+// obtained account identifier before changing any account.
 //
 // USAGE
 //   npm run capture-token
@@ -33,6 +35,7 @@ import { createInterface } from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { parseDocument } from "yaml";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -49,10 +52,10 @@ const API_HOST  = "cdn-nv3-webstore-api.startrek.digitgaming.com";
 // ----------------------------------------------------------------------------
 
 function parseArgs(argv) {
-  const out = { name: "main", timeout: 300, debug: false, force: false, help: false, invalid: false, ci: false, headless: false };
+  const out = { name: "main", explicitName: false, timeout: 300, debug: false, force: false, help: false, invalid: false, ci: false, headless: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
-    if (a === "--name" && argv[i + 1]) { out.name = argv[++i]; continue; }
+    if (a === "--name" && argv[i + 1]) { out.name = argv[++i]; out.explicitName = true; continue; }
     if (a === "--timeout" && argv[i + 1]) { out.timeout = Number(argv[++i]); continue; }
     if (a === "--debug") { out.debug = true; continue; }
     if (a === "--force") { out.force = true; continue; }
@@ -77,8 +80,7 @@ function printUsage() {
   console.log(`
 Usage: npm run capture-token -- [--name <accountName>] [--timeout <seconds>] [--debug] [--force] [--ci] [--headless]
 
-  --name      Name to record this account under in STFC_ACCOUNTS. Default: "main".
-              Re-run with a different name to add additional accounts.
+  --name      Account label in --ci mode. Interactive recovery reads it privately.
   --timeout   How long to wait for the login flow (in seconds). Default: 300.
   --debug     On capture failure, prompt to write redacted localStorage /
               sessionStorage / cookie diagnostics. Never includes raw values.
@@ -88,11 +90,8 @@ Usage: npm run capture-token -- [--name <accountName>] [--timeout <seconds>] [--
               captured JWT as JSON {"name":"<name>","token":"<jwt>"} to stdout
               (everything else goes to stderr). Skips .env writes and gh
               prompts. Requires STFC_EMAIL + STFC_PASSWORD env vars.
-  --headless  Run the browser headless (no visible window) but keep interactive
-              features. When STFC_EMAIL is set, auto-fills the email and waits
-              for an OTP code via the file /tmp/stfc-otp instead of stdin.
-              Useful when running inside a server/agent environment that has no
-              display but still needs a human to supply the verification code.
+  --headless  Not supported outside --ci: account identity cannot be verified
+              without a visible browser.
 
 Environment variables:
   STFC_EMAIL     If set, the script auto-fills the Scopely email form. Combined
@@ -146,45 +145,101 @@ function humanDelta(seconds) {
 // Network capture.
 // ----------------------------------------------------------------------------
 
-async function captureToken({ context, timeoutMs }) {
+async function captureToken({ context, timeoutMs, closeAfterCapture }) {
   let resolve;
   const captured = new Promise((r) => { resolve = r; });
-  let done = false;
+  let first = null, changed = false, ambiguous = false;
+  const pending = new Set();
   const win = (token, source) => {
-    if (done) return;
-    done = true;
-    resolve({ token, source });
+    if (!isJwtShaped(token)) { ambiguous = true; return; }
+    if (first) {
+      if (first.token !== token) changed = true;
+      return;
+    }
+    first = { token, source };
+    resolve(first);
   };
 
-  context.on("response", async (res) => {
+  const onResponse = (res) => {
     try {
-      const url = res.url();
-      const req = res.request();
-      if (req.method() !== "POST") return;
-      if (!url.includes(`${API_HOST}/api/v2/auth/login`)) return;
-      const body = await res.json().catch(() => null);
-      if (body && typeof body.accessToken === "string" && body.accessToken.length > 0) {
-        win(body.accessToken, "POST /auth/login response.accessToken");
+      const url = new URL(res.url());
+      if (url.protocol !== "https:" || url.host !== API_HOST || url.pathname !== "/api/v2/auth/login") return;
+      if (res.request().method() !== "POST") return;
+    } catch { if (closeAfterCapture) ambiguous = true; return; }
+    const job = (async () => {
+      try {
+        const body = await res.json();
+        if (typeof body?.accessToken === "string") win(body.accessToken, "POST /auth/login response");
+        else if (closeAfterCapture && res.status() >= 200 && res.status() < 300) ambiguous = true;
+      } catch {
+        if (closeAfterCapture) ambiguous = true;
       }
-    } catch {
-      // ignore body-read failures (redirects, aborted, non-JSON, etc.)
-    }
-  });
+    })();
+    pending.add(job);
+    job.finally(() => pending.delete(job));
+  };
 
-  context.on("request", (req) => {
+  const onRequest = (req) => {
     try {
-      const url = req.url();
-      if (!url.includes(API_HOST)) return;
+      const url = new URL(req.url());
+      if (url.protocol !== "https:" || url.host !== API_HOST) return;
       const auth = req.headers()["authorization"];
       if (typeof auth === "string" && auth.startsWith("Bearer ")) {
         const token = auth.slice("Bearer ".length).trim();
-        if (token.length > 0) win(token, `request header on ${new URL(url).pathname}`);
+        if (token.length > 0) win(token, "request header");
       }
-    } catch { /* noop */ }
-  });
+    } catch { if (closeAfterCapture) ambiguous = true; }
+  };
 
-  const timeout = new Promise((r) => setTimeout(() => r({ token: null, source: "timeout" }), timeoutMs));
-  return Promise.race([captured, timeout]);
+  context.on("response", onResponse);
+  context.on("request", onRequest);
+  let timer;
+  const timeout = new Promise((r) => { timer = setTimeout(() => r({ token: null, source: "timeout" }), timeoutMs); });
+  try {
+    const result = await Promise.race([captured, timeout]);
+    if (result.token && closeAfterCapture) {
+      await closeAfterCapture();
+      await Promise.all([...pending]);
+      if (changed || ambiguous) throw new Error("Capture was ambiguous or the browser token changed; no update was written.");
+    }
+    return result;
+  } finally {
+    clearTimeout(timer);
+    context.off("response", onResponse);
+    context.off("request", onRequest);
+  }
+}
+
+function accountId(value) {
+  if (typeof value === "bigint") return value >= 0n ? String(value) : null;
+  if (typeof value === "string" && /^[\x21-\x7e]{1,256}$/.test(value)) return value;
+  return null;
+}
+
+function parseAccountId(text) {
+  JSON.parse(text);
+  const doc = parseDocument(text, { schema: "json", uniqueKeys: true, intAsBigInt: true });
+  if (doc.errors.length || doc.warnings.length) return null;
+  const value = doc.toJS({ maxAliasCount: 0 });
+  if (!value || Array.isArray(value) || typeof value !== "object" ||
+      !value.payload || Array.isArray(value.payload) || typeof value.payload !== "object") return null;
+  return accountId(value.payload.accountId);
+}
+
+async function verifyAccountId(token, expectedId, fetchImpl = fetch) {
+  if (!isJwtShaped(token) || !accountId(expectedId)) return false;
+  try {
+    const response = await fetchImpl(`${API_BASE}/auth/me`, {
+      headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+      redirect: "error",
+      signal: AbortSignal.timeout(15000),
+    });
+    if (response.status !== 200 || response.redirected) return false;
+    const actual = parseAccountId(await response.text());
+    return actual !== null && actual === expectedId;
+  } catch {
+    return false;
+  }
 }
 
 async function validateToken(token) {
@@ -223,20 +278,47 @@ function unquoteEnvValue(raw) {
 }
 
 function quoteEnvValue(v) {
-  // Single-quoted with backslash-escaped single quotes. Safer for JSON
-  // payloads than double-quoted-with-escaped-double-quotes, which Node's
-  // own --env-file parser does NOT handle the way dotenv does.
-  return `'${v.replace(/\\/g, "\\\\").replace(/'/g, "\\'")}'`;
+  if (/['\r\n]/.test(v)) {
+    throw new Error("STFC_ACCOUNTS cannot be safely represented in a single-quoted .env value.");
+  }
+  return `'${v}'`;
 }
 
 async function readEnv(envPath = ENV_PATH) {
-  if (!existsSync(envPath)) return { exists: false, lines: [] };
+  if (!existsSync(envPath)) return { exists: false, raw: null, lines: [] };
   const raw = await fs.readFile(envPath, "utf8");
-  return { exists: true, lines: raw.split(/\r?\n/) };
+  return { exists: true, raw, lines: raw.split(/\r?\n/) };
 }
 
-async function mergeIntoEnv({ name, token, force, _envPath = ENV_PATH }) {
-  const { exists, lines } = await readEnv(_envPath);
+// JSON.parse validates syntax; keep each original array element's bytes so
+// unrelated metadata (including numbers outside JS's safe range) survives.
+function arrayElements(json) {
+  const elements = [];
+  let start = 1, depth = 0, quoted = false, escaped = false;
+  for (let i = 1; i < json.length; i++) {
+    const c = json[i];
+    if (quoted) {
+      if (escaped) escaped = false;
+      else if (c === "\\") escaped = true;
+      else if (c === '"') quoted = false;
+    } else if (c === '"') quoted = true;
+    else if (c === "{" || c === "[") depth++;
+    else if (c === "}" || (c === "]" && depth > 0)) depth--;
+    else if (depth === 0 && (c === "," || c === "]")) {
+      const element = json.slice(start, i).trim();
+      if (element) elements.push(element);
+      if (c === "]") break;
+      start = i + 1;
+    }
+  }
+  return elements;
+}
+
+async function mergeIntoEnv({ name, token, force, _envPath = ENV_PATH, _expectedRaw, _beforeReplace, _rename = fs.rename }) {
+  const { exists, raw, lines } = await readEnv(_envPath);
+  if (_expectedRaw !== undefined && raw !== _expectedRaw) {
+    throw new Error(".env changed during capture; no update was written.");
+  }
   const newAccount = { name, token };
 
   let existingIdx = -1;
@@ -250,13 +332,15 @@ async function mergeIntoEnv({ name, token, force, _envPath = ENV_PATH }) {
     }
   }
 
-  let merged;
+  let merged, elements;
   if (existingIdx === -1) {
     merged = [newAccount];
+    elements = [JSON.stringify(newAccount)];
   } else {
-    let parsed;
+    let parsed, original;
     try {
-      parsed = JSON.parse(unquoteEnvValue(existingLine));
+      original = unquoteEnvValue(existingLine).trim();
+      parsed = JSON.parse(original);
     } catch {
       if (!force) {
         throw new Error(
@@ -265,6 +349,7 @@ async function mergeIntoEnv({ name, token, force, _envPath = ENV_PATH }) {
         );
       }
       parsed = [];
+      original = "[]";
     }
     if (!Array.isArray(parsed)) {
       if (!force) {
@@ -274,14 +359,26 @@ async function mergeIntoEnv({ name, token, force, _envPath = ENV_PATH }) {
         );
       }
       parsed = [];
+      original = "[]";
     }
+    elements = arrayElements(original);
     const idx = parsed.findIndex((a) => a && a.name === name);
-    if (idx >= 0) parsed[idx] = newAccount;
-    else parsed.push(newAccount);
+    if (idx >= 0) {
+      if (parsed.filter((a) => a && a.name === name).length !== 1 ||
+          Object.keys(parsed[idx]).some((key) => key !== "name" && key !== "token")) {
+        throw new Error("Selected account is duplicated or has additional fields; refusing to discard data.");
+      }
+      parsed[idx] = newAccount;
+      elements[idx] = JSON.stringify(newAccount);
+    } else {
+      parsed.push(newAccount);
+      elements.push(JSON.stringify(newAccount));
+    }
     merged = parsed;
   }
 
-  const newLine = `STFC_ACCOUNTS=${quoteEnvValue(JSON.stringify(merged))}`;
+  const secretJson = `[${elements.join(",")}]`;
+  const newLine = `STFC_ACCOUNTS=${quoteEnvValue(secretJson)}`;
   let newLines;
   if (existingIdx === -1) {
     newLines = exists ? [...lines, newLine] : [newLine, ""];
@@ -289,8 +386,54 @@ async function mergeIntoEnv({ name, token, force, _envPath = ENV_PATH }) {
     newLines = [...lines];
     newLines[existingIdx] = newLine;
   }
-  await fs.writeFile(_envPath, newLines.join("\n"), "utf8");
+  const updatedRaw = newLines.join("\n");
+  const stagePath = path.join(path.dirname(_envPath), ".env.local");
+  let created = false;
+  try {
+    const stage = await fs.open(stagePath, "wx", 0o600);
+    created = true;
+    try { await stage.writeFile(updatedRaw, "utf8"); await stage.sync(); } finally { await stage.close(); }
+    if (_beforeReplace) await _beforeReplace();
+    if ((await readEnv(_envPath)).raw !== raw) throw new Error(".env changed during capture; no update was written.");
+    await _rename(stagePath, _envPath);
+    created = false;
+  } finally {
+    if (created) await fs.unlink(stagePath).catch(() => {});
+  }
+  Object.defineProperty(merged, "secretJson", { value: secretJson });
+  Object.defineProperty(merged, "envRaw", { value: updatedRaw });
   return merged;
+}
+
+async function mergeAfterIdentityConfirmation({ name, token, force, baseline, expectedId, envPath = ENV_PATH, verify = verifyAccountId }) {
+  if (!await verify(token, expectedId)) {
+    throw new Error("Token identity could not be verified against the expected account; no update was written.");
+  }
+  return mergeIntoEnv({ name, token, force, _envPath: envPath, _expectedRaw: baseline });
+}
+
+function validateRecoveryBaseline(raw, name) {
+  if (typeof raw !== "string") throw new Error("A complete local backup is required.");
+  const lines = raw.split(/\r?\n/).filter((line) => /^\s*(?:export\s+)?STFC_ACCOUNTS\s*=/.test(line));
+  if (lines.length !== 1) throw new Error("The backup must contain exactly one STFC_ACCOUNTS entry.");
+  if (/^\s*export\s+/.test(lines[0])) throw new Error("Exported STFC_ACCOUNTS entries are unsupported.");
+  const text = unquoteEnvValue(lines[0].replace(/^\s*STFC_ACCOUNTS\s*=/, "")).trim();
+  try {
+    const parsed = JSON.parse(text);
+    const doc = parseDocument(text, { schema: "json", uniqueKeys: true });
+    if (doc.errors.length || doc.warnings.length || !Array.isArray(parsed) || parsed.length === 0) throw new Error();
+    const names = new Set();
+    for (const item of parsed) {
+      if (!item || Array.isArray(item) || typeof item !== "object" ||
+          typeof item.name !== "string" || !item.name.trim() ||
+          !isJwtShaped(item.token) || names.has(item.name)) throw new Error();
+      names.add(item.name);
+    }
+    const target = parsed.filter((item) => item.name === name);
+    if (target.length !== 1 || Object.keys(target[0]).some((key) => key !== "name" && key !== "token")) throw new Error();
+  } catch {
+    throw new Error("The backup or selected account is invalid or ambiguous; no update was written.");
+  }
 }
 
 // ----------------------------------------------------------------------------
@@ -305,12 +448,12 @@ async function ghAvailable() {
   });
 }
 
-async function ghSetSecret(secretJson) {
+async function ghSetSecret(secretJson, spawnProcess = spawn) {
   return new Promise((resolve, reject) => {
     // gh reads the secret value from stdin when --body is omitted. Older gh
     // releases don't support --body-file, so rely on the stdin path here.
-    const p = spawn("gh", ["secret", "set", "STFC_ACCOUNTS"], {
-      stdio: ["pipe", "inherit", "inherit"],
+    const p = spawnProcess("gh", ["secret", "set", "STFC_ACCOUNTS", "--repo", "github.com/Jamula/stfc"], {
+      stdio: ["pipe", "ignore", "ignore"],
       shell: process.platform === "win32",
     });
     p.on("error", reject);
@@ -318,8 +461,28 @@ async function ghSetSecret(secretJson) {
       if (code === 0) resolve();
       else reject(new Error(`gh exited with code ${code}`));
     });
+    p.stdin.on("error", reject);
     p.stdin.end(secretJson);
   });
+}
+
+async function updateGithubSecret({ secretJson, expectedRaw, envPath = ENV_PATH, ask = confirm, setSecret = ghSetSecret, error = console.error }) {
+  if (!await ask("Is your backup current AND have you stopped all redemption workflows and other .env and STFC_ACCOUNTS updates until this finishes?")) {
+    return "skipped";
+  }
+  if ((await readEnv(envPath)).raw !== expectedRaw) {
+    error(".env changed after capture; GitHub secret was not updated.");
+    process.exitCode = 1;
+    return "failed";
+  }
+  try {
+    await setSecret(secretJson);
+    return "updated";
+  } catch {
+    error("GitHub secret update failed or could not be confirmed.");
+    process.exitCode = 1;
+    return "failed";
+  }
 }
 
 // ----------------------------------------------------------------------------
@@ -376,6 +539,45 @@ async function confirm(prompt, def = false) {
   } finally {
     rl.close();
   }
+}
+
+async function readPrivateValue(prompt, { stdin = input, stdout = output } = {}) {
+  if (!stdin.isTTY || !stdout.isTTY || typeof stdin.setRawMode !== "function") {
+    throw new Error("A private interactive terminal is required.");
+  }
+  stdout.write(prompt);
+  return new Promise((resolve, reject) => {
+    let value = "", invalid = false;
+    const wasRaw = stdin.isRaw;
+    const finish = (error) => {
+      stdin.off("data", onData);
+      stdin.off("error", onError);
+      try { stdin.setRawMode(Boolean(wasRaw)); } catch { error = true; }
+      stdin.pause();
+      stdout.write("\n");
+      if (error || invalid || !value || value !== value.trim()) reject(new Error("Private input was cancelled or invalid."));
+      else resolve(value);
+    };
+    const onError = () => finish(true);
+    const onData = (chunk) => {
+      for (const char of chunk.toString("utf8")) {
+        if (char === "\r" || char === "\n") { finish(false); return; }
+        if (char === "\x03" || char === "\x04") { finish(true); return; }
+        if (char === "\x08" || char === "\x7f") value = value.slice(0, -1);
+        else if (/^[\x20-\x7e]$/.test(char) && value.length < 256) value += char;
+        else invalid = true;
+      }
+    };
+    stdin.on("data", onData);
+    stdin.on("error", onError);
+    try { stdin.setRawMode(true); stdin.resume(); } catch { finish(true); }
+  });
+}
+
+async function readExpectedAccountId(streams) {
+  const value = await readPrivateValue("Enter the accountId from the independently authenticated /auth/me response (hidden): ", streams);
+  if (!accountId(value)) throw new Error("Account identifier input was cancelled or invalid.");
+  return value;
 }
 
 // ----------------------------------------------------------------------------
@@ -754,44 +956,70 @@ async function clickWithRetry(page, selector, timeoutMs) {
 // Main.
 // ----------------------------------------------------------------------------
 
-async function main() {
-  const args = parseArgs(process.argv.slice(2));
-  if (args.help || args.invalid) { printUsage(); process.exit(args.invalid ? 2 : 0); }
+async function main(argv = process.argv.slice(2), dependencies = {}) {
+  const args = parseArgs(argv);
+  if (args.help || args.invalid) { printUsage(); process.exitCode = args.invalid ? 2 : 0; return; }
+  const ask = dependencies.ask ?? confirm;
+  const envPath = dependencies.envPath ?? ENV_PATH;
+
+  if (!args.ci && (args.headless || args.force || args.debug || args.explicitName)) {
+    console.error("Stopped: interactive recovery requires a visible browser and a private account selection; --name, --headless, --force and --debug are unavailable.");
+    process.exitCode = 1;
+    return;
+  }
 
   // In CI mode, redirect everything diagnostic to stderr so stdout is reserved
   // for the captured-token JSON the workflow consumes.
   const log = args.ci ? (...a) => console.error(...a) : (...a) => console.log(...a);
   const err = (...a) => console.error(...a);
 
-  const email = process.env.STFC_EMAIL?.trim() || "";
-  const password = process.env.STFC_PASSWORD || "";
+  const email = args.ci ? process.env.STFC_EMAIL?.trim() || "" : "";
+  const password = args.ci ? process.env.STFC_PASSWORD || "" : "";
   // Auto-login only requires STFC_EMAIL; password is optional for OTP-only accounts.
   const wantAutoLogin = email.length > 0;
 
   if (args.ci && !wantAutoLogin) {
     err(`--ci requires STFC_EMAIL (and optionally STFC_PASSWORD) env vars.`);
-    process.exit(2);
+    process.exitCode = 2;
+    return;
   }
 
   log(`\nSTFC Gift Redeemer — JWT capture`);
   log(`────────────────────────────────`);
-  log(`  account name : ${args.name}`);
   log(`  timeout      : ${args.timeout}s`);
   log(`  store URL    : ${STORE_URL}`);
-  log(`  auto-login   : ${wantAutoLogin ? `yes (${email})` : "no (interactive)"}`);
+  log(`  auto-login   : ${wantAutoLogin ? "yes" : "no (interactive)"}`);
   const runHeadless = args.ci || args.headless;
+  let baseline = null, expectedId = null;
+  if (!args.ci) {
+    try {
+      baseline = (await readEnv(envPath)).raw;
+      if (!(dependencies.privateTerminal ?? (input.isTTY && output.isTTY))) throw new Error();
+      if (!await ask("Is the backup current and complete, with redemption workflows and other updates stopped until this finishes?")) {
+        throw new Error();
+      }
+      args.name = await (dependencies.readAccountName ?? (() => readPrivateValue("Enter the exact existing account label (hidden): ")))();
+      validateRecoveryBaseline(baseline, args.name);
+      expectedId = await (dependencies.readExpectedAccountId ?? readExpectedAccountId)();
+    } catch {
+      err("Stopped: the backup, selected account, or private identifier input is invalid; no capture or update was attempted.");
+      process.exitCode = 1;
+      return;
+    }
+  }
 
   log(`  mode         : ${args.ci ? "CI (headless)" : args.headless ? "headless (file OTP)" : "interactive (visible browser)"}`);
   log("");
 
   let browser;
   try {
-    browser = await chromium.launch({ headless: runHeadless });
-  } catch (e) {
-    err(`\nFailed to launch Chromium: ${e instanceof Error ? e.message : e}`);
+    browser = await (dependencies.launchBrowser ?? ((options) => chromium.launch(options)))({ headless: runHeadless });
+  } catch {
+    err(`\nFailed to launch Chromium.`);
     err(`\nIf this is the first run, install the browser binary:`);
     err(`  npm run playwright:install\n`);
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
 
   const context = await browser.newContext();
@@ -799,10 +1027,13 @@ async function main() {
 
   log(`Watching network traffic for /auth/login response or Bearer header…`);
   if (!wantAutoLogin) {
-    log(`Log in normally in the browser window. The browser will close automatically once a token is captured.\n`);
+    log(`Log in normally in the browser window. Keep it open to verify the account after capture.\n`);
   }
 
-  const capturePromise = captureToken({ context, timeoutMs: args.timeout * 1000 });
+  const capturePromise = captureToken({
+    context, timeoutMs: args.timeout * 1000,
+    closeAfterCapture: args.ci ? undefined : () => browser.close(),
+  }).then((result) => ({ result }), () => ({ failed: true }));
   await page.goto(STORE_URL, { waitUntil: "domcontentloaded" }).catch(() => {});
 
   if (wantAutoLogin) {
@@ -810,12 +1041,19 @@ async function main() {
     // /auth/login response handler picks up the JWT. If auto-login fails (e.g.
     // CAPTCHA) the user can still complete login manually in the visible
     // browser when not in --ci mode.
-    tryAutoLogin(page, { email, password, log, err, ci: args.ci, headless: args.headless }).catch((e) => {
-      err(`auto-login failed: ${e instanceof Error ? e.message : e}`);
+    tryAutoLogin(page, { email, password, log, err, ci: args.ci, headless: args.headless }).catch(() => {
+      err("auto-login failed.");
     });
   }
 
-  const { token, source } = await capturePromise;
+  const outcome = await capturePromise;
+  if (outcome.failed) {
+    err("Capture was ambiguous or the browser token changed; no update was written.");
+    await browser.close().catch(() => {});
+    process.exitCode = 1;
+    return;
+  }
+  const { token, source } = outcome.result;
 
   if (!token) {
     err(`\nTimed out after ${args.timeout}s without capturing a token.`);
@@ -828,7 +1066,7 @@ async function main() {
       err(`  - Network requests are happening but with a different host.`);
     }
 
-    if (args.debug || (!args.ci && (await confirm("Write redacted storage/cookie diagnostics?")))) {
+    if (args.ci && args.debug) {
       try {
         const file = await dumpDiagnostics(context, page);
         err(`Diagnostics written to ${file}`);
@@ -841,7 +1079,7 @@ async function main() {
     // way to tell a changed selector apart from a CAPTCHA when running
     // headless in CI. Only the rendered page is captured — never page HTML,
     // which could contain the JWT we are trying to protect.
-    const shotDir = process.env.STFC_DEBUG_DIR?.trim();
+    const shotDir = args.ci ? process.env.STFC_DEBUG_DIR?.trim() : "";
     if (shotDir) {
       try {
         await fs.mkdir(shotDir, { recursive: true });
@@ -900,24 +1138,20 @@ async function main() {
     }
 
     await browser.close();
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
 
   log(`\nCaptured a candidate token via: ${source}`);
 
-  log(`Validating against ${API_BASE}/auth/me…`);
-  const v = await validateToken(token);
-  if (!v.ok) {
-    err(`Validation failed: HTTP ${v.status}${v.error ? ` (${v.error})` : ""}`);
-    await browser.close();
-    process.exit(1);
-  }
-  log(`Validation OK (HTTP 200).`);
-
-  const payload = decodeJwt(token);
-  log(`Token expiry: ${describeExpiry(payload)}`);
-
   if (args.ci) {
+    const v = await validateToken(token);
+    if (!v.ok) {
+      err("Token validation failed.");
+      await browser.close();
+      process.exitCode = 1;
+      return;
+    }
     // The workflow consumes a single line of JSON: {"name":"<n>","token":"<t>"}.
     // Everything else has gone to stderr.
     process.stdout.write(JSON.stringify({ name: args.name, token }) + "\n");
@@ -925,40 +1159,50 @@ async function main() {
     return;
   }
 
+  log("Checking the captured token against the independently supplied account identifier.");
   let merged;
   try {
-    merged = await mergeIntoEnv({ name: args.name, token, force: args.force });
-  } catch (e) {
-    err(`\nFailed to update ${ENV_PATH}:`);
-    err(e instanceof Error ? e.message : String(e));
-    await browser.close();
-    process.exit(1);
+    merged = await mergeAfterIdentityConfirmation({
+      name: args.name, token, force: false, baseline, expectedId, envPath,
+      verify: (candidate, expected) => verifyAccountId(candidate, expected, dependencies.fetchIdentity ?? fetch),
+    });
+  } catch {
+    err("Identity verification or local update failed; no GitHub secret update was attempted.");
+    await browser.close().catch(() => {});
+    process.exitCode = 1;
+    return;
   }
 
-  log(`\nUpdated ${ENV_PATH}: STFC_ACCOUNTS now contains ${merged.length} account(s) [${merged.map((a) => a.name).join(", ")}].`);
+  log(`\nUpdated the local account backup (${merged.length} account(s)).`);
 
-  const ghOk = await ghAvailable();
+  const ghOk = await (dependencies.ghAvailable ?? ghAvailable)();
+  let githubUpdated = false;
   if (ghOk) {
     console.log("");
-    if (await confirm("Set the GitHub repo secret STFC_ACCOUNTS via gh now?", false)) {
-      try {
-        await ghSetSecret(JSON.stringify(merged));
+    if (await ask("Set STFC_ACCOUNTS on github.com/Jamula/stfc via gh now?", false)) {
+      const result = await updateGithubSecret({ secretJson: merged.secretJson, expectedRaw: merged.envRaw, envPath, ask, setSecret: dependencies.setSecret ?? ghSetSecret });
+      if (result === "updated") {
+        githubUpdated = true;
         console.log(`GitHub secret STFC_ACCOUNTS set successfully.`);
-      } catch (err) {
-        console.error(`gh failed: ${err instanceof Error ? err.message : err}`);
-        console.error(`You can set the secret manually: GitHub repo → Settings → Secrets and variables → Actions → STFC_ACCOUNTS.`);
+      } else if (result === "skipped") {
+        console.error(`GitHub secret was not updated.`);
+        process.exitCode = 1;
+      } else {
+        console.error(`GitHub update failed or could not be confirmed; the secret may have changed. Establish its current baseline before retrying.`);
+        process.exitCode = 1;
       }
     } else {
-      console.log(`Skipped. Set the secret manually when you're ready: GitHub repo → Settings → Secrets and variables → Actions → STFC_ACCOUNTS.`);
+      console.log(`GitHub secret update skipped.`);
+      process.exitCode = 1;
     }
   } else {
     console.log(`\n'gh' CLI not found on PATH.`);
-    console.log(`Set the secret manually: GitHub repo → Settings → Secrets and variables → Actions → STFC_ACCOUNTS.`);
-    console.log(`The value to paste is the JSON now in your local .env file.`);
+    console.log(`GitHub secret update was not attempted.`);
+    process.exitCode = 1;
   }
 
   await browser.close();
-  console.log(`\nDone. Trigger the workflow with: gh workflow run "Redeem gifts" (or via the GitHub UI).`);
+  console.log(githubUpdated ? "\nDone. GitHub secret update confirmed." : "\nDone. The GitHub secret was not confirmed updated.");
 }
 
 // Only run the CLI when invoked directly, so tests can import the OTP
@@ -966,10 +1210,10 @@ async function main() {
 const isDirectRun = process.argv[1] && path.resolve(process.argv[1]) === __filename;
 
 if (isDirectRun) {
-  main().catch((err) => {
-    console.error(`\nUnexpected error: ${err instanceof Error ? err.stack || err.message : String(err)}`);
+  main().catch(() => {
+    console.error("\nUnexpected error; no further update was attempted.");
     process.exit(1);
   });
 }
 
-export { findOtpEntry, fillOtp, OTP_SELECTORS, SPLIT_OTP_SELECTOR, mergeIntoEnv };
+export { findOtpEntry, fillOtp, OTP_SELECTORS, SPLIT_OTP_SELECTOR, mergeIntoEnv, mergeAfterIdentityConfirmation, captureToken, ghSetSecret, updateGithubSecret, verifyAccountId, validateRecoveryBaseline, readExpectedAccountId, main };

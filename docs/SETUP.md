@@ -15,57 +15,76 @@ of this repository.
 
 ## Recommended path: `npm run capture-token` (Playwright-driven)
 
-The script launches a real Chromium window, waits for you to log in, watches
-the actual network traffic for the JWT (much more reliable than scraping
-storage), validates it against `/auth/me`, decodes the expiry, writes it to a
-local `.env`, and optionally sets the GitHub repo secret via `gh secret set`.
+Interactive recovery compares the captured token's `/auth/me`
+`payload.accountId` with an identifier obtained independently from the
+official signed-in session. This field is observed in that response, not a
+documented guarantee that identifiers never change. An absent, unsupported,
+ambiguous or different identifier stops recovery. Non-CI `--headless` is
+refused. Do not use the legacy `--ci` path or `Refresh token` workflow for
+this recovery.
 
-```bash
-npm install
-npm run playwright:install   # one-time: download Chromium binary (~120 MB)
-npm run capture-token        # captures account "main"
+The Windows recovery entry point requires PowerShell 7 or later:
+
+```powershell
+pwsh -NoProfile -File .\recover-auth.ps1
 ```
 
-Steps:
+Ensure Node.js 24+, GitHub CLI, project dependencies, and Playwright's
+Chromium are installed before starting. If dependencies or Chromium are
+missing, install them first with `npm ci` and `npm run playwright:install`;
+`npm ci` also installs this repository's Git hooks. The launcher checks
+dependencies and Chromium before requesting the backup.
 
-1. The script opens a Chromium window pointing at
-   `https://home.startrekfleetcommand.com/store`.
-2. **Log in normally** in that window. The script never sees your password —
-   it only observes the resulting API traffic.
-3. Once it captures a token, it validates and writes it to `.env`. If `gh`
-   is on your `PATH` it offers (`y/N`) to also set the GitHub repo secret
-   `STFC_ACCOUNTS` for you (passing the JSON via stdin so the token never
-   appears in shell history).
-4. The browser closes automatically and you're done.
+First confirm that the full backup is current and complete, and wait for any
+redemption workflow to finish. Pause all redemption workflows and concurrent
+`.env` and `STFC_ACCOUNTS` updates until completion. GitHub cannot reveal
+the current secret. Never share the backup, identifier, response, email, OTP,
+or tokens in chat or screenshots.
+
+1. In an independent private official-store session, verify the intended
+   account and find `payload.accountId` in its `/auth/me` response. Keep it
+   private; do not rely on the current browser's display name or email alone.
+2. In a private PowerShell 7 terminal, run the command above. If this
+   worktree already has an `.env`, the launcher stops without overwriting it.
+   At its masked prompt, provide the complete backup; confirm the safeguards
+   and the explicit `github.com/Jamula/stfc` upload target. The backup is
+   stored as plaintext in the ignored local `.env`.
+3. Confirm the safeguards again, enter the exact existing account label at
+   the hidden prompt, and enter the independently obtained `accountId` at
+   the next hidden prompt. Sign in with email and OTP only in the newly
+   opened official browser window.
+4. The browser closes after capture. The script sends the exact captured
+   token to `/auth/me`, compares its identifier, and only then updates the
+   local backup. If prompted, approve the GitHub update and reconfirm the
+   backup and concurrency conditions. A failed or unconfirmed upload exits
+   nonzero; establish the current secret baseline before retrying. An
+   interrupted local write may leave an ignored `.env.local` staging file;
+   treat it as sensitive and remove it only after confirming it is not
+   another user's file.
+
+The comparison identifies the response associated with the token; an HTTP 200
+alone does not guarantee the store will accept the token for gift operations.
 
 ### Multiple accounts
 
-```bash
-npm run capture-token -- --name main
-npm run capture-token -- --name alt
-npm run capture-token -- --name third
-```
-
-Each run launches a fresh browser context (no cookies carried over) and
-**adds or replaces** the named entry in `STFC_ACCOUNTS`. All previously
-captured accounts are preserved.
+Each run requires an existing complete local backup and an exact existing
+account name. Unselected account JSON is preserved; ambiguous or duplicate
+accounts and additional selected-account fields are rejected. If the launcher
+already created the backup and stopped before the GitHub update, establish
+the current baseline first, then use `npm run capture-token` in a private
+terminal to retry without overwriting the existing `.env`.
 
 ### Useful flags
 
 - `--timeout <seconds>` — how long to wait for login (default 300).
-- `--debug` — on capture failure, prompts to write a redacted dump of
-  `localStorage`, `sessionStorage`, and cookie metadata to
-  `playwright-diagnostics/`. Helps us improve the script if the API ever
-  changes. The dump never includes raw values.
-- `--force` — required to overwrite an existing `STFC_ACCOUNTS` value
-  that fails to parse as JSON. Default is to refuse and exit non-zero
-  rather than destroy data.
+- `--name`, `--debug`, `--force`, and non-CI `--headless` are rejected for
+  interactive recovery; account labels are entered privately.
 
 ### Setting the GitHub secret manually
 
 If you don't have `gh` installed (or just prefer the UI):
 
-1. The script prints the JSON it wrote to `.env`.
+1. Copy the JSON from the local `.env` securely; the script does not print it.
 2. Go to your repo on GitHub → **Settings → Secrets and variables → Actions
    → New repository secret**.
 3. **Name:** `STFC_ACCOUNTS`. **Value:** paste the JSON array.
@@ -84,30 +103,25 @@ Once the secret is set:
 
 ## Fallback path: manual JWT extraction (browser-only, no install)
 
-If you can't install Node locally — or just want a quick one-off — open
+This is not an automated recovery procedure. Before changing the secret,
+confirm the full backup is current and complete and pause all concurrent
+updates. Replacing the whole secret with a single account discards the others.
+If you manually verify token ownership, open
 DevTools on the STFC store after logging in, switch to the **Network**
 tab, find any request to `cdn-nv3-webstore-api.startrek.digitgaming.com`,
 copy the token portion from the `Authorization` header (remove the
 `Bearer ` prefix) and paste it into the `STFC_ACCOUNTS` GitHub secret as
-`[{"name":"main","token":"<that JWT>"}]`. The `capture-token` script
-automates exactly this and is strongly recommended over the manual
-approach.
+`[{"name":"main","token":"<that JWT>"}]` only if that is the complete
+intended secret. Do not rely on the current browser identity alone to verify
+ownership of a token captured earlier.
 
 ## Token refresh
 
 The manual `Refresh token` workflow uses legacy password-based login and
 cannot complete the current email-OTP flow.
 
-For the current flow, use the local visible-browser capture:
-
-```bash
-npm run capture-token -- --name main
-```
-
-Enter the one-time code in the browser. The script preserves other named
-accounts and can update `STFC_ACCOUNTS` through `gh` after confirmation.
-Otherwise, follow [Setting the GitHub secret manually](#setting-the-github-secret-manually).
-Do not paste tokens into chat, issues, or repository files.
+Use the identity-bound visible-browser procedure above. Do not run a secret
+update based only on the current browser identity or an account label.
 
 ## Troubleshooting
 
@@ -130,16 +144,12 @@ automatically — this only happens with manual edits.)
 
 ### `token is not JWT-shaped` (workflow error)
 A JWT has exactly three base64url segments separated by `.`. If you see
-this error, you most likely pasted the wrong value into the secret. Re-run
-`npm run capture-token` — it validates each captured value against
-`/auth/me` before writing anything, so the result is guaranteed to be a
-JWT the API accepts.
+this error, you most likely pasted the wrong value into the secret. HTTP validation
+alone does not establish which account a token belongs to.
 
 ### `TOKEN_EXPIRED` outcome on a workflow run
-Your stored JWT's `exp` claim is in the past. Re-run
-`npm run capture-token -- --name <accountName>` locally for the affected
-account. The script preserves your other accounts and only updates the named
-one. It can update the GitHub secret if `gh` is available.
+Your stored JWT's `exp` claim is in the past. Follow the identity-bound
+recovery procedure above.
 
 If every configured account returns `TOKEN_EXPIRED` and there are no
 infrastructure errors, `run-all` exits with code **2** so the workflow fails as

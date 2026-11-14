@@ -10,32 +10,28 @@ promo codes and player tips, harvesting both into a daily digest.
 
 ## Quick start
 
-1. **Capture your store token (recommended).** Run the Playwright-driven
-   capture script:
+> **Token recovery requires an independently verified account identifier.** See
+> [docs/SETUP.md](docs/SETUP.md#recommended-path-npm-run-capture-token-playwright-driven)
+> before attempting recovery.
+
+1. **Recover a token** using the private, identity-bound procedure:
 
    ```bash
-   npm install
-   npm run playwright:install   # one-time: download Chromium (~120 MB)
-   npm run capture-token        # opens browser, watches network, writes .env
+   pwsh -NoProfile -File .\recover-auth.ps1
    ```
 
-   It opens a Chromium window pointing at the STFC store. Log in normally;
-   the script captures the JWT from the network traffic, validates it, and
-   writes it to your local `.env`. If `gh` is on your `PATH`, it also
-   offers to set the GitHub repo secret for you. See
-   [docs/SETUP.md](docs/SETUP.md) for multi-account and flag options.
-2. **Confirm the `STFC_ACCOUNTS` GitHub secret is set.** If you let
-   `capture-token` use `gh`, it's already done. Otherwise, paste the JSON
-   `capture-token` wrote to `.env` into *Settings → Secrets and variables →
-   Actions → STFC_ACCOUNTS*.
+   See [docs/SETUP.md](docs/SETUP.md) for prerequisites and safeguards.
+2. **Confirm the `STFC_ACCOUNTS` GitHub secret is set.** Before any
+   replacement, verify that your full backup is current and complete and
+   pause all concurrent secret and `.env` updates.
 3. **Enable the `Redeem gifts` workflow** under the Actions tab. GitHub
    requests a run every 10 minutes, but may delay or drop scheduled runs.
    You can also trigger it manually with the **Run workflow** button to verify
    everything works.
 
-> **Token expiry:** the current email-OTP login requires the visible-browser
-> `capture-token` flow. The legacy `Refresh token` workflow cannot complete
-> that login; see [docs/SETUP.md](docs/SETUP.md#token-refresh).
+> **Token expiry:** the current email-OTP login cannot use the legacy
+> `Refresh token` workflow;
+> see [docs/SETUP.md](docs/SETUP.md#token-refresh).
 
 > **Optional:** if you want to harvest promo codes and tips from the STFC
 > Discord community automatically, enable the **`Discord monitor` workflow**
@@ -60,7 +56,8 @@ For each account it performs roughly:
 - `POST /offers/gifts/claim`  — claim each pending gift.
 - `POST /redeem/claim`        — submit each promo code from `promo-codes.txt`.
 
-The bearer token is sent in the `Authorization` header. It is captured from your normal browser session (via `npm run capture-token`) and stored as a GitHub Actions secret named `STFC_ACCOUNTS`.
+The bearer token is sent in the `Authorization` header and stored as a GitHub
+Actions secret named `STFC_ACCOUNTS`.
 
 ---
 
@@ -174,9 +171,8 @@ and serialization behavior.
 ## Token expiry
 
 Expired tokens are reported per account without stopping other accounts.
-Re-capture an expired token with `npm run capture-token -- --name <account>`
-and update `STFC_ACCOUNTS`. `run-all` exits 2 when every account is expired
-and 1 for infrastructure errors.
+Interactive re-capture requires the identity-bound procedure in the setup guide.
+`run-all` exits 2 when every account is expired and 1 for infrastructure errors.
 
 ---
 
