@@ -72,6 +72,9 @@ a maximum level equal to or below the current Ops level.
 
 ### Progression milestones
 
+For original sources on Ops progression and rare G4 gas, see the
+[Ops progression and G4 gas source links](./stfc-knowledge/ops-progression/README.md).
+
 | Ops range | Focus |
 |---|---|
 | 1–14 | Base management, resource flow, first ships |
