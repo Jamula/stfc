@@ -276,7 +276,7 @@ export function recognizeTextCrop(
 
   const heights = runs.map((run) => run.bottom - run.top + 1).sort((a, b) => a - b);
   const medianHeight = heights[Math.floor(heights.length / 2)] ?? 1;
-  const wordGapThreshold = Math.max(1, Math.floor(medianHeight * 0.8));
+  const wordGapThreshold = Math.max(1, Math.floor(medianHeight * 0.7));
   let text = "";
   let confidenceTotal = 0;
   for (let index = 0; index < runs.length; index += 1) {
@@ -505,7 +505,7 @@ export async function evaluateAnnotationFile(manifestPath: string): Promise<OcrE
   const rows = parseOcrAnnotations(await readFile(actualManifestPath, "utf8"));
   const model = trainSyntheticOcrModel();
   return evaluateOcrAnnotations(rows, async (relativeCropPath) => {
-    const cropPath = resolveCropPath(manifestDirectory, relativeCropPath);
+    const cropPath = resolveCropPath(actualManifestPath, relativeCropPath);
     const actualCropPath = await realpath(cropPath);
     const fromRoot = relative(manifestDirectory, actualCropPath);
     if (!fromRoot || fromRoot === ".." || fromRoot.startsWith(`..${sep}`) || isAbsolute(fromRoot)) {

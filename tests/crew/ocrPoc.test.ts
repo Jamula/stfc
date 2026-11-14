@@ -1,8 +1,11 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { resolve } from "node:path";
+import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 import {
   decodePgm,
+  evaluateAnnotationFile,
   evaluateOcrAnnotations,
   parseOcrAnnotations,
   recognizeTextCrop,
@@ -37,6 +40,17 @@ describe("synthetic crop-level OCR POC", () => {
       const tinted = Uint8Array.from(crop.pixels, (pixel) => (pixel === 0 ? 35 : 220));
 
       assert.equal(recognizeTextCrop(model, { ...crop, pixels: tinted }).text, "AB 12");
+    }
+  });
+
+  it("recognizes rendered word gaps at every supported scale", () => {
+    const model = trainSyntheticOcrModel();
+    for (let scale = 1; scale <= 8; scale += 1) {
+      assert.equal(
+        recognizeTextCrop(model, renderSyntheticTextCrop("AB CD", scale)).text,
+        "AB CD",
+        `scale ${scale}`,
+      );
     }
   });
 
@@ -86,6 +100,39 @@ describe("synthetic crop-level OCR POC", () => {
       },
     });
     assert.equal("predictions" in metrics, false);
+  });
+
+  it("loads crops relative to the annotation manifest directory", async () => {
+    const manifestDirectory = await mkdtemp(join(tmpdir(), "stfc-ocr-poc-"));
+    try {
+      await mkdir(join(manifestDirectory, "crops"));
+      await writeFile(
+        join(manifestDirectory, "crops", "one.pgm"),
+        toPgm(renderSyntheticTextCrop("AB12")),
+      );
+      const manifestPath = join(manifestDirectory, "annotations.jsonl");
+      await writeFile(
+        manifestPath,
+        `${JSON.stringify({
+          sample: "synthetic-01",
+          field: "name",
+          crop: "crops/one.pgm",
+          expected: "AB12",
+        })}\n`,
+      );
+
+      assert.deepEqual(await evaluateAnnotationFile(manifestPath), {
+        total: 1,
+        correct: 1,
+        accuracy: 1,
+        fields: {
+          name: { total: 1, correct: 1, accuracy: 1 },
+          level: { total: 0, correct: 0, accuracy: 0 },
+        },
+      });
+    } finally {
+      await rm(manifestDirectory, { recursive: true, force: true });
+    }
   });
 
   it("rejects duplicate annotations and paths escaping the manifest directory", () => {
