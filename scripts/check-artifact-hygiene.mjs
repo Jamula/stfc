@@ -37,6 +37,13 @@ const WATCHED_PREFIXES = [
   '.github/',
   'data/digests/',
   'data/discord/',
+  'src/',
+  'scripts/',
+  'tests/',
+  'api/',
+  'web/',
+  'worker/',
+  'shared/',
 ];
 
 const WATCHED_ROOT_FILES = new Set([
@@ -45,7 +52,7 @@ const WATCHED_ROOT_FILES = new Set([
   'CONTRIBUTING.md',
 ]);
 
-const WATCHED_EXTENSIONS = /\.(md|txt|yaml|yml|json|jsonl)$/i;
+const WATCHED_EXTENSIONS = /\.(md|txt|yaml|yml|json|jsonl|cjs|js|mjs|jsx|ts|tsx|mts|html|sh)$/i;
 
 /**
  * Secret patterns to detect.
