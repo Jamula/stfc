@@ -160,10 +160,20 @@ describe("native Squad configuration", () => {
 
     const checklist = section(read(".github", "pull_request_template.md"), "Enforcement-gate changes");
     assert.match(checklist, /same PR includes the migration/i);
+    assert.match(checklist, /tracked mutable paths are untracked and ignored/i);
+    assert.match(checklist, /static configuration remains trackable/i);
     assert.match(checklist, /real repository invariant, not only synthetic fixtures/i);
     assert.match(checklist, /classified as static or mutable/i);
     assert.match(checklist, /explicit and narrowly scoped/i);
     assert.match(checklist, /native atomic casting protocol/i);
+
+    const instructions = read(".github", "copilot-instructions.md");
+    const gateGuidance = section(instructions, "Enforcement gates over existing state");
+    assert.match(gateGuidance, /classify every guarded path as static configuration or mutable runtime state/i);
+    assert.match(gateGuidance, /must remain trackable/i);
+    assert.match(gateGuidance, /companion migration in the same PR/i);
+    assert.match(gateGuidance, /actual repository invariant/i);
+    assert.match(gateGuidance, /exact path and its required protocol/i);
   });
 
   it("has Seven, the three specialists, and optional Copilot without auto-assignment", () => {
