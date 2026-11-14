@@ -72,8 +72,8 @@ a maximum level equal to or below the current Ops level.
 
 ### Progression milestones
 
-For specific camping opinions, refinery unlocks and rare G4 gas sourcing, see
-the [Ops progression and G4 gas reference](./stfc-knowledge/ops-progression/README.md).
+For original sources on Ops progression and rare G4 gas, see the
+[Ops progression and G4 gas source links](./stfc-knowledge/ops-progression/README.md).
 
 | Ops range | Focus |
 |---|---|
