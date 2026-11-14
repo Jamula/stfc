@@ -77,9 +77,10 @@ Once the secret is set:
 - **Manual:** repo → **Actions** → **Redeem gifts** → **Run workflow**.
 - **CLI:** `gh workflow run "Redeem gifts"` (followed by `gh run watch` to
   tail it).
-- **Cron:** every 10 minutes (144 runs/day) automatically. The job summary on each run shows
-  what was claimed, which codes were already used, and any tokens that have
-  expired.
+- **Cron:** GitHub requests a run every 10 minutes, but scheduled delivery is
+  best-effort and may be delayed or dropped. The job summary on each delivered
+  run shows what was claimed, which codes were already used, and any tokens
+  that have expired.
 
 ## Fallback path: manual JWT extraction (browser-only, no install)
 
