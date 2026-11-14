@@ -745,6 +745,9 @@ describe("workflow consolidation", () => {
     assert.ok(paths.includes("README.md"), "root README changes must trigger the scan");
     assert.ok(paths.includes("SECURITY.md"), "security policy changes must trigger the scan");
     assert.ok(paths.includes("CONTRIBUTING.md"), "contribution guidance changes must trigger the scan");
+    for (const directory of ["src", "scripts", "tests", "api", "web", "worker", "shared"]) {
+      assert.ok(paths.includes(`${directory}/**`), `${directory} changes must trigger the scan`);
+    }
     assert.doesNotMatch(source, /\[skip-token-scan\]/, "PR text must not bypass the scan");
 
     const scan = Object.values(hygiene.workflow.jobs ?? {})
@@ -833,13 +836,18 @@ describe("workflow consolidation", () => {
           "SECURITY.md",
           "data/discord/channel log.jsonl",
           ".github/workflows/quick-check.YML",
+          "src/handler.ts",
+          "scripts/check.mjs",
+          "scripts/types.d.mts",
+          "shared/contracts.ts",
+          "web/index.html",
         ];
         const scanned = executeScan(Buffer.from(`${filenames.join("\0")}\0`));
         assert.equal(scanned.status, 0, scanned.stderr);
         assert.deepEqual(
           readFileSync(capture).toString("utf8").split("\0").filter(Boolean),
           ["scripts/check-artifact-hygiene.mjs", ...filenames],
-          "the scanner must receive the exact changed filenames as separate arguments",
+          "the scanner must receive changed documents, runtime data, and code files as separate arguments",
         );
 
         const invalidUtf8 = executeScan(

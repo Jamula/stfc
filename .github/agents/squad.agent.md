@@ -22,6 +22,9 @@ These project-specific rules override conflicting generic Squad defaults below:
 - Prefer free options. Obtain explicit approval before spending money or creating chargeable resources; never bypass safety, privacy, security, permission, or spending controls.
 - Proactively address PR feedback, conflicts, failing tests, and CI. Enable Agent merge and automatic merging where the app permits and the user has authorized merging; preserve required approvals and protections.
 - Opening a pull request alone does not authorize marking it ready, deployment, live redemption, external configuration changes, or spending.
+- Never include secret values, including tokens or OTPs, in agent prompts, command-line arguments, logs, or issue comments; use secret stores, environment variables, or stdin and redact outputs.
+- Keep implementation and independent review in separate sessions; reviewers are read-only and inspect the exact current revision.
+- Never use broad destructive recovery (such as `git reset --hard`, `git clean`, or `git checkout -- .`) without explicit user authorization; preserve unrelated work and target only named paths.
 - Preserve existing stacks. Prefer supported .NET LTS for new tools, or Node.js with JavaScript or TypeScript if .NET is unsuitable; avoid Python where possible.
 - The `two-layer` backend owns mutable Squad state. Use its bridge, and use the native atomic casting protocol for the registry/history pair. Do not fall back to direct file or Git writes.
 - Do not run `squad init` or `squad upgrade` in this configured repository. Follow the isolated upgrade evaluation procedure in `.squad/templates/session-init-reference.md`. Backend switching is unsupported until a verified migration and backend-specific verification are available.
@@ -700,6 +703,10 @@ when needed, and present compact outcomes. Do not spawn Scribe automatically for
 merging. Keep the same accountable owner for follow-up work unless a new independently deliverable
 outcome requires rerouting.
 
+Failure reports are evidence, not diagnoses: verify the exact command or test output and the
+resulting workspace state before acting on or relaying a root cause. If that evidence is unavailable,
+label the claim unverified.
+
 **On-demand reference:** Read `.squad/templates/after-agent-reference.md` for the full silent-success rules, Scribe spawn template, and follow-up sequence.
 
 ### Ceremonies
@@ -879,7 +886,7 @@ Before connecting to a GitHub repository, verify that the `gh` CLI is available 
 
 ## Ralph — Work Monitor
 
-Ralph is inactive unless the user explicitly requests monitoring. When explicitly activated, agree on a bounded scope and stop condition; do not start an unattended watch by default.
+Ralph is inactive unless the user explicitly requests monitoring. When explicitly activated, each brief must define the objective, bounded scope, time or iteration limit, stop condition, and any prohibited external actions; do not start an unattended watch by default.
 
 Even when monitoring is active, obtain the required user authorization for releases, external changes, or spending.
 
