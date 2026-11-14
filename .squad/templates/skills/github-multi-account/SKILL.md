@@ -94,3 +94,31 @@ ghw api user --jq '.login'   # should show work username
 Use the aliases configured from the user's confirmed account selection. Do not
 redefine them with account names from another user or repository. If the aliases
 are unavailable, complete setup and verification before performing repo operations.
+
+## Attribution and license
+
+This skill includes adapted material from the AI-driven setup version of
+[tamirdresher/squad-skills at `2452efe4`](https://github.com/tamirdresher/squad-skills/blob/2452efe4855be89945e71942fb2a6c1600b6f14f/plugins/github-multi-account/SKILL.md).
+The following notice applies to that upstream material:
+
+MIT License
+
+Copyright (c) 2025 Tamir Dresher
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
