@@ -32,6 +32,7 @@ import { chromium } from "playwright";
 import { promises as fs, existsSync } from "node:fs";
 import { spawn } from "node:child_process";
 import { createInterface } from "node:readline/promises";
+import { StringDecoder } from "node:string_decoder";
 import { stdin as input, stdout as output } from "node:process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -541,13 +542,14 @@ async function confirm(prompt, def = false) {
   }
 }
 
-async function readPrivateValue(prompt, { stdin = input, stdout = output } = {}) {
+async function readPrivateValue(prompt, { stdin = input, stdout = output, allowUnicode = false } = {}) {
   if (!stdin.isTTY || !stdout.isTTY || typeof stdin.setRawMode !== "function") {
     throw new Error("A private interactive terminal is required.");
   }
   stdout.write(prompt);
   return new Promise((resolve, reject) => {
     let value = "", invalid = false;
+    const decoder = new StringDecoder("utf8");
     const wasRaw = stdin.isRaw;
     const finish = (error) => {
       stdin.off("data", onData);
@@ -560,17 +562,29 @@ async function readPrivateValue(prompt, { stdin = input, stdout = output } = {})
     };
     const onError = () => finish(true);
     const onData = (chunk) => {
-      for (const char of chunk.toString("utf8")) {
+      for (const char of decoder.write(chunk)) {
         if (char === "\r" || char === "\n") { finish(false); return; }
         if (char === "\x03" || char === "\x04") { finish(true); return; }
-        if (char === "\x08" || char === "\x7f") value = value.slice(0, -1);
-        else if (/^[\x20-\x7e]$/.test(char) && value.length < 256) value += char;
+        if (char === "\x08" || char === "\x7f") {
+          const codePoints = Array.from(value);
+          codePoints.pop();
+          value = codePoints.join("");
+        }
+        else if ((/^[\x20-\x7e]$/.test(char) ||
+            (allowUnicode && !/[\p{Cc}\p{Zl}\p{Zp}]/u.test(char))) && value.length < 256) value += char;
         else invalid = true;
       }
     };
     stdin.on("data", onData);
     stdin.on("error", onError);
     try { stdin.setRawMode(true); stdin.resume(); } catch { finish(true); }
+  });
+}
+
+async function readAccountName(streams) {
+  return readPrivateValue("Enter the exact existing account label (hidden): ", {
+    ...streams,
+    allowUnicode: true,
   });
 }
 
@@ -998,7 +1012,7 @@ async function main(argv = process.argv.slice(2), dependencies = {}) {
       if (!await ask("Is the backup current and complete, with redemption workflows and other updates stopped until this finishes?")) {
         throw new Error();
       }
-      args.name = await (dependencies.readAccountName ?? (() => readPrivateValue("Enter the exact existing account label (hidden): ")))();
+      args.name = await (dependencies.readAccountName ?? readAccountName)();
       validateRecoveryBaseline(baseline, args.name);
       expectedId = await (dependencies.readExpectedAccountId ?? readExpectedAccountId)();
     } catch {
@@ -1216,4 +1230,4 @@ if (isDirectRun) {
   });
 }
 
-export { findOtpEntry, fillOtp, OTP_SELECTORS, SPLIT_OTP_SELECTOR, mergeIntoEnv, mergeAfterIdentityConfirmation, captureToken, ghSetSecret, updateGithubSecret, verifyAccountId, validateRecoveryBaseline, readExpectedAccountId, main };
+export { findOtpEntry, fillOtp, OTP_SELECTORS, SPLIT_OTP_SELECTOR, mergeIntoEnv, mergeAfterIdentityConfirmation, captureToken, ghSetSecret, updateGithubSecret, verifyAccountId, validateRecoveryBaseline, readAccountName, readExpectedAccountId, main };

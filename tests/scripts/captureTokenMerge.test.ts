@@ -14,7 +14,7 @@ import { EventEmitter } from "node:events";
 import { Writable } from "node:stream";
 
 // @ts-expect-error - plain .mjs helper without type declarations
-import { mergeIntoEnv, mergeAfterIdentityConfirmation, captureToken, ghSetSecret, updateGithubSecret, verifyAccountId, validateRecoveryBaseline, readExpectedAccountId, main } from "../../scripts/capture-token.mjs";
+import { mergeIntoEnv, mergeAfterIdentityConfirmation, captureToken, ghSetSecret, updateGithubSecret, verifyAccountId, validateRecoveryBaseline, readAccountName, readExpectedAccountId, main } from "../../scripts/capture-token.mjs";
 
 // ---------------------------------------------------------------------------
 // Fake fixture values — clearly not real credentials.
@@ -250,6 +250,32 @@ describe("mergeIntoEnv error redaction (issue #211)", () => {
     assert.equal(stdin.isRaw, false);
   });
 
+  it("reads Unicode account labels privately without relaxing account identifier validation", async () => {
+    const label = "café";
+    const backup = `STFC_ACCOUNTS='[{"name":"${label}","token":"old.fake.token"}]'\n`;
+    assert.doesNotThrow(() => validateRecoveryBaseline(backup, label));
+
+    let output = "";
+    const stdin = Object.assign(new EventEmitter(), {
+      isTTY: true, isRaw: false,
+      setRawMode(value: boolean) { this.isRaw = value; },
+      resume() {}, pause() {},
+    });
+    const stdout = { isTTY: true, write: (value: string) => { output += value; } };
+    const selected = readAccountName({ stdin, stdout });
+    const bytes = Buffer.from(`${label}😀\x08\r`);
+    stdin.emit("data", bytes.subarray(0, 4));
+    stdin.emit("data", bytes.subarray(4));
+    assert.equal(await selected, label);
+    assert.equal(output, "Enter the exact existing account label (hidden): \n");
+    assert.equal(stdin.isRaw, false);
+
+    const expectedId = readExpectedAccountId({ stdin, stdout });
+    stdin.emit("data", Buffer.from(`${label}\r`));
+    await assert.rejects(expectedId, /cancelled or invalid/);
+    assert.equal(stdin.isRaw, false);
+  });
+
   it("refuses an env changed since capture", async () => {
     const original = `STFC_ACCOUNTS='[{"name":"main","token":"old"}]'\n`;
     const changed = `${original}OTHER=value\n`;
@@ -413,7 +439,8 @@ describe("mergeIntoEnv error redaction (issue #211)", () => {
 
   it("runs the real interactive caller with a frozen browser and preserves the full backup", async () => {
     const other = `{"name":"other","token":"old.other.token","extra":9007199254740993}`;
-    const original = `STFC_ACCOUNTS='[{"name":"main","token":"old.main.token"},${other}]'\n`;
+    const accountName = "café";
+    const original = `STFC_ACCOUNTS='[{"name":"${accountName}","token":"old.main.token"},${other}]'\n`;
     const cases = ["matched", "mismatched", "changed", "offline", "upload-failed", "env-changed"] as const;
     for (const scenario of cases) {
       const envFile = makeTmpEnv(original);
@@ -440,7 +467,17 @@ describe("mergeIntoEnv error redaction (issue #211)", () => {
         console.error = (...parts: unknown[]) => messages.push(parts.join(" "));
         await main([], {
           envPath: envFile, privateTerminal: true, ask: async () => true,
-          readAccountName: async () => "main",
+          readAccountName: async () => {
+            const stdin = Object.assign(new EventEmitter(), {
+              isTTY: true, isRaw: false,
+              setRawMode(value: boolean) { this.isRaw = value; },
+              resume() {}, pause() {},
+            });
+            const stdout = { isTTY: true, write: (value: string) => messages.push(value) };
+            const selected = readAccountName({ stdin, stdout });
+            stdin.emit("data", Buffer.from(`${accountName}\r`));
+            return selected;
+          },
           readExpectedAccountId: async () => "expected-fixture-id",
           launchBrowser: async () => browser,
           fetchIdentity: async (_url: string, options: { headers: { Authorization: string } }) => {
@@ -461,7 +498,7 @@ describe("mergeIntoEnv error redaction (issue #211)", () => {
         assert.equal(uploads, scenario === "matched" || scenario === "upload-failed" ? 1 : 0, `${scenario} upload count`);
         if (scenario !== "changed") assert.equal(correctToken, true, `${scenario} must verify the captured token`);
         if (scenario === "matched" || scenario === "upload-failed") {
-          assert.equal(sent, `[{"name":"main","token":"new.main.token"},${other}]`);
+          assert.equal(sent, `[{"name":"${accountName}","token":"new.main.token"},${other}]`);
           assert.equal(readFileSync(envFile, "utf8"), `STFC_ACCOUNTS='${sent}'\n`);
         } else {
           assert.equal(readFileSync(envFile, "utf8"), scenario === "env-changed" ? `${original}OTHER=value\n` : original);
@@ -579,7 +616,8 @@ function gh { }
 function node {
   if ($args -contains '--input-type=module') { $global:LASTEXITCODE = 0; return }
   if ($env:GH_REPO -ne 'Jamula/stfc' -or $env:GH_HOST -ne 'github.com' -or $env:STFC_EMAIL -or $env:STFC_PASSWORD -or $env:STFC_OTP -or $env:STFC_DEBUG_DIR) { throw 'incorrect child environment' }
-  & '${executable}' "--env-file=$PSScriptRoot\\.env" -e "if (process.env.STFC_ACCOUNTS !== process.env.CAPTURE_TEST_BASELINE) process.exit(3)"
+  $envPath = Join-Path $PSScriptRoot '.env'
+  & '${executable}' "--env-file=$envPath" -e "if (process.env.STFC_ACCOUNTS !== process.env.CAPTURE_TEST_BASELINE) process.exit(3)"
   if ($LASTEXITCODE -ne 0) { throw 'invalid env value' }
   if ($env:CAPTURE_TEST_THROW -eq 'yes') { throw 'simulated capture error' }
   $global:LASTEXITCODE = 0
