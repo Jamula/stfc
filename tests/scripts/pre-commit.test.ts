@@ -311,23 +311,31 @@ describe("checkWorkflowPinningTests", () => {
       }
     });
 
-    it("scans staged JSONL runtime artifacts case-insensitively for raw token fields", () => {
+    it("scans staged JSONL and HTML files for raw tokens", () => {
       const dir = mkdtempSync(join(tmpdir(), "stfc-hygiene-jsonl-"));
       const scanner = resolve("scripts/check-artifact-hygiene.mjs");
       const artifact = join(dir, "data", "discord", "records.JSONL");
+      const html = join(dir, "web", "index.html");
       const isolatedGitEnv = { ...process.env };
       for (const key of Object.keys(isolatedGitEnv)) {
         if (key.startsWith("GIT_")) delete isolatedGitEnv[key];
       }
       const secret = "sensitive-upstream-token-value";
+      const jwt = [
+        `eyJ${"a".repeat(10)}`,
+        "b".repeat(10),
+        "c".repeat(10),
+      ].join(".");
       try {
         mkdirSync(join(dir, "data", "discord"), { recursive: true });
+        mkdirSync(join(dir, "web"), { recursive: true });
         execFileSync("git", ["init", "--quiet"], {
           cwd: dir,
           env: isolatedGitEnv,
         });
         writeFileSync(artifact, `{"access_token":"${secret}"}\n`);
-        execFileSync("git", ["add", "data/discord/records.JSONL"], {
+        writeFileSync(html, `<script>const token = "${jwt}";</script>\n`);
+        execFileSync("git", ["add", "data/discord/records.JSONL", "web/index.html"], {
           cwd: dir,
           env: isolatedGitEnv,
         });
@@ -340,14 +348,16 @@ describe("checkWorkflowPinningTests", () => {
         const output = `${result.stdout}${result.stderr}`;
         assert.equal(result.status, 1);
         assert.match(output, /\[STFC_RAW_UPSTREAM_RESPONSE\]/);
+        assert.match(output, /web[\\/]index\.html:1  \[JWT\]/);
         assert.match(output, /matched content → <REDACTED-TOKEN>/);
         assert.doesNotMatch(output, new RegExp(secret));
+        assert.doesNotMatch(output, new RegExp(jwt.replaceAll(".", "\\.")));
       } finally {
         rmSync(dir, { recursive: true, force: true });
       }
     });
 
-    it("scans changed root contribution documents and redacts matches", () => {
+    it("scans changed contribution documents and source code for secrets and account data", () => {
       const dir = mkdtempSync(join(tmpdir(), "stfc-hygiene-changed-"));
       const scanner = resolve("scripts/check-artifact-hygiene.mjs");
       const isolatedGitEnv = { ...process.env };
@@ -356,6 +366,7 @@ describe("checkWorkflowPinningTests", () => {
       }
 
       const secret = `eyJ${"a".repeat(12)}.${"b".repeat(12)}.${"c".repeat(12)}`;
+      const accountField = '"account_' + 'id": 12345';
       try {
         execFileSync("git", ["init", "--quiet"], { cwd: dir, env: isolatedGitEnv });
         execFileSync("git", ["config", "user.name", "Artifact hygiene test"], {
@@ -369,7 +380,13 @@ describe("checkWorkflowPinningTests", () => {
 
         writeFileSync(join(dir, "SECURITY.md"), "Safe reporting guidance.\n");
         mkdirSync(join(dir, "src"));
-        writeFileSync(join(dir, "src", "example.md"), "No public artifact scan here.\n");
+        writeFileSync(join(dir, "src", "example.ts"), "export const account = {};\n");
+        mkdirSync(join(dir, "scripts"));
+        writeFileSync(join(dir, "scripts", "types.d.mts"), "export {};\n");
+        mkdirSync(join(dir, "shared"));
+        writeFileSync(join(dir, "shared", "example.ts"), "export const token = 'safe';\n");
+        mkdirSync(join(dir, "web"));
+        writeFileSync(join(dir, "web", "index.html"), "<main>safe</main>\n");
         execFileSync("git", ["add", "."], { cwd: dir, env: isolatedGitEnv });
         execFileSync("git", ["commit", "--quiet", "-m", "base"], {
           cwd: dir,
@@ -377,7 +394,13 @@ describe("checkWorkflowPinningTests", () => {
         });
 
         writeFileSync(join(dir, "SECURITY.md"), `Token: ${secret}\n`);
-        writeFileSync(join(dir, "src", "example.md"), `Unwatched: ${secret}\n`);
+        writeFileSync(
+          join(dir, "src", "example.ts"),
+          `const token = "${secret}";\nconst account = {${accountField}};\n`,
+        );
+        writeFileSync(join(dir, "scripts", "types.d.mts"), `const token = "${secret}";\n`);
+        writeFileSync(join(dir, "shared", "example.ts"), `export const token = "${secret}";\n`);
+        writeFileSync(join(dir, "web", "index.html"), `<script>${secret}</script>\n`);
         execFileSync("git", ["add", "."], { cwd: dir, env: isolatedGitEnv });
         execFileSync("git", ["commit", "--quiet", "-m", "change"], {
           cwd: dir,
@@ -392,18 +415,27 @@ describe("checkWorkflowPinningTests", () => {
         const output = `${result.stdout}${result.stderr}`;
         assert.equal(result.status, 1);
         assert.match(output, /SECURITY\.md:\d+  \[JWT\]/);
+        assert.match(output, /src[\\/]example\.ts:1  \[JWT\]/);
+        assert.match(output, /src[\\/]example\.ts:2  \[STFC_ACCOUNT_DATA\]/);
+        assert.match(output, /scripts[\\/]types\.d\.mts:1  \[JWT\]/);
+        assert.match(output, /shared[\\/]example\.ts:1  \[JWT\]/);
+        assert.match(output, /web[\\/]index\.html:1  \[JWT\]/);
         assert.match(output, /matched content → <REDACTED-TOKEN>/);
         assert.doesNotMatch(output, new RegExp(secret.replaceAll(".", "\\.")));
-        assert.doesNotMatch(output, /src[\\/]example\.md/);
+        assert.doesNotMatch(output, /12345/);
 
         writeFileSync(join(dir, "SECURITY.md"), "Safe reporting guidance.\n");
+        writeFileSync(join(dir, "src", "example.ts"), "export const account = {};\n");
+        writeFileSync(join(dir, "scripts", "types.d.mts"), "export {};\n");
+        writeFileSync(join(dir, "shared", "example.ts"), "export const token = 'safe';\n");
+        writeFileSync(join(dir, "web", "index.html"), "<main>safe</main>\n");
         const cleanArtifact = spawnSync(process.execPath, [scanner, "--base-ref", "HEAD^"], {
           cwd: dir,
           encoding: "utf8",
           env: isolatedGitEnv,
         });
         assert.equal(cleanArtifact.status, 0, cleanArtifact.stderr);
-        assert.match(cleanArtifact.stdout, /1 file\(s\) scanned, 0 violations/);
+        assert.match(cleanArtifact.stdout, /5 file\(s\) scanned, 0 violations/);
       } finally {
         rmSync(dir, { recursive: true, force: true });
       }
