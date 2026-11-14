@@ -7,7 +7,7 @@ export interface BrowserLoginSession {
 }
 
 export interface BrowserSessionFactory {
-  open(email: string): Promise<BrowserLoginSession>;
+  open(email: string, signal?: AbortSignal): Promise<BrowserLoginSession>;
 }
 
 export interface StartedLogin {
@@ -38,6 +38,9 @@ interface ActiveSession {
   verifying: boolean;
   browser: BrowserLoginSession;
   timer: NodeJS.Timeout;
+  signal?: AbortSignal;
+  abortHandler?: () => void;
+  closed: boolean;
 }
 
 const SESSION_TTL_MS = 10 * 60 * 1000;
@@ -52,8 +55,9 @@ export class LoginSessionManager {
     private readonly now: () => number = Date.now,
   ) {}
 
-  async start(accountName: unknown, email: unknown): Promise<StartedLogin> {
+  async start(accountName: unknown, email: unknown, signal?: AbortSignal): Promise<StartedLogin> {
     this.expireIfNeeded();
+    if (signal?.aborted) throw new LoginSessionError("The login session is no longer available.", 410);
     if (this.active || this.starting) throw new LoginSessionError("A login is already in progress.", 429);
     if (typeof accountName !== "string" || !ACCOUNT_NAME.test(accountName)) {
       throw new LoginSessionError("Enter a valid account name.", 400);
@@ -66,7 +70,11 @@ export class LoginSessionManager {
     this.starting = true;
     let browser: BrowserLoginSession;
     try {
-      browser = await this.factory.open(email);
+      browser = await this.factory.open(email, signal);
+      if (signal?.aborted) {
+        await browser.close();
+        throw new LoginSessionError("The login session is no longer available.", 410);
+      }
     } finally {
       this.starting = false;
     }
@@ -79,15 +87,23 @@ export class LoginSessionManager {
       verifying: false,
       browser,
       timer: setTimeout(() => this.close(active), SESSION_TTL_MS),
+      signal,
+      closed: false,
     };
+    if (signal) {
+      active.abortHandler = () => { void this.close(active); };
+      signal.addEventListener("abort", active.abortHandler, { once: true });
+    }
     active.timer.unref();
     this.active = active;
 
     try {
-      return {
+      const started = {
         id,
         screenshot: (await browser.screenshot()).toString("base64"),
       };
+      if (signal?.aborted) throw new LoginSessionError("The login session is no longer available.", 410);
+      return started;
     } catch (error) {
       await this.close(active);
       throw error;
@@ -143,8 +159,13 @@ export class LoginSessionManager {
   }
 
   private async close(active: ActiveSession): Promise<void> {
+    if (active.closed) return;
+    active.closed = true;
     if (this.active === active) this.active = undefined;
     clearTimeout(active.timer);
+    if (active.signal && active.abortHandler) {
+      active.signal.removeEventListener("abort", active.abortHandler);
+    }
     try {
       await active.browser.close();
     } catch (error) {

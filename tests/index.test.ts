@@ -98,6 +98,7 @@ import "./web/shell.test.ts";
 import "./web/pwa-login.test.ts";
 import "./ci/check-bundle-budget.test.ts";
 import "./api/auth.test.ts";
+import "./api/entrypoint.test.ts";
 import "./api/token-accounts.test.ts";
 import "./api/token-pwa.test.ts";
 import "./scripts/validateTokenAccounts.test.ts";

@@ -56,6 +56,7 @@ Set these Container App settings as secrets (never as public app settings):
 | Token API | `PWA_BROWSER_URL` | HTTPS URL of the relay's internal ingress |
 | Token API | `STFC_TOKEN_STORAGE_ACCOUNT` | Storage account name |
 | Token API | `STFC_TOKEN_STORAGE_CONTAINER` | Private token container |
+| Token API | `AZURE_TOKEN_BLOB` | Token Blob name; must match the GitHub Actions variable below |
 | Browser relay | `PWA_BROWSER_KEY` | Same secret as the token API |
 
 Set these Static Web App Function application settings:

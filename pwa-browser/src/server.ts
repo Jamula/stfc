@@ -32,6 +32,7 @@ async function readJson(req: IncomingMessage): Promise<Record<string, unknown>> 
 }
 
 function reply(res: ServerResponse, status: number, body: unknown): void {
+  if (res.destroyed || res.writableEnded) return;
   res.writeHead(status, NO_STORE);
   res.end(JSON.stringify(body));
 }
@@ -52,10 +53,15 @@ export function createBrowserRelayServer(service: LoginSessionManager, secret: s
       return;
     }
 
+    const controller = new AbortController();
+    res.once("close", () => {
+      if (!res.writableEnded) controller.abort();
+    });
+
     try {
       const body = await readJson(req);
       if (url.pathname === "/sessions/start") {
-        reply(res, 200, await service.start(body.accountName, body.email));
+        reply(res, 200, await service.start(body.accountName, body.email, controller.signal));
       } else if (url.pathname === "/sessions/verify") {
         reply(res, 200, await service.verify(body.id, body.otp));
       } else if (url.pathname === "/sessions/cancel") {
@@ -65,6 +71,7 @@ export function createBrowserRelayServer(service: LoginSessionManager, secret: s
         reply(res, 404, { error: "Not found" });
       }
     } catch (error) {
+      if (controller.signal.aborted) return;
       if (error instanceof LoginSessionError) {
         reply(res, error.status, { error: error.message });
         return;

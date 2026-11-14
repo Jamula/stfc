@@ -56,6 +56,7 @@ async function readJson(req: IncomingMessage): Promise<Record<string, unknown>> 
 }
 
 function reply(res: ServerResponse, status: number, body: unknown): void {
+  if (res.destroyed || res.writableEnded) return;
   res.writeHead(status, RESPONSE_HEADERS);
   res.end(JSON.stringify(body));
 }
@@ -69,7 +70,11 @@ export function createTokenApiServer(deps: ApiDependencies) {
   const browserUrl = new URL(deps.browserUrl);
   if (browserUrl.protocol !== "https:") throw new Error("Browser relay URL must use HTTPS.");
 
-  async function browserRequest(path: string, body: object): Promise<{ status: number; body: Record<string, unknown> }> {
+  async function browserRequest(
+    path: string,
+    body: object,
+    signal?: AbortSignal,
+  ): Promise<{ status: number; body: Record<string, unknown> }> {
     let response: Response;
     try {
       response = await fetcher(new URL(path, browserUrl), {
@@ -79,7 +84,9 @@ export function createTokenApiServer(deps: ApiDependencies) {
           "Content-Type": "application/json",
         },
         body: JSON.stringify(body),
-        signal: AbortSignal.timeout(45_000),
+        signal: signal
+          ? AbortSignal.any([signal, AbortSignal.timeout(45_000)])
+          : AbortSignal.timeout(45_000),
       });
     } catch {
       throw new ApiError("The browser service is unavailable.", 502);
@@ -116,6 +123,10 @@ export function createTokenApiServer(deps: ApiDependencies) {
       reply(res, 401, { error: "Unauthorized" });
       return;
     }
+    const controller = new AbortController();
+    res.once("close", () => {
+      if (!res.writableEnded) controller.abort();
+    });
     try {
       if (req.method === "GET" && url.pathname === "/accounts") {
         reply(res, 200, { accounts: await deps.store.listNames() });
@@ -132,7 +143,7 @@ export function createTokenApiServer(deps: ApiDependencies) {
             !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.email)) {
           throw new ApiError("Enter a valid account name and email address.", 400);
         }
-        const started = await browserRequest("/sessions/start", body);
+        const started = await browserRequest("/sessions/start", body, controller.signal);
         if (typeof started.body.id !== "string" || !/^[A-Za-z0-9_-]{40,64}$/.test(started.body.id) ||
             typeof started.body.screenshot !== "string" ||
             !/^[A-Za-z0-9+/]+={0,2}$/.test(started.body.screenshot) ||
@@ -144,7 +155,7 @@ export function createTokenApiServer(deps: ApiDependencies) {
       }
       if (url.pathname === "/sessions/cancel") {
         if (typeof body.id !== "string") throw new ApiError("Invalid login session.", 400);
-        await browserRequest("/sessions/cancel", { id: body.id });
+        await browserRequest("/sessions/cancel", { id: body.id }, controller.signal);
         reply(res, 200, { cancelled: true });
         return;
       }
@@ -152,7 +163,7 @@ export function createTokenApiServer(deps: ApiDependencies) {
         if (typeof body.id !== "string" || typeof body.otp !== "string" || !/^\d{6}$/.test(body.otp)) {
           throw new ApiError("Enter the 6-digit verification code.", 400);
         }
-        const captured = await browserRequest("/sessions/verify", body);
+        const captured = await browserRequest("/sessions/verify", body, controller.signal);
         const accountName = captured.body.accountName;
         const token = captured.body.token;
         if (typeof accountName !== "string" || !ACCOUNT_NAME.test(accountName) ||
@@ -173,6 +184,7 @@ export function createTokenApiServer(deps: ApiDependencies) {
       }
       reply(res, 404, { error: "Not found" });
     } catch (error) {
+      if (controller.signal.aborted) return;
       if (error instanceof ApiError || error instanceof TokenAccountStoreError) {
         reply(res, error.status, { error: error.message });
         return;

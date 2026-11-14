@@ -1,5 +1,8 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import type { Server } from "node:http";
 import {
   LoginSessionError,
@@ -10,6 +13,7 @@ import {
   createTokenApiServer,
   validateStfcToken,
 } from "../../pwa-token-api/src/http-server.js";
+import { getTokenBlobName } from "../../pwa-token-api/src/azure-account-blob.js";
 
 const API_KEY = "<REDACTED>";
 const BROWSER_KEY = "<REDACTED>";
@@ -30,6 +34,26 @@ function loginSession(overrides: Partial<BrowserLoginSession> = {}): BrowserLogi
 }
 
 describe("PWA browser login sessions", () => {
+  it("closes a browser that finishes starting after the caller disconnects", async () => {
+    const opening = deferred<BrowserLoginSession>();
+    let closes = 0;
+    const manager = new LoginSessionManager({
+      open: async () => opening.promise,
+    });
+    const controller = new AbortController();
+    const starting = manager.start("main", "owner@example.com", controller.signal);
+    controller.abort();
+    opening.resolve(loginSession({ close: async () => { closes++; } }));
+
+    await assert.rejects(
+      starting,
+      (error: unknown) => error instanceof LoginSessionError && error.status === 410,
+    );
+    assert.equal(closes, 1);
+    const next = await manager.start("alt", "owner@example.com");
+    await manager.cancel(next.id);
+  });
+
   it("reserves the single session slot while Chromium is starting", async () => {
     const opening = deferred<BrowserLoginSession>();
     let openCalls = 0;
@@ -142,6 +166,42 @@ async function withTokenApi(
 }
 
 describe("PWA token API", () => {
+  it("uses the same configured Blob name as scheduled token readers", () => {
+    assert.equal(getTokenBlobName({ AZURE_TOKEN_BLOB: "production-token-store.json" }), "production-token-store.json");
+    assert.equal(getTokenBlobName({}), "accounts.json");
+  });
+
+  it("emits the schema and loads the built entry point without service configuration", () => {
+    const build = spawnSync(process.execPath, [
+      resolve("pwa-token-api/node_modules/typescript/bin/tsc"),
+      "-p", "pwa-token-api/tsconfig.json", "--listEmittedFiles",
+    ], { encoding: "utf8" });
+    assert.equal(build.status, 0, build.stderr || build.stdout);
+    assert.match(build.stdout.replaceAll("\\", "/"), /TSFILE: .*\/dist\/shared\/token-account-schema\.mjs/);
+
+    const env = { ...process.env };
+    delete env["PWA_TOKEN_API_KEY"];
+    delete env["PWA_BROWSER_KEY"];
+    delete env["PWA_BROWSER_URL"];
+    const load = spawnSync(process.execPath, [
+      "--input-type=module", "-e",
+      `import assert from "node:assert/strict";
+       const { TokenAccountStore } = await import("./pwa-token-api/dist/shared/token-accounts.js");
+       const store = new TokenAccountStore({ read: async () => ({
+         content: JSON.stringify([{ name: "main", token: "header.payload.signature" }]), etag: "1"
+       }) });
+       assert.deepEqual(await store.listNames(), ["main"]);
+       await assert.rejects(import("./pwa-token-api/dist/pwa-token-api/src/main.js"),
+         { message: "Token API configuration is incomplete." });`,
+    ], { encoding: "utf8", env });
+    assert.equal(load.status, 0, load.stderr || load.stdout);
+  });
+
+  it("copies both shared schema files into the token API container build", () => {
+    const dockerfile = readFileSync("pwa-token-api/Dockerfile", "utf8").replaceAll("\r\n", "\n");
+    assert.match(dockerfile, /^COPY shared\/token-account-schema\.mjs shared\/token-account-schema\.d\.mts \.\/shared\/$/m);
+  });
+
   it("validates tokens against the non-destructive endpoint redemption relies on", async () => {
     let requestUrl = "";
     let requestHeaders: Headers | undefined;

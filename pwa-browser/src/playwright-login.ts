@@ -19,33 +19,42 @@ const OTP_SUBMIT_BUTTONS = [
 ];
 
 export class PlaywrightLoginFactory implements BrowserSessionFactory {
-  async open(email: string): Promise<BrowserLoginSession> {
+  async open(email: string, signal?: AbortSignal): Promise<BrowserLoginSession> {
     const browser = await chromium.launch({
       headless: true,
       args: ["--no-sandbox", "--disable-dev-shm-usage"],
     });
-    const context = await browser.newContext({
-      viewport: { width: 390, height: 844 },
-      serviceWorkers: "block",
-    });
-    const page = await context.newPage();
-    const abort = new AbortController();
-    const captured = captureToken({ context, timeoutMs: 10 * 60 * 1000, signal: abort.signal });
+    const closeOnAbort = () => {
+      void browser.close().catch((error: unknown) => {
+        console.error("Login browser cleanup failed", error instanceof Error ? error.name : "UnknownError");
+      });
+    };
+    signal?.addEventListener("abort", closeOnAbort, { once: true });
+    let context: Awaited<ReturnType<Browser["newContext"]>> | undefined;
 
     try {
+      if (signal?.aborted) throw new LoginSessionError("The login session is no longer available.", 410);
+      context = await browser.newContext({
+        viewport: { width: 390, height: 844 },
+        serviceWorkers: "block",
+      });
+      const page = await context.newPage();
+      const abort = new AbortController();
+      const captured = captureToken({ context, timeoutMs: 10 * 60 * 1000, signal: abort.signal });
       await page.goto(STORE_URL, { waitUntil: "domcontentloaded", timeout: 30_000 });
+      if (signal?.aborted) throw new LoginSessionError("The login session is no longer available.", 410);
       if (!(await beginEmailLogin(page, email))) {
         throw new LoginSessionError("The STFC sign-in page could not be opened.", 422);
       }
       const deadline = Date.now() + 30_000;
       while (Date.now() < deadline) {
+        if (signal?.aborted) throw new LoginSessionError("The login session is no longer available.", 410);
         if (await findOtpEntry(page)) return new PlaywrightLoginSession(browser, page, captured, abort);
         await page.waitForTimeout(500);
       }
       throw new LoginSessionError("The expected email-code challenge did not appear.", 422);
     } catch (error) {
-      abort.abort();
-      await context.close().catch((closeError: unknown) => {
+      await context?.close().catch((closeError: unknown) => {
         console.error("Login browser context cleanup failed", closeError instanceof Error ? closeError.name : "UnknownError");
       });
       await browser.close().catch((closeError: unknown) => {
@@ -54,6 +63,8 @@ export class PlaywrightLoginFactory implements BrowserSessionFactory {
       throw error instanceof LoginSessionError
         ? error
         : new LoginSessionError("The STFC sign-in flow could not be started.", 422);
+    } finally {
+      signal?.removeEventListener("abort", closeOnAbort);
     }
   }
 }

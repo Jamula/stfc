@@ -17,6 +17,10 @@ function isBlobFailure(error: unknown, status: number): boolean {
     (error as { statusCode?: unknown }).statusCode === status;
 }
 
+export function getTokenBlobName(env: NodeJS.ProcessEnv = process.env): string {
+  return env["AZURE_TOKEN_BLOB"] || "accounts.json";
+}
+
 export class AzureConditionalAccountBlob implements ConditionalAccountBlob {
   constructor(private readonly blob: BlockBlobClient) {}
 
@@ -31,7 +35,7 @@ export class AzureConditionalAccountBlob implements ConditionalAccountBlob {
       new ManagedIdentityCredential(),
     );
     return new AzureConditionalAccountBlob(
-      service.getContainerClient(container).getBlockBlobClient("accounts.json"),
+      service.getContainerClient(container).getBlockBlobClient(getTokenBlobName()),
     );
   }
 
