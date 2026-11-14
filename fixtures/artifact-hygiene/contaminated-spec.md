@@ -6,7 +6,7 @@
 #
 # ALL VALUES BELOW ARE FABRICATED AND NON-FUNCTIONAL. No real tokens here.
 #
-# Scanner: node scripts/check-artifact-hygiene.mjs tests/fixtures/artifact-hygiene/contaminated-spec.md
+# Scanner: node scripts/check-artifact-hygiene.mjs fixtures/artifact-hygiene/contaminated-spec.md
 # Expected exit code: 1 (violations found — this is the correct/intended result)
 # Expected violations: 6 (one per FAIL CASE below)
 

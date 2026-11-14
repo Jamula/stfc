@@ -70,6 +70,7 @@ import "./workflows/automation-state-race.test.ts";
 import "./contracts/contracts-v1.test.ts";
 import "./contracts/types-sync.test.ts";
 import "./crew/schemas.test.ts";
+import "./crew/ocrPoc.test.ts";
 import "./crew/database.test.ts";
 import "./crew/roster.test.ts";
 import "./crew/tasks.test.ts";

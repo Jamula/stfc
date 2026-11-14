@@ -38,6 +38,7 @@ refresh cannot accidentally drop attribution.
 | Sub-directory | Source kind | Index |
 | --- | --- | --- |
 | [`community-reference-sheet/`](./community-reference-sheet/README.md) | Public Google Sheet (source links only) | 11 per-tab link stubs for *Starfleet Academy, Athena & Duo Waves — M90 & M91*; no local data |
+| [`ops-progression/`](./ops-progression/README.md) | Community workbook and related sources (links only) | Ops progression and G4 gas source links; no local data |
 | [`discord-channels/`](./discord-channels/README.md) | Discord channel snapshots (bot REST API) | STFC Officer Tool `#data-collection` — no content ingested; access not verified (see README) |
 
 ## Adding a new source

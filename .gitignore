@@ -25,6 +25,8 @@ playwright-diagnostics/
 
 # CLI runtime output
 summary.md
+# Local OCR POC crops and annotations (operator-owned holdout material)
+data/crew/ocr-poc/
 # Digest writer output — *.md are now durable artifacts (constitution v2.0.0,
 # Phase 0 PR merged 2026-05-31). Only .gitkeep is still auto-ignored here
 # so an empty dir can be committed; individual *.md files are committed by
