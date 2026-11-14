@@ -64,6 +64,17 @@ _(The pre-commit hook should enforce this automatically. The checkbox creates an
 
 ---
 
+## Enforcement-gate changes
+
+_Complete this section when adding or tightening a gate over existing repository state._
+
+- [ ] The same PR includes the migration that makes the current repository satisfy the gate.
+- [ ] Tests assert the real repository invariant, not only synthetic fixtures.
+- [ ] Guarded paths are classified as static or mutable; every exception is explicit and narrowly scoped.
+- [ ] The tracked Squad casting registry/history pair and commit marker are the only mutable-state exception; they use the native atomic casting protocol.
+
+---
+
 ## Constitution check
 
 - [ ] This change does not violate repository rules in `.github/copilot-instructions.md`.

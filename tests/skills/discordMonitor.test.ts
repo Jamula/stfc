@@ -663,6 +663,12 @@ describe("discordMonitor / workflow YAML assertions (T027)", () => {
     assert.match(yaml, /cron:\s*["']\*\/10 \* \* \* \*["']/);
   });
 
+  it("refresh-token.yml remains manual-only while passwordless OTP is required", () => {
+    const yaml = fs.readFileSync(refreshTokenYamlPath, "utf8");
+    assert.match(yaml, /^ {2}workflow_dispatch:/m, "manual refresh must remain available");
+    assert.doesNotMatch(yaml, /^ {2}schedule:/m, "do not re-enable unattended refresh without an authenticator");
+  });
+
   it("concurrency group is `stfc-gift-redeemer` bit-for-bit (matches redeem.yml and refresh-token.yml)", () => {
     const monitor = fs.readFileSync(yamlPath, "utf8");
     const redeem = fs.readFileSync(redeemYamlPath, "utf8");

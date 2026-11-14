@@ -121,7 +121,7 @@ gh secret set ALLOWED_GUILD_IDS --repo Jamula/stfc
 
 **Verify:**
 ```bash
-gh secret list --repo Jamula/stfc | grep CLOUDFLARE
+gh secret list --repo Jamula/stfc
 ```
 
 Should show:
@@ -131,8 +131,14 @@ CLOUDFLARE_ACCOUNT_ID
 CLOUDFLARE_R2_ACCESS_KEY_ID
 CLOUDFLARE_R2_SECRET_ACCESS_KEY
 DISCORD_BOT_TOKEN          # should already exist from #143
-ALLOWED_GUILD_IDS         # required for /game-state handler allowlist re-check
+ALLOWED_GUILD_IDS          # required for the GitHub Actions handler allowlist re-check
 ```
+
+The GitHub repository secret is only available to GitHub Actions; it does not
+configure the separately deployed Cloudflare Worker. Set the Worker copy after
+the first deployment in Step D. Keep both copies aligned: the Worker gates
+`/game-state` before dispatch, and the Actions handler independently
+re-checks the allowlist after dispatch.
 
 ---
 
@@ -175,6 +181,10 @@ npx wrangler secret put DISCORD_PUBLIC_KEY
 # Set the GitHub dispatch token on the Worker
 npx wrangler secret put GH_DISPATCH_TOKEN
 # Paste your GitHub fine-grained PAT (from A3), then press Enter
+
+# Set the Worker's command allowlist (same guild IDs as the GitHub repository secret)
+npx wrangler secret put ALLOWED_GUILD_IDS
+# Enter the comma-separated guild IDs when prompted; do not put their values in the command line
 ```
 
 You can verify auth with `npx wrangler whoami` (or `wrangler whoami` if using a global install) — it should print your Cloudflare account email.
@@ -188,7 +198,13 @@ Should show:
 ```
 DISCORD_PUBLIC_KEY
 GH_DISPATCH_TOKEN
+ALLOWED_GUILD_IDS
 ```
+
+The secret list verifies the Worker secret name without revealing its value.
+If the Worker secret is unset, or the invoked server's guild ID is not in its
+comma-separated value, `/game-state` is rejected with “This command isn't
+enabled in this server.” before GitHub receives a dispatch.
 
 ---
 

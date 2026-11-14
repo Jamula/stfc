@@ -1,5 +1,10 @@
 #!/usr/bin/env node
-// Re-fetch the community STFC reference sheet (Academy/Athena/Duo Waves)
+// DISABLED under issue #402: redistribution permission is unestablished.
+// Use the source-link index in docs/stfc-knowledge/community-reference-sheet/.
+// The original authored implementation below is retained, but main refuses
+// to fetch or write. Public availability is not redistribution permission.
+//
+// Former purpose: re-fetch the community STFC reference sheet (Academy/Athena/Duo Waves)
 // and rewrite each tab's mirror file under
 // docs/stfc-knowledge/community-reference-sheet/.
 //
@@ -141,6 +146,12 @@ function footer() {
 }
 
 async function main() {
+  throw new Error(
+    "Community sheet mirroring is disabled (#402): redistribution permission has not been established. " +
+    `Open the original source: ${SHEET_URL}. ` +
+    "See docs/stfc-knowledge/community-reference-sheet/README.md; no data was fetched or written.",
+  );
+
   await mkdir(OUT_DIR, { recursive: true });
   const fetchedDate = new Date().toISOString().slice(0, 10);
   const summary = [];

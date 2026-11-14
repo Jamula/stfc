@@ -1,123 +1,73 @@
-# Community STFC Reference Sheet — Mirror
+# Community STFC Reference Sheet — Source Links
 
-This directory mirrors the community-maintained Google Sheet
-**[*Starfleet Academy, Athena & Duo Waves — M90 & M91*][upstream]** into
-agent-readable markdown, one file per tab.
+This directory links to the community-maintained Google Sheet
+[*Starfleet Academy, Athena & Duo Waves — M90 & M91*][upstream].
+It contains **no sheet data, excerpts, screenshots, or calculators**.
+Existing per-tab paths remain as link-only stubs so older local references
+still lead readers to the original source.
 
 [upstream]: https://docs.google.com/spreadsheets/d/19gxHFoje5GGRWSmE9BtSp97j_zOnMY4jBP9gFr1zi90/edit
 
 ## Lineage
 
-Per [the knowledge-base lineage convention](../README.md#lineage-convention--every-ingested-artifact-must-declare-it),
-this whole sub-directory carries the following lineage. **Every per-tab file
-also carries its own per-tab lineage block** (with the tab-specific URL and gid).
-
 | Field | Value |
 | --- | --- |
 | **Source URL** | <https://docs.google.com/spreadsheets/d/19gxHFoje5GGRWSmE9BtSp97j_zOnMY4jBP9gFr1zi90/edit> |
 | **Source name** | STFC Community Sheet — *Starfleet Academy, Athena & Duo Waves — M90 & M91* (whole workbook) |
-| **Author(s) / contributors** | JulesVern; Quasel; BlueMandalorian; STFC Officer Tool Discord `#data-collection` channel (invite: <https://discord.gg/BRhru6Vcnj>) |
-| **Captured on** | 2026-11-02 (UTC) |
-| **License / attribution requirements** | Community-maintained reference. Upstream says **"MAKE A COPY"** for any use of the calculators; we mirror read-only. Preserve the author list above on every quote or excerpt; link back to the source URL. We do **not** modify the upstream sheet — contributions go through the authors via the Discord channel. |
-| **Refresh strategy** | Re-fetch all tabs via `node scripts/fetch-community-sheet.mjs` from the repo root. The script reads each tab's CSV via the public gviz endpoint, trims empty columns, and rewrites the per-tab files with an updated **Captured on** date using the UTC calendar date (`toISOString()`). This may differ from the local calendar date near midnight UTC. To check for upstream tab additions/removals, fetch `https://docs.google.com/spreadsheets/d/19gxHFoje5GGRWSmE9BtSp97j_zOnMY4jBP9gFr1zi90/htmlview` — its source contains the canonical tab list. |
+| **Author(s) / contributors** | Previously recorded attribution: JulesVern; Quasel; BlueMandalorian; STFC Officer Tool Discord `#data-collection` community ([invite](https://discord.gg/BRhru6Vcnj)). This is attribution metadata, not confirmation of ownership or permission. |
+| **Captured on** | Not applicable — source links only. Previous snapshots were recorded as captured on 2026-11-02 (UTC) and removed from the current tree on 2026-11-14 (UTC). |
+| **License / attribution requirements** | Redistribution permission has not been established. Public availability, attribution, read-only access, and an instruction to make a copy of a calculator do not establish permission to redistribute the workbook. Consult the original source and its contributors for applicable terms. |
+| **Refresh strategy** | Check the original workbook for current tabs and content; manually update source links only. The former `node scripts/fetch-community-sheet.mjs` command is disabled and exits with an error before fetching or writing. |
 
-## Why it's mirrored here
+## Original tabs
 
-This project (`stfc-gift-redeemer`) is a CLI that redeems STFC web-store gifts
-and promo codes; it does **not** consume game-strategy data at runtime. The
-mirror exists to give:
+These names and gids come from the previous repository provenance, not a
+new capture. Upstream tabs may have changed; use the workbook if a deep-link
+is no longer available.
 
-1. **AI agents** (notably Uhura, our STFC-domain integrator) machine-readable
-   context for game terminology, building/refinery progression, and crewing
-   suggestions when reasoning about features.
-2. **Human contributors** a stable, greppable snapshot of community knowledge
-   that's tracked alongside our docs, so links don't rot mid-feature.
-
-## Read-only mirror — we never modify upstream
-
-The upstream sheet says **"MAKE A COPY if you want to use any calculators"**.
-We honour that:
-
-- We **only** fetch the public CSV exports via the gviz endpoint.
-- We **never** write back to the upstream sheet.
-- Suggestions for the sheet itself go through the authors via the Discord
-  channel above, not via this repo.
-
-## Tabs ingested (M91, refreshed 2026-11-02 UTC)
-
-| # | Tab | gid | File |
+| # | Tab | Original source | Local link stub |
 | -: | --- | --- | --- |
-| 01 | Intro                          | 1563749702 | [01-intro.md](./01-intro.md) |
-| 02 | SF Academy Building            | 556376347  | [02-sf-academy-building.md](./02-sf-academy-building.md) |
-| 03 | Refinery (M91 additions)       | 508132113  | [03-refinery.md](./03-refinery.md) |
-| 04 | Athena                         | 1243592063 | [04-athena.md](./04-athena.md) |
-| 05 | Duo Wave Defense               | 119341188  | [05-duo-wave-defense.md](./05-duo-wave-defense.md) |
-| 06 | System Map                     | 1549666316 | [06-system-map.md](./06-system-map.md) |
-| 07 | Credit Calculator              | 744753634  | [07-credit-calculator.md](./07-credit-calculator.md) |
-| 08 | Crews — Academy Drones (Blue's Crews) | 1770071728 | [08-crews-academy-drones.md](./08-crews-academy-drones.md) |
-| 09 | Independent Archives (M91)     | 1778790882 | [09-independent-archives-m91.md](./09-independent-archives-m91.md) |
-| 10 | G5 Scrapping Guide             | 1369248894 | [10-g5-scrapping-guide.md](./10-g5-scrapping-guide.md) |
-| 11 | Critical Damage Mitigation     | 1179953085 | [11-critical-damage-mitigation.md](./11-critical-damage-mitigation.md) |
+| 01 | Intro | [Open tab][tab01] | [01-intro.md](./01-intro.md) |
+| 02 | SF Academy Building | [Open tab][tab02] | [02-sf-academy-building.md](./02-sf-academy-building.md) |
+| 03 | Refinery | [Open tab][tab03] | [03-refinery.md](./03-refinery.md) |
+| 04 | Athena | [Open tab][tab04] | [04-athena.md](./04-athena.md) |
+| 05 | Duo Wave Defense | [Open tab][tab05] | [05-duo-wave-defense.md](./05-duo-wave-defense.md) |
+| 06 | System Map | [Open tab][tab06] | [06-system-map.md](./06-system-map.md) |
+| 07 | Credit Calculator | [Open tab][tab07] | [07-credit-calculator.md](./07-credit-calculator.md) |
+| 08 | Crews — Academy Drones | [Open tab][tab08] | [08-crews-academy-drones.md](./08-crews-academy-drones.md) |
+| 09 | Independent Archives (M91) | [Open tab][tab09] | [09-independent-archives-m91.md](./09-independent-archives-m91.md) |
+| 10 | G5 Scrapping Guide | [Open tab][tab10] | [10-g5-scrapping-guide.md](./10-g5-scrapping-guide.md) |
+| 11 | Critical Damage Mitigation | [Open tab][tab11] | [11-critical-damage-mitigation.md](./11-critical-damage-mitigation.md) |
 
-### Tabs not mirrored
+[tab01]: https://docs.google.com/spreadsheets/d/19gxHFoje5GGRWSmE9BtSp97j_zOnMY4jBP9gFr1zi90/edit#gid=1563749702
+[tab02]: https://docs.google.com/spreadsheets/d/19gxHFoje5GGRWSmE9BtSp97j_zOnMY4jBP9gFr1zi90/edit#gid=556376347
+[tab03]: https://docs.google.com/spreadsheets/d/19gxHFoje5GGRWSmE9BtSp97j_zOnMY4jBP9gFr1zi90/edit#gid=508132113
+[tab04]: https://docs.google.com/spreadsheets/d/19gxHFoje5GGRWSmE9BtSp97j_zOnMY4jBP9gFr1zi90/edit#gid=1243592063
+[tab05]: https://docs.google.com/spreadsheets/d/19gxHFoje5GGRWSmE9BtSp97j_zOnMY4jBP9gFr1zi90/edit#gid=119341188
+[tab06]: https://docs.google.com/spreadsheets/d/19gxHFoje5GGRWSmE9BtSp97j_zOnMY4jBP9gFr1zi90/edit#gid=1549666316
+[tab07]: https://docs.google.com/spreadsheets/d/19gxHFoje5GGRWSmE9BtSp97j_zOnMY4jBP9gFr1zi90/edit#gid=744753634
+[tab08]: https://docs.google.com/spreadsheets/d/19gxHFoje5GGRWSmE9BtSp97j_zOnMY4jBP9gFr1zi90/edit#gid=1770071728
+[tab09]: https://docs.google.com/spreadsheets/d/19gxHFoje5GGRWSmE9BtSp97j_zOnMY4jBP9gFr1zi90/edit#gid=1778790882
+[tab10]: https://docs.google.com/spreadsheets/d/19gxHFoje5GGRWSmE9BtSp97j_zOnMY4jBP9gFr1zi90/edit#gid=1369248894
+[tab11]: https://docs.google.com/spreadsheets/d/19gxHFoje5GGRWSmE9BtSp97j_zOnMY4jBP9gFr1zi90/edit#gid=1179953085
 
-Earlier source notes mention *Facade Expansion* and *Emerald Chain Expansion*
-as "Other" tabs. They are not in the current `TABS` list, so this refresh did
-not capture them. Check the upstream tab list before adding them to
-[`scripts/fetch-community-sheet.mjs`](../../../scripts/fetch-community-sheet.mjs).
+## Effect on readers and tooling
 
-## What you'll find in each file
+There is no local CSV dataset to parse. Open the source links for progression
+numbers, crewing advice, charts, and calculator use under the upstream terms.
+Do not treat a link stub as an empty dataset or recreate the mirrors.
+The gift-redeemer runtime does not read this directory.
 
-Each per-tab file contains:
+The authored [game knowledge reference](../../stfc-game-knowledge.md) remains;
+its community-sheet section now points here for links instead of local data.
+The dependent crew retrieval cache is rebuilt to remove obsolete mirroring
+and refresh instructions; it does not ingest this directory.
 
-1. A **`## Lineage` block** with the six required fields (per the
-   [knowledge-base lineage convention](../README.md#lineage-convention--every-ingested-artifact-must-declare-it)):
-   tab-specific Source URL (with `#gid=`), Source name, Author(s), Captured
-   on date, License / attribution requirements, Refresh strategy.
-2. A "read-only mirror" notice (your edits will be overwritten on the next
-   refresh).
-3. A note that **visual/screenshot content** in the upstream tab does not
-   survive CSV export — for charts, embedded images, or formatted layouts,
-   follow the Source URL.
-4. A fenced ` ```csv ` block with the tab's data, with **empty columns
-   trimmed** for readability. Cells preserve original formatting (e.g.
-   percentages, commas in numbers) so downstream parsing can choose its own
-   normalisation.
+## Rights and history remain unresolved
 
-The CSV block is intentionally machine-readable (gviz output is RFC 4180
-quoted), so agents can stream it through any standard CSV parser.
-
-## Limitations
-
-- **Visual layouts lost.** The upstream sheet uses heavy cell merging,
-  conditional formatting, and embedded screenshots. CSV export flattens
-  everything; columns occasionally drift. When a mirror is hard to read,
-  open the upstream link from the file's header.
-- **Some cells contain inline prose / multi-line notes.** These survive CSV
-  export but render as long quoted strings.
-- **Numbers stay as strings.** We preserve thousands-separators (`"1,100"`)
-  and unit suffixes (`%`, `K`, `M`) exactly as the authors wrote them.
-
-## Refresh procedure
-
-When the upstream sheet is updated:
-
-```bash
-node scripts/fetch-community-sheet.mjs
-```
-
-This re-fetches every tab listed in the script's `TABS` array, trims empty
-columns, and rewrites the per-tab markdown files (the header block updates
-the **Last fetched** date automatically). Commit the resulting diff as a
-`docs(stfc-knowledge): refresh community sheet mirror` change.
-
-If a tab has been added, renamed, or removed upstream, edit the `TABS` array
-first (gids come from the published htmlview at
-<https://docs.google.com/spreadsheets/d/19gxHFoje5GGRWSmE9BtSp97j_zOnMY4jBP9gFr1zi90/htmlview>).
-
-## Related project knowledge
-
-- [`docs/stfc-game-knowledge.md`](../../stfc-game-knowledge.md) — first-party
-  STFC reference compiled from official Scopely sources. Use it for canonical
-  game terminology; use this directory for community-derived progression and
-  crewing data.
+This replacement implements the user's selected path for
+[issue #402](https://github.com/Jamula/stfc/issues/402). It does not establish
+code ownership, change `LICENSE`, certify other third-party material, or
+authorize publication. Previous mirrors remain in Git history; history
+acceptance and any separately authorized remediation require a rights-holder
+decision. No history was rewritten. Issue #402 remains open as a release gate.

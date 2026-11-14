@@ -55,12 +55,17 @@ describe("native Squad configuration", () => {
     const ignored = [
       ".squad/decisions.md",
       ".squad/agents/spock/history.md",
+      ".squad/agents/spock/history-archive.md",
+      ".squad/agents/data/history-archive.md",
       ".squad/identity/now.md",
       ".squad/rai/audit-trail.md",
       ".squad/fact-checker/audit-trail.md",
       ".squad/memory/index.json",
       ".squad/memory/audit.jsonl",
       ".squad/.first-run",
+      ".squad/sessions/2026-01-01.md",
+      ".squad/.scratch/worktree.json",
+      ".squad/.cache/state.json",
     ];
     for (const file of ignored) {
       const result = spawnSync("git", ["check-ignore", "--no-index", "-q", "--", file]);
@@ -72,6 +77,93 @@ describe("native Squad configuration", () => {
     ]);
     assert.ifError(config.error);
     assert.equal(config.status, 1, "The static memory configuration must remain trackable");
+    const charter = spawnSync("git", [
+      "check-ignore", "--no-index", "-q", "--", ".squad/agents/spock/charter.md",
+    ]);
+    assert.ifError(charter.error);
+    assert.equal(charter.status, 1, "The static agent charter must remain trackable");
+  });
+
+  it("pairs enforcement-gate changes with a real-repository state invariant", () => {
+    const result = spawnSync("git", ["ls-files", "-z"], { encoding: "utf8" });
+    assert.ifError(result.error);
+    assert.equal(result.status, 0, `git ls-files failed: ${result.stderr}`);
+
+    const trackedPaths = result.stdout.split("\0").filter(Boolean);
+    const mutableStatePathPatterns = [
+      /^\.squad\/decisions(?:\/|\.md$)/,
+      /^\.squad\/agents\/[^/]+\/history(?:-archive)?\.md$/,
+      /^\.squad\/(?:log|orchestration-log)\//,
+      /^\.squad\/(?:rai|fact-checker)\/audit-trail\.md$/,
+      /^\.squad\/identity\//,
+      /^\.squad\/memory\/(?!config\.json$)/,
+      /^\.squad\/casting\/(?:history|registry)(?:-history\.commit)?\.json$/,
+      /^\.squad\/\.first-run$/,
+      /^\.squad\/sessions\//,
+      /^\.squad\/\.scratch\//,
+      /^\.squad\/\.cache\//,
+    ];
+    const mutableStatePaths = trackedPaths.filter((file) =>
+      mutableStatePathPatterns.some((pattern) => pattern.test(file)),
+    );
+    const atomicCastingPaths = [
+      ".squad/casting/history.json",
+      ".squad/casting/registry-history.commit.json",
+      ".squad/casting/registry.json",
+    ];
+    assert.ok(trackedPaths.includes(".squad/memory/config.json"), "The static memory config must remain tracked");
+    assert.deepEqual(
+      mutableStatePaths.sort(),
+      atomicCastingPaths.filter((file) => trackedPaths.includes(file)).sort(),
+      "Tracked mutable state must be absent except for the narrowly scoped native atomic casting artifacts",
+    );
+    assert.deepEqual(
+      trackedPaths
+        .filter((file) => /^\.squad\/casting\/(?:history|registry(?:-history\.commit)?)\.json$/.test(file))
+        .sort(),
+      atomicCastingPaths.sort(),
+      "Only the documented atomic casting artifacts may be tracked as mutable casting state",
+    );
+
+    const mutableStatePathsToCheck = [
+      ".squad/decisions.md",
+      ".squad/agents/spock/history.md",
+      ".squad/agents/spock/history-archive.md",
+      ".squad/log/2026-01-01.md",
+      ".squad/orchestration-log/2026-01-01.md",
+      ".squad/rai/audit-trail.md",
+      ".squad/fact-checker/audit-trail.md",
+      ".squad/identity/now.md",
+      ".squad/memory/audit.jsonl",
+      ".squad/sessions/2026-01-01.md",
+      ".squad/.scratch/worktree.json",
+      ".squad/.cache/state.json",
+      ".squad/casting/history.json",
+      ".squad/casting/registry.json",
+      ".squad/casting/registry-history.commit.json",
+    ];
+    const attributes = spawnSync(
+      "git",
+      ["check-attr", "merge", "--", ...mutableStatePathsToCheck],
+      { encoding: "utf8" },
+    );
+    assert.ifError(attributes.error);
+    assert.equal(attributes.status, 0, `git check-attr failed: ${attributes.stderr}`);
+    const effectiveMergeAttributes = attributes.stdout.replace(/\r\n/g, "\n").trimEnd().split("\n");
+    assert.equal(effectiveMergeAttributes.length, mutableStatePathsToCheck.length);
+    for (const [index, file] of mutableStatePathsToCheck.entries()) {
+      const match = /^(.+): merge: (.+)$/.exec(effectiveMergeAttributes[index] ?? "");
+      assert.ok(match, `Missing effective merge attribute for ${file}`);
+      assert.equal(match[1], file);
+      assert.notEqual(match[2], "union", `${file} must not have effective merge=union`);
+    }
+
+    const checklist = section(read(".github", "pull_request_template.md"), "Enforcement-gate changes");
+    assert.match(checklist, /same PR includes the migration/i);
+    assert.match(checklist, /real repository invariant, not only synthetic fixtures/i);
+    assert.match(checklist, /classified as static or mutable/i);
+    assert.match(checklist, /explicit and narrowly scoped/i);
+    assert.match(checklist, /native atomic casting protocol/i);
   });
 
   it("has Seven, the three specialists, and optional Copilot without auto-assignment", () => {
@@ -136,8 +228,40 @@ describe("native Squad configuration", () => {
     assert.match(contract, /stacked PRs/);
     assert.match(contract, /explicit approval before spending money/);
     assert.match(contract, /native atomic casting protocol/);
+    assert.match(
+      contract,
+      /Never include secret values.*tokens or OTPs.*agent prompts.*command-line arguments.*logs.*issue comments/,
+    );
+    assert.match(contract, /implementation and independent review in separate sessions/i);
+    assert.match(contract, /reviewers are read-only and inspect the exact current revision/i);
+    assert.match(
+      contract,
+      /Never use broad destructive recovery.*`git reset --hard`.*`git clean`.*`git checkout -- \.`.*explicit user authorization/i,
+    );
     assert.doesNotMatch(coordinator, /work inline \(fallback only/i);
     assert.doesNotMatch(coordinator, /original author is locked out/i);
+  });
+
+  it("keeps Ralph briefs bounded and verifies agent failure reports", () => {
+    for (const file of [
+      [".github", "agents", "squad.agent.md"],
+      [".squad", "templates", "squad.agent.md.template"],
+    ]) {
+      const content = read(...file);
+      const afterAgentWork = between(content, "### After Agent Work", "### Ceremonies");
+      assert.match(
+        afterAgentWork,
+        /Failure reports are evidence.*verify the exact command or test output.*workspace state.*label the claim unverified/is,
+        file.join("/"),
+      );
+
+      const ralph = between(content, "## Ralph — Work Monitor", "## Rai — RAI Reviewer");
+      assert.match(
+        ralph,
+        /each brief must define the objective, bounded scope, time or iteration limit, stop condition, and any prohibited external actions/i,
+        file.join("/"),
+      );
+    }
   });
 
   it("keeps optional ceremonies and support agents inactive by default", () => {
