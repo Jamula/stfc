@@ -347,6 +347,68 @@ describe("checkWorkflowPinningTests", () => {
       }
     });
 
+    it("scans changed root contribution documents and redacts matches", () => {
+      const dir = mkdtempSync(join(tmpdir(), "stfc-hygiene-changed-"));
+      const scanner = resolve("scripts/check-artifact-hygiene.mjs");
+      const isolatedGitEnv = { ...process.env };
+      for (const key of Object.keys(isolatedGitEnv)) {
+        if (key.startsWith("GIT_")) delete isolatedGitEnv[key];
+      }
+
+      const secret = `eyJ${"a".repeat(12)}.${"b".repeat(12)}.${"c".repeat(12)}`;
+      try {
+        execFileSync("git", ["init", "--quiet"], { cwd: dir, env: isolatedGitEnv });
+        execFileSync("git", ["config", "user.name", "Artifact hygiene test"], {
+          cwd: dir,
+          env: isolatedGitEnv,
+        });
+        execFileSync("git", ["config", "user.email", "artifact-hygiene@example.invalid"], {
+          cwd: dir,
+          env: isolatedGitEnv,
+        });
+
+        writeFileSync(join(dir, "SECURITY.md"), "Safe reporting guidance.\n");
+        mkdirSync(join(dir, "src"));
+        writeFileSync(join(dir, "src", "example.md"), "No public artifact scan here.\n");
+        execFileSync("git", ["add", "."], { cwd: dir, env: isolatedGitEnv });
+        execFileSync("git", ["commit", "--quiet", "-m", "base"], {
+          cwd: dir,
+          env: isolatedGitEnv,
+        });
+
+        writeFileSync(join(dir, "SECURITY.md"), `Token: ${secret}\n`);
+        writeFileSync(join(dir, "src", "example.md"), `Unwatched: ${secret}\n`);
+        execFileSync("git", ["add", "."], { cwd: dir, env: isolatedGitEnv });
+        execFileSync("git", ["commit", "--quiet", "-m", "change"], {
+          cwd: dir,
+          env: isolatedGitEnv,
+        });
+
+        const result = spawnSync(process.execPath, [scanner, "--base-ref", "HEAD^"], {
+          cwd: dir,
+          encoding: "utf8",
+          env: isolatedGitEnv,
+        });
+        const output = `${result.stdout}${result.stderr}`;
+        assert.equal(result.status, 1);
+        assert.match(output, /SECURITY\.md:\d+  \[JWT\]/);
+        assert.match(output, /matched content → <REDACTED-TOKEN>/);
+        assert.doesNotMatch(output, new RegExp(secret.replaceAll(".", "\\.")));
+        assert.doesNotMatch(output, /src[\\/]example\.md/);
+
+        writeFileSync(join(dir, "SECURITY.md"), "Safe reporting guidance.\n");
+        const cleanArtifact = spawnSync(process.execPath, [scanner, "--base-ref", "HEAD^"], {
+          cwd: dir,
+          encoding: "utf8",
+          env: isolatedGitEnv,
+        });
+        assert.equal(cleanArtifact.status, 0, cleanArtifact.stderr);
+        assert.match(cleanArtifact.stdout, /1 file\(s\) scanned, 0 violations/);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
     it("runs successfully in a repository with no agent-team state", () => {
       const dir = mkdtempSync(join(tmpdir(), "stfc-pre-commit-"));
       try {

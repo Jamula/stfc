@@ -50,6 +50,7 @@ const workflows = workflowSources.map(({ file, source }) => ({
         permissions?: Record<string, string>;
         steps?: Array<{
           id?: string;
+          name?: string;
           if?: string;
           "continue-on-error"?: boolean | string;
           run?: string;
@@ -703,6 +704,34 @@ describe("workflow consolidation", () => {
     );
   });
 
+  it("runs artifact hygiene inside the required test gate", () => {
+    const gate = workflows.find(({ file }) => file === "test-gate.yml");
+    assert.ok(gate, "test-gate.yml must exist");
+    const requiredJob = gate.workflow.jobs?.["test-gate"];
+    assert.equal(requiredJob?.name, "npm test (required)");
+
+    const checkout = requiredJob?.steps?.find((step) =>
+      step.uses?.startsWith("actions/checkout@"),
+    );
+    assert.equal(
+      checkout?.with?.["fetch-depth"],
+      0,
+      "the required gate must fetch history to compute the PR diff",
+    );
+
+    const hygiene = requiredJob?.steps?.find(
+      (step) => step.name === "Scan changed artifacts for secrets",
+    );
+    assert.ok(hygiene, "the required gate must include the artifact scanner");
+    assert.ok(hygiene.run?.includes("check-artifact-hygiene.mjs --base-ref"));
+    assert.equal(hygiene.if, undefined, "the required scan must not be conditional");
+    assert.equal(
+      hygiene["continue-on-error"],
+      undefined,
+      "the required scan must fail the required check on violations",
+    );
+  });
+
   it("scans changed runtime artifacts and JSONL files without a PR-body bypass", () => {
     const source = workflowSources.find(({ file }) => file === "artifact-hygiene.yml")?.source;
     const hygiene = workflows.find(({ file }) => file === "artifact-hygiene.yml");
@@ -713,6 +742,9 @@ describe("workflow consolidation", () => {
     assert.ok(paths.includes("data/digests/**"), "digest artifacts must trigger the scan");
     assert.ok(paths.includes("data/discord/**"), "Discord runtime artifacts must trigger the scan");
     assert.ok(paths.includes(".github/**"), "scanned GitHub configuration files must trigger the scan");
+    assert.ok(paths.includes("README.md"), "root README changes must trigger the scan");
+    assert.ok(paths.includes("SECURITY.md"), "security policy changes must trigger the scan");
+    assert.ok(paths.includes("CONTRIBUTING.md"), "contribution guidance changes must trigger the scan");
     assert.doesNotMatch(source, /\[skip-token-scan\]/, "PR text must not bypass the scan");
 
     const scan = Object.values(hygiene.workflow.jobs ?? {})
@@ -798,6 +830,7 @@ describe("workflow consolidation", () => {
         };
 
         const filenames = [
+          "SECURITY.md",
           "data/discord/channel log.jsonl",
           ".github/workflows/quick-check.YML",
         ];

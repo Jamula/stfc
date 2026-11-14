@@ -6,7 +6,7 @@
  * Run locally before committing, or invoked by CI on PR-changed files.
  *
  * USAGE
- *   node scripts/check-artifact-hygiene.mjs [--staged] [file ...]
+ *   node scripts/check-artifact-hygiene.mjs [--staged | --base-ref <ref>] [file ...]
  *
  *   --staged       Scan git-staged files (pre-commit use)
  *   [file ...]     Scan the explicit file paths given as arguments
@@ -38,6 +38,12 @@ const WATCHED_PREFIXES = [
   'data/digests/',
   'data/discord/',
 ];
+
+const WATCHED_ROOT_FILES = new Set([
+  'README.md',
+  'SECURITY.md',
+  'CONTRIBUTING.md',
+]);
 
 const WATCHED_EXTENSIONS = /\.(md|txt|yaml|yml|json|jsonl)$/i;
 
@@ -132,6 +138,15 @@ function getAllTrackedFiles() {
   return out.split('\n').filter(Boolean);
 }
 
+function getChangedFiles(baseRef) {
+  const out = execFileSync('git', ['diff', '--name-only', '-z', `${baseRef}...HEAD`]);
+  const decoded = out.toString('utf8');
+  if (!Buffer.from(decoded, 'utf8').equals(out)) {
+    throw new Error('Changed-file list contains a path that is not valid UTF-8.');
+  }
+  return decoded.split('\0').filter(Boolean);
+}
+
 function readStagedFile(filePath) {
   return execFileSync('git', ['show', `:${filePath}`], {
     encoding: 'utf8',
@@ -143,8 +158,9 @@ function readStagedFile(filePath) {
 function isWatched(filePath) {
   const normalized = filePath.replace(/\\/g, '/');
   return (
-    WATCHED_EXTENSIONS.test(filePath) &&
-    WATCHED_PREFIXES.some(prefix => normalized.startsWith(prefix))
+    WATCHED_EXTENSIONS.test(normalized) &&
+    (WATCHED_ROOT_FILES.has(normalized) ||
+      WATCHED_PREFIXES.some(prefix => normalized.startsWith(prefix)))
   );
 }
 
@@ -193,11 +209,28 @@ function scanFile(filePath, { staged = false } = {}) {
 
 const args = process.argv.slice(2);
 const useStaged = args.includes('--staged');
-const fileArgs = args.filter(a => !a.startsWith('--'));
+const baseRefIndex = args.indexOf('--base-ref');
+if (args.filter(a => a === '--base-ref').length > 1) {
+  throw new Error('Only one --base-ref option may be provided.');
+}
+const baseRef = baseRefIndex >= 0 ? args[baseRefIndex + 1] : undefined;
+const baseRefValueIndex = baseRefIndex >= 0 ? baseRefIndex + 1 : -1;
+if (baseRefIndex >= 0 && (!baseRef || baseRef.startsWith('--'))) {
+  throw new Error('--base-ref requires a Git ref.');
+}
+if (useStaged && baseRef !== undefined) {
+  throw new Error('--staged and --base-ref cannot be used together.');
+}
+
+const fileArgs = args.filter((arg, index) =>
+  !arg.startsWith('--') && index !== baseRefValueIndex,
+);
 
 let targets;
 if (useStaged) {
   targets = getStagedFiles().filter(isWatched);
+} else if (baseRef !== undefined) {
+  targets = getChangedFiles(baseRef).filter(isWatched);
 } else if (fileArgs.length > 0) {
   targets = fileArgs;
 } else {
