@@ -324,6 +324,25 @@ async function processGifts(
     return { items: [{ id: "(none)", outcome: Outcomes.NO_GIFTS_AVAILABLE }], schemaMismatch: false };
   }
 
+  const accountKey = createHash("sha256").update(accountName).digest("hex");
+  const previous = degradedState?.accounts[accountKey] ?? {};
+  // Bind once before claims so same-title bundles cannot share a legacy cooldown.
+  for (const [legacyKey, prior] of Object.entries(previous)) {
+    if (!prior.legacy) continue;
+    const gift = gifts.find((gift) => {
+      const bundleId = gift.bundleId ?? gift.bundle_id ?? gift.id;
+      return bundleId !== undefined && String(bundleId) === legacyKey;
+    })
+      ?? gifts.find((gift) => {
+        const bundleId = gift.bundleId ?? gift.bundle_id ?? gift.id;
+        return bundleId !== undefined && previous[String(bundleId)] === undefined && describeGift(gift) === prior.title;
+      });
+    if (!gift) continue;
+    const stateKey = String(gift.bundleId ?? gift.bundle_id ?? gift.id);
+    delete previous[legacyKey];
+    previous[stateKey] = withoutLegacyMarker(prior);
+  }
+
   const items: ItemResult[] = [];
   for (const gift of gifts) {
     const result = await processOneGift(
@@ -703,13 +722,17 @@ async function updateDegradedGiftState(
     const accountKey = createHash("sha256").update(account.name).digest("hex");
     const previous = state.accounts[accountKey] ?? {};
     const current: Record<string, PersistedGiftStreak> = {};
+    const observedGiftKeys = new Set<string>();
     for (const gift of gifts) {
       if (gift.stateKey === undefined) continue;
-      const prior =
-        previous[gift.stateKey] ??
-        Object.values(previous).find((entry) => entry.legacy && entry.title === gift.id);
+      observedGiftKeys.add(gift.stateKey);
+      const legacyKey = Object.keys(previous).find(
+        (key) => previous[key]!.legacy && previous[key]!.title === gift.id,
+      );
+      if (legacyKey !== undefined) observedGiftKeys.add(legacyKey);
+      const prior = previous[gift.stateKey] ?? (legacyKey === undefined ? undefined : previous[legacyKey]);
       if (gift.deferred) {
-        if (prior) current[gift.stateKey] = prior;
+        if (prior) current[gift.stateKey] = withoutLegacyMarker(prior);
         continue;
       }
       const previousStreak = prior?.streak;
@@ -728,7 +751,13 @@ async function updateDegradedGiftState(
         prior.streak >= PERSISTENT_TRANSIENT_RUNS &&
         !isExpectedOutcome(gift.outcome)
       ) {
-        current[gift.stateKey] = prior;
+        current[gift.stateKey] = withoutLegacyMarker(prior);
+      }
+    }
+
+    for (const [giftKey, prior] of Object.entries(previous)) {
+      if (prior.nextAttemptAt !== undefined && !observedGiftKeys.has(giftKey)) {
+        current[giftKey] = prior;
       }
     }
 
@@ -748,6 +777,12 @@ async function updateDegradedGiftState(
   if (!observedAccount && !prunedAccount) return;
 
   await writeDegradedGiftState(filePath, state);
+}
+
+function withoutLegacyMarker(streak: PersistedGiftStreak): PersistedGiftStreak {
+  const current = { ...streak };
+  delete current.legacy;
+  return current;
 }
 
 async function readDegradedGiftState(filePath: string, now: Date): Promise<DegradedGiftState> {

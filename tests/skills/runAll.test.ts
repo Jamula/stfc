@@ -451,6 +451,7 @@ describe("runAll", () => {
     assert.match(alertCreates[0]!.body, /Localized Loyalty Chest \(bundle 77\) — 3 consecutive runs/);
 
     now = new Date(start.getTime() + 24 * 60 * 60 * 1000 - 1);
+    fs.writeFileSync(summaryFile, "", "utf8");
     const deferred = await runAll(options);
     assert.equal(deferred.exitCode, 0);
     assert.equal(claimCount, 6, "claims remain deferred until the exact deadline");
@@ -481,6 +482,69 @@ describe("runAll", () => {
       version: 3,
       accounts: {},
     });
+  });
+
+  it("retains cooldown state when a gift is omitted and defers it when it reappears", async () => {
+    const stateFile = path.join(dir, "degraded-state-omitted-gift.json");
+    const accountName = "omitted-gift-account";
+    const accountKey = createHash("sha256").update(accountName).digest("hex");
+    let now = new Date("2026-03-01T00:00:00.000Z");
+    let giftVisible = true;
+    let claims = 0;
+    const fake = makeFakeClient({
+      listGifts: async () => ({
+        items: giftVisible ? [{ bundleId: 77, title: "Loyalty Chest", isClaimable: true }] : [],
+      }),
+      claimGift: async () => {
+        claims += 1;
+        throw new TransientError("Server error 500 on POST /offers/gifts/claim", 500);
+      },
+    });
+    const options = {
+      accounts: [{ name: accountName, token: makeJwt({ exp: 9999999999 }) }],
+      clientFactory: () => fake as unknown as ApiClient,
+      degradedStatePath: stateFile,
+      now: () => new Date(now),
+    };
+
+    for (let run = 1; run <= 3; run += 1) {
+      now = new Date(`2026-03-0${run}T00:00:00.000Z`);
+      await runAll(options);
+    }
+
+    now = new Date("2026-03-03T12:00:00.000Z");
+    giftVisible = false;
+    await runAll(options);
+    assert.equal(claims, 3, "an omitted gift must not trigger another claim");
+    assert.deepEqual(JSON.parse(fs.readFileSync(stateFile, "utf8")), {
+      version: 3,
+      accounts: {
+        [accountKey]: {
+          "77": {
+            streak: 3,
+            title: "Loyalty Chest",
+            nextAttemptAt: "2026-03-04T00:00:00.000Z",
+          },
+        },
+      },
+    });
+
+    const alert = syncDegradedGiftAlert({
+      state: JSON.parse(fs.readFileSync(stateFile, "utf8")),
+      listIssues: () => [{ number: 42, title: DEGRADED_ALERT_TITLE, labels: DEGRADED_ALERT_LABELS }],
+      createIssue: () => assert.fail("an omitted gift must not close and recreate its alert"),
+      closeIssue: () => assert.fail("omission is not evidence that the gift recovered"),
+      updateIssue: () => {},
+      log: () => {},
+    });
+    assert.equal(alert.status, "already-open");
+
+    giftVisible = true;
+    now = new Date("2026-03-03T23:59:59.000Z");
+    const reappeared = await runAll(options);
+    assert.equal(claims, 3, "the reappearing gift remains deferred until the persisted deadline");
+    assert.equal(reappeared.result.accounts[0]!.items[0]!.deferred, true);
+    assert.equal(reappeared.result.accounts[0]!.items[0]!.outcome, Outcomes.TRANSIENT);
   });
 
   it("migrates legacy display-name streaks to stable bundle identifiers", async () => {
@@ -531,6 +595,7 @@ describe("runAll", () => {
       const accountKey = createHash("sha256").update(accountName).digest("hex");
       let now = new Date("2026-02-01T00:00:00.000Z");
       const nextAttemptAt = "2026-02-02T00:00:00.000Z";
+      let includeNewBundle = false;
       let claims = 0;
       fs.writeFileSync(
         stateFile,
@@ -538,7 +603,10 @@ describe("runAll", () => {
       );
       const fake = makeFakeClient({
         listGifts: async () => ({
-          items: [{ bundleId: 77, title: "30 Day Loyalty Chest", isClaimable: true }],
+          items: [
+            { bundleId: 77, title: "30 Day Loyalty Chest", isClaimable: true },
+            ...(includeNewBundle ? [{ bundleId: 78, title: "30 Day Loyalty Chest", isClaimable: true }] : []),
+          ],
         }),
         claimGift: async () => {
           claims += 1;
@@ -555,7 +623,7 @@ describe("runAll", () => {
         version: 3,
         accounts: {
           [accountKey]: {
-            "77": { streak, title: "30 Day Loyalty Chest", nextAttemptAt, legacy: true },
+            "77": { streak, title: "30 Day Loyalty Chest", nextAttemptAt },
           },
         },
       };
@@ -573,17 +641,65 @@ describe("runAll", () => {
       assert.deepEqual(JSON.parse(fs.readFileSync(stateFile, "utf8")), expectedState);
 
       now = new Date(Date.parse(nextAttemptAt) - 1);
+      includeNewBundle = true;
       const deferred = await runAll(options);
-      assert.equal(claims, 0, "the migrated deadline must remain enforced until its final millisecond");
+      assert.equal(claims, 1, "a new same-title bundle must not inherit the migrated bundle's cooldown");
       assert.equal(deferred.result.accounts[0]!.items[0]!.deferred, true);
+      assert.equal(deferred.result.accounts[0]!.items[1]!.stateKey, "78");
+      assert.equal(deferred.result.accounts[0]!.items[1]!.outcome, Outcomes.CLAIMED);
       assert.deepEqual(JSON.parse(fs.readFileSync(stateFile, "utf8")), expectedState);
 
       now = new Date(nextAttemptAt);
       const recovered = await runAll(options);
-      assert.equal(claims, 1, "the first run at the migrated deadline must attempt the claim once");
+      assert.equal(claims, 3, "the migrated gift and unrelated new bundle are attempted after the deadline");
       assert.equal(recovered.result.accounts[0]!.items[0]!.outcome, Outcomes.CLAIMED);
+      assert.equal(recovered.result.accounts[0]!.items[1]!.outcome, Outcomes.CLAIMED);
       assert.deepEqual(JSON.parse(fs.readFileSync(stateFile, "utf8")), { version: 3, accounts: {} });
     }
+  });
+
+  it("binds a legacy cooldown to only one of two same-title bundles on the initial migration run", async () => {
+    const stateFile = path.join(dir, "degraded-state-v1-same-title.json");
+    const accountName = "legacy-same-title-account";
+    const accountKey = createHash("sha256").update(accountName).digest("hex");
+    fs.writeFileSync(
+      stateFile,
+      JSON.stringify({ version: 1, accounts: { [accountKey]: { "Loyalty Chest": 3 } } }),
+    );
+    const claimedBundles: Array<string | number> = [];
+    const fake = makeFakeClient({
+      listGifts: async () => ({
+        items: [
+          { bundleId: 77, title: "Loyalty Chest", isClaimable: true },
+          { bundleId: 78, title: "Loyalty Chest", isClaimable: true },
+        ],
+      }),
+      claimGift: async (bundleId) => {
+        claimedBundles.push(bundleId);
+        return { success: true };
+      },
+    });
+
+    const { result } = await runAll({
+      accounts: [{ name: accountName, token: makeJwt({ exp: 9999999999 }) }],
+      clientFactory: () => fake as unknown as ApiClient,
+      degradedStatePath: stateFile,
+      now: () => new Date("2026-02-01T00:00:00.000Z"),
+    });
+
+    assert.deepEqual(claimedBundles, [78], "only the first matching bundle inherits the legacy cooldown");
+    assert.equal(result.accounts[0]!.items[0]!.stateKey, "77");
+    assert.equal(result.accounts[0]!.items[0]!.deferred, true);
+    assert.equal(result.accounts[0]!.items[1]!.stateKey, "78");
+    assert.equal(result.accounts[0]!.items[1]!.outcome, Outcomes.CLAIMED);
+    assert.deepEqual(JSON.parse(fs.readFileSync(stateFile, "utf8")), {
+      version: 3,
+      accounts: {
+        [accountKey]: {
+          "77": { streak: 3, title: "Loyalty Chest", nextAttemptAt: "2026-02-02T00:00:00.000Z" },
+        },
+      },
+    });
   });
 
   it("migrates current v2 streaks by starting a 24-hour cooldown", async () => {
@@ -646,7 +762,7 @@ describe("runAll", () => {
         version: 3,
         accounts: {
           [accountKey]: {
-            "77": { streak: 3, title: "Loyalty Chest", nextAttemptAt },
+            "77": { streak: 3, title: "Loyalty Chest", nextAttemptAt, legacy: true },
           },
         },
       }),
