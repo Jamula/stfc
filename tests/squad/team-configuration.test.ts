@@ -55,6 +55,8 @@ describe("native Squad configuration", () => {
     const ignored = [
       ".squad/decisions.md",
       ".squad/agents/spock/history.md",
+      ".squad/agents/spock/history-archive.md",
+      ".squad/agents/data/history-archive.md",
       ".squad/identity/now.md",
       ".squad/rai/audit-trail.md",
       ".squad/fact-checker/audit-trail.md",
@@ -75,6 +77,11 @@ describe("native Squad configuration", () => {
     ]);
     assert.ifError(config.error);
     assert.equal(config.status, 1, "The static memory configuration must remain trackable");
+    const charter = spawnSync("git", [
+      "check-ignore", "--no-index", "-q", "--", ".squad/agents/spock/charter.md",
+    ]);
+    assert.ifError(charter.error);
+    assert.equal(charter.status, 1, "The static agent charter must remain trackable");
   });
 
   it("pairs enforcement-gate changes with a real-repository state invariant", () => {
@@ -121,6 +128,7 @@ describe("native Squad configuration", () => {
     const mutableStatePathsToCheck = [
       ".squad/decisions.md",
       ".squad/agents/spock/history.md",
+      ".squad/agents/spock/history-archive.md",
       ".squad/log/2026-01-01.md",
       ".squad/orchestration-log/2026-01-01.md",
       ".squad/rai/audit-trail.md",
