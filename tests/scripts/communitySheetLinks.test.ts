@@ -87,7 +87,11 @@ describe("community sheet source links (#402)", () => {
     assert.equal(result.stdout, "");
     assert.match(result.stderr, /Community sheet mirroring is disabled \(#402\)/);
     assert.match(result.stderr, /redistribution permission has not been established/);
-    assert.ok(result.stderr.includes(source), "error must point callers to the original source");
+    assert.equal(
+      result.stderr.split("\n", 1)[0],
+      `Error: Community sheet mirroring is disabled (#402): redistribution permission has not been established. Open the original source: ${source}. See docs/stfc-knowledge/community-reference-sheet/README.md; no data was fetched or written.`,
+      "error must point callers to the exact original source",
+    );
     assert.match(result.stderr, /no data was fetched or written/);
     assert.doesNotMatch(result.stderr, /UNEXPECTED_FETCH|UNEXPECTED_WRITE/);
     assert.deepEqual(await snapshot(), before, "retired command must not overwrite the link stubs");
