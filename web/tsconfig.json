@@ -17,5 +17,5 @@
       "@stfc/contracts/*": ["../shared/contracts/*"]
     }
   },
-  "include": ["src/**/*.ts", "vite.config.ts"]
+  "include": ["src/**/*.ts", "vite*.config.ts"]
 }
