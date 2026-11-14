@@ -313,24 +313,24 @@ scheduled run; `CODE_ALREADY_USED` responses are expected and harmless.
 
 ## 14. Community Reference Sheet (Academy / Athena / Duo Waves)
 
-The [`docs/stfc-knowledge/`](./stfc-knowledge/README.md) directory holds
-ingested third-party reference material — every artifact carries a six-field
-`## Lineage` block (Source URL, Source name, Author(s), Captured on,
-License / attribution requirements, Refresh strategy) so provenance is never
-lost.
+The [`docs/stfc-knowledge/`](./stfc-knowledge/README.md) directory records
+source links and provenance for third-party references. Its lineage metadata
+does not establish ownership or redistribution permission.
 
-The first source ingested is a community-maintained Google Sheet covering
+The community-maintained Google Sheet covers
 **Starfleet Academy**, **Athena**, **Duo Wave Defense**, the **M91 Refinery**,
 **Independent Archives**, **G5 scrapping**, and **Critical Damage
-Mitigation**, mirrored at
+Mitigation**. Original tab links are indexed at
 [`docs/stfc-knowledge/community-reference-sheet/`](./stfc-knowledge/community-reference-sheet/README.md).
 
-- **Authors:** JulesVern, Quasel, BlueMandalorian, and the STFC Officer Tool
+- **Previously recorded contributors:** JulesVern, Quasel, BlueMandalorian, and the STFC Officer Tool
   Discord `#data-collection` community ([invite](https://discord.gg/BRhru6Vcnj)).
 - **Upstream:** <https://docs.google.com/spreadsheets/d/19gxHFoje5GGRWSmE9BtSp97j_zOnMY4jBP9gFr1zi90/edit>
-- **Refresh:** `node scripts/fetch-community-sheet.mjs` (read-only mirror; we
-  never modify the upstream sheet).
+- **Access:** Open the original source for current data. Local mirrors were
+  replaced with links under [#402](https://github.com/Jamula/stfc/issues/402)
+  because redistribution permission was not established. The former fetch
+  command is disabled; there is no local sheet dataset.
 
 Use this section for the **canonical, Scopely-sourced** terminology above and
-the community mirror for **progression numbers, crewing suggestions, and M91
+the original community sheet for **progression numbers, crewing suggestions, and M91
 loop specifics** that aren't published on the official site.
