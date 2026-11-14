@@ -22,6 +22,7 @@ permissions:
   # `write` so the post-run step can commit any new state + digest + auto-
   # appended promo codes back to the repo using the default GITHUB_TOKEN.
   contents: write
+  id-token: write
 
 # Opt into the Node 24 runtime for actions/* internals (default June 2026).
 env:
@@ -86,10 +87,42 @@ jobs:
 
       - run: npm ci
 
+      - name: Sign in to Azure with GitHub OIDC
+        uses: azure/login@eec3c95657c1536435858eda1f3ff5437fee8474  # v2.3.0
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Download account tokens
+        env:
+          AZURE_STORAGE_ACCOUNT: ${{ vars.AZURE_TOKEN_STORAGE_ACCOUNT }}
+          AZURE_TOKEN_CONTAINER: ${{ vars.AZURE_TOKEN_CONTAINER }}
+          AZURE_TOKEN_BLOB: ${{ vars.AZURE_TOKEN_BLOB }}
+        run: |
+          set -euo pipefail
+          : "${AZURE_STORAGE_ACCOUNT:?AZURE_TOKEN_STORAGE_ACCOUNT variable is required}"
+          : "${AZURE_TOKEN_CONTAINER:?AZURE_TOKEN_CONTAINER variable is required}"
+          : "${AZURE_TOKEN_BLOB:?AZURE_TOKEN_BLOB variable is required}"
+          az storage blob download \
+            --auth-mode login \
+            --account-name "$AZURE_STORAGE_ACCOUNT" \
+            --container-name "$AZURE_TOKEN_CONTAINER" \
+            --name "$AZURE_TOKEN_BLOB" \
+            --file "$RUNNER_TEMP/stfc-accounts.json" \
+            --overwrite \
+            --only-show-errors
+          chmod 600 "$RUNNER_TEMP/stfc-accounts.json"
+          test -s "$RUNNER_TEMP/stfc-accounts.json"
+
       - run: npm run skill:discord-monitor
         env:
           DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
-          STFC_ACCOUNTS: ${{ secrets.STFC_ACCOUNTS }}
+          STFC_ACCOUNTS_FILE: ${{ runner.temp }}/stfc-accounts.json
+
+      - name: Remove account-token file
+        if: always()
+        run: rm -f "$RUNNER_TEMP/stfc-accounts.json"
 
       - name: Commit state + digest + promo-codes to automation-state (if changed)
         if: always() && steps.restore_state.outputs.complete == 'true'

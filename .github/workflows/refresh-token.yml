@@ -1,244 +1,71 @@
-# Auto-refresh the STFC store JWT.
-#
-# Logs in to the Scopely store via Playwright using STFC_EMAIL +
-# STFC_PASSWORD secrets, captures the resulting JWT, and updates the
-# STFC_ACCOUNTS repo secret (preserving any other accounts).
-#
-# ┌─ IMPORTANT: passwordless login (June 2026) ─────────────────────────────┐
-# │ Scopely migrated this account's Okta login to PASSWORDLESS email OTP:   │
-# │ after submitting the email it emails a one-time code and no longer      │
-# │ offers a password field ("No more passwords!"). A headless CI job       │
-# │ cannot read that emailed code, so this workflow can no longer complete  │
-# │ the capture automatically — it is kept for manual dispatch only (and    │
-# │ for the day a password authenticator is re-enabled, see below).         │
-# │                                                                          │
-# │ To refresh the token manually:                                          │
-# │   1. Locally run:  npm run capture-token            (no --ci flag)      │
-# │   2. A browser opens and auto-fills your email; enter the one-time      │
-# │      code from your inbox to finish signing in. The script captures     │
-# │      the JWT and writes it to your local .env.                          │
-# │   3. Update the repo secret from the captured token, e.g.:              │
-# │        gh secret set STFC_ACCOUNTS --repo Jamula/stfc < accounts.json   │
-# │      (accounts.json = the JSON array of {name, token} entries).         │
-# │                                                                          │
-# │ To restore full automation, re-enable a password authenticator on the  │
-# │ Scopely/Okta account (Account security settings). If/when a password    │
-# │ field reappears, re-add the `schedule:` trigger below.                  │
-# └──────────────────────────────────────────────────────────────────────────┘
-#
-# Required secrets:
-#   STFC_EMAIL          your Scopely login email
-#   STFC_PASSWORD       your Scopely password (mapped from your `cj_pwd`
-#                       secret in the Refresh step below if you prefer to
-#                       keep the existing name)
-#   STFC_REFRESH_PAT    fine-grained PAT with "Secrets: Read & write"
-#                       permission for THIS repo. Default GITHUB_TOKEN
-#                       cannot write secrets, hence the PAT requirement.
-#
-# Optional inputs (workflow_dispatch only):
-#   account_name        which account in STFC_ACCOUNTS to refresh (default
-#                       "main"). Set this if you have multiple accounts and
-#                       want to refresh just one.
-name: Refresh token
+# One-time migration of the legacy STFC_ACCOUNTS secret into private Blob
+# Storage. Real sign-in and token updates happen in the authenticated PWA.
+name: Migrate token store
 
 on:
-  # Manual dispatch only. The scheduled trigger was removed in June 2026 when
-  # Scopely switched this account to passwordless email-OTP login, which a
-  # headless CI run cannot complete (see the header note above). Re-add the
-  # `schedule:` block once a password authenticator is available again:
-  #   schedule:
-  #     - cron: "0 0 * * 6"   # Saturday 00:00 UTC, weekly
-  workflow_dispatch:
-    inputs:
-      account_name:
-        description: "Account name in STFC_ACCOUNTS to refresh"
-        type: string
-        required: false
-        default: "main"
-      otp:
-        description: "6-digit OTP from the Scopely verification email (supply after triggering if Scopely sends one)"
-        type: string
-        required: false
-        default: ""
+  workflow_dispatch: {}
 
 permissions:
   contents: read
+  id-token: write
 
-# Opt into the Node 24 runtime for actions/* internals (default June 2026).
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
-# Don't race with the redeem workflow (both touch STFC_ACCOUNTS).
-# `queue: max` matches redeem.yml/discord-monitor.yml/discord-command-handler
-# .yml: a refresh run must queue behind the shared writer lock, never cancel a
-# pending run in it. See docs/ARCHITECTURE.md → "Writer serialization".
 concurrency:
   group: stfc-gift-redeemer
   queue: max
   cancel-in-progress: false
 
 jobs:
-  refresh:
+  migrate:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
 
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
-        with:
-          node-version-file: .nvmrc
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Resolve Playwright version
-        id: pw
-        run: echo "version=$(node -p "require('playwright/package.json').version")" >> "$GITHUB_OUTPUT"
-
-      - name: Cache Playwright browsers
-        id: pw-cache
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
-        with:
-          path: ~/.cache/ms-playwright
-          key: ${{ runner.os }}-playwright-${{ steps.pw.outputs.version }}
-
-      - name: Install Playwright system deps
-        run: npx playwright install-deps chromium
-
-      - name: Install Playwright Chromium
-        # On a cache hit the browser binary is already present, so skip the
-        # multi-minute CDN download from cdn.playwright.dev entirely.
-        #
-        # On a cold cache the download from cdn.playwright.dev has repeatedly
-        # stalled *after* the main Chrome binary finishes, hanging on a
-        # follow-up artifact (headless shell / ffmpeg) until the step timeout.
-        # Because the step timed out the job failed, so actions/cache never
-        # got to save the browser and every subsequent run hit the same stall
-        # (a cache-population chicken-and-egg).
-        #
-        # Wrap the install in a bounded retry loop: each attempt is capped by
-        # `timeout` so a stalled connection is killed fast, and already-fetched
-        # artifacts persist in ~/.cache/ms-playwright across attempts so each
-        # retry makes incremental progress until one completes and the cache
-        # can finally be saved.
-        if: steps.pw-cache.outputs.cache-hit != 'true'
-        timeout-minutes: 15
-        run: |
-          set -uo pipefail
-          for attempt in 1 2 3; do
-            echo "::group::Playwright chromium install (attempt ${attempt}/3)"
-            if timeout 240 npx playwright install chromium; then
-              echo "Chromium installed on attempt ${attempt}."
-              echo "::endgroup::"
-              exit 0
-            fi
-            echo "::endgroup::"
-            echo "::warning::Chromium install attempt ${attempt} stalled or failed; retrying in 5s."
-            sleep 5
-          done
-          echo "::error::Failed to install Playwright chromium after 3 attempts."
-          exit 1
-
-      - name: Capture fresh JWT
-        id: capture
+      - name: Validate existing account tokens
         env:
-          STFC_EMAIL: ${{ secrets.STFC_EMAIL }}
-          STFC_PASSWORD: ${{ secrets.STFC_PASSWORD || secrets.cj_pwd }}
-          STFC_OTP: ${{ inputs.otp }}
-          STFC_DEBUG_DIR: /tmp/stfc-debug
+          STFC_ACCOUNTS: ${{ secrets.STFC_ACCOUNTS }}
         run: |
           set -euo pipefail
-          if [ -z "${STFC_EMAIL:-}" ] || [ -z "${STFC_PASSWORD:-}" ]; then
-            echo "::error::STFC_EMAIL and STFC_PASSWORD (or cj_pwd) secrets must be set."
-            exit 1
-          fi
-          NAME="${{ inputs.account_name || 'main' }}"
-          # Capture into a file so we don't echo the JWT into the live log.
-          # Stdout from --ci is exactly one line of JSON; stderr is diagnostic.
-          npm --silent run capture-token -- --ci --name "$NAME" --timeout 180 \
-            > /tmp/captured.json
-          # Sanity check (without revealing the value)
-          if ! jq -e '.token | length > 0' /tmp/captured.json > /dev/null; then
-            echo "::error::capture-token produced no token."
-            exit 1
-          fi
-          # Mask the token value in any subsequent log output.
-          TOKEN=$(jq -r '.token' /tmp/captured.json)
-          echo "::add-mask::$TOKEN"
-          echo "captured=true" >> "$GITHUB_OUTPUT"
+          : "${STFC_ACCOUNTS:?The legacy STFC_ACCOUNTS secret is required for migration}"
 
-      # Only the rendered login page is uploaded (no page HTML), so a failed
-      # capture can be diagnosed as "selector changed" vs "CAPTCHA" without
-      # risking the JWT. Short retention: it shows the login email.
-      - name: Upload login-failure screenshot
-        if: failure()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+          account_file="$RUNNER_TEMP/stfc-accounts.json"
+          printf '%s' "$STFC_ACCOUNTS" > "$account_file"
+          chmod 600 "$account_file"
+          unset STFC_ACCOUNTS
+
+          node scripts/validate-token-accounts.mjs "$account_file"
+
+      - name: Sign in to Azure with GitHub OIDC
+        uses: azure/login@eec3c95657c1536435858eda1f3ff5437fee8474  # v2.3.0
         with:
-          name: login-failure-screenshot
-          path: /tmp/stfc-debug/
-          retention-days: 3
-          if-no-files-found: ignore
+          client-id: ${{ vars.AZURE_MIGRATION_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Merge with existing STFC_ACCOUNTS and update secret
+      - name: Upload account tokens
         env:
-          GH_TOKEN: ${{ secrets.STFC_REFRESH_PAT }}
-          EXISTING: ${{ secrets.STFC_ACCOUNTS }}
+          AZURE_STORAGE_ACCOUNT: ${{ vars.AZURE_TOKEN_STORAGE_ACCOUNT }}
+          AZURE_TOKEN_CONTAINER: ${{ vars.AZURE_TOKEN_CONTAINER }}
+          AZURE_TOKEN_BLOB: ${{ vars.AZURE_TOKEN_BLOB }}
         run: |
           set -euo pipefail
-          if [ -z "${GH_TOKEN:-}" ]; then
-            echo "::error::STFC_REFRESH_PAT secret is missing. Create a fine-grained PAT scoped to this repo with 'Secrets: Read & write' permission, store it as STFC_REFRESH_PAT, and re-run."
-            exit 1
-          fi
-          NEW_NAME=$(jq -r '.name' /tmp/captured.json)
-          NEW_TOKEN=$(jq -r '.token' /tmp/captured.json)
-          # Mask the new token value too (belt + braces; capture step also did this).
-          echo "::add-mask::$NEW_TOKEN"
+          : "${AZURE_STORAGE_ACCOUNT:?AZURE_TOKEN_STORAGE_ACCOUNT variable is required}"
+          : "${AZURE_TOKEN_CONTAINER:?AZURE_TOKEN_CONTAINER variable is required}"
+          : "${AZURE_TOKEN_BLOB:?AZURE_TOKEN_BLOB variable is required}"
 
-          # Build the merged JSON. If STFC_ACCOUNTS is unset/empty/invalid,
-          # start from an empty array. Otherwise replace the matching name or
-          # append a new entry.
-          if [ -z "${EXISTING:-}" ]; then
-            BASE='[]'
-          else
-            # Mask existing tokens too so they don't leak via diffs in case of error.
-            for tok in $(echo "$EXISTING" | jq -r '.[].token // empty' 2>/dev/null || true); do
-              echo "::add-mask::$tok"
-            done
-            BASE=$(echo "$EXISTING" | jq -c . 2>/dev/null || echo '[]')
-          fi
+          az storage blob upload \
+            --auth-mode login \
+            --account-name "$AZURE_STORAGE_ACCOUNT" \
+            --container-name "$AZURE_TOKEN_CONTAINER" \
+            --name "$AZURE_TOKEN_BLOB" \
+            --file "$RUNNER_TEMP/stfc-accounts.json" \
+            --overwrite false \
+            --only-show-errors
+          echo "The existing account list was migrated to the private token store."
 
-          MERGED=$(jq -c --arg n "$NEW_NAME" --arg t "$NEW_TOKEN" '
-            (map(select(.name != $n))) + [{name: $n, token: $t}]
-          ' <<< "$BASE")
-
-          # Push via gh (uses GH_TOKEN env var). Without --body, gh reads
-          # the secret value from stdin — so it never lands on a command
-          # line, in shell history, or in process listings.
-          printf '%s' "$MERGED" | gh secret set STFC_ACCOUNTS \
-            --repo "$GITHUB_REPOSITORY"
-
-          # Cleanup the temp file with the JWT in it.
-          rm -f /tmp/captured.json
-
-          echo "✅ STFC_ACCOUNTS updated. Account refreshed: $NEW_NAME"
-
-      - name: Summary
+      - name: Remove temporary account-token file
         if: always()
-        run: |
-          {
-            echo "## Refresh token"
-            if [ "${{ steps.capture.outputs.captured }}" = "true" ]; then
-              echo ""
-              echo "✅ Captured a fresh JWT and updated the STFC_ACCOUNTS secret."
-              echo "Account: \`${{ inputs.account_name || 'main' }}\`"
-            else
-              echo ""
-              echo "❌ Refresh failed. Common causes:"
-              echo "- STFC_EMAIL / STFC_PASSWORD secret missing or wrong"
-              echo "- STFC_REFRESH_PAT secret missing or lacking secrets:write"
-              echo "- Scopely served a CAPTCHA / MFA challenge to the headless browser"
-              echo ""
-              echo "Fall back to running \`npm run capture-token\` locally."
-            fi
-          } >> "$GITHUB_STEP_SUMMARY"
+        run: rm -f "$RUNNER_TEMP/stfc-accounts.json"

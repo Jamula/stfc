@@ -553,7 +553,11 @@ describe("dashboard data source loading", () => {
       assert.equal(data.runs[0]!.conclusion, null);
       assert.equal(data.runs[0]!.business_result, null);
       assert.equal(calls.filter(call => call.url.includes("/actions/workflows/")).length, 1);
-      assert.ok(calls.some(call => call.url.includes("/actions/workflows/redeem.yml/runs?per_page=20")));
+      const workflowRequest = calls.find(call => call.url.includes("/actions/workflows/"));
+      assert.ok(workflowRequest, "expected a request for the redeem workflow runs");
+      const workflowUrl = new URL(workflowRequest.url);
+      assert.ok(workflowUrl.pathname.endsWith("/actions/workflows/redeem.yml/runs"));
+      assert.equal(workflowUrl.searchParams.get("per_page"), "20");
     });
   });
 });

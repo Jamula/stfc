@@ -13,7 +13,6 @@ import { describe, it, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { chromium, type Browser, type Page } from "playwright";
 
-// @ts-expect-error - plain .mjs helper without type declarations
 import { findOtpEntry, fillOtp } from "../../scripts/capture-token.mjs";
 
 const SPLIT_OTP_PAGE = `
@@ -69,6 +68,7 @@ describe("capture-token OTP widget handling", () => {
     const entry = await findOtpEntry(page);
 
     assert.ok(entry, "expected the split OTP widget to be detected");
+    if (!entry) assert.fail("expected the split OTP widget to be detected");
     assert.equal(entry.kind, "split");
     assert.equal(entry.count, 6);
   });
@@ -77,6 +77,7 @@ describe("capture-token OTP widget handling", () => {
     if (!browserAvailable) return t.skip("Chromium not installed");
     await page.setContent(SPLIT_OTP_PAGE);
     const entry = await findOtpEntry(page);
+    if (!entry) assert.fail("expected the split OTP widget to be detected");
     await fillOtp(page, entry, "711997");
 
     const values = await page.$$eval('input[maxlength="1"]', (els) =>
@@ -89,6 +90,7 @@ describe("capture-token OTP widget handling", () => {
     if (!browserAvailable) return t.skip("Chromium not installed");
     await page.setContent(SPLIT_OTP_PAGE);
     const entry = await findOtpEntry(page);
+    if (!entry) assert.fail("expected the split OTP widget to be detected");
     await fillOtp(page, entry, "711-997");
 
     const values = await page.$$eval('input[maxlength="1"]', (els) =>
@@ -103,6 +105,7 @@ describe("capture-token OTP widget handling", () => {
     const entry = await findOtpEntry(page);
 
     assert.ok(entry, "expected the single-input OTP widget to be detected");
+    if (!entry) assert.fail("expected the single-input OTP widget to be detected");
     assert.equal(entry.kind, "single");
 
     await fillOtp(page, entry, "123456");
