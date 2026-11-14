@@ -167,6 +167,18 @@ min, 144 runs/day). It restores live history, dead-code cache, and promo codes
 from `automation-state`, then commits changed state there via `GITHUB_TOKEN`.
 The protected `main` tip is never the automation push target.
 
+**Ambiguous gift claims.** `data/redeem-degraded-state.json` stores per-account
+(hashed account name) and bundle-ID transient streaks. After three consecutive
+transient claim failures, the claim is deferred for 24 hours; one claim is
+attempted on the first scheduled run at or after the deadline. Another
+transient failure starts a new 24-hour delay. Successful and benign outcomes
+clear the streak. Deferred claims remain `TRANSIENT` in the logs and step
+summary, keeping the account degraded and the existing repeated-failure alert
+open. State is migrated from versions 1 and 2 before claims proceed. Missing
+state is initialized; unreadable or unwritable state is surfaced as an
+infrastructure error and prevents gift claim POSTs rather than risking
+untracked retries. Claim POSTs are never replayed within one run.
+
 ### 3.2 Discord Monitor — `src/discord/`
 
 Read-only Discord bot that ingests promo codes from operator-curated
