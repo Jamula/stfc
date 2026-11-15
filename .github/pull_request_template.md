@@ -69,6 +69,7 @@ _(The pre-commit hook should enforce this automatically. The checkbox creates an
 _Complete this section when adding or tightening a gate over existing repository state._
 
 - [ ] The same PR includes the migration that makes the current repository satisfy the gate.
+- [ ] Tracked mutable paths are untracked and ignored, and conflicting merge attributes are removed; static configuration remains trackable.
 - [ ] Tests assert the real repository invariant, not only synthetic fixtures.
 - [ ] Guarded paths are classified as static or mutable; every exception is explicit and narrowly scoped.
 - [ ] The tracked Squad casting registry/history pair and commit marker are the only mutable-state exception; they use the native atomic casting protocol.

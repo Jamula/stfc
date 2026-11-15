@@ -72,6 +72,12 @@ Consider fleet mode when work can be split safely, and use separate worktrees fo
 
 The `two-layer` backend owns mutable Squad state. Read and write decisions and histories through the Squad state bridge, and use the native atomic casting protocol for the registry/history pair. Do not use direct `.squad/` file or Git operations as a fallback if the bridge is unavailable.
 
+## Enforcement gates over existing state
+
+Before adding or tightening a gate, classify every guarded path as static configuration or mutable runtime state. Static configuration—including `.squad/config.json`, team and routing files, agent charters, templates, and `.squad/memory/config.json`—must remain trackable and must not be swept into a mutable-state guard. Runtime-owned histories, decisions, logs, identity, audit, memory data, sessions, scratch, and cache files are mutable; exclude them from source control according to the active backend. The only tracked mutable-state exception is `.squad/casting/registry.json`, `.squad/casting/history.json`, and `.squad/casting/registry-history.commit.json`, which must use the native atomic casting protocol.
+
+Any gate over existing repository state must ship its companion migration in the same PR. That migration must make the real checkout satisfy the gate, including untracking and ignoring mutable files and removing unsafe merge attributes where applicable. Add a test that inspects the actual repository invariant (for example, `git ls-files` and effective Git attributes), not just synthetic fixtures. Any exception must name the exact path and its required protocol.
+
 <!-- squad:copilot-instructions:start -->
 # Copilot Coding Agent — Squad Instructions
 
