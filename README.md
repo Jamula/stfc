@@ -26,16 +26,16 @@ promo codes and player tips, harvesting both into a daily digest.
 > `refresh-token.yml` no longer performs a provider login; the **Migrate token
 > store** workflow is only the one-time migration path.
 
-> **Local development:** the Playwright-driven capture script remains useful
-> for local CLI work:
+> **Local development:** run `pwsh -NoProfile -File .\recover-auth.ps1` for the
+> guided, identity-bound recovery. With a prepared local `.env`, you can also
+> run the capture script directly:
 
    ```bash
-   npm install
-   npm run playwright:install   # one-time: download Chromium (~120 MB)
-   npm run capture-token        # opens browser, watches network, writes .env
+   npm run capture-token
    ```
 
-   It writes to a local `.env`; it does not update the canonical hosted store.
+   The flow requires independently verifying the account identifier and writes
+   only to a local `.env`; hosted token updates use the owner-only PWA.
    See [docs/SETUP.md](docs/SETUP.md) for local CLI instructions.
 
 > **Optional:** if you want to harvest promo codes and tips from the STFC
@@ -147,9 +147,10 @@ For system design, deployment, and workflow details, see
 
 ## Multi-account support
 
-`STFC_ACCOUNTS` is a JSON **array**, one entry per account. The orchestrator
-iterates the entire array, so you can manage as many accounts as you like with
-a single secret:
+The orchestrator accepts a JSON array from `STFC_ACCOUNTS` for local runs or
+`STFC_ACCOUNTS_FILE` for scheduled workflows. Scheduled workflows load the
+account list from private Azure Blob Storage using GitHub OIDC; the legacy
+`STFC_ACCOUNTS` secret is used only for the one-time migration:
 
 ```json
 [
@@ -159,7 +160,7 @@ a single secret:
 ]
 ```
 
-Capture each token from a different browser profile (cookies are profile-scoped).
+The local capture utility opens a fresh browser context for each account.
 
 ---
 
@@ -177,9 +178,8 @@ and serialization behavior.
 ## Token expiry
 
 Expired tokens are reported per account without stopping other accounts.
-Re-capture an expired token with `npm run capture-token -- --name <account>`
-and update `STFC_ACCOUNTS`. `run-all` exits 2 when every account is expired
-and 1 for infrastructure errors.
+Interactive re-capture requires the identity-bound procedure in the setup guide.
+`run-all` exits 2 when every account is expired and 1 for infrastructure errors.
 
 ---
 

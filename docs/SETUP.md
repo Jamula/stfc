@@ -32,17 +32,41 @@ without returning the token to the browser.
 
 ## Local CLI token capture
 
-The existing Playwright capture script remains available for local CLI use:
+The Playwright capture script is for local CLI use only. It writes the updated
+account list to the ignored local `.env`; hosted token updates must use the
+owner-only PWA described in [STFC-TOKEN-PWA.md](STFC-TOKEN-PWA.md).
 
-```bash
-npm install
-npm run playwright:install
-npm run capture-token -- --name main
+```powershell
+pwsh -NoProfile -File .\recover-auth.ps1
 ```
 
-It opens a fresh browser context, validates the token against `/auth/me`, and
-writes to the ignored local `.env`. This local `.env` does not update the
-canonical hosted store. Never commit or share it.
+The recovery launcher requires PowerShell 7 or later, Node.js 24+, project
+dependencies, and Playwright's Chromium. Install missing project dependencies
+with `npm ci` and Chromium with `npm run playwright:install`.
+The launcher checks prerequisites before requesting the backup.
+
+Before recovery, provide the current complete backup and confirm that all
+redemption workflows and concurrent `.env` and secret updates are stopped.
+GitHub cannot show the current secret. In an independent private official-store
+session, verify the intended account and obtain `payload.accountId` from its
+`/auth/me` response; do not use a display name or email as a substitute.
+At the hidden prompts, enter the exact existing account label and this
+independently obtained identifier, then sign in with email and OTP only in the
+newly opened official browser window.
+
+The script sends the captured token to `/auth/me` and updates the local backup
+only when the returned account identifier matches. A missing, unsupported,
+ambiguous, or different identifier stops the update. A successful response
+does not guarantee that the store will accept the token for gift operations.
+The launcher updates only the local `.env`, never the GitHub secret or hosted
+Blob. Use the PWA for hosted token updates. Treat the plaintext `.env` and any
+interrupted `.env.local` staging file as sensitive; never commit or share them.
+
+Each recovery requires a complete existing account list and an exact existing
+account name. Unselected account JSON is preserved; duplicate accounts and
+additional fields on the selected account are rejected. For the one-time
+migration, follow the workflow steps above rather than setting a replacement
+secret manually.
 
 ## Triggering the workflow
 
@@ -55,6 +79,17 @@ Once the private token store and Azure OIDC identities are initialized:
   best-effort and may be delayed or dropped. The job summary on each delivered
   run shows what was claimed, which codes were already used, and any tokens
   that have expired.
+
+<!-- The legacy manual token-extraction instructions below are obsolete. Use the identity-bound local recovery above or the owner-only PWA for hosted updates.
+DevTools on the STFC store after logging in, switch to the **Network**
+tab, find any request to `cdn-nv3-webstore-api.startrek.digitgaming.com`,
+copy the token portion from the `Authorization` header (remove the
+`Bearer ` prefix) and paste it into the `STFC_ACCOUNTS` GitHub secret as
+`[{"name":"main","token":"<that JWT>"}]` only if that is the complete
+intended secret. Do not rely on the current browser identity alone to verify
+ownership of a token captured earlier.
+
+-->
 
 ## Token refresh
 
