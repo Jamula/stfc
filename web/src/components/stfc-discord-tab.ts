@@ -15,7 +15,8 @@ export class StfcDiscordTab extends LitElement {
 
   @state() private _digests: DashboardData | null = null;
   @state() private _runs: DashboardData | null = null;
-  @state() private _error = '';
+  @state() private _loadError = '';
+  @state() private _actionError = '';
   @state() private _message = '';
   @state() private _busy = false;
   private readonly _request = new AbortController();
@@ -31,7 +32,7 @@ export class StfcDiscordTab extends LitElement {
   }
 
   private async _load(): Promise<void> {
-    this._error = '';
+    this._loadError = '';
     try {
       const [digests, runs] = await Promise.all([
         loadDashboard('digests', this._request.signal),
@@ -43,7 +44,7 @@ export class StfcDiscordTab extends LitElement {
       }
     } catch (error) {
       if (!this._request.signal.aborted) {
-        this._error = error instanceof Error ? error.message : 'Discord status could not be loaded.';
+        this._loadError = error instanceof Error ? error.message : 'Discord status could not be loaded.';
       }
     }
   }
@@ -53,7 +54,7 @@ export class StfcDiscordTab extends LitElement {
       return;
     }
     this._busy = true;
-    this._error = '';
+    this._actionError = '';
     this._message = '';
     try {
       const response = await fetch('/api/discord-command/trigger-redeem', {
@@ -75,7 +76,7 @@ export class StfcDiscordTab extends LitElement {
       }
       this._message = 'Redemption run accepted. Refresh Runs to check its status.';
     } catch (error) {
-      this._error = error instanceof Error ? error.message : 'Redemption could not be started.';
+      this._actionError = error instanceof Error ? error.message : 'Redemption could not be started.';
     } finally {
       this._busy = false;
     }
@@ -88,8 +89,12 @@ export class StfcDiscordTab extends LitElement {
   };
 
   override render() {
-    if (this._error) return html`<p role="alert">${this._error}</p>`;
-    if (!this._digests || !this._runs) return html`<p role="status">Loading Discord status...</p>`;
+    if (!this._digests || !this._runs) return html`
+      ${this._loadError
+        ? html`<p role="alert">${this._loadError}</p>`
+        : html`<p role="status">Loading Discord status...</p>`}
+      <button @click=${this._refresh}>Refresh status</button>
+    `;
     return html`
       <h2>Discord monitoring</h2>
       <p class="notice">Shows committed monitor digests and recent Discord-monitor workflow runs. The bot's game-state upload command remains available in Discord.</p>
@@ -107,6 +112,7 @@ export class StfcDiscordTab extends LitElement {
       <button ?disabled=${this._busy} @click=${this._triggerRedeem}>
         ${this._busy ? 'Starting…' : 'Run redemption now'}
       </button>
+      ${this._actionError ? html`<p role="alert">${this._actionError}</p>` : ''}
       <button ?disabled=${this._busy} @click=${this._refresh}>Refresh status</button>
       ${this._message ? html`<p role="status">${this._message}</p>` : ''}
     `;
