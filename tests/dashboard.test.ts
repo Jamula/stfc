@@ -726,7 +726,7 @@ describe("dashboard browser client validation", () => {
 });
 
 describe("dashboard tab browser rendering", () => {
-  it("loads all five real tabs, escapes HTML, handles empty/unavailable/error states, and marks unmatched runs", async (t) => {
+  it("loads real tabs, escapes HTML, handles errors, and preserves Discord recovery controls", async (t) => {
     const [{ createServer }, { chromium }] = await Promise.all([
       import("../web/node_modules/vite/dist/node/index.js"),
       import("playwright"),
@@ -759,16 +759,43 @@ describe("dashboard tab browser rendering", () => {
 
       const page = await browser.newPage();
       const requests: string[] = [];
+      let failNextDigestLoad = false;
+      let dispatchAttempts = 0;
 
       await page.route("**/*", route => {
         if (new URL(route.request().url()).origin !== baseUrl) return route.abort();
         return route.continue();
+      });
+      await page.route("**/api/discord-command/trigger-redeem", async route => {
+        dispatchAttempts += 1;
+        if (dispatchAttempts === 1) {
+          await route.fulfill({
+            status: 503,
+            contentType: "application/json",
+            body: JSON.stringify({ error: "Dispatch unavailable." }),
+          });
+        } else {
+          await route.fulfill({
+            status: 202,
+            contentType: "application/json",
+            body: JSON.stringify({ accepted: true }),
+          });
+        }
       });
       await page.route("**/api/data/*", async route => {
         const url = new URL(route.request().url());
         const tab = url.pathname.split("/").at(-1) as DashboardTab;
         requests.push(tab);
         assert.equal(route.request().headers().accept, "application/json");
+        if (tab === "digests" && failNextDigestLoad) {
+          failNextDigestLoad = false;
+          await route.fulfill({
+            status: 503,
+            contentType: "application/json",
+            body: JSON.stringify({ error: "Digest status unavailable." }),
+          });
+          return;
+        }
         const body: DashboardData = {
           available: true,
           message: null,
@@ -874,7 +901,29 @@ describe("dashboard tab browser rendering", () => {
       assert.match(runText, /Start time unavailable/);
       assert.equal((await page.locator("stfc-runs-tab table tbody tr").count()), 2);
       assert.match(runText, /Not emitted/);
-      assert.deepEqual(requests, ["redeems", "digests", "telemetry", "crew", "runs"]);
+
+      failNextDigestLoad = true;
+      await page.getByRole("tab", { name: "Discord" }).click();
+      await waitForTabText("stfc-discord-tab", "HTTP 503");
+      const discordTab = page.locator("stfc-discord-tab");
+      await discordTab.getByRole("button", { name: "Refresh status" }).click();
+      await waitForTabText("stfc-discord-tab", "Latest digests");
+      await page.evaluate(() => { window.confirm = () => true; });
+      await discordTab.getByRole("button", { name: "Run redemption now" }).click();
+      await waitForTabText("stfc-discord-tab", "Dispatch unavailable.");
+      const failedDispatchText = await readTabText("stfc-discord-tab");
+      assert.match(failedDispatchText, /Recent monitoring runs/);
+      assert.match(failedDispatchText, /Latest digests/);
+      assert.equal(await discordTab.getByRole("button", { name: "Run redemption now" }).count(), 1);
+      assert.equal(await discordTab.getByRole("button", { name: "Refresh status" }).count(), 1);
+
+      await discordTab.getByRole("button", { name: "Run redemption now" }).click();
+      await waitForTabText("stfc-discord-tab", "Redemption run accepted.");
+      assert.equal(dispatchAttempts, 2, "redemption dispatch must use the mocked API route");
+      assert.deepEqual(requests, [
+        "redeems", "digests", "telemetry", "crew", "runs",
+        "digests", "runs", "digests", "runs",
+      ]);
     } finally {
       await browser?.close();
       await server.close();

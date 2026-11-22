@@ -1,4 +1,4 @@
-import type { DashboardData, DashboardRun, DashboardTab } from '../../shared/dashboard.js';
+import type { DashboardData, DashboardRun, DashboardTab, Workflow } from '../../shared/dashboard.js';
 
 function isRun(value: unknown): value is DashboardRun {
   if (typeof value !== 'object' || value === null) return false;
@@ -13,8 +13,16 @@ function isRun(value: unknown): value is DashboardRun {
     (run['business_result'] === null || (typeof run['business_result'] === 'object' && !Array.isArray(run['business_result'])));
 }
 
-export async function loadDashboard(tab: DashboardTab, signal?: AbortSignal): Promise<DashboardData> {
-  const response = await fetch(`/api/data/${tab}`, {
+export async function loadDashboard(
+  tab: DashboardTab,
+  signal?: AbortSignal,
+  query: { workflow?: Workflow; limit?: number } = {},
+): Promise<DashboardData> {
+  const params = new URLSearchParams();
+  if (query.workflow) params.set('workflow', query.workflow);
+  if (query.limit !== undefined) params.set('limit', String(query.limit));
+  const suffix = params.size > 0 ? `?${params}` : '';
+  const response = await fetch(`/api/data/${tab}${suffix}`, {
     credentials: 'same-origin',
     headers: { Accept: 'application/json' },
     signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(15_000)]) : AbortSignal.timeout(15_000),

@@ -6,15 +6,17 @@ import './components/stfc-telemetry-tab.js';
 import './components/stfc-crew-tab.js';
 import './components/stfc-runs-tab.js';
 import './components/stfc-token-update-tab.js';
+import './components/stfc-discord-tab.js';
 
-type Tab = 'redeems' | 'digests' | 'telemetry' | 'crew' | 'runs' | 'token-update';
-const TABS: readonly Tab[] = ['redeems', 'digests', 'telemetry', 'crew', 'runs', 'token-update'] as const;
+type Tab = 'redeems' | 'digests' | 'telemetry' | 'crew' | 'runs' | 'discord' | 'token-update';
+const TABS: readonly Tab[] = ['redeems', 'digests', 'telemetry', 'crew', 'runs', 'discord', 'token-update'] as const;
 const TAB_LABELS: Record<Tab, string> = {
   redeems: 'Redeems',
   digests: 'Digests',
   telemetry: 'Telemetry',
   crew: 'Crew',
   runs: 'Runs',
+  discord: 'Discord',
   'token-update': 'Token update',
 };
 
@@ -122,6 +124,7 @@ export class StfcApp extends LitElement {
       case 'telemetry': return html`<stfc-telemetry-tab></stfc-telemetry-tab>`;
       case 'crew':      return html`<stfc-crew-tab></stfc-crew-tab>`;
       case 'runs':      return html`<stfc-runs-tab></stfc-runs-tab>`;
+      case 'discord':   return html`<stfc-discord-tab></stfc-discord-tab>`;
       case 'token-update': return html``;
     }
   }

@@ -27,6 +27,17 @@ async function api<T>(action: string, method: "GET" | "POST", body?: object): Pr
     cache: "no-store",
     credentials: "same-origin",
   });
+  if (response.redirected && new URL(response.url).pathname.startsWith('/.auth/login')) {
+    throw new TokenUpdateError('Your sign-in may have expired. Sign in again to continue.', 401);
+  }
+  if (!response.headers.get('content-type')?.includes('application/json')) {
+    throw new TokenUpdateError(
+      response.status >= 500
+        ? 'The token-update service is unavailable. Verify the API deployment and configuration.'
+        : 'The token-update service returned an invalid response.',
+      response.status,
+    );
+  }
   let value: unknown;
   try {
     value = await response.json();
