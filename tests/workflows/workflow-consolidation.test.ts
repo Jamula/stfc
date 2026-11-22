@@ -670,6 +670,25 @@ describe("workflow consolidation", () => {
     );
   });
 
+  it("keeps Playwright type versions aligned across the root and browser relay", () => {
+    const rootLock = JSON.parse(readFileSync("package-lock.json", "utf8")) as {
+      packages?: Record<string, { version?: string }>;
+    };
+    const browserLock = JSON.parse(
+      readFileSync("pwa-browser/package-lock.json", "utf8"),
+    ) as {
+      packages?: Record<string, { version?: string }>;
+    };
+
+    for (const packageName of ["playwright", "playwright-core"]) {
+      assert.equal(
+        browserLock.packages?.[`node_modules/${packageName}`]?.version,
+        rootLock.packages?.[`node_modules/${packageName}`]?.version,
+        `${packageName} must resolve to the same version in both projects`,
+      );
+    }
+  });
+
   it("propagates failures from every required-gate check", () => {
     const gate = workflows.find(({ file }) => file === "test-gate.yml");
     assert.ok(gate, "test-gate.yml must exist");
