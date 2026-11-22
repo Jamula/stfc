@@ -101,6 +101,7 @@ import "./api/auth.test.ts";
 import "./api/entrypoint.test.ts";
 import "./api/token-accounts.test.ts";
 import "./api/token-pwa.test.ts";
+import "./api/discord-command.test.ts";
 import "./scripts/validateTokenAccounts.test.ts";
 import "./ci/check-api-auth.test.ts";
 import "./dashboard.test.ts";

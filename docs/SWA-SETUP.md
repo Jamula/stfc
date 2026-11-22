@@ -240,7 +240,7 @@ For local development, add these to `api/local.settings.json` (git-ignored):
 
 ### Read-only dashboard sources
 
-The five tabs call GET `/api/data/{redeems,digests,telemetry,crew,runs}`.
+The dashboard tabs call GET `/api/data/{redeems,digests,telemetry,crew,runs}`.
 The Function rechecks both the allowlist and `stfc_operator` role before reading
 GitHub. Configure a read-only `GITHUB_TOKEN` Function app setting with access to
 repository contents and Actions when authenticated API access is required.
@@ -256,7 +256,25 @@ per workflow with any valid committed run-result artifacts. Existing unmarked
 Actions runs remain uncorrelated and are never joined by run ID, event type,
 or timestamp. An artifact is merged only when its correlation ID explicitly
 matches the ID carried by an Actions run name.
-No endpoint triggers workflows or calls the game store or Discord.
+The **Discord** tab displays committed monitoring digests and recent
+`discord-monitor` workflow results. Its **Run redemption now** action requires
+the owner-only Function endpoint and a fresh browser confirmation before it
+dispatches `redeem.yml` on `main`. Configure a dedicated server-side
+`PWA_GITHUB_DISPATCH_TOKEN` with the minimum repository-scoped Actions write
+permission needed for `workflow_dispatch`; do not reuse the read-only dashboard
+token or expose this credential to the browser. The endpoint rejects requests
+without the PWA's same-origin custom action header (cross-origin browser
+requests cannot set it without a successful CORS preflight, and the API does
+not enable CORS). It does not invoke Discord's
+slash-command API. `/game-state` uploads remain available only through Discord.
+
+The local Vite server and preview server proxy `/api/*` to Azure Functions at
+`http://127.0.0.1:7071`. Start the API with `func start` from `api/` and run the
+frontend with `npm run dev --prefix web` (or `npm run build --prefix web` and
+`npm run preview --prefix web`). The local proxy does not emulate SWA sign-in;
+owner-only token updates and redemption dispatch must be tested in the
+authenticated SWA deployment. When the Functions API is absent, API requests
+now fail as unavailable instead of receiving Vite's HTML fallback as JSON.
 
 ### STFC token-update PWA
 
@@ -267,6 +285,17 @@ settings only after following the separate
 [STFC token PWA runbook](STFC-TOKEN-PWA.md). The API key must never be exposed
 to the browser. The browser relay must remain on internal Container Apps
 ingress and must not receive a Blob identity.
+
+### Discord and live redemption
+
+The PWA's Discord status and digest view uses the existing authenticated
+dashboard API. To enable the redemption button, set
+`PWA_GITHUB_DISPATCH_TOKEN` as a secret in the Static Web App Function
+configuration. Restrict its GitHub token permissions to the `Jamula/stfc`
+repository and the Actions write permission required to dispatch the `redeem`
+workflow. Do not copy the token into `api/local.settings.json`, a browser
+setting, or a Vite environment variable. The owner must confirm each run in
+the browser; opening the Discord tab never starts redemption.
 
 ### CI gate
 
