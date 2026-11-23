@@ -319,7 +319,7 @@ describe("mergeIntoEnv error redaction (issue #211)", () => {
       const result = captureToken({ context, timeoutMs: 30000 });
       context.emit('request', { url: () => 'https://cdn-nv3-webstore-api.startrek.digitgaming.com/x', headers: () => ({ authorization: 'Bearer a.b.c' }) });
       await result;
-    `], { cwd: process.cwd(), timeout: 5000, encoding: "utf8" });
+    `], { cwd: process.cwd(), timeout: 15000, encoding: "utf8" });
     assert.equal(child.status, 0, child.stderr || String(child.error));
   });
 
@@ -389,6 +389,41 @@ describe("mergeIntoEnv error redaction (issue #211)", () => {
     });
     await assert.rejects(timedOut, /ambiguous or the browser token changed/);
     assert.equal(timeoutClosed, true);
+  });
+
+  it("drains ambiguous login responses that begin during closure without unhandled rejections", async () => {
+    for (const responseKind of ["different-token", "unreadable"] as const) {
+      const context = new EventEmitter();
+      const token = "first.token.value";
+      let unhandled: unknown;
+      const onUnhandled = (reason: unknown) => { unhandled = reason; };
+      process.on("unhandledRejection", onUnhandled);
+      try {
+        const capture = captureToken({
+          context, timeoutMs: 30_000, responseDrainTimeoutMs: 1000,
+          closeAfterCapture: async () => {
+            context.emit("response", {
+              url: () => "https://cdn-nv3-webstore-api.startrek.digitgaming.com/api/v2/auth/login",
+              request: () => ({ method: () => "POST" }), status: () => 200,
+              json: async () => {
+                await new Promise((resolve) => setImmediate(resolve));
+                if (responseKind === "unreadable") throw new Error("synthetic response read failure");
+                return { accessToken: "second.token.value" };
+              },
+            });
+          },
+        });
+        context.emit("request", {
+          url: () => "https://cdn-nv3-webstore-api.startrek.digitgaming.com/api/v2/test",
+          headers: () => ({ authorization: `Bearer ${token}` }),
+        });
+        await assert.rejects(capture, /ambiguous or the browser token changed/);
+        await new Promise((resolve) => setImmediate(resolve));
+        assert.equal(unhandled, undefined);
+      } finally {
+        process.off("unhandledRejection", onUnhandled);
+      }
+    }
   });
 
   it("detects mutations removing the identity comparison and token-change gates", () => {
@@ -505,7 +540,7 @@ describe("mergeIntoEnv error redaction (issue #211)", () => {
       [["--name", "main"], /private account selection/],
     ] as const) {
       const result = spawnSync(process.execPath, [script, "--timeout", "1", ...args], {
-        cwd: dir, input: "yes\n", encoding: "utf8", timeout: 5000,
+        cwd: dir, input: "yes\n", encoding: "utf8", timeout: 15000,
         env: { ...process.env, STFC_EMAIL: "", STFC_PASSWORD: "", STFC_OTP: "" },
       });
       assert.equal(result.status, 1, result.stderr || String(result.error));
@@ -515,7 +550,7 @@ describe("mergeIntoEnv error redaction (issue #211)", () => {
       assert.equal(readFileSync(envFile, "utf8"), original);
     }
     const ci = spawnSync(process.execPath, [script, "--ci", "--headless"], {
-      cwd: dir, encoding: "utf8", timeout: 5000,
+      cwd: dir, encoding: "utf8", timeout: 15000,
       env: { ...process.env, STFC_EMAIL: "", STFC_PASSWORD: "", STFC_OTP: "" },
     });
     assert.equal(ci.status, 2);

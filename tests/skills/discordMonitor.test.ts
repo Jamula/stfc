@@ -661,8 +661,8 @@ describe("discordMonitor / workflow YAML assertions (T027)", () => {
   it("redeem.yml cron is `*/10 * * * *` (regression guard — bumped in #7, then again to */10)", () => {
     const yaml = fs.readFileSync(redeemYamlPath, "utf8");
     assert.match(yaml, /cron:\s*["']\*\/10 \* \* \* \*["']/);
-    assert.match(yaml, /Refresh override was not applied; continuing with the preserved STFC_ACCOUNTS inventory/);
-    assert.ok(yaml.indexOf("await mergeRefreshedAccounts(") < yaml.indexOf("writeFileSync(join("),
+    assert.match(yaml, /refresh override\(s\) were rejected/);
+    assert.ok(yaml.indexOf("await mergeAvailableRefreshedAccounts(") < yaml.indexOf("writeFileSync(join("),
       "validate overrides before writing the scheduled inventory");
   });
 

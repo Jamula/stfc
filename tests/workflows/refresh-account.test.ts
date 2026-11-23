@@ -1,6 +1,12 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { mergeRefreshedAccount, mergeRefreshedAccounts, runGithubSecretCommand, verifyGiftAccess } from "../../scripts/refresh-account.mjs";
+import {
+  mergeAvailableRefreshedAccounts,
+  mergeRefreshedAccount,
+  mergeRefreshedAccounts,
+  runGithubSecretCommand,
+  verifyGiftAccess,
+} from "../../scripts/refresh-account.mjs";
 import { mkdtempSync, readFileSync, rmSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -16,11 +22,15 @@ const original = [
   { name: "alt", token: token("two") },
 ];
 const reply: typeof fetch = async (_url, options) => {
-  assert.equal(_url, "https://cdn-nv3-webstore-api.startrek.digitgaming.com/api/v2/auth/me");
   assert.match((options?.headers as Record<string, string>).Authorization ?? "", /^Bearer header\./);
-  return new Response('{"payload":{"accountId":"one"}}', {
-    status: 200, headers: { "content-type": "application/json" },
-  });
+  assert.equal(options?.redirect, "error");
+  if (String(_url).endsWith("/auth/me")) {
+    return new Response('{"payload":{"accountId":"one"}}', {
+      status: 200, headers: { "content-type": "application/json" },
+    });
+  }
+  assert.equal(_url, "https://cdn-nv3-webstore-api.startrek.digitgaming.com/api/v2/offers/gifts?available=true");
+  return new Response("[]", { headers: { "content-type": "application/json" } });
 };
 
 describe("manual refresh inventory safety", () => {
@@ -62,6 +72,9 @@ describe("manual refresh inventory safety", () => {
     const updatedTwo = token("two") + "new";
     const identify: typeof fetch = async (_url, options) => {
       const credential = String((options?.headers as Record<string, string>).Authorization).slice(7);
+      if (String(_url).endsWith("/offers/gifts?available=true")) {
+        return new Response("[]", { headers: { "content-type": "application/json" } });
+      }
       const id = JSON.parse(Buffer.from(credential.split(".")[1]!, "base64url").toString()).accountId;
       return new Response(JSON.stringify({ payload: { accountId: id } }), {
         headers: { "content-type": "application/json" },
@@ -92,9 +105,19 @@ describe("manual refresh inventory safety", () => {
       new Response("{", { headers: { "content-type": "application/json" } }),
       new Response("{}", { headers: { "content-type": "application/json" } }),
       new Response('{"items":[null]}', { headers: { "content-type": "application/json" } }),
+      new Response("[]", { status: 302, headers: { "content-type": "application/json" } }),
+      new Response("[]", { status: 401, headers: { "content-type": "application/json" } }),
+      new Response("[]", { status: 503, headers: { "content-type": "application/json" } }),
     ]) {
-      await assert.rejects(verifyGiftAccess(fresh, async () => response.clone()));
+      await assert.rejects(verifyGiftAccess(fresh, async (url, options) => {
+        assert.equal(url, "https://cdn-nv3-webstore-api.startrek.digitgaming.com/api/v2/offers/gifts?available=true");
+        assert.equal(options?.redirect, "error");
+        return response.clone();
+      }));
     }
+    const redirected = new Response("[]", { headers: { "content-type": "application/json" } });
+    Object.defineProperty(redirected, "redirected", { value: true });
+    await assert.rejects(verifyGiftAccess(fresh, async () => redirected));
   });
 
   it("pins GitHub secret commands to github.com regardless of GH_HOST", () => {
@@ -150,7 +173,8 @@ describe("manual refresh inventory safety", () => {
         },
       });
       assert.equal(result.status, expectedStatus, result.stderr);
-      assert.match(result.stdout, giftStatus === 401 ? /0\/1 accounts accepted/ : /1\/1 accounts accepted/);
+      if (giftStatus === 401) assert.match(result.stderr, /could not be verified/);
+      else assert.match(result.stdout, /1\/1 accounts accepted/);
     }
   });
 
@@ -184,9 +208,14 @@ describe("manual refresh inventory safety", () => {
           headers: {"content-type": "application/json"}
         });
       }
-      if (url.endsWith("/offers/gifts?available=true")) return new Response("[]", {
-        headers: {"content-type": "application/json"}
-      });
+      if (url.endsWith("/offers/gifts?available=true")) {
+        const token = opts.headers.Authorization.slice(7);
+        const accountId = JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString()).accountId;
+        return new Response("[]", {
+          status: process.env.REJECT_GIFT_ACCOUNT === accountId ? 403 : 200,
+          headers: {"content-type": "application/json"}
+        });
+      }
       throw new Error("unexpected endpoint");
     };`;
     const workflow = parse(readFileSync(".github/workflows/redeem.yml", "utf8"));
@@ -197,14 +226,17 @@ describe("manual refresh inventory safety", () => {
     const output = join(directory, "stfc-accounts.json");
     const summary = join(directory, "summary.md");
     try {
-      for (const mode of ["valid", "duplicate", "mismatched"] as const) {
+      for (const mode of ["valid", "duplicate", "mismatched", "gift-denied"] as const) {
         const recovery = mode === "valid" ? updatedTwo : mode === "duplicate" ? updatedOne : token("unmatched") + "new";
         const result = spawnSync(process.execPath, ["--input-type=module", "-e", `${stub}\n${script}`], {
           encoding: "utf8",
           env: {
             ...process.env, RUNNER_TEMP: directory, GITHUB_STEP_SUMMARY: summary, REPOSITORY_VARIABLES: "{}",
+            REJECT_GIFT_ACCOUNT: mode === "gift-denied" ? "two" : "",
             STFC_ACCOUNTS: JSON.stringify(original), STFC_ACCOUNT_REFRESH: JSON.stringify({ token: updatedOne }),
-            STFC_ACCOUNT_REFRESH_RECOVERY: JSON.stringify({ token: recovery }),
+            STFC_ACCOUNT_REFRESH_RECOVERY: JSON.stringify({
+              token: mode === "gift-denied" ? updatedTwo : recovery,
+            }),
           },
         });
         assert.equal(result.status, 0, result.stderr);
@@ -214,9 +246,11 @@ describe("manual refresh inventory safety", () => {
             { name: "main", token: updatedOne }, { name: "alt", token: updatedTwo },
           ]);
         } else {
-          assert.deepEqual(JSON.parse(readFileSync(output, "utf8")), original);
-          assert.match(result.stderr, /Refresh override was not applied/);
-          assert.match(readFileSync(summary, "utf8"), /preserved `STFC_ACCOUNTS` inventory remains in use/);
+          assert.deepEqual(JSON.parse(readFileSync(output, "utf8")), [
+            { name: "main", token: updatedOne }, original[1],
+          ]);
+          assert.match(result.stderr, /1 refresh override\(s\) were rejected/);
+          assert.match(readFileSync(summary, "utf8"), /Verified overrides and the preserved `STFC_ACCOUNTS` inventory remain in use/);
         }
         rmSync(output);
         rmSync(summary, { force: true });

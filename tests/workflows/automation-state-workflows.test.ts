@@ -201,8 +201,14 @@ describe("automation-state scheduled workflow contract", () => {
       if (label === "discord-monitor.yml") {
         assert.doesNotMatch(source, /STFC_ACCOUNTS:\s*\$\{\{\s*secrets\.STFC_ACCOUNTS/);
       } else {
-        assert.equal(namedStep(workflow, "Load legacy account tokens").if,
+        const loadLegacyTokens = namedStep(workflow, "Load legacy account tokens");
+        assert.equal(loadLegacyTokens.if,
           "steps.token_source.outputs.source == 'secret'");
+        assert.match(loadLegacyTokens.run ?? "", /mergeAvailableRefreshedAccounts/);
+        assert.match(loadLegacyTokens.run ?? "", /refresh override\(s\) were rejected/);
+        assert.ok((loadLegacyTokens.run ?? "").indexOf("mergeAvailableRefreshedAccounts")
+          < (loadLegacyTokens.run ?? "").indexOf("writeFileSync(join("),
+        "validate refresh candidates before writing the temporary inventory");
         for (const name of ["Sign in to Azure with GitHub OIDC", "Download account tokens"]) {
           assert.equal(namedStep(workflow, name).if,
             "steps.token_source.outputs.source == 'azure'");

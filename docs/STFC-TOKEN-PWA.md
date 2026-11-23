@@ -130,13 +130,15 @@ Both legacy redemption and the manual **Check recovery authentication** workflow
 verify the fresh token's live `/auth/me` account identity and require exactly one
 matching `accountId` claim in the existing inventory. The manual check fails if
 the required fresh override is missing or any override cannot be matched and
-verified. Scheduled redemption applies overrides only after the complete set
-passes validation in the same step that writes its temporary inventory; if
-validation fails, it reports a warning and continues with the preserved
-`STFC_ACCOUNTS` inventory. Existing JWT claims are used only to match the trusted
-secret inventory, not as proof of live authentication. Tokens whose claims use
-a different identity field are unsupported and must not be guessed. All other
-accounts are preserved.
+verified. Every override must also pass the exact gift-list endpoint's
+authentication, HTTP status, content-type, JSON, and production schema checks.
+Scheduled redemption applies each override only after these checks in the same
+step that writes its temporary inventory. If a candidate fails, it reports a
+warning and rejects that candidate while preserving prior verified overrides and
+the baseline tokens for the remaining accounts. Existing JWT claims are used
+only to match the trusted secret inventory, not as proof of live authentication.
+Tokens whose claims use a different identity field are unsupported and must not
+be guessed. All other accounts are preserved.
 
 The merge exists only in the workflow's snapshot: the baseline secret is never
 overwritten, so concurrent baseline updates are not lost. The shared workflow

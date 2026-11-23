@@ -5,10 +5,10 @@ import { captureToken } from './capture-token.mjs';
 import { parseDocument } from 'yaml';
 import { isTokenAccounts } from '../shared/token-account-schema.mjs';
 import { createInterface } from 'node:readline/promises';
-import { ApiClient } from '../src/api/client.ts';
-import { AuthMeResponseSchema } from '../src/api/schemas.ts';
+import { AuthMeResponseSchema, GiftsResponseSchema } from '../src/api/schemas.ts';
 
 const API = 'https://cdn-nv3-webstore-api.startrek.digitgaming.com/api/v2/auth/me';
+const GIFTS_API = 'https://cdn-nv3-webstore-api.startrek.digitgaming.com/api/v2/offers/gifts?available=true';
 const REFRESH_SECRET = 'STFC_ACCOUNT_REFRESH_61690F065F04521CBA2CAE742A6BEC0DB2606A8E38A2FF74AEA5E1CB58D4E854';
 const GITHUB_REPO = 'github.com/Jamula/stfc';
 
@@ -40,7 +40,21 @@ export async function verifiedIdentity(token, fetchImpl = fetch) {
 }
 
 export async function verifyGiftAccess(token, fetchImpl = fetch) {
-  await new ApiClient({ token, fetchImpl }).listGifts();
+  const response = await fetchImpl(GIFTS_API, {
+    headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
+    redirect: 'error', signal: AbortSignal.timeout(15000),
+  });
+  if (response.status !== 200 || response.redirected) throw new Error('Gift-list authentication rejected.');
+  if (!/json/i.test(response.headers.get('content-type') ?? '')) {
+    throw new Error('Gift-list response was not JSON.');
+  }
+  let body;
+  try {
+    body = await response.json();
+  } catch {
+    throw new Error('Gift-list response was not valid JSON.');
+  }
+  if (!GiftsResponseSchema.safeParse(body).success) throw new Error('Gift-list response failed schema validation.');
 }
 
 export function runGithubSecretCommand(args, options = {}, run = spawnSync) {
@@ -56,28 +70,56 @@ export async function mergeRefreshedAccount(raw, refreshed, fetchImpl = fetch) {
 
 export async function mergeRefreshedAccounts(raw, overrides, fetchImpl = fetch) {
   try {
-    const accounts = JSON.parse(raw);
-    if (!isTokenAccounts(accounts)) throw new Error();
-    const ids = accounts.map(account => {
-      const payload = document(Buffer.from(account.token.split('.')[1], 'base64url').toString('utf8'));
-      const id = identifier(payload?.accountId);
-      if (!id) throw new Error();
-      return id;
-    });
-    if (new Set(ids).size !== ids.length) throw new Error();
-    const replacements = new Map();
-    for (const refreshed of overrides) {
+    const inventory = readInventory(raw);
+    const result = await applyRefreshOverrides(inventory, overrides, fetchImpl);
+    if (result.rejectedCount > 0) throw new Error();
+    return result.accounts;
+  } catch {
+    throw new Error('Account refresh identity is missing, ambiguous, mismatched, or unverifiable; inventory was not changed.');
+  }
+}
+
+export async function mergeAvailableRefreshedAccounts(raw, overrides, fetchImpl = fetch) {
+  try {
+    return await applyRefreshOverrides(readInventory(raw), overrides, fetchImpl);
+  } catch {
+    throw new Error('Account refresh inventory is invalid; inventory was not changed.');
+  }
+}
+
+function readInventory(raw) {
+  const accounts = JSON.parse(raw);
+  if (!isTokenAccounts(accounts)) throw new Error();
+  const ids = accounts.map(account => {
+    const payload = document(Buffer.from(account.token.split('.')[1], 'base64url').toString('utf8'));
+    const id = identifier(payload?.accountId);
+    if (!id) throw new Error();
+    return id;
+  });
+  if (new Set(ids).size !== ids.length) throw new Error();
+  return { accounts, ids };
+}
+
+async function applyRefreshOverrides({ accounts, ids }, overrides, fetchImpl) {
+  const replacements = new Map();
+  let rejectedCount = 0;
+  for (const refreshed of overrides) {
+    try {
       const candidate = JSON.parse(refreshed);
       if (!isTokenAccounts([{ name: 'candidate', token: candidate?.token }])) throw new Error();
       const id = await verifiedIdentity(candidate.token, fetchImpl);
       if (!ids.includes(id) || replacements.has(id)) throw new Error();
+      await verifyGiftAccess(candidate.token, fetchImpl);
       replacements.set(id, candidate.token);
+    } catch {
+      rejectedCount += 1;
     }
-    return accounts.map((account, index) => replacements.has(ids[index])
-      ? { ...account, token: replacements.get(ids[index]) } : account);
-  } catch {
-    throw new Error('Account refresh identity is missing, ambiguous, mismatched, or unverifiable; inventory was not changed.');
   }
+  return {
+    accounts: accounts.map((account, index) => replacements.has(ids[index])
+      ? { ...account, token: replacements.get(ids[index]) } : account),
+    rejectedCount,
+  };
 }
 
 export async function captureFromPage(browser, context, page) {

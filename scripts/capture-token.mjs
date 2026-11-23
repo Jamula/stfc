@@ -194,7 +194,7 @@ async function captureToken({ context, timeoutMs, closeAfterCapture, signal, res
       }
     })();
     pending.add(job);
-    job.finally(() => pending.delete(job));
+    job.then(() => pending.delete(job), () => pending.delete(job));
   };
 
   const onRequest = (req) => {
@@ -224,6 +224,7 @@ async function captureToken({ context, timeoutMs, closeAfterCapture, signal, res
     if (result.token && closeAfterCapture) {
       if (!await drainPendingResponses(pending, responseDrainTimeoutMs)) ambiguous = true;
       await closeAfterCapture();
+      if (!await drainPendingResponses(pending, responseDrainTimeoutMs)) ambiguous = true;
       if (changed || ambiguous) throw new Error("Capture was ambiguous or the browser token changed; no update was written.");
     }
     return result;
