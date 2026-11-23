@@ -174,12 +174,13 @@ jobs:
         env:
           STFC_ACCOUNTS: ${{ secrets.STFC_ACCOUNTS }}
           STFC_ACCOUNT_REFRESH: ${{ secrets.STFC_ACCOUNT_REFRESH }}
+          STFC_ACCOUNT_REFRESH_RECOVERY: ${{ secrets.STFC_ACCOUNT_REFRESH_61690F065F04521CBA2CAE742A6BEC0DB2606A8E38A2FF74AEA5E1CB58D4E854 }}
         run: |
           node --input-type=module <<'NODE'
           import { writeFileSync } from 'node:fs';
           import { join } from 'node:path';
           import { isTokenAccounts } from './shared/token-account-schema.mjs';
-          import { mergeRefreshedAccount } from './scripts/refresh-account.mjs';
+          import { mergeRefreshedAccounts } from './scripts/refresh-account.mjs';
           let accounts;
           try {
             accounts = JSON.parse(process.env.STFC_ACCOUNTS ?? '');
@@ -191,10 +192,10 @@ jobs:
             console.error('::error::STFC_ACCOUNTS account schema is invalid; no redemption attempted.');
             process.exit(1);
           }
-          if (process.env.STFC_ACCOUNT_REFRESH) {
+          const overrides = [process.env.STFC_ACCOUNT_REFRESH, process.env.STFC_ACCOUNT_REFRESH_RECOVERY].filter(Boolean);
+          if (overrides.length) {
             try {
-              accounts = await mergeRefreshedAccount(process.env.STFC_ACCOUNTS,
-                process.env.STFC_ACCOUNT_REFRESH);
+              accounts = await mergeRefreshedAccounts(process.env.STFC_ACCOUNTS, overrides);
             } catch {
               console.error('::error::Refresh override identity could not be matched; no redemption attempted.');
               process.exit(1);

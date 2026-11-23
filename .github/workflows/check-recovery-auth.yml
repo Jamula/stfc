@@ -25,10 +25,11 @@ jobs:
         env:
           STFC_ACCOUNTS: ${{ secrets.STFC_ACCOUNTS }}
           STFC_ACCOUNT_REFRESH: ${{ secrets.STFC_ACCOUNT_REFRESH }}
+          STFC_ACCOUNT_REFRESH_RECOVERY: ${{ secrets.STFC_ACCOUNT_REFRESH_61690F065F04521CBA2CAE742A6BEC0DB2606A8E38A2FF74AEA5E1CB58D4E854 }}
           REPOSITORY_VARIABLES: ${{ toJSON(vars) }}
         run: |
           node --input-type=module <<'NODE'
-          import { mergeRefreshedAccount, verifiedIdentity } from './scripts/refresh-account.mjs';
+          import { mergeRefreshedAccounts, verifiedIdentity, verifyGiftAccess } from './scripts/refresh-account.mjs';
           import { isTokenAccounts } from './shared/token-account-schema.mjs';
           try {
             const vars = JSON.parse(process.env.REPOSITORY_VARIABLES);
@@ -37,15 +38,19 @@ jobs:
             if (keys.some(key => vars[key]?.trim())) throw new Error();
             let accounts = JSON.parse(process.env.STFC_ACCOUNTS ?? '');
             if (!isTokenAccounts(accounts)) throw new Error();
-            if (process.env.STFC_ACCOUNT_REFRESH) {
-              accounts = await mergeRefreshedAccount(process.env.STFC_ACCOUNTS,
-                process.env.STFC_ACCOUNT_REFRESH);
+            const overrides = [process.env.STFC_ACCOUNT_REFRESH, process.env.STFC_ACCOUNT_REFRESH_RECOVERY].filter(Boolean);
+            if (overrides.length) {
+              accounts = await mergeRefreshedAccounts(process.env.STFC_ACCOUNTS, overrides);
             }
             let authenticated = 0;
             for (const account of accounts) {
-              try { await verifiedIdentity(account.token); authenticated++; } catch {}
+              try {
+                await verifiedIdentity(account.token);
+                await verifyGiftAccess(account.token);
+                authenticated++;
+              } catch {}
             }
-            console.log(`Non-redeeming authentication: ${authenticated}/${accounts.length} accounts accepted.`);
+            console.log(`Non-redeeming authentication and gift-list access: ${authenticated}/${accounts.length} accounts accepted.`);
             if (authenticated !== accounts.length) {
               console.error('::error::One or more preserved accounts failed authentication.');
               process.exitCode = 1;

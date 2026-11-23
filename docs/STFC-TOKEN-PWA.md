@@ -107,30 +107,40 @@ account identity; enter login credentials and OTP only in the official browser.
 
 ### Recovery without a complete account backup
 
-After explicit approval to create the encrypted `STFC_ACCOUNT_REFRESH`
-override secret, run `node scripts/refresh-account.mjs --publish` in a private
-interactive terminal. Enter credentials and the OTP only in the visible official
-STFC browser. The helper checks `/auth/me` and pipes the fresh credential directly
-to `gh secret set`; it does not read `.env`, print the token, or rewrite
-`STFC_ACCOUNTS`. Its GitHub CLI account needs repository Actions-secret write
-access; the existing refresh PAT is not read or reused.
+The reviewed recovery workflow references a separate one-time secret named
+`STFC_ACCOUNT_REFRESH_61690F065F04521CBA2CAE742A6BEC0DB2606A8E38A2FF74AEA5E1CB58D4E854`.
+After independent review, integration, and explicit approval for that name,
+`node scripts/refresh-account.mjs --publish` can create it from a private
+interactive terminal. Enter credentials and the OTP only in the official browser.
+The helper checks `/auth/me` and the non-redeeming gift list and pipes the token
+to `gh secret set`; it does not read `.env`, print the token, or alter the
+baseline or existing override. `--verify-only` checks a login without saving it.
+
+The name was randomly generated with 256 bits of entropy; independent accidental
+collisions are extremely unlikely, not impossible. GitHub does not provide
+create-only or compare-and-swap secret updates. The helper checks the name before
+and after login but cannot prevent another writer from creating or replacing it
+between the final check and write. The name is visible in the repository. Use
+this procedure only if the user approves the operational assumption that no other
+writer will use this exact name; it is not protection against a malicious writer.
+An isolated conditional-write credential store provides stronger protection; the
+existing Azure token store must first be available and its use authorized.
 
 Both legacy redemption and the manual **Check recovery authentication** workflow
 verify the fresh token's live `/auth/me` account identity and require exactly one
 matching `accountId` claim in the existing inventory. Missing claims, ambiguity,
-mismatch, invalid data, or failed authentication stop the operation. Existing
+mismatch, duplicate identities across overrides, invalid data, or failed authentication stop the operation. Existing
 JWT claims are used only to match the trusted secret inventory, not as proof of
 live authentication. Tokens whose claims use a different identity field are
 unsupported and must not be guessed. All other accounts are preserved.
 
 The merge exists only in the workflow's snapshot: the baseline secret is never
 overwritten, so concurrent baseline updates are not lost. The shared workflow
-lock serializes recovery checks and redemption; GitHub does not offer
-compare-and-swap secret updates, so only one operator may publish an override at
-a time. Do not concurrently refresh multiple accounts: the helper refuses to
-replace an existing override and checks again after login. Retain it until that credential is
+lock serializes recovery checks and redemption, but does not lock secret writers.
+Retain an existing override until that credential is
 safely incorporated into the canonical store. Deleting it earlier reactivates
-the baseline credential. These workflows must be integrated through the
+the baseline credential. Retain the new override by the same rule; future
+refreshes need a newly reviewed name and must not overwrite it. These workflows must be integrated through the
 authorized repository process before dispatch; running the auth check does not
 authorize live redemption.
 
