@@ -140,6 +140,32 @@ implementation.
 
 ---
 
+## Product versioning and release approval
+
+The authoritative product policy is in [docs/VERSIONING.md](docs/VERSIONING.md).
+The root `package.json` version is currently `0.1.0` and stays there until
+verified STFC MVP acceptance and **separate explicit owner approval** for a
+new product version. Do not bump versions based only on a merged PR, an
+issue's completion marker, a green check or a draft deployment.
+
+Follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html) for
+approved releases: `MAJOR.MINOR.PATCH`, `vMAJOR.MINOR.PATCH` tags,
+and [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
+entries. Normal changes go under `[Unreleased]`. When a version change is
+explicitly approved, use a dedicated reviewed PR updating the **root**
+`package.json`, both root version entries in `package-lock.json`, and the
+changelog; keep independent subpackage versions and `.nvmrc` unchanged unless
+there is a separate technical reason. Do not rewrite historical tags: both
+`v1.0.0` and `v0.1.0` exist, and the latter is the current product baseline.
+
+The `Release` GitHub Actions workflow is manually dispatched on reviewed
+`main` with the exact owner-approved version. Merely merging a docs PR must
+not create a tag or GitHub Release. Release dispatch, production deployment,
+issue closure and merge remain separate explicitly approved actions. Draft
+PRs are not eligible for automatic squash merge.
+
+---
+
 ## Review and CI
 
 Review changes for correctness, security, and coverage of the documented
