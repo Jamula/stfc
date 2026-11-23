@@ -64,8 +64,8 @@ on 2026-06-26 and later explicitly reset the current root product version to
 [`v0.1.0`](https://github.com/Jamula/stfc/releases/tag/v0.1.0) on
 2026-11-08. This is an acknowledged historical out-of-order release, **not**
 a claim that SemVer normally allows decreasing a released version.
-Keep both immutable historical records as they exist; do not delete, rename
-or rewrite either without a separate express owner decision. Treat root
+Preserve both historical records as they exist; do not delete, rename or
+rewrite either without a separate express owner decision. Treat root
 `0.1.0` as the **current agreed product baseline**; discuss any proposed
 future version against the full published-tag history before approval.
 
