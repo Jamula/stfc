@@ -35,6 +35,18 @@ function between(content: string, start: string, end: string): string {
 }
 
 describe("native Squad configuration", () => {
+  it("keeps installed error recovery aligned with the state-backend safety contract", () => {
+    const installed = read(".github", "skills", "error-recovery", "SKILL.md");
+    const template = read(".squad", "templates", "skills", "error-recovery", "SKILL.md");
+    assert.equal(installed, template);
+
+    const fallback = between(installed, "## 2. Fallback Alternatives", "## 3. Diagnose-and-Fix");
+    assert.match(fallback, /never bypass security, permissions, spending controls, or required approvals/i);
+    assert.match(fallback, /two-layer.*never fall back to direct file or Git operations/is);
+    assert.match(fallback, /halt state mutations.*verified bridge.*unavailable/is);
+    assert.match(fallback, /uncertain writes.*verify the outcome\s+before retrying/is);
+  });
+
   it("uses the requested two-layer backend and state bridge", () => {
     const config = JSON.parse(read(".squad", "config.json")) as {
       stateBackend: string;
