@@ -829,6 +829,24 @@ operational assumptions; their state is not represented by this source tree.
 
 ---
 
+### 5.5 Product version and release publishing
+
+Product versioning is governed by [`docs/VERSIONING.md`](VERSIONING.md).
+The root `package.json` and root lockfile declare the `0.1.0` product
+baseline; subpackage versions and `.nvmrc` describe separate components
+and toolchains. Changes are tracked in `CHANGELOG.md` under `[Unreleased]`
+until MVP acceptance and a separate owner-approved release decision.
+
+The `.github/workflows/release.yml` pipeline is **manual dispatch only**:
+reviewed `main` plus an exact approved version input, independent build/tests,
+root metadata/lockfile/changelog validation, and a `v<version>` tag and GitHub
+Release only if that tag does not already exist. The workflow does not approve
+its own invocation, and any release or production deployment remains a
+separately authorized action. Historical `v1.0.0` predates the agreed
+`v0.1.0` product baseline and is preserved, not silently reinterpreted.
+
+---
+
 ## 6. Reference index
 
 | Look up | Where |
