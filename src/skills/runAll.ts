@@ -36,7 +36,7 @@ import {
 import { PromoCodesFileError, readPromoCodes } from "../lib/promoCodes.ts";
 import { redactForLog } from "../lib/redact.ts";
 import { heading, table, type SummaryWriter } from "../lib/summary.ts";
-import { ApiClient, ApiError, SchemaMismatchError, TokenExpiredError, TransientError } from "../api/client.ts";
+import { AmbiguousResponseError, ApiClient, ApiError, SchemaMismatchError, TokenExpiredError, TransientError } from "../api/client.ts";
 import { claimGift, getMe, listGifts, redeemCode } from "../api/endpoints.ts";
 import type { Gift } from "../api/schemas.ts";
 
@@ -416,6 +416,12 @@ async function processOneGift(
     await claimGift(client, bundleId);
     return { ...itemIdentity, outcome: Outcomes.CLAIMED };
   } catch (err) {
+    if (err instanceof AmbiguousResponseError) {
+      const detail = redactForLog(err);
+      log.error(`[${accountName}] gifts/claim response ambiguous: ${detail}`);
+      report.errors.push({ account: accountName, message: `gifts/claim response ambiguous: ${detail}` });
+      return { ...itemIdentity, outcome: Outcomes.UNKNOWN_RESULT, detail };
+    }
     if (err instanceof SchemaMismatchError) {
       report.errors.push({ account: accountName, message: `gifts/claim schema mismatch: ${redactForLog(err)}` });
       return { ...itemIdentity, outcome: Outcomes.UNKNOWN_RESULT, detail: "schema mismatch" };
@@ -490,6 +496,12 @@ async function processOneCode(
         detail: res.message ?? (resultCode !== undefined ? `redeem_result=${resultCode}` : undefined),
       };
     } catch (err) {
+      if (err instanceof AmbiguousResponseError) {
+        const detail = redactForLog(err);
+        log.error(`[${accountName}] redeem/claim response ambiguous: ${detail}`);
+        report.errors.push({ account: accountName, message: `redeem/claim response ambiguous: ${detail}` });
+        return { code, outcome: Outcomes.UNKNOWN_RESULT, detail };
+      }
       if (err instanceof SchemaMismatchError) {
         report.errors.push({ account: accountName, message: `redeem/claim schema mismatch: ${redactForLog(err)}` });
         return { code, outcome: Outcomes.UNKNOWN_RESULT, detail: "schema mismatch" };
