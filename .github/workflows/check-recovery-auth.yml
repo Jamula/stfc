@@ -36,12 +36,14 @@ jobs:
             const keys = ['AZURE_CLIENT_ID', 'AZURE_TENANT_ID', 'AZURE_SUBSCRIPTION_ID',
               'AZURE_TOKEN_STORAGE_ACCOUNT', 'AZURE_TOKEN_CONTAINER', 'AZURE_TOKEN_BLOB'];
             if (keys.some(key => vars[key]?.trim())) throw new Error();
+            if (!process.env.STFC_ACCOUNT_REFRESH_RECOVERY?.trim()) {
+              console.error('::error::Required fresh recovery override is missing; no recovery validation was performed.');
+              process.exit(1);
+            }
             let accounts = JSON.parse(process.env.STFC_ACCOUNTS ?? '');
             if (!isTokenAccounts(accounts)) throw new Error();
             const overrides = [process.env.STFC_ACCOUNT_REFRESH, process.env.STFC_ACCOUNT_REFRESH_RECOVERY].filter(Boolean);
-            if (overrides.length) {
-              accounts = await mergeRefreshedAccounts(process.env.STFC_ACCOUNTS, overrides);
-            }
+            accounts = await mergeRefreshedAccounts(process.env.STFC_ACCOUNTS, overrides);
             let authenticated = 0;
             for (const account of accounts) {
               try {

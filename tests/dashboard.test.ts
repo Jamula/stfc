@@ -524,6 +524,8 @@ describe("dashboard data source loading", () => {
   });
 
   it("filters Actions requests by workflow, applies the requested limit, and retains cron no-op runs", async () => {
+    assert.match(await readFile(resolve(".github/workflows/redeem.yml"), "utf8"), /schedule:/,
+      "the redeem workflow must remain scheduled");
     await withMockFetch(url => {
       if (url.endsWith("/contents/data/runs?ref=main")) return new Response(null, { status: 404 });
       if (url.endsWith("/actions/workflows/redeem.yml/runs?per_page=20")) {

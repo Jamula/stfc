@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { mergeRefreshedAccount, mergeRefreshedAccounts } from "../../scripts/refresh-account.mjs";
+import { mergeRefreshedAccount, mergeRefreshedAccounts, runGithubSecretCommand, verifyGiftAccess } from "../../scripts/refresh-account.mjs";
 import { mkdtempSync, readFileSync, rmSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -17,8 +17,10 @@ const original = [
 ];
 const reply: typeof fetch = async (_url, options) => {
   assert.equal(_url, "https://cdn-nv3-webstore-api.startrek.digitgaming.com/api/v2/auth/me");
-  assert.equal(options?.redirect, "error");
-  return new Response('{"payload":{"accountId":"one"}}', { status: 200 });
+  assert.match((options?.headers as Record<string, string>).Authorization ?? "", /^Bearer header\./);
+  return new Response('{"payload":{"accountId":"one"}}', {
+    status: 200, headers: { "content-type": "application/json" },
+  });
 };
 
 describe("manual refresh inventory safety", () => {
@@ -47,7 +49,7 @@ describe("manual refresh inventory safety", () => {
       '{"payload":{}}',
     ]) {
       await assert.rejects(mergeRefreshedAccount(JSON.stringify(original), JSON.stringify({ token: fresh }),
-        async () => new Response(body)));
+        async () => new Response(body, { headers: { "content-type": "application/json" } })));
     }
     await assert.rejects(mergeRefreshedAccount(JSON.stringify(original), JSON.stringify({ token: fresh }),
       async () => { throw new Error(fresh); }), /inventory was not changed/);
@@ -61,7 +63,9 @@ describe("manual refresh inventory safety", () => {
     const identify: typeof fetch = async (_url, options) => {
       const credential = String((options?.headers as Record<string, string>).Authorization).slice(7);
       const id = JSON.parse(Buffer.from(credential.split(".")[1]!, "base64url").toString()).accountId;
-      return new Response(JSON.stringify({ payload: { accountId: id } }));
+      return new Response(JSON.stringify({ payload: { accountId: id } }), {
+        headers: { "content-type": "application/json" },
+      });
     };
     const one = JSON.stringify({ token: updatedOne });
     const two = JSON.stringify({ token: updatedTwo });
@@ -69,6 +73,45 @@ describe("manual refresh inventory safety", () => {
       { name: "main", token: updatedOne }, { name: "alt", token: updatedTwo },
     ]);
     await assert.rejects(mergeRefreshedAccounts(JSON.stringify(original), [one, one], identify), /inventory was not changed/);
+  });
+
+  it("uses the production gift-list response contract for refresh validation", async () => {
+    for (const body of [
+      "[]",
+      '{"items":[{"bundle_id":7,"title":"gift"}]}',
+      '{"data":[]}',
+      '{"gifts":[]}',
+    ]) {
+      await verifyGiftAccess(fresh, async () => new Response(body, {
+        headers: { "content-type": "application/json" },
+      }));
+    }
+
+    for (const response of [
+      new Response("<html></html>", { headers: { "content-type": "text/html" } }),
+      new Response("{", { headers: { "content-type": "application/json" } }),
+      new Response("{}", { headers: { "content-type": "application/json" } }),
+      new Response('{"items":[null]}', { headers: { "content-type": "application/json" } }),
+    ]) {
+      await assert.rejects(verifyGiftAccess(fresh, async () => response.clone()));
+    }
+  });
+
+  it("pins GitHub secret commands to github.com regardless of GH_HOST", () => {
+    for (const args of [
+      ["secret", "list", "--json", "name"],
+      ["secret", "set", "STFC_ACCOUNT_REFRESH_TEST"],
+    ]) {
+      let actual: { command: string; args: string[]; options: { env?: NodeJS.ProcessEnv } } | undefined;
+      const result = runGithubSecretCommand(args, {}, (command, childArgs, options) => {
+        actual = { command, args: childArgs, options };
+        return { status: 0, stdout: "[]", stderr: "" };
+      });
+      assert.equal(result.status, 0);
+      assert.equal(actual?.command, "gh");
+      assert.deepEqual(actual?.args, [...args, "--repo", "github.com/Jamula/stfc"]);
+      assert.equal(actual?.options.env?.GH_HOST, "github.com");
+    }
   });
 
   it("keeps recovery verification manual, read-only, and on the shared queue", () => {
@@ -91,68 +134,95 @@ describe("manual refresh inventory safety", () => {
     for (const [giftStatus, expectedStatus] of [[401, 1], [200, 0]] as const) {
       const stub = `globalThis.fetch = async (url, opts) => {
         if (opts.headers.Authorization !== ${JSON.stringify(`Bearer ${fresh}`)}) throw new Error("wrong token");
-        if (url.endsWith("/auth/me")) return new Response('{"payload":{"accountId":"one"}}');
-        if (url.endsWith("/offers/gifts?available=true")) return new Response("{}", {status: ${giftStatus}});
+        if (url.endsWith("/auth/me")) return new Response('{"payload":{"accountId":"one"}}', {
+          headers: {"content-type": "application/json"}
+        });
+        if (url.endsWith("/offers/gifts?available=true")) return new Response("[]", {
+          status: ${giftStatus}, headers: {"content-type": "application/json"}
+        });
         throw new Error("unexpected endpoint");
       };`;
       const result: { status: number | null; stdout: string; stderr: string } = spawnSync(process.execPath, ["--input-type=module", "-e", `${stub}\n${script}`], {
         encoding: "utf8",
-        env: { ...process.env, STFC_ACCOUNTS: JSON.stringify([original[0]]), STFC_ACCOUNT_REFRESH: "", STFC_ACCOUNT_REFRESH_RECOVERY: "", REPOSITORY_VARIABLES: "{}" },
+        env: {
+          ...process.env, STFC_ACCOUNTS: JSON.stringify([original[0]]), STFC_ACCOUNT_REFRESH: "",
+          STFC_ACCOUNT_REFRESH_RECOVERY: JSON.stringify({ token: fresh }), REPOSITORY_VARIABLES: "{}",
+        },
       });
       assert.equal(result.status, expectedStatus, result.stderr);
       assert.match(result.stdout, giftStatus === 401 ? /0\/1 accounts accepted/ : /1\/1 accounts accepted/);
     }
   });
 
-  it("applies both overrides in each workflow and refuses duplicate identities", () => {
+  it("fails recovery verification when the required fresh override is absent", () => {
+    const workflow = parse(readFileSync(".github/workflows/check-recovery-auth.yml", "utf8"));
+    const run: string = workflow.jobs.check.steps.at(-1).run;
+    const script = run.match(/node --input-type=module <<'NODE'\r?\n([\s\S]*?)\r?\nNODE/)?.[1];
+    assert.ok(script);
+    const stub = `globalThis.fetch = async () => new Response('{"payload":{"accountId":"one"}}', {
+      headers: {"content-type": "application/json"}
+    });`;
+    const result = spawnSync(process.execPath, ["--input-type=module", "-e", `${stub}\n${script}`], {
+      encoding: "utf8",
+      env: {
+        ...process.env, STFC_ACCOUNTS: JSON.stringify([original[0]]), STFC_ACCOUNT_REFRESH: "",
+        STFC_ACCOUNT_REFRESH_RECOVERY: "", REPOSITORY_VARIABLES: "{}",
+      },
+    });
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /Required fresh recovery override is missing/);
+  });
+
+  it("keeps scheduled redemption on the preserved inventory when overrides fail validation", () => {
     const updatedOne = token("one") + "new";
     const updatedTwo = token("two") + "new";
     const stub = `globalThis.fetch = async (url, opts) => {
       if (url.endsWith("/auth/me")) {
         const token = opts.headers.Authorization.slice(7);
         const accountId = JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString()).accountId;
-        return new Response(JSON.stringify({payload: {accountId}}));
+        return new Response(JSON.stringify({payload: {accountId}}), {
+          headers: {"content-type": "application/json"}
+        });
       }
-      if (url.endsWith("/offers/gifts?available=true")) return new Response("{}");
+      if (url.endsWith("/offers/gifts?available=true")) return new Response("[]", {
+        headers: {"content-type": "application/json"}
+      });
       throw new Error("unexpected endpoint");
     };`;
-    for (const [file, job, stepName] of [
-      [".github/workflows/redeem.yml", "redeem", "Load legacy account tokens"],
-      [".github/workflows/check-recovery-auth.yml", "check", "Verify legacy inventory and refresh without redemption"],
-    ] as const) {
-      const workflow = parse(readFileSync(file, "utf8"));
-      const step = workflow.jobs[job].steps.find((item: { name?: string }) => item.name === stepName);
-      const script = step.run.match(/node --input-type=module <<'NODE'\r?\n([\s\S]*?)\r?\nNODE/)?.[1];
-      assert.ok(script, file);
-      const directory = mkdtempSync(join(tmpdir(), "stfc-override-test-"));
-      const output = join(directory, "stfc-accounts.json");
-      try {
-        for (const duplicate of [false, true]) {
-          const result = spawnSync(process.execPath, ["--input-type=module", "-e", `${stub}\n${script}`], {
-            encoding: "utf8",
-            env: {
-              ...process.env, RUNNER_TEMP: directory, REPOSITORY_VARIABLES: "{}",
-              STFC_ACCOUNTS: JSON.stringify(original), STFC_ACCOUNT_REFRESH: JSON.stringify({ token: updatedOne }),
-              STFC_ACCOUNT_REFRESH_RECOVERY: JSON.stringify({ token: duplicate ? updatedOne : updatedTwo }),
-            },
-          });
-          assert.equal(result.status, duplicate ? 1 : 0, `${file}: ${result.stderr}`);
-          if (job === "redeem") {
-            assert.equal(existsSync(output), !duplicate);
-            if (!duplicate) {
-              assert.deepEqual(JSON.parse(readFileSync(output, "utf8")), [
-                { name: "main", token: updatedOne }, { name: "alt", token: updatedTwo },
-              ]);
-              rmSync(output);
-            }
-          } else {
-            assert.match(duplicate ? result.stderr : result.stdout,
-              duplicate ? /could not be verified/ : /2\/2 accounts accepted/);
-          }
+    const workflow = parse(readFileSync(".github/workflows/redeem.yml", "utf8"));
+    const step = workflow.jobs.redeem.steps.find((item: { name?: string }) => item.name === "Load legacy account tokens");
+    const script = step.run.match(/node --input-type=module <<'NODE'\r?\n([\s\S]*?)\r?\nNODE/)?.[1];
+    assert.ok(script);
+    const directory = mkdtempSync(join(tmpdir(), "stfc-override-test-"));
+    const output = join(directory, "stfc-accounts.json");
+    const summary = join(directory, "summary.md");
+    try {
+      for (const mode of ["valid", "duplicate", "mismatched"] as const) {
+        const recovery = mode === "valid" ? updatedTwo : mode === "duplicate" ? updatedOne : token("unmatched") + "new";
+        const result = spawnSync(process.execPath, ["--input-type=module", "-e", `${stub}\n${script}`], {
+          encoding: "utf8",
+          env: {
+            ...process.env, RUNNER_TEMP: directory, GITHUB_STEP_SUMMARY: summary, REPOSITORY_VARIABLES: "{}",
+            STFC_ACCOUNTS: JSON.stringify(original), STFC_ACCOUNT_REFRESH: JSON.stringify({ token: updatedOne }),
+            STFC_ACCOUNT_REFRESH_RECOVERY: JSON.stringify({ token: recovery }),
+          },
+        });
+        assert.equal(result.status, 0, result.stderr);
+        assert.equal(existsSync(output), true);
+        if (mode === "valid") {
+          assert.deepEqual(JSON.parse(readFileSync(output, "utf8")), [
+            { name: "main", token: updatedOne }, { name: "alt", token: updatedTwo },
+          ]);
+        } else {
+          assert.deepEqual(JSON.parse(readFileSync(output, "utf8")), original);
+          assert.match(result.stderr, /Refresh override was not applied/);
+          assert.match(readFileSync(summary, "utf8"), /preserved `STFC_ACCOUNTS` inventory remains in use/);
         }
-      } finally {
-        rmSync(directory, { recursive: true, force: true });
+        rmSync(output);
+        rmSync(summary, { force: true });
       }
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
     }
   });
 

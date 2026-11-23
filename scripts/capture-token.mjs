@@ -142,7 +142,28 @@ function humanDelta(seconds) {
 // Network capture.
 // ----------------------------------------------------------------------------
 
-async function captureToken({ context, timeoutMs, closeAfterCapture, signal }) {
+async function drainPendingResponses(pending, timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  const quietMs = 100;
+  let quietSince = Date.now();
+  while (Date.now() < deadline) {
+    if (pending.size > 0) {
+      quietSince = null;
+      const jobs = [...pending];
+      await Promise.race([
+        Promise.allSettled(jobs),
+        new Promise((resolve) => setTimeout(resolve, Math.min(25, deadline - Date.now()))),
+      ]);
+      continue;
+    }
+    if (quietSince === null) quietSince = Date.now();
+    if (Date.now() - quietSince >= quietMs) return true;
+    await new Promise((resolve) => setTimeout(resolve, Math.min(20, deadline - Date.now())));
+  }
+  return false;
+}
+
+async function captureToken({ context, timeoutMs, closeAfterCapture, signal, responseDrainTimeoutMs = 5000 }) {
   let resolve;
   const captured = new Promise((r) => { resolve = r; });
   let first = null, changed = false, ambiguous = false;
@@ -201,8 +222,8 @@ async function captureToken({ context, timeoutMs, closeAfterCapture, signal }) {
   try {
     const result = await Promise.race([captured, timeout, aborted]);
     if (result.token && closeAfterCapture) {
+      if (!await drainPendingResponses(pending, responseDrainTimeoutMs)) ambiguous = true;
       await closeAfterCapture();
-      await Promise.all([...pending]);
       if (changed || ambiguous) throw new Error("Capture was ambiguous or the browser token changed; no update was written.");
     }
     return result;

@@ -5,10 +5,12 @@ import { captureToken } from './capture-token.mjs';
 import { parseDocument } from 'yaml';
 import { isTokenAccounts } from '../shared/token-account-schema.mjs';
 import { createInterface } from 'node:readline/promises';
+import { ApiClient } from '../src/api/client.ts';
+import { AuthMeResponseSchema } from '../src/api/schemas.ts';
 
 const API = 'https://cdn-nv3-webstore-api.startrek.digitgaming.com/api/v2/auth/me';
-const GIFTS_API = 'https://cdn-nv3-webstore-api.startrek.digitgaming.com/api/v2/offers/gifts?available=true';
 const REFRESH_SECRET = 'STFC_ACCOUNT_REFRESH_61690F065F04521CBA2CAE742A6BEC0DB2606A8E38A2FF74AEA5E1CB58D4E854';
+const GITHUB_REPO = 'github.com/Jamula/stfc';
 
 function identifier(value) {
   if (typeof value === 'bigint' && value >= 0n) return String(value);
@@ -28,18 +30,24 @@ export async function verifiedIdentity(token, fetchImpl = fetch) {
     headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
     redirect: 'error', signal: AbortSignal.timeout(15000),
   });
-  if (response.status !== 200 || response.redirected) throw new Error('Authentication rejected.');
-  const id = identifier(document(await response.text())?.payload?.accountId);
+  if (response.status !== 200 || response.redirected || !/json/i.test(response.headers.get('content-type') ?? '')) {
+    throw new Error('Authentication rejected.');
+  }
+  const identity = AuthMeResponseSchema.parse(document(await response.text()));
+  const id = identifier(identity?.payload?.accountId);
   if (!id) throw new Error('Verified account identity is unavailable.');
   return id;
 }
 
 export async function verifyGiftAccess(token, fetchImpl = fetch) {
-  const response = await fetchImpl(GIFTS_API, {
-    headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
-    redirect: 'error', signal: AbortSignal.timeout(15000),
+  await new ApiClient({ token, fetchImpl }).listGifts();
+}
+
+export function runGithubSecretCommand(args, options = {}, run = spawnSync) {
+  return run('gh', [...args, '--repo', GITHUB_REPO], {
+    ...options,
+    env: { ...process.env, ...options.env, GH_HOST: 'github.com' },
   });
-  if (response.status !== 200 || response.redirected) throw new Error('Gift-list authentication rejected.');
 }
 
 export async function mergeRefreshedAccount(raw, refreshed, fetchImpl = fetch) {
@@ -122,7 +130,7 @@ async function main() {
     await verifyGiftAccess(token);
     if (process.argv[2] === '--publish') {
       assertSecretAbsent();
-      const result = spawnSync('gh', ['secret', 'set', REFRESH_SECRET, '--repo', 'Jamula/stfc'], {
+      const result = runGithubSecretCommand(['secret', 'set', REFRESH_SECRET], {
         input: JSON.stringify({ token }), stdio: ['pipe', 'ignore', 'ignore'],
       });
       if (result.status !== 0) throw new Error('Encrypted override update failed.');
@@ -136,7 +144,7 @@ async function main() {
 }
 
 function assertSecretAbsent() {
-  const result = spawnSync('gh', ['secret', 'list', '--repo', 'Jamula/stfc', '--json', 'name'], { encoding: 'utf8' });
+  const result = runGithubSecretCommand(['secret', 'list', '--json', 'name'], { encoding: 'utf8' });
   if (result.status !== 0) throw new Error('Cannot verify secret names.');
   const secrets = JSON.parse(result.stdout);
   if (!Array.isArray(secrets) || secrets.some(secret => !secret || typeof secret.name !== 'string' || secret.name === REFRESH_SECRET)) {

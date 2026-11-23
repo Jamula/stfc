@@ -177,7 +177,7 @@ jobs:
           STFC_ACCOUNT_REFRESH_RECOVERY: ${{ secrets.STFC_ACCOUNT_REFRESH_61690F065F04521CBA2CAE742A6BEC0DB2606A8E38A2FF74AEA5E1CB58D4E854 }}
         run: |
           node --input-type=module <<'NODE'
-          import { writeFileSync } from 'node:fs';
+          import { appendFileSync, writeFileSync } from 'node:fs';
           import { join } from 'node:path';
           import { isTokenAccounts } from './shared/token-account-schema.mjs';
           import { mergeRefreshedAccounts } from './scripts/refresh-account.mjs';
@@ -195,10 +195,14 @@ jobs:
           const overrides = [process.env.STFC_ACCOUNT_REFRESH, process.env.STFC_ACCOUNT_REFRESH_RECOVERY].filter(Boolean);
           if (overrides.length) {
             try {
+              // Validate and apply the exact same secret snapshot before writing the runner inventory.
               accounts = await mergeRefreshedAccounts(process.env.STFC_ACCOUNTS, overrides);
             } catch {
-              console.error('::error::Refresh override identity could not be matched; no redemption attempted.');
-              process.exit(1);
+              console.warn('::warning::Refresh override was not applied; continuing with the preserved STFC_ACCOUNTS inventory.');
+              if (process.env.GITHUB_STEP_SUMMARY) {
+                appendFileSync(process.env.GITHUB_STEP_SUMMARY,
+                  '### Account refresh override not applied\nIdentity or uniqueness verification failed. The preserved `STFC_ACCOUNTS` inventory remains in use.\n');
+              }
             }
           }
           writeFileSync(join(process.env.RUNNER_TEMP, 'stfc-accounts.json'),

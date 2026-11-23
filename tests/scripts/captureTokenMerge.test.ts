@@ -334,15 +334,61 @@ describe("mergeIntoEnv error redaction (issue #211)", () => {
     for (const event of ["changed", "ambiguous"]) {
       const context = new EventEmitter();
       const request = (token: string) => ({ url: () => "https://cdn-nv3-webstore-api.startrek.digitgaming.com/api/v2/test", headers: () => ({ authorization: `Bearer ${token}` }) });
-      const capture = captureToken({ context, timeoutMs: 30000, closeAfterCapture: async () => {
-        if (event === "changed") context.emit("request", request("different.token.value"));
-        else context.emit("response", { url: () => "https://cdn-nv3-webstore-api.startrek.digitgaming.com/api/v2/auth/login", request: () => ({ method: () => "POST" }), status: () => 200, json: async () => { throw new Error("unreadable"); } });
-      } });
+      const capture = captureToken({ context, timeoutMs: 30000, closeAfterCapture: async () => {} });
       context.emit("request", request("first.token.value"));
+      if (event === "changed") context.emit("request", request("different.token.value"));
+      else context.emit("response", {
+        url: () => "https://cdn-nv3-webstore-api.startrek.digitgaming.com/api/v2/auth/login",
+        request: () => ({ method: () => "POST" }), status: () => 200,
+        json: async () => { throw new Error("unreadable"); },
+      });
       await assert.rejects(capture, /ambiguous or the browser token changed/);
       assert.equal(context.listenerCount("request"), 0);
       assert.equal(context.listenerCount("response"), 0);
     }
+  });
+
+  it("drains login response reads before closing and fails closed on a drain timeout", async () => {
+    const context = new EventEmitter();
+    let resolveBody!: (body: { accessToken: string }) => void;
+    let closed = false;
+    const capture = captureToken({
+      context, timeoutMs: 30_000, responseDrainTimeoutMs: 1000,
+      closeAfterCapture: async () => { closed = true; },
+    });
+    const token = "first.token.value";
+    context.emit("request", {
+      url: () => "https://cdn-nv3-webstore-api.startrek.digitgaming.com/api/v2/test",
+      headers: () => ({ authorization: `Bearer ${token}` }),
+    });
+    context.emit("response", {
+      url: () => "https://cdn-nv3-webstore-api.startrek.digitgaming.com/api/v2/auth/login",
+      request: () => ({ method: () => "POST" }), status: () => 200,
+      json: () => new Promise<{ accessToken: string }>((resolve) => { resolveBody = resolve; }),
+    });
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(closed, false, "browser must remain open while the login response is unread");
+    resolveBody({ accessToken: token });
+    assert.deepEqual(await capture, { token, source: "request header" });
+    assert.equal(closed, true);
+
+    const timedOutContext = new EventEmitter();
+    let timeoutClosed = false;
+    const timedOut = captureToken({
+      context: timedOutContext, timeoutMs: 30_000, responseDrainTimeoutMs: 10,
+      closeAfterCapture: async () => { timeoutClosed = true; },
+    });
+    timedOutContext.emit("request", {
+      url: () => "https://cdn-nv3-webstore-api.startrek.digitgaming.com/api/v2/test",
+      headers: () => ({ authorization: `Bearer ${token}` }),
+    });
+    timedOutContext.emit("response", {
+      url: () => "https://cdn-nv3-webstore-api.startrek.digitgaming.com/api/v2/auth/login",
+      request: () => ({ method: () => "POST" }), status: () => 200,
+      json: () => new Promise(() => {}),
+    });
+    await assert.rejects(timedOut, /ambiguous or the browser token changed/);
+    assert.equal(timeoutClosed, true);
   });
 
   it("detects mutations removing the identity comparison and token-change gates", () => {

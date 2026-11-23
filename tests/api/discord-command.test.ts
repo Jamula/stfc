@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import type { HttpRequest, InvocationContext } from "../../api/node_modules/@azure/functions/types/index.js";
 import { handler } from "../../api/src/discord-command/index.ts";
 
@@ -104,6 +105,8 @@ describe("Discord PWA trigger-redeem handler", () => {
   });
 
   it("dispatches the fixed redeem workflow and returns its success payload", async () => {
+    assert.match(readFileSync(".github/workflows/redeem.yml", "utf8"), /workflow_dispatch:/,
+      "the fixed dispatch target must remain manually triggerable");
     process.env["PWA_GITHUB_DISPATCH_TOKEN"] = TEST_TOKEN;
     globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
       fetchCalls.push({ input, init });

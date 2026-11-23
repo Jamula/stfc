@@ -178,6 +178,15 @@ const scheduled = [
 ] as const;
 
 describe("automation-state scheduled workflow contract", () => {
+  it("requires the fresh secret for recovery checks and validates it on the shared queue", () => {
+    const recoverySource = readFileSync(path.join(WORKFLOW_DIR, "check-recovery-auth.yml"), "utf8");
+    const recovery = parse(recoverySource) as Workflow & { concurrency: Concurrency };
+    const check = namedStep(recovery, "Verify legacy inventory and refresh without redemption");
+    assert.equal(recovery.concurrency.group, SHARED_WRITER_GROUP);
+    assert.match(check.run ?? "", /Required fresh recovery override is missing/);
+    assert.match(check.run ?? "", /mergeRefreshedAccounts/);
+  });
+
   it("reads account tokens from private Blob Storage through OIDC with a bounded redeem-only legacy fallback", () => {
     for (const [label, workflow] of [
       ["redeem.yml", redeem],
