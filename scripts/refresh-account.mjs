@@ -7,6 +7,8 @@ import { isTokenAccounts } from '../shared/token-account-schema.mjs';
 import { createInterface } from 'node:readline/promises';
 
 const API = 'https://cdn-nv3-webstore-api.startrek.digitgaming.com/api/v2/auth/me';
+const GIFTS_API = 'https://cdn-nv3-webstore-api.startrek.digitgaming.com/api/v2/offers/gifts?available=true';
+const REFRESH_SECRET = 'STFC_ACCOUNT_REFRESH_61690F065F04521CBA2CAE742A6BEC0DB2606A8E38A2FF74AEA5E1CB58D4E854';
 
 function identifier(value) {
   if (typeof value === 'bigint' && value >= 0n) return String(value);
@@ -32,70 +34,61 @@ export async function verifiedIdentity(token, fetchImpl = fetch) {
   return id;
 }
 
+export async function verifyGiftAccess(token, fetchImpl = fetch) {
+  const response = await fetchImpl(GIFTS_API, {
+    headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
+    redirect: 'error', signal: AbortSignal.timeout(15000),
+  });
+  if (response.status !== 200 || response.redirected) throw new Error('Gift-list authentication rejected.');
+}
+
 export async function mergeRefreshedAccount(raw, refreshed, fetchImpl = fetch) {
-  let accounts, candidate;
+  return mergeRefreshedAccounts(raw, [refreshed], fetchImpl);
+}
+
+export async function mergeRefreshedAccounts(raw, overrides, fetchImpl = fetch) {
   try {
-    accounts = JSON.parse(raw);
-    candidate = JSON.parse(refreshed);
-    if (!isTokenAccounts(accounts) || !isTokenAccounts([{ name: 'candidate', token: candidate?.token }])) {
-      throw new Error();
-    }
-    const id = await verifiedIdentity(candidate.token, fetchImpl);
-    const matches = accounts.filter(account => {
+    const accounts = JSON.parse(raw);
+    if (!isTokenAccounts(accounts)) throw new Error();
+    const ids = accounts.map(account => {
       const payload = document(Buffer.from(account.token.split('.')[1], 'base64url').toString('utf8'));
-      const existingId = identifier(payload?.accountId);
-      if (!existingId) throw new Error();
-      return existingId === id;
+      const id = identifier(payload?.accountId);
+      if (!id) throw new Error();
+      return id;
     });
-    if (matches.length !== 1) throw new Error();
-    return accounts.map(account => account === matches[0] ? { ...account, token: candidate.token } : account);
+    if (new Set(ids).size !== ids.length) throw new Error();
+    const replacements = new Map();
+    for (const refreshed of overrides) {
+      const candidate = JSON.parse(refreshed);
+      if (!isTokenAccounts([{ name: 'candidate', token: candidate?.token }])) throw new Error();
+      const id = await verifiedIdentity(candidate.token, fetchImpl);
+      if (!ids.includes(id) || replacements.has(id)) throw new Error();
+      replacements.set(id, candidate.token);
+    }
+    return accounts.map((account, index) => replacements.has(ids[index])
+      ? { ...account, token: replacements.get(ids[index]) } : account);
   } catch {
     throw new Error('Account refresh identity is missing, ambiguous, mismatched, or unverifiable; inventory was not changed.');
   }
 }
 
-async function main() {
-  if (process.argv[2] !== '--publish' || !process.stdin.isTTY || !process.stdout.isTTY) {
-    throw new Error('Run in a private interactive terminal with --publish only after override-secret approval.');
-  }
-  const terminal = createInterface({ input: process.stdin, output: process.stdout });
-  try {
-    if ((await terminal.question('Type YES only if the override secret is approved and you are the sole recovery operator: ')) !== 'YES') {
-      throw new Error('Recovery approval was not confirmed.');
-    }
-  } finally {
-    terminal.close();
-  }
-  const access = spawnSync('gh', ['api', 'repos/Jamula/stfc/actions/secrets/public-key'], { stdio: 'ignore' });
-  if (access.status !== 0) throw new Error('GitHub Actions secret access is unavailable.');
-  const inventory = spawnSync('gh', ['secret', 'list', '--repo', 'Jamula/stfc', '--json', 'name'], { encoding: 'utf8' });
-  if (inventory.status !== 0 || JSON.parse(inventory.stdout).some(secret => secret.name === 'STFC_ACCOUNT_REFRESH')) {
-    throw new Error('An existing override must be reconciled before another refresh.');
-  }
-  const browser = await chromium.launch({ headless: false });
+export async function captureFromPage(browser, context, page) {
   const controller = new AbortController();
   let capture;
+  let closing = false;
   try {
-    const context = await browser.newContext();
-    const page = await context.newPage();
     capture = captureToken({
-      context, timeoutMs: 900000, signal: controller.signal, closeAfterCapture: () => browser.close(),
+      context, timeoutMs: 900000, signal: controller.signal, closeAfterCapture: async () => {
+        closing = true;
+        await browser.close();
+      },
     });
-    capture.catch(() => {});
-    console.log('Sign in and enter the email OTP directly in the official browser. No credentials belong in this terminal.');
-    await page.goto('https://home.startrekfleetcommand.com/store');
-    const { token } = await capture;
-    if (!token) throw new Error('Login timed out.');
-    await verifiedIdentity(token);
-    const current = spawnSync('gh', ['secret', 'list', '--repo', 'Jamula/stfc', '--json', 'name'], { encoding: 'utf8' });
-    if (current.status !== 0 || JSON.parse(current.stdout).some(secret => secret.name === 'STFC_ACCOUNT_REFRESH')) {
-      throw new Error('An override appeared during login; refusing to replace it.');
-    }
-    const result = spawnSync('gh', ['secret', 'set', 'STFC_ACCOUNT_REFRESH', '--repo', 'Jamula/stfc'], {
-      input: JSON.stringify({ token }), stdio: ['pipe', 'ignore', 'ignore'],
+    const navigation = page.goto('https://home.startrekfleetcommand.com/store').catch(error => {
+      if (closing && error instanceof Error && /Target page, context or browser has been closed/.test(error.message)) return;
+      throw error;
     });
-    if (result.status !== 0) throw new Error('Encrypted override update failed.');
-    console.log('Non-redeeming authentication passed. Encrypted refresh override saved; inventory matching still requires the auth-check workflow.');
+    const [, result] = await Promise.all([navigation, capture]);
+    return result;
   } finally {
     controller.abort();
     await browser.close();
@@ -103,9 +96,57 @@ async function main() {
   }
 }
 
+async function main() {
+  if (!['--publish', '--verify-only'].includes(process.argv[2]) || !process.stdin.isTTY || !process.stdout.isTTY) {
+    throw new Error('Run in a private interactive terminal.');
+  }
+  if (process.argv[2] === '--publish') {
+    const terminal = createInterface({ input: process.stdin, output: process.stdout });
+    try {
+      if (await terminal.question(`Type YES only if this exact secret name is approved, no other writer will use it, and it will be retained until safely incorporated: ${REFRESH_SECRET}\n`) !== 'YES') {
+        throw new Error('Publishing approval was not confirmed.');
+      }
+    } finally {
+      terminal.close();
+    }
+    assertSecretAbsent();
+  }
+  const browser = await chromium.launch({ headless: false });
+  try {
+    const context = await browser.newContext();
+    const page = await context.newPage();
+    console.log('Sign in and enter the email OTP directly in the official browser. No credentials belong in this terminal.');
+    const { token } = await captureFromPage(browser, context, page);
+    if (!token) throw new Error('Login timed out.');
+    await verifiedIdentity(token);
+    await verifyGiftAccess(token);
+    if (process.argv[2] === '--publish') {
+      assertSecretAbsent();
+      const result = spawnSync('gh', ['secret', 'set', REFRESH_SECRET, '--repo', 'Jamula/stfc'], {
+        input: JSON.stringify({ token }), stdio: ['pipe', 'ignore', 'ignore'],
+      });
+      if (result.status !== 0) throw new Error('Encrypted override update failed.');
+      console.log('Encrypted override saved; run the recovery authentication workflow to verify inventory matching.');
+    } else {
+      console.log('Non-redeeming authentication and gift-list access passed. No credential was saved or published.');
+    }
+  } finally {
+    await browser.close();
+  }
+}
+
+function assertSecretAbsent() {
+  const result = spawnSync('gh', ['secret', 'list', '--repo', 'Jamula/stfc', '--json', 'name'], { encoding: 'utf8' });
+  if (result.status !== 0) throw new Error('Cannot verify secret names.');
+  const secrets = JSON.parse(result.stdout);
+  if (!Array.isArray(secrets) || secrets.some(secret => !secret || typeof secret.name !== 'string' || secret.name === REFRESH_SECRET)) {
+    throw new Error('The proposed override name already exists; refusing to replace it.');
+  }
+}
+
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   main().catch(() => {
-    console.error('Secure account refresh failed; no inventory update or redemption was attempted.');
+    console.error('Secure account refresh failed; no inventory update or redemption was attempted. Check approval, secret-name availability, and authentication.');
     process.exitCode = 1;
   });
 }
