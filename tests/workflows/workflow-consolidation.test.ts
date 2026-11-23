@@ -1056,7 +1056,7 @@ describe("workflow consolidation", () => {
     }
   });
 
-  it("runs the canonical suite entry point on push to main (#242, #222)", () => {
+  it("runs the canonical suite during an explicitly approved release (#242, #222)", () => {
     const release = workflows.find(({ file }) => file === "release.yml");
     assert.ok(release, "release.yml must exist");
     const steps = Object.values(release!.workflow.jobs ?? {}).flatMap(
@@ -1071,6 +1071,52 @@ describe("workflow consolidation", () => {
     assert.ok(
       steps.some((step) => step.run?.trim() === "npm run typecheck"),
       "release.yml must run npm run typecheck alongside npm test",
+    );
+  });
+
+  it("requires a reviewed manual release with an exact version and no push trigger", () => {
+    const release = workflows.find(({ file }) => file === "release.yml");
+    assert.ok(release, "release.yml must exist");
+    const triggers = (release.workflow.on ?? {}) as Record<string, unknown>;
+    assert.ok(
+      Object.prototype.hasOwnProperty.call(triggers, "workflow_dispatch"),
+      "a product release must be an explicit workflow dispatch",
+    );
+    assert.ok(
+      !Object.prototype.hasOwnProperty.call(triggers, "push"),
+      "a normal push must never publish a Git tag or release",
+    );
+    const steps = Object.values(release.workflow.jobs ?? {}).flatMap(
+      (job) => job.steps ?? [],
+    );
+    const versionGate = steps.find(
+      (step) => step.name === "Verify reviewed release request and version contract",
+    );
+    assert.ok(versionGate, "release workflow must verify its exact approved version");
+    assert.match(versionGate.run ?? "", /APPROVED_VERSION/);
+    assert.match(versionGate.run ?? "", /refs\/heads\/main/);
+    assert.match(versionGate.run ?? "", /package-lock\.json/);
+    assert.match(versionGate.run ?? "", /CHANGELOG\.md/);
+    const publication = steps.findIndex((step) => step.name === "Create GitHub Release");
+    const validation = steps.findIndex((step) =>
+      step.name === "Verify reviewed release request and version contract"
+    );
+    assert.ok(publication > validation, "do not publish before validating the reviewed version");
+  });
+
+  it("keeps the 0.1.0 product baseline frozen pending MVP acceptance", () => {
+    const root = JSON.parse(readFileSync("package.json", "utf8")) as { version: string };
+    const lock = JSON.parse(readFileSync("package-lock.json", "utf8")) as {
+      version: string;
+      packages: Record<string, { version: string }>;
+    };
+    const changelog = readFileSync("CHANGELOG.md", "utf8");
+    assert.equal(root.version, "0.1.0", "a later version needs a reviewed owner-approved release PR");
+    assert.equal(lock.version, root.version);
+    assert.equal(lock.packages[""]?.version, root.version);
+    assert.ok(
+      changelog.includes("## [0.1.0] - 2026-11-08"),
+      "the published product baseline must remain recorded in the changelog",
     );
   });
 
