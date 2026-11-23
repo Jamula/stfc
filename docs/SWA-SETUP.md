@@ -12,6 +12,12 @@ Free tier. The GitHub Actions workflow (`.github/workflows/swa-deploy.yml`)
 deploys it automatically on every push to `main` and creates preview
 environments for pull requests.
 
+The build also publishes the repository's Markdown documentation at `/docs/`.
+The index and documents require the same `stfc_operator` role as the control
+panel; Markdown files are served as plain text.
+The deployment workflow builds `web/dist` in the checked-out repository so the
+build can read `docs/`, then deploys that output with its SWA security config.
+
 This runbook covers the **one-time setup** steps that cannot be automated
 by GitHub Actions — they require Azure portal access or an authenticated
 `az` CLI session.

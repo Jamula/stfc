@@ -1038,6 +1038,15 @@ describe("workflow consolidation", () => {
       dependencies.includes("preflight"),
       "SWA deployment must also wait for the deployment-token presence probe",
     );
+    const deploySteps = deploy.steps ?? [];
+    const webBuild = deploySteps.findIndex((step) =>
+      step.run?.trim() === "npm run build" && step["working-directory"] === "web",
+    );
+    const upload = deploySteps.findIndex((step) => step.name === "Deploy to SWA");
+    assert.ok(webBuild >= 0 && upload > webBuild, "SWA must build web and docs before uploading");
+    assert.equal(deploySteps[upload]?.with?.app_location, "web/dist");
+    assert.equal(deploySteps[upload]?.with?.skip_app_build, true);
+    assert.equal(deploySteps[upload]?.with?.output_location, "");
     for (const jobName of ["deploy", "teardown"]) {
       assert.match(
         swa.workflow.jobs?.[jobName]?.if ?? "",

@@ -157,6 +157,32 @@ describe('vite build', () => {
     assert.ok(jsFiles.length > 0, 'Expected at least one JS file in dist/ or subdirs');
   });
 
+  it('publishes the documentation index and nested Markdown files', async () => {
+    const docsDir = join(WEB_DIR, 'dist', 'docs');
+    const index = await readFile(join(docsDir, 'index.html'), 'utf8');
+    assert.match(index, /href="\/docs\/SETUP\.md"/);
+    assert.match(index, /href="\/docs\/stfc-knowledge\/README\.md"/);
+    for (const file of ['SETUP.md', 'stfc-knowledge/README.md']) {
+      assert.deepEqual(
+        await readFile(join(docsDir, file)),
+        await readFile(join(REPO, 'docs', file)),
+        `${file} must be copied unchanged`,
+      );
+    }
+
+    const config = JSON.parse(await readFile(join(REPO, 'staticwebapp.config.json'), 'utf8')) as {
+      mimeTypes?: Record<string, string>;
+      routes?: { route: string; allowedRoles?: string[] }[];
+    };
+    assert.equal(config.mimeTypes?.['.md'], 'text/plain');
+    assert.deepEqual(config.routes?.find((route) => route.route === '/*')?.allowedRoles, ['stfc_operator']);
+    assert.deepEqual(
+      await readFile(join(WEB_DIR, 'dist', 'staticwebapp.config.json')),
+      await readFile(join(REPO, 'staticwebapp.config.json')),
+      'The deployed output must include the complete SWA security configuration',
+    );
+  });
+
   it('excludes the local-only login prototype from normal deployment output', async () => {
     for (const file of ['index.html', 'sw.js', 'manifest.webmanifest', 'icon.svg']) {
       await assert.rejects(stat(join(WEB_DIR, 'dist', 'pwa-demo', file)), { code: 'ENOENT' },

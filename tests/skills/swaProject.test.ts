@@ -38,11 +38,14 @@ function isExecutable(rel: string): boolean {
 }
 
 describe("SWA project structure (T-SWA-002)", () => {
-  it("deploy workflow loads the root SWA security configuration", () => {
-    assert.match(
-      read(".github/workflows/swa-deploy.yml"),
-      /config_file_location:\s*\./,
-    );
+  it("deploys the prebuilt output containing the SWA security configuration", () => {
+    const workflow = parseYaml(read(".github/workflows/swa-deploy.yml")) as {
+      jobs: Record<string, { steps: Array<{ name?: string; with?: Record<string, unknown> }> }>;
+    };
+    const deploy = workflow.jobs.deploy?.steps.find((step) => step.name === "Deploy to SWA");
+    assert.equal(deploy?.with?.app_location, "web/dist");
+    assert.equal(deploy?.with?.skip_app_build, true);
+    assert.equal(deploy?.with?.output_location, "");
   });
 
   it("limits the Node 22 API validation job to contents: read", () => {

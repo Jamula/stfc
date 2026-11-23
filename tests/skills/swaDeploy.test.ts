@@ -152,10 +152,12 @@ describe("swa-deploy.yml / contract pinning (T-SWA-001)", () => {
     assert.match(yaml, /repo_token:\s*\$\{\{\s*secrets\.GITHUB_TOKEN\s*\}\}/);
   });
 
-  it("app_location is 'web' and api_location is 'api'", () => {
-    assert.match(yaml, /app_location:\s*web/);
+  it("deploys the prebuilt web artifact and builds the API", () => {
+    assert.match(yaml, /app_location:\s*web\/dist/);
     assert.match(yaml, /api_location:\s*api/);
-    assert.match(yaml, /config_file_location:\s*\./);
+    assert.match(yaml, /output_location:\s*''/);
+    assert.match(yaml, /skip_app_build:\s*true/);
+    assert.match(yaml, /name: Build web and documentation[\s\S]*?run: npm run build[\s\S]*?working-directory: web/);
   });
 
   it("deploy and teardown jobs are gated on the SWA deployment token (secret-presence guard)", () => {
