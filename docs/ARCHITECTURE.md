@@ -859,6 +859,7 @@ separately authorized action. Historical `v1.0.0` predates the agreed
 | Exit-code semantics | §3.1 + `src/skills/runAll.ts:399-407` |
 | Feature specifications | `specs/NNN-feature-slug/` |
 | Repository rules | `.github/copilot-instructions.md` |
+| Versioning and release approval | `docs/VERSIONING.md` + `.github/workflows/release.yml` |
 | Web panel setup | `docs/SWA-SETUP.md` |
 | Web panel invitation and setup | `docs/SWA-SETUP.md` |
 | Crew optimizer details | `docs/CREW-OPTIMIZER.md` |
