@@ -5,6 +5,7 @@ import {
   mergeRefreshedAccount,
   mergeRefreshedAccounts,
   runGithubSecretCommand,
+  verifiedIdentity,
   verifyGiftAccess,
 } from "../../scripts/refresh-account.mjs";
 import { mkdtempSync, readFileSync, rmSync, existsSync } from "node:fs";
@@ -34,6 +35,38 @@ const reply: typeof fetch = async (_url, options) => {
 };
 
 describe("manual refresh inventory safety", () => {
+  it("uses the production safe-GET retry policy for identity verification", async () => {
+    for (const temporaryStatus of [401, 503]) {
+      let attempts = 0;
+      const id = await verifiedIdentity(fresh, async (_url, options) => {
+        assert.equal(options?.redirect, "error");
+        attempts += 1;
+        const status = attempts === 1 ? temporaryStatus : 200;
+        return new Response('{"payload":{"accountId":"one"}}', {
+          status, headers: { "content-type": "application/json" },
+        });
+      });
+      assert.equal(id, "one");
+      assert.equal(attempts, 2, `HTTP ${temporaryStatus} should be retried once before identity is accepted`);
+    }
+
+    for (const [status, expectedAttempts] of [[401, 2], [503, 2]] as const) {
+      let attempts = 0;
+      await assert.rejects(verifiedIdentity(fresh, async () => {
+        attempts += 1;
+        return new Response("{}", { status, headers: { "content-type": "application/json" } });
+      }), new RegExp(String(status)));
+      assert.equal(attempts, expectedAttempts, `HTTP ${status} should stop at the production retry limit`);
+    }
+
+    let nonRetriableAttempts = 0;
+    await assert.rejects(verifiedIdentity(fresh, async () => {
+      nonRetriableAttempts += 1;
+      return new Response("{}", { status: 422, headers: { "content-type": "application/json" } });
+    }), /HTTP 422/);
+    assert.equal(nonRetriableAttempts, 1, "non-retriable client errors must not be replayed");
+  });
+
   it("replaces exactly the verified identity, preserving labels and every other account", async () => {
     const refreshed = `${fresh.slice(0, -9)}newsignature`;
     const merged = await mergeRefreshedAccount(JSON.stringify(original), JSON.stringify({ token: refreshed }), reply);
@@ -293,13 +326,74 @@ describe("manual refresh inventory safety", () => {
     assert.doesNotMatch(freshRejected.stderr, /older refresh override was rejected/);
   });
 
+  it("retries identity checks in the actual manual recovery workflow and fails after exhaustion", () => {
+    const workflow = parse(readFileSync(".github/workflows/check-recovery-auth.yml", "utf8"));
+    const run: string = workflow.jobs.check.steps.at(-1).run;
+    const script = run.match(/node --input-type=module <<'NODE'\r?\n([\s\S]*?)\r?\nNODE/)?.[1];
+    assert.ok(script);
+    const refreshed = `${fresh}new`;
+    const stub = `globalThis.identityAttempts = 0;
+      globalThis.fetch = async (url, opts) => {
+        const credential = opts.headers.Authorization.slice(7);
+        if (url.endsWith("/auth/me")) {
+          if (credential === process.env.IDENTITY_TOKEN) {
+            globalThis.identityAttempts += 1;
+            process.stdout.write("IDENTITY_ATTEMPTS=" + globalThis.identityAttempts + "\\n");
+            if (process.env.IDENTITY_MODE === "exhausted" || globalThis.identityAttempts === 1) {
+              return new Response("{}", {
+                status: 503, headers: {"content-type": "application/json"}
+              });
+            }
+          }
+          return new Response('{"payload":{"accountId":"one"}}', {
+            headers: {"content-type": "application/json"}
+          });
+        }
+        return new Response("[]", { headers: {"content-type": "application/json"} });
+      };`;
+    for (const [mode, expectedStatus, expectedAttempts] of [
+      ["transient", 0, 3], ["exhausted", 1, 2],
+    ] as const) {
+      const result: { status: number | null; stdout: string; stderr: string } = spawnSync(
+        process.execPath,
+        ["--input-type=module", "-e", `${stub}\n${script}\nconsole.log("IDENTITY_ATTEMPTS=" + globalThis.identityAttempts);`],
+        {
+          encoding: "utf8",
+          env: {
+            ...process.env,
+            STFC_ACCOUNTS: JSON.stringify([original[0]]),
+            STFC_ACCOUNT_REFRESH: "",
+            STFC_ACCOUNT_REFRESH_RECOVERY: JSON.stringify({ token: refreshed }),
+            IDENTITY_TOKEN: refreshed,
+            IDENTITY_MODE: mode,
+            REPOSITORY_VARIABLES: "{}",
+          },
+        },
+      );
+      assert.equal(result.status, expectedStatus, result.stderr);
+      assert.match(result.stdout, new RegExp(`IDENTITY_ATTEMPTS=${expectedAttempts}`));
+      if (mode === "transient") assert.match(result.stdout, /1\/1 accounts accepted/);
+      else assert.match(result.stderr, /Fresh recovery override failed/);
+    }
+  });
+
   it("keeps scheduled redemption on the preserved inventory when overrides fail validation", () => {
     const updatedOne = token("one") + "new";
     const updatedTwo = token("two") + "new";
-    const stub = `globalThis.fetch = async (url, opts) => {
+    const stub = `globalThis.identityAttempts = new Map();
+    globalThis.fetch = async (url, opts) => {
       if (url.endsWith("/auth/me")) {
         const token = opts.headers.Authorization.slice(7);
         const accountId = JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString()).accountId;
+        if (token === process.env.IDENTITY_FAULT_TOKEN) {
+          const attempts = (globalThis.identityAttempts.get(token) ?? 0) + 1;
+          globalThis.identityAttempts.set(token, attempts);
+          if (process.env.IDENTITY_FAULT_MODE === "exhausted" || attempts === 1) {
+            return new Response("{}", {
+              status: 503, headers: {"content-type": "application/json"}
+            });
+          }
+        }
         return new Response(JSON.stringify({payload: {accountId}}), {
           headers: {"content-type": "application/json"}
         });
@@ -322,9 +416,13 @@ describe("manual refresh inventory safety", () => {
     const output = join(directory, "stfc-accounts.json");
     const summary = join(directory, "summary.md");
     try {
-      for (const mode of ["valid", "duplicate", "mismatched", "gift-denied"] as const) {
-        const recovery = mode === "valid" ? updatedTwo : mode === "duplicate" ? updatedOne : token("unmatched") + "new";
-        const result = spawnSync(process.execPath, ["--input-type=module", "-e", `${stub}\n${script}`], {
+      for (const mode of [
+        "valid", "identity-transient", "identity-exhausted", "duplicate", "mismatched", "gift-denied",
+      ] as const) {
+        const recovery = ["valid", "identity-transient", "identity-exhausted", "gift-denied"].includes(mode)
+          ? updatedTwo : mode === "duplicate" ? updatedOne : token("unmatched") + "new";
+        const identityFault = mode === "identity-transient" || mode === "identity-exhausted";
+        const result = spawnSync(process.execPath, ["--input-type=module", "-e", `${stub}\n${script}\nconsole.log("IDENTITY_ATTEMPTS=" + (globalThis.identityAttempts.get(process.env.IDENTITY_FAULT_TOKEN) ?? 0));`], {
           encoding: "utf8",
           env: {
             ...process.env, RUNNER_TEMP: directory, GITHUB_STEP_SUMMARY: summary, REPOSITORY_VARIABLES: "{}",
@@ -333,20 +431,24 @@ describe("manual refresh inventory safety", () => {
             STFC_ACCOUNT_REFRESH_RECOVERY: JSON.stringify({
               token: mode === "gift-denied" ? updatedTwo : recovery,
             }),
+            IDENTITY_FAULT_TOKEN: identityFault ? updatedTwo : "",
+            IDENTITY_FAULT_MODE: mode === "identity-exhausted" ? "exhausted" : "transient",
           },
         });
         assert.equal(result.status, 0, result.stderr);
         assert.equal(existsSync(output), true);
-        if (mode === "valid") {
+        if (mode === "valid" || mode === "identity-transient") {
           assert.deepEqual(JSON.parse(readFileSync(output, "utf8")), [
             { name: "main", token: updatedOne }, { name: "alt", token: updatedTwo },
           ]);
+          if (mode === "identity-transient") assert.match(result.stdout, /IDENTITY_ATTEMPTS=2/);
         } else {
           assert.deepEqual(JSON.parse(readFileSync(output, "utf8")), [
             { name: "main", token: updatedOne }, original[1],
           ]);
           assert.match(result.stderr, /1 refresh override\(s\) were rejected/);
           assert.match(readFileSync(summary, "utf8"), /Verified overrides and the preserved `STFC_ACCOUNTS` inventory remain in use/);
+          if (mode === "identity-exhausted") assert.match(result.stdout, /IDENTITY_ATTEMPTS=2/);
         }
         rmSync(output);
         rmSync(summary, { force: true });

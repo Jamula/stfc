@@ -5,7 +5,14 @@ import { captureToken } from './capture-token.mjs';
 import { parseDocument } from 'yaml';
 import { isTokenAccounts } from '../shared/token-account-schema.mjs';
 import { createInterface } from 'node:readline/promises';
-import { ApiClient } from '../src/api/client.ts';
+import {
+  ApiClient,
+  ApiError,
+  SchemaMismatchError,
+  TokenExpiredError,
+  TransientError,
+  withSafeGetRetries,
+} from '../src/api/client.ts';
 import { AuthMeResponseSchema } from '../src/api/schemas.ts';
 
 const API = 'https://cdn-nv3-webstore-api.startrek.digitgaming.com/api/v2/auth/me';
@@ -26,17 +33,36 @@ function document(text) {
 
 export async function verifiedIdentity(token, fetchImpl = fetch) {
   if (!isTokenAccounts([{ name: 'candidate', token }])) throw new Error('Invalid credential shape.');
-  const response = await fetchImpl(API, {
-    headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
-    redirect: 'error', signal: AbortSignal.timeout(15000),
+  return withSafeGetRetries(async () => {
+    let response;
+    try {
+      response = await fetchImpl(API, {
+        headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
+        redirect: 'error', signal: AbortSignal.timeout(15000),
+      });
+    } catch {
+      throw new TransientError('Network failure on GET /auth/me');
+    }
+    if (response.redirected || (response.status >= 300 && response.status < 400)) {
+      throw new ApiError(`Redirected response on GET /auth/me (${response.status})`, response.status);
+    }
+    if (response.status === 401 || response.status === 403) {
+      throw new TokenExpiredError(`Authentication rejected (${response.status}) on GET /auth/me`, response.status);
+    }
+    if (response.status >= 500 && response.status <= 599) {
+      throw new TransientError(`Server error ${response.status} on GET /auth/me`, response.status);
+    }
+    if (response.status !== 200) {
+      throw new ApiError(`Unexpected HTTP ${response.status} on GET /auth/me; expected 200`, response.status);
+    }
+    if (!/json/i.test(response.headers.get('content-type') ?? '')) {
+      throw new SchemaMismatchError('Expected JSON from GET /auth/me', response.status);
+    }
+    const identity = AuthMeResponseSchema.parse(document(await response.text()));
+    const id = identifier(identity?.payload?.accountId);
+    if (!id) throw new Error('Verified account identity is unavailable.');
+    return id;
   });
-  if (response.status !== 200 || response.redirected || !/json/i.test(response.headers.get('content-type') ?? '')) {
-    throw new Error('Authentication rejected.');
-  }
-  const identity = AuthMeResponseSchema.parse(document(await response.text()));
-  const id = identifier(identity?.payload?.accountId);
-  if (!id) throw new Error('Verified account identity is unavailable.');
-  return id;
 }
 
 export async function verifyGiftAccess(token, fetchImpl = fetch) {

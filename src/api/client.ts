@@ -130,37 +130,8 @@ export class ApiClient {
     }
   }
 
-  /**
-   * Safe request: up to three attempts, sharing one transient-retry allowance
-   * and one auth-corroboration allowance. The last attempt is unconditional,
-   * so whatever it throws is the corroborated answer and no branch is dead.
-   */
-  private async requestSafe<T>(args: RequestArgs<T>, method: HttpMethod): Promise<T> {
-    const maxAttempts = 3;
-    let authRejections = 0;
-    let transientRetries = 0;
-
-    for (let attempt = 1; attempt < maxAttempts; attempt += 1) {
-      try {
-        return await this.attempt(args, method);
-      } catch (err) {
-        if (err instanceof TokenExpiredError) {
-          authRejections += 1;
-          if (authRejections >= 2) throw err;
-        } else if (
-          transientRetries === 0 &&
-          (err instanceof TransientError || err instanceof TypeError)
-        ) {
-          transientRetries += 1;
-        } else {
-          throw err;
-        }
-
-        await sleep(jitter(500, 1000));
-      }
-    }
-
-    return await this.attempt(args, method);
+  private requestSafe<T>(args: RequestArgs<T>, method: HttpMethod): Promise<T> {
+    return withSafeGetRetries(() => this.attempt(args, method));
   }
 
   private async attempt<T>(args: RequestArgs<T>, method: HttpMethod): Promise<T> {
@@ -243,6 +214,38 @@ export class ApiClient {
       schema: RedeemResponseSchema,
     });
   }
+}
+
+/**
+ * Safe GET retry policy shared by ApiClient reads and recovery identity probes.
+ * The bounded sequence allows one transient retry and one auth corroboration.
+ */
+export async function withSafeGetRetries<T>(request: () => Promise<T>): Promise<T> {
+  const maxAttempts = 3;
+  let authRejections = 0;
+  let transientRetries = 0;
+
+  for (let attempt = 1; attempt < maxAttempts; attempt += 1) {
+    try {
+      return await request();
+    } catch (err) {
+      if (err instanceof TokenExpiredError) {
+        authRejections += 1;
+        if (authRejections >= 2) throw err;
+      } else if (
+        transientRetries === 0 &&
+        (err instanceof TransientError || err instanceof TypeError)
+      ) {
+        transientRetries += 1;
+      } else {
+        throw err;
+      }
+
+      await sleep(jitter(500, 1000));
+    }
+  }
+
+  return await request();
 }
 
 function wrapNetworkError(err: unknown, method: HttpMethod, path: string): TransientError {

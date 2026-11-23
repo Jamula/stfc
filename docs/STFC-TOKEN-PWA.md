@@ -128,14 +128,14 @@ existing Azure token store must first be available and its use authorized.
 
 Both legacy redemption and the manual **Check recovery authentication** workflow
 verify the fresh token's live `/auth/me` account identity and require exactly one
-matching `accountId` claim in the existing inventory. The gift-list probe uses
-the production client's bounded safe-GET retry policy for temporary
-authentication and server errors, but requires the final response to be HTTP
-200, non-redirected, and valid under the production response schema. Scheduled
-redemption applies each override only after these checks in the same step that
-writes its temporary inventory. If a candidate fails, it reports a warning and
-rejects that candidate while preserving prior verified overrides and the
-baseline tokens for the remaining accounts.
+matching `accountId` claim in the existing inventory. Identity and gift-list
+probes share the production client's bounded safe-GET retry policy for temporary
+authentication and server errors, but require the final response to be HTTP 200,
+non-redirected, and valid under the applicable production response schema.
+Scheduled redemption applies each override only after these checks in the same
+step that writes its temporary inventory. If a candidate fails, it reports a
+warning and rejects that candidate while preserving prior verified overrides
+and the baseline tokens for the remaining accounts.
 
 The manual check uses that same effective inventory: the fresh recovery
 override must be accepted, then every effective account must pass authentication
