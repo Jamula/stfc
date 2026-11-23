@@ -19,7 +19,7 @@ When **Version bump** is checked, link the explicit owner release approval and
 MVP acceptance evidence, or mark the PR as **version-policy preparation only**.
 The root package and lockfile must agree, the dated changelog entry must exist,
 and the GitHub Release action requires a separately authorized manual dispatch.
-See [docs/VERSIONING.md](../../docs/VERSIONING.md). Do not publish a tag or
+See [docs/VERSIONING.md](../docs/VERSIONING.md). Do not publish a tag or
 merge merely because this checkbox is checked.
 
 ---
