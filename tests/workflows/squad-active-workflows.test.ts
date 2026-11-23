@@ -117,7 +117,7 @@ test("live triage routes a suitable issue to a team member, not Copilot", async 
   const execute = new AsyncFunction("require", "github", "context", "core", script);
   await execute(createRequire(import.meta.url), github, context, core);
   assert.ok(labels.some((label) => /^squad:(spock|data|uhura)$/.test(label)), labels.join(", "));
-  assert.ok(labels.includes("go:needs-research"));
+  assert.ok(!labels.some((label) => label.startsWith("go:")), "Triage must not change the human verdict");
   assert.ok(!labels.includes("squad:copilot"));
   assert.equal(comments.length, 1);
   assert.doesNotMatch(comments[0]!, /Assigned to:\*\* @copilot/);
