@@ -63,6 +63,28 @@ describe("native Squad configuration", () => {
     assert.match(mcp.mcpServers.squad_state.args.join(" "), /@bradygaster\/squad-cli@.+ state-mcp$/);
   });
 
+  it("keeps the generated casting policy mirror identical to the authoritative policy", () => {
+    assert.deepEqual(
+      JSON.parse(read(".squad", "casting-policy.json")),
+      JSON.parse(read(".squad", "casting", "policy.json")),
+      "The generated root policy must not diverge from .squad/casting/policy.json",
+    );
+  });
+
+  it("keeps installed workflow and review guidance aligned with its templates", () => {
+    for (const name of ["git-workflow", "reviewer-protocol", "agent-collaboration", "cross-squad"]) {
+      const installed = read(".github", "skills", name, "SKILL.md");
+      assert.equal(installed, read(".squad", "templates", "skills", name, "SKILL.md"), name);
+    }
+    const git = read(".github", "skills", "git-workflow", "SKILL.md");
+    assert.match(git, /`main` is the only persistent development and release branch/);
+    assert.match(git, /required reviews and branch protections/);
+    assert.match(git, /native atomic casting protocol/);
+    const reviewer = read(".github", "skills", "reviewer-protocol", "SKILL.md");
+    assert.match(reviewer, /original author\s+may address feedback/);
+    assert.match(reviewer, /independently review\s+the revised substantive changes/);
+  });
+
   it("keeps mutable runtime state out of the source tree", () => {
     const ignored = [
       ".squad/decisions.md",
@@ -78,6 +100,8 @@ describe("native Squad configuration", () => {
       ".squad/sessions/2026-01-01.md",
       ".squad/.scratch/worktree.json",
       ".squad/.cache/state.json",
+      ".squad/casting-history.json",
+      ".squad/casting-registry.json",
     ];
     for (const file of ignored) {
       const result = spawnSync("git", ["check-ignore", "--no-index", "-q", "--", file]);
@@ -89,6 +113,11 @@ describe("native Squad configuration", () => {
     ]);
     assert.ifError(config.error);
     assert.equal(config.status, 1, "The static memory configuration must remain trackable");
+    const castingPolicy = spawnSync("git", [
+      "check-ignore", "--no-index", "-q", "--", ".squad/casting-policy.json",
+    ]);
+    assert.ifError(castingPolicy.error);
+    assert.equal(castingPolicy.status, 1, "The static casting policy must remain trackable");
     const charter = spawnSync("git", [
       "check-ignore", "--no-index", "-q", "--", ".squad/agents/spock/charter.md",
     ]);
@@ -110,6 +139,7 @@ describe("native Squad configuration", () => {
       /^\.squad\/identity\//,
       /^\.squad\/memory\/(?!config\.json$)/,
       /^\.squad\/casting\/(?:history|registry)(?:-history\.commit)?\.json$/,
+      /^\.squad\/casting-(?:history|registry)\.json$/,
       /^\.squad\/\.first-run$/,
       /^\.squad\/sessions\//,
       /^\.squad\/\.scratch\//,
@@ -150,6 +180,8 @@ describe("native Squad configuration", () => {
       ".squad/sessions/2026-01-01.md",
       ".squad/.scratch/worktree.json",
       ".squad/.cache/state.json",
+      ".squad/casting-history.json",
+      ".squad/casting-registry.json",
       ".squad/casting/history.json",
       ".squad/casting/registry.json",
       ".squad/casting/registry-history.commit.json",

@@ -1,6 +1,6 @@
 ---
 name: "git-workflow"
-description: "Squad branching model: dev-first workflow with insiders preview channel"
+description: "Main-only branching, protected pull requests, and safe worktree state"
 domain: "version-control"
 confidence: "high"
 source: "team-decision"
@@ -8,202 +8,33 @@ source: "team-decision"
 
 ## Context
 
-Squad uses a three-branch model. **All feature work starts from `dev`, not `main`.**
+`main` is the only persistent development and release branch. Feature and issue
+branches normally start from and target `main`; use a different base only for an
+explicitly requested or genuinely dependent stack. Issue branches follow
+`squad/{issue-number}-{kebab-case-slug}` when the host permits branch naming.
 
-| Branch | Purpose | Publishes |
-|--------|---------|-----------|
-| `main` | Released, tagged, in-npm code only | `npm publish` on tag |
-| `dev` | Integration branch — all feature work lands here | `npm publish --tag preview` on merge |
-| `insiders` | Early-access channel — synced from dev | `npm publish --tag insiders` on sync |
+## Pull requests
 
-## Branch Naming Convention
+Work in the assigned checkout or app-managed worktree. Stage only intended
+changes, inspect the staged diff, and respect the repository's hooks and tests.
+When a PR is requested, follow its template and target the intended base. Opening
+a PR does not authorize marking it ready, merging, enabling automatic merging,
+deploying, or spending money. Preserve required reviews and branch protections.
+The existing `Release` and `Deploy SWA` workflows run from `main`; do not create
+competing release or deployment paths.
 
-Issue branches MUST use: `squad/{issue-number}-{kebab-case-slug}`
+## Parallel worktrees and state
 
-Examples:
-- `squad/195-fix-version-stamp-bug`
-- `squad/42-add-profile-api`
+Use separate worktrees when parallel changes can safely be isolated. Do not
+switch branches in a checkout shared by another session. Before removing a
+worktree, inspect it for uncommitted changes, ongoing work, and local state.
+Resolve the configured state backend first: for local/worktree fallback, make
+and verify a snapshot of mutable state before removal; local state tools alone
+do not transfer that state. For a non-local backend, use its state tools
+exclusively and do not copy, merge, or rewrite runtime state through Git.
 
-## Workflow for Issue Work
-
-1. **Branch from dev:**
-   ```bash
-   git checkout dev
-   git pull origin dev
-   git checkout -b squad/{issue-number}-{slug}
-   ```
-
-2. **Mark issue in-progress:**
-   ```bash
-   gh issue edit {number} --add-label "status:in-progress"
-   ```
-
-3. **Create draft PR targeting dev:**
-   ```bash
-   gh pr create --base dev --title "{description}" --body "Closes #{issue-number}" --draft
-   ```
-
-4. **Do the work.** Make changes, write tests, commit with issue reference.
-
-5. **Push and mark ready:**
-   ```bash
-   git push -u origin squad/{issue-number}-{slug}
-   gh pr ready
-   ```
-
-6. **After merge to dev:**
-   ```bash
-   git checkout dev
-   git pull origin dev
-   git branch -d squad/{issue-number}-{slug}
-   git push origin --delete squad/{issue-number}-{slug}
-   ```
-
-## Parallel Multi-Issue Work (Worktrees)
-
-When the coordinator routes multiple issues simultaneously (e.g., "fix bugs X, Y, and Z"), use `git worktree` to give each agent an isolated working directory. No filesystem collisions, no branch-switching overhead.
-
-### When to Use Worktrees vs Sequential
-
-| Scenario | Strategy |
-|----------|----------|
-| Single issue | Standard workflow above — no worktree needed |
-| 2+ simultaneous issues in same repo | Worktrees — one per issue |
-| Work spanning multiple repos | Separate clones as siblings (see Multi-Repo below) |
-
-### Setup
-
-From the main clone (must be on dev or any branch):
-
-```bash
-# Ensure dev is current
-git fetch origin dev
-
-# Create a worktree per issue — siblings to the main clone
-git worktree add ../squad-195 -b squad/195-fix-stamp-bug origin/dev
-git worktree add ../squad-193 -b squad/193-refactor-loader origin/dev
-```
-
-**Naming convention:** `../{repo-name}-{issue-number}` (e.g., `../squad-195`, `../squad-pr-42`).
-
-Each worktree:
-- Has its own working directory and index
-- Is on its own `squad/{issue-number}-{slug}` branch from dev
-- Shares the same `.git` object store (disk-efficient)
-
-### Per-Worktree Agent Workflow
-
-Each agent operates inside its worktree exactly like the single-issue workflow:
-
-```bash
-cd ../squad-195
-
-# Stage only the files changed for this issue, then inspect the commit contents
-git add -- path/to/intentionally-changed-file
-git diff --cached --stat
-git diff --cached
-git commit -m "fix: stamp bug (#195)"
-git push -u origin squad/195-fix-stamp-bug
-
-# Create PR targeting dev
-gh pr create --base dev --title "fix: stamp bug" --body "Closes #195" --draft
-```
-
-All PRs target `dev` independently. Agents never interfere with each other's filesystem.
-
-### .squad/ State in Worktrees
-
-For a local-file backend, the `.squad/` directory exists in each worktree as a copy. This is safe because:
-- `.gitattributes` may declare `merge=union` on local append-only files (including the canonical local ledger at `.squad/decisions/decisions.md`)
-- Each agent appends to its own section; union merge reconciles local files on PR merge
-- **Rule:** Never rewrite or reorder local append-only state in a worktree
-
-The governed two-layer backend stores mutable state through the configured bridge. Use logical state key `decisions.md`; do not assume a worktree copy or rely on Git merge drivers for runtime-owned state.
-
-### Cleanup After Merge
-
-After a worktree's PR is merged to dev:
-
-```bash
-# From the main clone
-git worktree remove ../squad-195
-git worktree prune          # clean stale metadata
-git branch -d squad/195-fix-stamp-bug
-git push origin --delete squad/195-fix-stamp-bug
-```
-
-If a worktree was deleted manually (rm -rf), `git worktree prune` recovers the state.
-
----
-
-## Multi-Repo Downstream Scenarios
-
-When work spans multiple repositories (e.g., squad-cli changes need squad-sdk changes, or a user's app depends on squad):
-
-### Setup
-
-Clone downstream repos as siblings to the main repo:
-
-```
-~/work/
-  squad-pr/          # main repo
-  squad-sdk/         # downstream dependency
-  user-app/          # consumer project
-```
-
-Each repo gets its own issue branch following its own naming convention. If the downstream repo also uses Squad conventions, use `squad/{issue-number}-{slug}`.
-
-### Coordinated PRs
-
-- Create PRs in each repo independently
-- Link them in PR descriptions:
-  ```
-  Closes #42
-
-  **Depends on:** squad-sdk PR #17 (squad-sdk changes required for this feature)
-  ```
-- Merge order: dependencies first (e.g., squad-sdk), then dependents (e.g., squad-cli)
-
-### Local Linking for Testing
-
-Before pushing, verify cross-repo changes work together:
-
-```bash
-# Node.js / npm
-cd ../squad-sdk && npm link
-cd ../squad-pr && npm link squad-sdk
-
-# Go
-# Use replace directive in go.mod:
-# replace github.com/org/squad-sdk => ../squad-sdk
-
-# Python
-cd ../squad-sdk && pip install -e .
-```
-
-**Important:** Remove local links before committing. `npm link` and `go replace` are dev-only — CI must use published packages or PR-specific refs.
-
-### Worktrees + Multi-Repo
-
-These compose naturally. You can have:
-- Multiple worktrees in the main repo (parallel issues)
-- Separate clones for downstream repos
-- Each combination operates independently
-
----
-
-## Anti-Patterns
-
-- ❌ Branching from main (branch from dev)
-- ❌ PR targeting main directly (target dev)
-- ❌ Non-conforming branch names (must be squad/{number}-{slug})
-- ❌ Committing directly to main or dev (use PRs)
-- ❌ Switching branches in the main clone while worktrees are active (use worktrees instead)
-- ❌ Using worktrees for cross-repo work (use separate clones)
-- ❌ Leaving stale worktrees after PR merge (clean up immediately)
-
-## Promotion Pipeline
-
-- dev → insiders: Automated sync on green build
-- dev → main: Manual merge when ready for stable release, then tag
-- Hotfixes: Branch from main as `hotfix/{slug}`, PR to dev, cherry-pick to main if urgent
+In this repository the `two-layer` bridge owns mutable Squad state. Read
+`decisions.md` and agent histories through the bridge; submit proposals through
+`decisions/inbox/`. The tracked casting registry, history, and commit marker use
+the native atomic casting protocol. Never bypass an unavailable bridge with
+local files or Git operations.

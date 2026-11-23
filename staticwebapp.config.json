@@ -47,7 +47,8 @@
   },
 
   "mimeTypes": {
-    ".json": "application/json"
+    ".json": "application/json",
+    ".md": "text/plain"
   },
 
   "navigationFallback": {

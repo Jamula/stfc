@@ -26,7 +26,7 @@ tools:
 
 ## Context
 
-> **Read this FIRST any time the user says "squad" as a thing to spawn, delegate to, address, or fan out to** — e.g., *"spawn two squads of designers and devs"*, *"ask the other squad"*, *"delegate to a squad"*. In Squad-PRODUCT vocabulary, "squad" is a **peer** (an independent installation with its own `.squad/`, `team.md`, MCP server, and agents) — NOT a generic English synonym for "team" or "group". Do not fan out raw `task` agents inside your own coordinator context when the user means "another squad". Use the discovery and communication patterns below (and the companion `cross-squad-communication` skill for the actual protocols).
+Use this skill when the user explicitly requests coordination with another Squad installation. In this repository, "the squad" normally means the existing team; it does not by itself authorize creating installations, repositories, or work in another repository.
 
 When an organization runs multiple Squad instances (e.g., platform-squad, frontend-squad, data-squad), those squads need to discover each other, share context, and hand off work across repository boundaries. This skill teaches agents how to coordinate across squads without creating tight coupling.
 
@@ -40,15 +40,15 @@ Cross-squad orchestration applies when:
 
 ## Disambiguation: "squad" vs ad-hoc agents
 
-When the user uses the word **"squad" / "squads"** or asks to **"spawn a team"**, the coordinator MUST treat it as a literal reference to a Squad install (a `.squad/` directory with its own roster, casting, and coordinator) — NOT as a casual synonym for "a group of sub-agents".
+Interpret "squad" in context. The current team and a separate Squad installation are distinct. Do not create a peer installation or expand work to another repository without the user's request; ask when that distinction is consequential and unclear.
 
 ### Default behaviour (apply unless explicitly told otherwise)
 
 | User says | Coordinator does |
 |---|---|
-| *"spawn two squads of X and Y"* / *"set up squads for X, Y, Z"* | Bootstrap N **real** Squad installs — separate folder + `git init` + `squad init` per squad — then use the cross-squad patterns below (`.squad/manifest.json`, `squad registry add`, `squad delegate`) and the protocols in the `cross-squad-communication` skill |
+| Explicit request to create separate Squad installs | With authorization, create the requested installations and use the cross-squad patterns below |
 | *"ask the other squad about X"* / *"delegate to the data squad"* | Discover the peer via `squad registry list` (or by reading a known `.squad/manifest.json`), then use `cross-squad-communication` Pattern 0 / 1 / 2 / 3 — never re-implement the protocol with `task` |
-| *"spawn a few agents to do X"* / *"have some agents review X"* / *"in parallel, get sub-agents to..."* | Ad-hoc `task` fan-out is fine — no `.squad/` bootstrap needed. This is the only path where raw `task` is appropriate when the user mentioned a multi-agent activity |
+| *"spawn a few agents to do X"* / *"have some agents review X"* | Delegate within the existing team as appropriate; no `.squad/` bootstrap is implied |
 
 ### Ambiguous? `ask_user`, never silently downgrade
 
@@ -68,7 +68,7 @@ The cost of asking is one `ask_user`. The cost of getting it wrong is the user h
 - **Calling `task` sub-agents "squad-alpha" / "squad-beta"** and treating them as squads. Naming something a squad doesn't make it one — a squad has its own `.squad/`, `team.md`, MCP server, and coordinator. If those aren't there, it's not a squad.
 - **Matching a prior session's ad-hoc pattern without re-checking current intent.** If you see existing `reviews/squad-alpha/` folders from a previous run, that's a hint, NOT a contract — the user may have meant something different this time. Re-evaluate from scratch.
 - **Silently choosing the cheaper interpretation because "bootstrapping two real squads for a 30-line app feels disproportionate".** That's a judgment call for the USER to make, not the coordinator. Use `ask_user`.
-- **Loading the `cross-squad` skill, reading it, then doing `task` fan-out anyway** because the eager-execution / parallel-fan-out doctrine pulled you back. The disambiguation rule on this page OVERRIDES the generic fan-out doctrine when "squad" was the trigger.
+- **Creating a separate installation merely because the user refers to the current team as a squad.**
 
 ## Patterns
 
