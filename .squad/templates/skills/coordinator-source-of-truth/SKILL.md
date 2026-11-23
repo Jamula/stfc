@@ -11,7 +11,7 @@ source: "Extracted from squad.agent.md as part of the slimming effort (bradygast
 
 ## State backend note
 
-Authority and persistence are separate: an authoritative record can also be runtime-owned mutable state. The decision ledger and files marked **"Derived / append-only"** are accessed through the configured state bridge (`squad_state_read`, `squad_state_write`, `squad_state_append`, `squad_state_create_if_absent`, `squad_state_delete`, `squad_state_list`), not by assuming an on-disk copy is current. The runtime decides whether the backend stores them on disk, git-native state, or an external provider. Other authoritative entries in the table are static configuration on disk. Verify the bridge as described in `.squad/templates/spawn-reference.md`; if it is unavailable, report the limitation rather than falling back to direct mutable-state access.
+Authority and persistence are separate: an authoritative record can also be runtime-owned mutable state. The decision ledger and files marked **"Derived / append-only"** are accessed through the configured state bridge (`squad_state_read`, `squad_state_write`, `squad_state_append`, `squad_state_create_if_absent`, `squad_state_delete`, `squad_state_list`), not by assuming an on-disk copy is current. The tracked casting registry, history, and commit marker are the exception: update them together using the native atomic casting protocol, never independently through the bridge or Git. Other authoritative entries in the table are static configuration on disk. Verify the bridge as described in `.squad/templates/spawn-reference.md`; if it is unavailable, report the limitation rather than falling back to direct mutable-state access.
 
 ## File hierarchy
 

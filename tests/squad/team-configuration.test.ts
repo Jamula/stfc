@@ -72,7 +72,7 @@ describe("native Squad configuration", () => {
   });
 
   it("keeps installed workflow and review guidance aligned with its templates", () => {
-    for (const name of ["git-workflow", "reviewer-protocol", "agent-collaboration", "cross-squad"]) {
+    for (const name of ["git-workflow", "reviewer-protocol", "agent-collaboration", "cross-squad", "coordinator-init-mode", "coordinator-source-of-truth", "secret-handling"]) {
       const installed = read(".github", "skills", name, "SKILL.md");
       assert.equal(installed, read(".squad", "templates", "skills", name, "SKILL.md"), name);
     }
@@ -83,6 +83,11 @@ describe("native Squad configuration", () => {
     const reviewer = read(".github", "skills", "reviewer-protocol", "SKILL.md");
     assert.match(reviewer, /original author\s+may address feedback/);
     assert.match(reviewer, /independently review\s+the revised substantive changes/);
+    const source = read(".github", "skills", "coordinator-source-of-truth", "SKILL.md");
+    assert.match(source, /casting registry, history, and commit marker are the exception/);
+    assert.match(source, /native atomic casting protocol/);
+    const secrets = read(".github", "skills", "secret-handling", "SKILL.md");
+    assert.doesNotMatch(secrets, /\$matches\[0\]/i);
   });
 
   it("keeps mutable runtime state out of the source tree", () => {

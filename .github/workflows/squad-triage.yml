@@ -20,7 +20,15 @@ jobs:
         with:
           script: |
             const fs = require('fs');
-            const issue = context.payload.issue;
+            const { data: issue } = await github.rest.issues.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.issue.number
+            });
+            if (issue.state !== 'open') {
+              core.info(`Issue #${issue.number} is no longer open — skipping triage.`);
+              return;
+            }
 
             const teamFile = '.squad/team.md';
             if (!fs.existsSync(teamFile)) {
@@ -214,13 +222,15 @@ jobs:
               labels: [assignLabel]
             });
 
-            // Apply default triage verdict
-            await github.rest.issues.addLabels({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: issue.number,
-              labels: ['go:needs-research']
-            });
+            // Preserve a verdict already chosen for this issue.
+            if (!issue.labels.some(label => label.name.startsWith('go:'))) {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                labels: ['go:needs-research']
+              });
+            }
 
             // Labels route work; only squad-issue-assign.yml assigns Copilot.
 

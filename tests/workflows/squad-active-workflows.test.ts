@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import YAML from "yaml";
 
-type Step = { name?: string; if?: string; run?: string; with?: { script?: string } };
+type Step = { name?: string; if?: string; run?: string; "working-directory"?: string; with?: { script?: string } };
 type Workflow = {
   on: Record<string, unknown>;
   permissions: Record<string, string>;
@@ -39,6 +39,9 @@ test("active Squad workflows use main, existing deployment, and protected promot
   assert.match(steps[0]?.run ?? "", /refs\/heads\/main/);
   assert.ok(steps.some((step) => step.run === "npm run typecheck"));
   assert.ok(steps.some((step) => step.run === "npm test"));
+  for (const directory of ["pwa-browser", "pwa-token-api"]) {
+    assert.ok(steps.some((step) => step.run === "npm ci" && step["working-directory"] === directory), directory);
+  }
   assert.match(steps.at(-1)?.run ?? "", /gh release create.*--verify-tag --prerelease/);
 });
 
@@ -94,17 +97,18 @@ test("live triage routes a suitable issue to a team member, not Copilot", async 
   assert.ok(script);
   const labels: string[] = [];
   const comments: string[] = [];
+  const context = {
+    repo: { owner: "owner", repo: "repo" },
+    payload: { issue: { number: 42, state: "open", title: "Documentation fix", body: "", labels: [{ name: "squad" }] } },
+  };
   const github = {
     rest: {
       issues: {
+        get: async () => ({ data: context.payload.issue }),
         addLabels: async (request: { labels: string[] }) => { labels.push(...request.labels); },
         createComment: async (request: { body: string }) => { comments.push(request.body); },
       },
     },
-  };
-  const context = {
-    repo: { owner: "owner", repo: "repo" },
-    payload: { issue: { number: 42, title: "Documentation fix", body: "", labels: [{ name: "squad" }] } },
   };
   const core = { info: () => {}, warning: () => {} };
   const AsyncFunction = Object.getPrototypeOf(async () => {}).constructor as new (
@@ -117,4 +121,8 @@ test("live triage routes a suitable issue to a team member, not Copilot", async 
   assert.ok(!labels.includes("squad:copilot"));
   assert.equal(comments.length, 1);
   assert.doesNotMatch(comments[0]!, /Assigned to:\*\* @copilot/);
+  labels.length = 0;
+  context.payload.issue.labels.push({ name: "go:no" });
+  await execute(createRequire(import.meta.url), github, context, core);
+  assert.ok(!labels.some((label) => label.startsWith("go:")), "An existing go:no verdict must be preserved");
 });
