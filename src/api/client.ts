@@ -70,6 +70,8 @@ export interface RequestArgs<T> {
   body?: unknown;
   timeoutMs?: number;
   signal?: AbortSignal;
+  expectedStatus?: number;
+  rejectRedirects?: boolean;
 }
 
 export class ApiClient {
@@ -183,7 +185,10 @@ export class ApiClient {
       throw wrapNetworkError(err, method, args.path);
     }
 
-    return parseAndValidate(res, args.schema, method, args.path);
+    return parseAndValidate(res, args.schema, method, args.path, {
+      expectedStatus: args.expectedStatus,
+      rejectRedirects: args.rejectRedirects,
+    });
   }
 
   private buildUrl(path: string): string {
@@ -204,11 +209,16 @@ export class ApiClient {
     return this.request({ path: "/auth/me", method: "GET", schema: AuthMeResponseSchema });
   }
 
-  async listGifts(): Promise<GiftsLike> {
+  async listGifts(options: { expectedStatus?: number; rejectRedirects?: boolean } = {}): Promise<GiftsLike> {
     // The list endpoint without ?available=true returns the entire bundle
     // catalog (mostly bundles you can't claim). With ?available=true it
     // returns the subset the player can act on right now.
-    return this.request({ path: "/offers/gifts?available=true", method: "GET", schema: GiftsResponseSchema });
+    return this.request({
+      path: "/offers/gifts?available=true",
+      method: "GET",
+      schema: GiftsResponseSchema,
+      ...options,
+    });
   }
 
   /** List all gift bundles (catalog) — for the diagnostic `list-gifts` skill. */
@@ -247,6 +257,7 @@ async function parseAndValidate<T>(
   schema: ZodType<T>,
   method: HttpMethod,
   path: string,
+  options: { expectedStatus?: number; rejectRedirects?: boolean } = {},
 ): Promise<T> {
   const status = res.status;
 
@@ -270,6 +281,19 @@ async function parseAndValidate<T>(
       redactString(`HTTP ${status} on ${method} ${path}: ${truncate(body, 500)}`),
       status,
       { retryAfterMs: status === 429 ? parseRetryAfterMs(res.headers.get("retry-after")) : undefined },
+    );
+  }
+
+  if (options.rejectRedirects && res.redirected) {
+    throw new ApiError(
+      redactString(`Unexpected redirect on ${method} ${path}`),
+      status,
+    );
+  }
+  if (options.expectedStatus !== undefined && status !== options.expectedStatus) {
+    throw new ApiError(
+      redactString(`Unexpected HTTP ${status} on ${method} ${path}; expected ${options.expectedStatus}`),
+      status,
     );
   }
 

@@ -27,5 +27,9 @@ export function mergeAvailableRefreshedAccounts(
   raw: string,
   overrides: string[],
   fetchImpl?: typeof fetch,
-): Promise<{ accounts: Array<{ name: string; token: string }>; rejectedCount: number }>;
+): Promise<{
+  accounts: Array<{ name: string; token: string }>;
+  rejectedCount: number;
+  acceptedOverrides: boolean[];
+}>;
 export function captureFromPage(browser: import('playwright').Browser, context: import('playwright').BrowserContext, page: import('playwright').Page): Promise<{ token: string | null; source: string }>;

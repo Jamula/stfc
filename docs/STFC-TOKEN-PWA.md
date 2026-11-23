@@ -128,15 +128,22 @@ existing Azure token store must first be available and its use authorized.
 
 Both legacy redemption and the manual **Check recovery authentication** workflow
 verify the fresh token's live `/auth/me` account identity and require exactly one
-matching `accountId` claim in the existing inventory. The manual check fails if
-the required fresh override is missing or any override cannot be matched and
-verified. Every override must also pass the exact gift-list endpoint's
-authentication, HTTP status, content-type, JSON, and production schema checks.
-Scheduled redemption applies each override only after these checks in the same
-step that writes its temporary inventory. If a candidate fails, it reports a
-warning and rejects that candidate while preserving prior verified overrides and
-the baseline tokens for the remaining accounts. Existing JWT claims are used
-only to match the trusted secret inventory, not as proof of live authentication.
+matching `accountId` claim in the existing inventory. The gift-list probe uses
+the production client's bounded safe-GET retry policy for temporary
+authentication and server errors, but requires the final response to be HTTP
+200, non-redirected, and valid under the production response schema. Scheduled
+redemption applies each override only after these checks in the same step that
+writes its temporary inventory. If a candidate fails, it reports a warning and
+rejects that candidate while preserving prior verified overrides and the
+baseline tokens for the remaining accounts.
+
+The manual check uses that same effective inventory: the fresh recovery
+override must be accepted, then every effective account must pass authentication
+and gift-list checks. A rejected older override is reported separately and may
+remain non-fatal when the fresh override succeeds and the resulting inventory
+passes validation. A rejected fresh override fails the check. Existing JWT
+claims are used only to match the trusted secret inventory, not as proof of live
+authentication.
 Tokens whose claims use a different identity field are unsupported and must not
 be guessed. All other accounts are preserved.
 

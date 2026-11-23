@@ -184,7 +184,8 @@ describe("automation-state scheduled workflow contract", () => {
     const check = namedStep(recovery, "Verify legacy inventory and refresh without redemption");
     assert.equal(recovery.concurrency.group, SHARED_WRITER_GROUP);
     assert.match(check.run ?? "", /Required fresh recovery override is missing/);
-    assert.match(check.run ?? "", /mergeRefreshedAccounts/);
+    assert.match(check.run ?? "", /mergeAvailableRefreshedAccounts/);
+    assert.match(check.run ?? "", /acceptedOverrides\[freshOverrideIndex\]/);
   });
 
   it("reads account tokens from private Blob Storage through OIDC with a bounded redeem-only legacy fallback", () => {

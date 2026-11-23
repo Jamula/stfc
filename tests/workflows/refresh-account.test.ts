@@ -106,6 +106,7 @@ describe("manual refresh inventory safety", () => {
       new Response("{}", { headers: { "content-type": "application/json" } }),
       new Response('{"items":[null]}', { headers: { "content-type": "application/json" } }),
       new Response("[]", { status: 302, headers: { "content-type": "application/json" } }),
+      new Response("[]", { status: 201, headers: { "content-type": "application/json" } }),
       new Response("[]", { status: 401, headers: { "content-type": "application/json" } }),
       new Response("[]", { status: 503, headers: { "content-type": "application/json" } }),
     ]) {
@@ -118,6 +119,50 @@ describe("manual refresh inventory safety", () => {
     const redirected = new Response("[]", { headers: { "content-type": "application/json" } });
     Object.defineProperty(redirected, "redirected", { value: true });
     await assert.rejects(verifyGiftAccess(fresh, async () => redirected));
+  });
+
+  it("uses the production retry budget for temporary gift-list authentication and server failures", async () => {
+    for (const temporaryStatus of [401, 503]) {
+      let attempts = 0;
+      await verifyGiftAccess(fresh, async (_url, options) => {
+        assert.equal(options?.redirect, "error");
+        attempts += 1;
+        const status = attempts === 1 ? temporaryStatus : 200;
+        return new Response("[]", { status, headers: { "content-type": "application/json" } });
+      });
+      assert.equal(attempts, 2, `HTTP ${temporaryStatus} should be retried once before the successful response`);
+    }
+
+    let mixedAttempts = 0;
+    const mixedStatuses = [503, 401, 200];
+    await verifyGiftAccess(fresh, async () => {
+      const status = mixedStatuses[mixedAttempts++]!;
+      return new Response("[]", { status, headers: { "content-type": "application/json" } });
+    });
+    assert.equal(mixedAttempts, 3, "transient retry and auth corroboration share the production three-attempt cap");
+
+    for (const [status, expectedAttempts] of [[401, 2], [503, 2]] as const) {
+      let attempts = 0;
+      await assert.rejects(verifyGiftAccess(fresh, async () => {
+        attempts += 1;
+        return new Response("[]", { status, headers: { "content-type": "application/json" } });
+      }));
+      assert.equal(attempts, expectedAttempts, `HTTP ${status} should stop at the production retry limit`);
+    }
+
+    let nonRetriableAttempts = 0;
+    await assert.rejects(verifyGiftAccess(fresh, async () => {
+      nonRetriableAttempts += 1;
+      return new Response("invalid request", { status: 422, headers: { "content-type": "application/json" } });
+    }), /HTTP 422/);
+    assert.equal(nonRetriableAttempts, 1, "non-retriable client errors must not be replayed");
+
+    let unexpectedSuccessAttempts = 0;
+    await assert.rejects(verifyGiftAccess(fresh, async () => {
+      unexpectedSuccessAttempts += 1;
+      return new Response("[]", { status: 201, headers: { "content-type": "application/json" } });
+    }));
+    assert.equal(unexpectedSuccessAttempts, 1, "a non-200 success status must fail without retries");
   });
 
   it("pins GitHub secret commands to github.com regardless of GH_HOST", () => {
@@ -143,7 +188,8 @@ describe("manual refresh inventory safety", () => {
     assert.deepEqual(workflow.permissions, { contents: "read" });
     assert.equal(workflow.concurrency.group, "stfc-gift-redeemer");
     const run = workflow.jobs.check.steps.at(-1).run;
-    assert.match(run, /mergeRefreshedAccounts/);
+    assert.match(run, /mergeAvailableRefreshedAccounts/);
+    assert.match(run, /acceptedOverrides\[freshOverrideIndex\]/);
     assert.match(run, /verifiedIdentity\(account\.token\)/);
     assert.match(run, /verifyGiftAccess\(account\.token\)/);
     assert.doesNotMatch(run, /skill:run-all|claim-gifts|redeem-codes|secret.*set/);
@@ -173,7 +219,7 @@ describe("manual refresh inventory safety", () => {
         },
       });
       assert.equal(result.status, expectedStatus, result.stderr);
-      if (giftStatus === 401) assert.match(result.stderr, /could not be verified/);
+      if (giftStatus === 401) assert.match(result.stderr, /Fresh recovery override failed/);
       else assert.match(result.stdout, /1\/1 accounts accepted/);
     }
   });
@@ -195,6 +241,56 @@ describe("manual refresh inventory safety", () => {
     });
     assert.equal(result.status, 1);
     assert.match(result.stderr, /Required fresh recovery override is missing/);
+  });
+
+  it("verifies the effective scheduled inventory and reports prior versus fresh override failures", () => {
+    const priorToken = token("two").replace(".signature", ".prior");
+    const freshToken = token("two").replace(".signature", ".fresh");
+    const workflow = parse(readFileSync(".github/workflows/check-recovery-auth.yml", "utf8"));
+    const run: string = workflow.jobs.check.steps.at(-1).run;
+    const script = run.match(/node --input-type=module <<'NODE'\r?\n([\s\S]*?)\r?\nNODE/)?.[1];
+    assert.ok(script);
+    const stub = `globalThis.fetch = async (url, opts) => {
+      const credential = opts.headers.Authorization.slice(7);
+      const claims = JSON.parse(Buffer.from(credential.split(".")[1], "base64url").toString());
+      if (url.endsWith("/auth/me")) return new Response(JSON.stringify({
+        payload: { accountId: claims.accountId }
+      }), { headers: {"content-type": "application/json"} });
+      if (url.endsWith("/offers/gifts?available=true")) {
+        const rejected = JSON.parse(process.env.REJECT_GIFT_TOKENS);
+        return new Response("[]", {
+          status: rejected.includes(credential) ? 401 : 200,
+          headers: {"content-type": "application/json"}
+        });
+      }
+      throw new Error("unexpected endpoint");
+    };`;
+    const execute = (rejectedTokens: string[]) => spawnSync(
+      process.execPath,
+      ["--input-type=module", "-e", `${stub}\n${script}`],
+      {
+        encoding: "utf8",
+        env: {
+          ...process.env,
+          STFC_ACCOUNTS: JSON.stringify(original),
+          STFC_ACCOUNT_REFRESH: JSON.stringify({ token: priorToken }),
+          STFC_ACCOUNT_REFRESH_RECOVERY: JSON.stringify({ token: freshToken }),
+          REJECT_GIFT_TOKENS: JSON.stringify(rejectedTokens),
+          REPOSITORY_VARIABLES: "{}",
+        },
+      },
+    );
+
+    const priorRejected = execute([priorToken, original[1]!.token]);
+    assert.equal(priorRejected.status, 0, priorRejected.stderr);
+    assert.match(priorRejected.stderr, /older refresh override was rejected/);
+    assert.match(priorRejected.stdout, /2\/2 accounts accepted/);
+
+    const freshRejected = execute([priorToken, original[1]!.token, freshToken]);
+    assert.equal(freshRejected.status, 1);
+    assert.match(freshRejected.stderr, /Fresh recovery override failed/);
+    assert.doesNotMatch(freshRejected.stdout, /Non-redeeming authentication and gift-list access/);
+    assert.doesNotMatch(freshRejected.stderr, /older refresh override was rejected/);
   });
 
   it("keeps scheduled redemption on the preserved inventory when overrides fail validation", () => {

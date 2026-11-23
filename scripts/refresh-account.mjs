@@ -5,10 +5,10 @@ import { captureToken } from './capture-token.mjs';
 import { parseDocument } from 'yaml';
 import { isTokenAccounts } from '../shared/token-account-schema.mjs';
 import { createInterface } from 'node:readline/promises';
-import { AuthMeResponseSchema, GiftsResponseSchema } from '../src/api/schemas.ts';
+import { ApiClient } from '../src/api/client.ts';
+import { AuthMeResponseSchema } from '../src/api/schemas.ts';
 
 const API = 'https://cdn-nv3-webstore-api.startrek.digitgaming.com/api/v2/auth/me';
-const GIFTS_API = 'https://cdn-nv3-webstore-api.startrek.digitgaming.com/api/v2/offers/gifts?available=true';
 const REFRESH_SECRET = 'STFC_ACCOUNT_REFRESH_61690F065F04521CBA2CAE742A6BEC0DB2606A8E38A2FF74AEA5E1CB58D4E854';
 const GITHUB_REPO = 'github.com/Jamula/stfc';
 
@@ -40,21 +40,11 @@ export async function verifiedIdentity(token, fetchImpl = fetch) {
 }
 
 export async function verifyGiftAccess(token, fetchImpl = fetch) {
-  const response = await fetchImpl(GIFTS_API, {
-    headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
-    redirect: 'error', signal: AbortSignal.timeout(15000),
+  const client = new ApiClient({
+    token,
+    fetchImpl: (url, options) => fetchImpl(url, { ...options, redirect: 'error' }),
   });
-  if (response.status !== 200 || response.redirected) throw new Error('Gift-list authentication rejected.');
-  if (!/json/i.test(response.headers.get('content-type') ?? '')) {
-    throw new Error('Gift-list response was not JSON.');
-  }
-  let body;
-  try {
-    body = await response.json();
-  } catch {
-    throw new Error('Gift-list response was not valid JSON.');
-  }
-  if (!GiftsResponseSchema.safeParse(body).success) throw new Error('Gift-list response failed schema validation.');
+  await client.listGifts({ expectedStatus: 200, rejectRedirects: true });
 }
 
 export function runGithubSecretCommand(args, options = {}, run = spawnSync) {
@@ -102,6 +92,7 @@ function readInventory(raw) {
 
 async function applyRefreshOverrides({ accounts, ids }, overrides, fetchImpl) {
   const replacements = new Map();
+  const acceptedOverrides = [];
   let rejectedCount = 0;
   for (const refreshed of overrides) {
     try {
@@ -111,14 +102,17 @@ async function applyRefreshOverrides({ accounts, ids }, overrides, fetchImpl) {
       if (!ids.includes(id) || replacements.has(id)) throw new Error();
       await verifyGiftAccess(candidate.token, fetchImpl);
       replacements.set(id, candidate.token);
+      acceptedOverrides.push(true);
     } catch {
       rejectedCount += 1;
+      acceptedOverrides.push(false);
     }
   }
   return {
     accounts: accounts.map((account, index) => replacements.has(ids[index])
       ? { ...account, token: replacements.get(ids[index]) } : account),
     rejectedCount,
+    acceptedOverrides,
   };
 }
 
