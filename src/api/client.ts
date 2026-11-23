@@ -42,6 +42,10 @@ export class TransientError extends ApiError {
   override readonly name = "TransientError";
 }
 
+export class AmbiguousResponseError extends ApiError {
+  override readonly name = "AmbiguousResponseError";
+}
+
 export class SchemaMismatchError extends ApiError {
   override readonly name = "SchemaMismatchError";
 }
@@ -70,6 +74,8 @@ export interface RequestArgs<T> {
   body?: unknown;
   timeoutMs?: number;
   signal?: AbortSignal;
+  expectedStatus?: number;
+  rejectRedirects?: boolean;
 }
 
 export class ApiClient {
@@ -128,37 +134,8 @@ export class ApiClient {
     }
   }
 
-  /**
-   * Safe request: up to three attempts, sharing one transient-retry allowance
-   * and one auth-corroboration allowance. The last attempt is unconditional,
-   * so whatever it throws is the corroborated answer and no branch is dead.
-   */
-  private async requestSafe<T>(args: RequestArgs<T>, method: HttpMethod): Promise<T> {
-    const maxAttempts = 3;
-    let authRejections = 0;
-    let transientRetries = 0;
-
-    for (let attempt = 1; attempt < maxAttempts; attempt += 1) {
-      try {
-        return await this.attempt(args, method);
-      } catch (err) {
-        if (err instanceof TokenExpiredError) {
-          authRejections += 1;
-          if (authRejections >= 2) throw err;
-        } else if (
-          transientRetries === 0 &&
-          (err instanceof TransientError || err instanceof TypeError)
-        ) {
-          transientRetries += 1;
-        } else {
-          throw err;
-        }
-
-        await sleep(jitter(500, 1000));
-      }
-    }
-
-    return await this.attempt(args, method);
+  private requestSafe<T>(args: RequestArgs<T>, method: HttpMethod): Promise<T> {
+    return withSafeGetRetries(() => this.attempt(args, method));
   }
 
   private async attempt<T>(args: RequestArgs<T>, method: HttpMethod): Promise<T> {
@@ -183,7 +160,10 @@ export class ApiClient {
       throw wrapNetworkError(err, method, args.path);
     }
 
-    return parseAndValidate(res, args.schema, method, args.path);
+    return parseAndValidate(res, args.schema, method, args.path, {
+      expectedStatus: args.expectedStatus,
+      rejectRedirects: args.rejectRedirects,
+    });
   }
 
   private buildUrl(path: string): string {
@@ -204,11 +184,16 @@ export class ApiClient {
     return this.request({ path: "/auth/me", method: "GET", schema: AuthMeResponseSchema });
   }
 
-  async listGifts(): Promise<GiftsLike> {
+  async listGifts(options: { expectedStatus?: number; rejectRedirects?: boolean } = {}): Promise<GiftsLike> {
     // The list endpoint without ?available=true returns the entire bundle
     // catalog (mostly bundles you can't claim). With ?available=true it
     // returns the subset the player can act on right now.
-    return this.request({ path: "/offers/gifts?available=true", method: "GET", schema: GiftsResponseSchema });
+    return this.request({
+      path: "/offers/gifts?available=true",
+      method: "GET",
+      schema: GiftsResponseSchema,
+      ...options,
+    });
   }
 
   /** List all gift bundles (catalog) — for the diagnostic `list-gifts` skill. */
@@ -235,6 +220,38 @@ export class ApiClient {
   }
 }
 
+/**
+ * Safe GET retry policy shared by ApiClient reads and recovery identity probes.
+ * The bounded sequence allows one transient retry and one auth corroboration.
+ */
+export async function withSafeGetRetries<T>(request: () => Promise<T>): Promise<T> {
+  const maxAttempts = 3;
+  let authRejections = 0;
+  let transientRetries = 0;
+
+  for (let attempt = 1; attempt < maxAttempts; attempt += 1) {
+    try {
+      return await request();
+    } catch (err) {
+      if (err instanceof TokenExpiredError) {
+        authRejections += 1;
+        if (authRejections >= 2) throw err;
+      } else if (
+        transientRetries === 0 &&
+        (err instanceof TransientError || err instanceof TypeError)
+      ) {
+        transientRetries += 1;
+      } else {
+        throw err;
+      }
+
+      await sleep(jitter(500, 1000));
+    }
+  }
+
+  return await request();
+}
+
 function wrapNetworkError(err: unknown, method: HttpMethod, path: string): TransientError {
   const detail = err instanceof Error ? err.message : String(err);
   return new TransientError(
@@ -242,11 +259,29 @@ function wrapNetworkError(err: unknown, method: HttpMethod, path: string): Trans
   );
 }
 
+export async function readResponseText(res: Response, method: HttpMethod, path: string): Promise<string> {
+  try {
+    return await res.text();
+  } catch (err) {
+    if (SAFE_METHODS.has(method)) throw wrapNetworkError(err, method, path);
+
+    const detail = err instanceof Error ? err.message : String(err);
+    throw new AmbiguousResponseError(
+      redactString(
+        `Could not read the HTTP ${res.status} response body for ${method} ${path}; ` +
+          `the operation result is unknown: ${detail}`,
+      ),
+      res.status,
+    );
+  }
+}
+
 async function parseAndValidate<T>(
   res: Response,
   schema: ZodType<T>,
   method: HttpMethod,
   path: string,
+  options: { expectedStatus?: number; rejectRedirects?: boolean } = {},
 ): Promise<T> {
   const status = res.status;
 
@@ -273,6 +308,19 @@ async function parseAndValidate<T>(
     );
   }
 
+  if (options.rejectRedirects && res.redirected) {
+    throw new ApiError(
+      redactString(`Unexpected redirect on ${method} ${path}`),
+      status,
+    );
+  }
+  if (options.expectedStatus !== undefined && status !== options.expectedStatus) {
+    throw new ApiError(
+      redactString(`Unexpected HTTP ${status} on ${method} ${path}; expected ${options.expectedStatus}`),
+      status,
+    );
+  }
+
   const contentType = res.headers.get("content-type") ?? "";
   if (!/json/i.test(contentType)) {
     const body = await safeReadText(res);
@@ -284,9 +332,10 @@ async function parseAndValidate<T>(
     );
   }
 
+  const body = await readResponseText(res, method, path);
   let json: unknown;
   try {
-    json = await res.json();
+    json = JSON.parse(body);
   } catch (err) {
     const detail = err instanceof Error ? err.message : String(err);
     throw new SchemaMismatchError(

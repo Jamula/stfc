@@ -15,8 +15,9 @@
 //         { accessToken: <STFC store JWT> }, OR
 //      b) any outgoing request to the STFC API carrying an
 //         "Authorization: Bearer <token>" header.
-//   3. Whichever fires first, validates the captured token by calling
-//      GET /auth/me. If valid, decodes the JWT exp and proceeds.
+//   3. Interactive capture drains login requests and response reads before
+//      closing the browser; unresolved, cancelled, or ambiguous work fails closed.
+//      It validates the captured token with GET /auth/me before proceeding.
 //   4. Merges the validated token into a local .env (preserving any
 //      other accounts already in STFC_ACCOUNTS).
 //   5. Writes only to the local .env. Hosted token updates use the owner-only PWA.
@@ -142,11 +143,40 @@ function humanDelta(seconds) {
 // Network capture.
 // ----------------------------------------------------------------------------
 
-async function captureToken({ context, timeoutMs, closeAfterCapture, signal }) {
+async function drainPendingResponses(pending, pendingLoginRequests, timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  const quietMs = 100;
+  let quietSince = Date.now();
+  while (Date.now() < deadline) {
+    if (pending.size > 0 || pendingLoginRequests.size > 0) {
+      quietSince = null;
+      const jobs = [...pending];
+      let timer;
+      const timeout = new Promise((resolve) => {
+        timer = setTimeout(resolve, Math.min(25, deadline - Date.now()));
+      });
+      try {
+        if (jobs.length > 0) await Promise.race([Promise.allSettled(jobs), timeout]);
+        else await timeout;
+      } finally {
+        clearTimeout(timer);
+      }
+      continue;
+    }
+    if (quietSince === null) quietSince = Date.now();
+    if (Date.now() - quietSince >= quietMs) return true;
+    await new Promise((resolve) => setTimeout(resolve, Math.min(20, deadline - Date.now())));
+  }
+  return false;
+}
+
+async function captureToken({ context, timeoutMs, closeAfterCapture, signal, responseDrainTimeoutMs = 5000 }) {
   let resolve;
   const captured = new Promise((r) => { resolve = r; });
   let first = null, changed = false, ambiguous = false;
   const pending = new Set();
+  const pendingLoginRequests = new Set();
+  const loginRequests = new WeakSet();
   const win = (token, source) => {
     if (!isJwtShaped(token)) { ambiguous = true; return; }
     if (first) {
@@ -158,38 +188,60 @@ async function captureToken({ context, timeoutMs, closeAfterCapture, signal }) {
   };
 
   const onResponse = (res) => {
+    let request;
     try {
       const url = new URL(res.url());
       if (url.protocol !== "https:" || url.host !== API_HOST || url.pathname !== "/api/v2/auth/login") return;
-      if (res.request().method() !== "POST") return;
-    } catch { if (closeAfterCapture) ambiguous = true; return; }
+      request = res.request();
+      if (request.method() !== "POST") return;
+      if (!loginRequests.has(request)) {
+        loginRequests.add(request);
+        pendingLoginRequests.add(request);
+      }
+    } catch { if (closeAfterCapture && first) ambiguous = true; return; }
     const job = (async () => {
       try {
         const body = await res.json();
         if (typeof body?.accessToken === "string") win(body.accessToken, "POST /auth/login response");
-        else if (closeAfterCapture && res.status() >= 200 && res.status() < 300) ambiguous = true;
+        else if (closeAfterCapture) ambiguous = true;
       } catch {
         if (closeAfterCapture) ambiguous = true;
       }
     })();
     pending.add(job);
-    job.finally(() => pending.delete(job));
+    job.then(() => pending.delete(job), () => pending.delete(job));
   };
 
   const onRequest = (req) => {
     try {
       const url = new URL(req.url());
       if (url.protocol !== "https:" || url.host !== API_HOST) return;
+      if (url.pathname === "/api/v2/auth/login" && req.method() === "POST") {
+        loginRequests.add(req);
+        pendingLoginRequests.add(req);
+      }
       const auth = req.headers()["authorization"];
       if (typeof auth === "string" && auth.startsWith("Bearer ")) {
         const token = auth.slice("Bearer ".length).trim();
         if (token.length > 0) win(token, "request header");
       }
-    } catch { if (closeAfterCapture) ambiguous = true; }
+    } catch { if (closeAfterCapture && first) ambiguous = true; }
+  };
+
+  const onRequestFinished = (req) => {
+    if (loginRequests.has(req)) pendingLoginRequests.delete(req);
+  };
+
+  const onRequestFailed = (req) => {
+    if (!loginRequests.has(req)) return;
+    pendingLoginRequests.delete(req);
+    if (closeAfterCapture) ambiguous = true;
   };
 
   context.on("response", onResponse);
   context.on("request", onRequest);
+  context.on("requestfinished", onRequestFinished);
+  context.on("requestfailed", onRequestFailed);
   let timer;
   const timeout = new Promise((r) => { timer = setTimeout(() => r({ token: null, source: "timeout" }), timeoutMs); });
   let onAbort;
@@ -201,8 +253,9 @@ async function captureToken({ context, timeoutMs, closeAfterCapture, signal }) {
   try {
     const result = await Promise.race([captured, timeout, aborted]);
     if (result.token && closeAfterCapture) {
+      if (!await drainPendingResponses(pending, pendingLoginRequests, responseDrainTimeoutMs)) ambiguous = true;
       await closeAfterCapture();
-      await Promise.all([...pending]);
+      if (!await drainPendingResponses(pending, pendingLoginRequests, responseDrainTimeoutMs)) ambiguous = true;
       if (changed || ambiguous) throw new Error("Capture was ambiguous or the browser token changed; no update was written.");
     }
     return result;
@@ -211,6 +264,8 @@ async function captureToken({ context, timeoutMs, closeAfterCapture, signal }) {
     if (onAbort) signal.removeEventListener("abort", onAbort);
     context.off("response", onResponse);
     context.off("request", onRequest);
+    context.off("requestfinished", onRequestFinished);
+    context.off("requestfailed", onRequestFailed);
   }
 }
 

@@ -115,6 +115,9 @@ interactive terminal. Enter credentials and the OTP only in the official browser
 The helper checks `/auth/me` and the non-redeeming gift list and pipes the token
 to `gh secret set`; it does not read `.env`, print the token, or alter the
 baseline or existing override. `--verify-only` checks a login without saving it.
+Capture fails closed if a login attempt is failed, tokenless, ambiguous, or still
+unresolved when the browser closes. A promo POST whose successful response body
+cannot be read is reported as unknown and is never replayed.
 
 The name was randomly generated with 256 bits of entropy; independent accidental
 collisions are extremely unlikely, not impossible. GitHub does not provide
@@ -128,11 +131,25 @@ existing Azure token store must first be available and its use authorized.
 
 Both legacy redemption and the manual **Check recovery authentication** workflow
 verify the fresh token's live `/auth/me` account identity and require exactly one
-matching `accountId` claim in the existing inventory. Missing claims, ambiguity,
-mismatch, duplicate identities across overrides, invalid data, or failed authentication stop the operation. Existing
-JWT claims are used only to match the trusted secret inventory, not as proof of
-live authentication. Tokens whose claims use a different identity field are
-unsupported and must not be guessed. All other accounts are preserved.
+matching `accountId` claim in the existing inventory. Identity and gift-list
+probes share the production client's bounded safe-GET retry policy, including
+transient response-body read failures; malformed JSON and schema mismatches are
+not retried. Both require the final response to be HTTP 200, non-redirected, and
+valid under the applicable production response schema.
+Scheduled redemption applies each override only after these checks in the same
+step that writes its temporary inventory. If a candidate fails, it reports a
+warning and rejects that candidate while preserving prior verified overrides
+and the baseline tokens for the remaining accounts.
+
+The manual check uses that same effective inventory: the fresh recovery
+override must be accepted, then every effective account must pass authentication
+and gift-list checks. A rejected older override is reported separately and may
+remain non-fatal when the fresh override succeeds and the resulting inventory
+passes validation. A rejected fresh override fails the check. Existing JWT
+claims are used only to match the trusted secret inventory, not as proof of live
+authentication.
+Tokens whose claims use a different identity field are unsupported and must not
+be guessed. All other accounts are preserved.
 
 The merge exists only in the workflow's snapshot: the baseline secret is never
 overwritten, so concurrent baseline updates are not lost. The shared workflow

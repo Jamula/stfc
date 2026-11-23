@@ -29,7 +29,7 @@ export interface TokenValidation {
 
 export function findOtpEntry(page: Page): Promise<OtpEntry | null>;
 export function fillOtp(page: Page, entry: OtpEntry, code: string): Promise<void>;
-export function captureToken(options: { context: TokenCaptureContext; timeoutMs: number; signal?: AbortSignal; closeAfterCapture?: () => Promise<void> }): Promise<CapturedToken>;
+export function captureToken(options: { context: TokenCaptureContext; timeoutMs: number; signal?: AbortSignal; closeAfterCapture?: () => Promise<void>; responseDrainTimeoutMs?: number }): Promise<CapturedToken>;
 export function validateToken(token: string): Promise<TokenValidation>;
 export function waitForFirstSelector(page: Page, selectors: string[], timeoutMs: number): Promise<ElementHandle<HTMLElement | SVGElement> | null>;
 export function clickFirstAvailable(page: Page, selectors: string[]): Promise<boolean>;

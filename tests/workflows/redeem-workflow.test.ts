@@ -81,6 +81,9 @@ describe(".github/workflows/redeem.yml", () => {
       (entry: { name?: string }) => entry.name === "Load legacy account tokens",
     );
     assert.equal(step.env.STFC_ACCOUNTS, "${{ secrets.STFC_ACCOUNTS }}");
+    assert.match(step.run, /refresh override\(s\) were rejected/);
+    assert.ok(step.run.indexOf("await mergeAvailableRefreshedAccounts(") < step.run.indexOf("writeFileSync(join("),
+      "only independently validated overrides may enter the temporary inventory");
     const script = step.run.split("<<'NODE'\n")[1].replace(/\nNODE\s*$/, "");
     const directory = fs.mkdtempSync(path.join(tmpdir(), "stfc-legacy-"));
     const file = path.join(directory, "stfc-accounts.json");

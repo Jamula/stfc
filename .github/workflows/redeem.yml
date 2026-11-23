@@ -177,10 +177,10 @@ jobs:
           STFC_ACCOUNT_REFRESH_RECOVERY: ${{ secrets.STFC_ACCOUNT_REFRESH_61690F065F04521CBA2CAE742A6BEC0DB2606A8E38A2FF74AEA5E1CB58D4E854 }}
         run: |
           node --input-type=module <<'NODE'
-          import { writeFileSync } from 'node:fs';
+          import { appendFileSync, writeFileSync } from 'node:fs';
           import { join } from 'node:path';
           import { isTokenAccounts } from './shared/token-account-schema.mjs';
-          import { mergeRefreshedAccounts } from './scripts/refresh-account.mjs';
+          import { mergeAvailableRefreshedAccounts } from './scripts/refresh-account.mjs';
           let accounts;
           try {
             accounts = JSON.parse(process.env.STFC_ACCOUNTS ?? '');
@@ -194,11 +194,21 @@ jobs:
           }
           const overrides = [process.env.STFC_ACCOUNT_REFRESH, process.env.STFC_ACCOUNT_REFRESH_RECOVERY].filter(Boolean);
           if (overrides.length) {
+            let result;
             try {
-              accounts = await mergeRefreshedAccounts(process.env.STFC_ACCOUNTS, overrides);
+              // Validate each snapshot before applying it, keeping earlier verified overrides if a later one fails.
+              result = await mergeAvailableRefreshedAccounts(process.env.STFC_ACCOUNTS, overrides);
             } catch {
-              console.error('::error::Refresh override identity could not be matched; no redemption attempted.');
+              console.error('::error::Account refresh inventory is invalid; no redemption attempted.');
               process.exit(1);
+            }
+            accounts = result.accounts;
+            if (result.rejectedCount > 0) {
+              console.warn(`::warning::${result.rejectedCount} refresh override(s) were rejected; only verified overrides and preserved account tokens will be used.`);
+              if (process.env.GITHUB_STEP_SUMMARY) {
+                appendFileSync(process.env.GITHUB_STEP_SUMMARY,
+                  `### Account refresh override(s) rejected\n${result.rejectedCount} override(s) failed identity, uniqueness, or gift-access verification. Verified overrides and the preserved \`STFC_ACCOUNTS\` inventory remain in use.\n`);
+              }
             }
           }
           writeFileSync(join(process.env.RUNNER_TEMP, 'stfc-accounts.json'),

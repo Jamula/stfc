@@ -29,29 +29,41 @@ jobs:
           REPOSITORY_VARIABLES: ${{ toJSON(vars) }}
         run: |
           node --input-type=module <<'NODE'
-          import { mergeRefreshedAccounts, verifiedIdentity, verifyGiftAccess } from './scripts/refresh-account.mjs';
+          import { mergeAvailableRefreshedAccounts, verifiedIdentity, verifyGiftAccess } from './scripts/refresh-account.mjs';
           import { isTokenAccounts } from './shared/token-account-schema.mjs';
           try {
             const vars = JSON.parse(process.env.REPOSITORY_VARIABLES);
             const keys = ['AZURE_CLIENT_ID', 'AZURE_TENANT_ID', 'AZURE_SUBSCRIPTION_ID',
               'AZURE_TOKEN_STORAGE_ACCOUNT', 'AZURE_TOKEN_CONTAINER', 'AZURE_TOKEN_BLOB'];
             if (keys.some(key => vars[key]?.trim())) throw new Error();
-            let accounts = JSON.parse(process.env.STFC_ACCOUNTS ?? '');
-            if (!isTokenAccounts(accounts)) throw new Error();
-            const overrides = [process.env.STFC_ACCOUNT_REFRESH, process.env.STFC_ACCOUNT_REFRESH_RECOVERY].filter(Boolean);
-            if (overrides.length) {
-              accounts = await mergeRefreshedAccounts(process.env.STFC_ACCOUNTS, overrides);
+            if (!process.env.STFC_ACCOUNT_REFRESH_RECOVERY?.trim()) {
+              console.error('::error::Required fresh recovery override is missing; no recovery validation was performed.');
+              process.exit(1);
             }
+            const accounts = JSON.parse(process.env.STFC_ACCOUNTS ?? '');
+            if (!isTokenAccounts(accounts)) throw new Error();
+            const priorOverride = process.env.STFC_ACCOUNT_REFRESH;
+            const overrides = [priorOverride, process.env.STFC_ACCOUNT_REFRESH_RECOVERY].filter(value => value?.trim());
+            const result = await mergeAvailableRefreshedAccounts(process.env.STFC_ACCOUNTS, overrides);
+            const freshOverrideIndex = overrides.length - 1;
+            if (!result.acceptedOverrides[freshOverrideIndex]) {
+              console.error('::error::Fresh recovery override failed identity, uniqueness, or gift-access validation; no recovery validation was accepted.');
+              process.exit(1);
+            }
+            if (priorOverride?.trim() && !result.acceptedOverrides[0]) {
+              console.warn('::warning::The older refresh override was rejected; the accepted fresh override and baseline inventory remain in use.');
+            }
+            const effectiveAccounts = result.accounts;
             let authenticated = 0;
-            for (const account of accounts) {
+            for (const account of effectiveAccounts) {
               try {
                 await verifiedIdentity(account.token);
                 await verifyGiftAccess(account.token);
                 authenticated++;
               } catch {}
             }
-            console.log(`Non-redeeming authentication and gift-list access: ${authenticated}/${accounts.length} accounts accepted.`);
-            if (authenticated !== accounts.length) {
+            console.log(`Non-redeeming authentication and gift-list access: ${authenticated}/${effectiveAccounts.length} accounts accepted.`);
+            if (authenticated !== effectiveAccounts.length) {
               console.error('::error::One or more preserved accounts failed authentication.');
               process.exitCode = 1;
             }
