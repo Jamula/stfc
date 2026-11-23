@@ -3,6 +3,7 @@
 //
 // Run with: npm test
 import "./lib/jwt.test.ts";
+import "./workflows/refresh-account.test.ts";
 import "./lib/accounts.test.ts";
 import "./lib/outcomes.test.ts";
 import "./lib/promoCodes.test.ts";

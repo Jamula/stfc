@@ -93,6 +93,47 @@ scoped to the token container. The scheduled workflows download the Blob to a
 runner temporary file, restrict its permissions, use `STFC_ACCOUNTS_FILE`, and
 remove the file after the account list has been loaded.
 
+For recovery, `redeem.yml` uses the existing `STFC_ACCOUNTS` GitHub secret
+only when all six Azure variables are absent or empty. It validates the whole
+account list and writes it to the same restricted temporary file, without
+changing the secret or dropping accounts. Partial Azure configuration fails
+explicitly; a configured Azure login or download failure never falls back.
+`discord-monitor.yml` still requires Azure configuration.
+
+This fallback does not refresh expired tokens. Without a current complete
+account backup, do not replace `STFC_ACCOUNTS` with a single refreshed account.
+The local capture helper requires that backup and independently verified
+account identity; enter login credentials and OTP only in the official browser.
+
+### Recovery without a complete account backup
+
+After explicit approval to create the encrypted `STFC_ACCOUNT_REFRESH`
+override secret, run `node scripts/refresh-account.mjs --publish` in a private
+interactive terminal. Enter credentials and the OTP only in the visible official
+STFC browser. The helper checks `/auth/me` and pipes the fresh credential directly
+to `gh secret set`; it does not read `.env`, print the token, or rewrite
+`STFC_ACCOUNTS`. Its GitHub CLI account needs repository Actions-secret write
+access; the existing refresh PAT is not read or reused.
+
+Both legacy redemption and the manual **Check recovery authentication** workflow
+verify the fresh token's live `/auth/me` account identity and require exactly one
+matching `accountId` claim in the existing inventory. Missing claims, ambiguity,
+mismatch, invalid data, or failed authentication stop the operation. Existing
+JWT claims are used only to match the trusted secret inventory, not as proof of
+live authentication. Tokens whose claims use a different identity field are
+unsupported and must not be guessed. All other accounts are preserved.
+
+The merge exists only in the workflow's snapshot: the baseline secret is never
+overwritten, so concurrent baseline updates are not lost. The shared workflow
+lock serializes recovery checks and redemption; GitHub does not offer
+compare-and-swap secret updates, so only one operator may publish an override at
+a time. Do not concurrently refresh multiple accounts: the helper refuses to
+replace an existing override and checks again after login. Retain it until that credential is
+safely incorporated into the canonical store. Deleting it earlier reactivates
+the baseline credential. These workflows must be integrated through the
+authorized repository process before dispatch; running the auth check does not
+authorize live redemption.
+
 The one-time migration workflow uses a separate identity:
 
 - Set `AZURE_MIGRATION_CLIENT_ID` to its client ID.

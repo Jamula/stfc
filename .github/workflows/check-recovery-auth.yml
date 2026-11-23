@@ -1,0 +1,57 @@
+name: Check recovery authentication
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: stfc-gift-redeemer
+  queue: max
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4
+        with:
+          node-version-file: .nvmrc
+      - run: npm ci
+      - name: Verify legacy inventory and refresh without redemption
+        env:
+          STFC_ACCOUNTS: ${{ secrets.STFC_ACCOUNTS }}
+          STFC_ACCOUNT_REFRESH: ${{ secrets.STFC_ACCOUNT_REFRESH }}
+          REPOSITORY_VARIABLES: ${{ toJSON(vars) }}
+        run: |
+          node --input-type=module <<'NODE'
+          import { mergeRefreshedAccount, verifiedIdentity } from './scripts/refresh-account.mjs';
+          import { isTokenAccounts } from './shared/token-account-schema.mjs';
+          try {
+            const vars = JSON.parse(process.env.REPOSITORY_VARIABLES);
+            const keys = ['AZURE_CLIENT_ID', 'AZURE_TENANT_ID', 'AZURE_SUBSCRIPTION_ID',
+              'AZURE_TOKEN_STORAGE_ACCOUNT', 'AZURE_TOKEN_CONTAINER', 'AZURE_TOKEN_BLOB'];
+            if (keys.some(key => vars[key]?.trim())) throw new Error();
+            let accounts = JSON.parse(process.env.STFC_ACCOUNTS ?? '');
+            if (!isTokenAccounts(accounts)) throw new Error();
+            if (process.env.STFC_ACCOUNT_REFRESH) {
+              accounts = await mergeRefreshedAccount(process.env.STFC_ACCOUNTS,
+                process.env.STFC_ACCOUNT_REFRESH);
+            }
+            let authenticated = 0;
+            for (const account of accounts) {
+              try { await verifiedIdentity(account.token); authenticated++; } catch {}
+            }
+            console.log(`Non-redeeming authentication: ${authenticated}/${accounts.length} accounts accepted.`);
+            if (authenticated !== accounts.length) {
+              console.error('::error::One or more preserved accounts failed authentication.');
+              process.exitCode = 1;
+            }
+          } catch {
+            console.error('::error::Recovery configuration or exact account identity could not be verified; no redemption attempted.');
+            process.exitCode = 1;
+          }
+          NODE

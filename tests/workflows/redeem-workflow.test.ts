@@ -18,6 +18,9 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { tmpdir } from "node:os";
+import { spawnSync } from "node:child_process";
+import { parse } from "yaml";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..", "..");
 const WORKFLOW = path.join(REPO_ROOT, ".github", "workflows", "redeem.yml");
@@ -44,6 +47,70 @@ const ALERT_SCRIPT = path.join(REPO_ROOT, "scripts", "dead-token-alert.mjs");
 const alertScript = readIfExists(ALERT_SCRIPT);
 
 describe(".github/workflows/redeem.yml", () => {
+  it("selects Azure only for complete configuration and refuses every partial combination", () => {
+    const workflow = parse(yaml!);
+    const step = workflow.jobs.redeem.steps.find(
+      (entry: { id?: string }) => entry.id === "token_source",
+    );
+    const script = step.run.split("<<'NODE'\n")[1].replace(/\nNODE\s*$/, "");
+    const keys = Object.keys(step.env);
+    assert.equal(keys.length, 6);
+    const directory = fs.mkdtempSync(path.join(tmpdir(), "stfc-source-"));
+    try {
+      for (let mask = 0; mask < 64; mask++) {
+        const output = path.join(directory, "output");
+        fs.writeFileSync(output, "");
+        const env: NodeJS.ProcessEnv = { ...process.env, GITHUB_OUTPUT: output };
+        keys.forEach((key, index) => { env[key] = mask & (1 << index) ? "configured" : ""; });
+        const result = spawnSync(process.execPath, ["--input-type=module", "-e", script], { env, encoding: "utf8" });
+        const complete = mask === 0 || mask === 63;
+        assert.equal(result.status, complete ? 0 : 1, `configuration mask ${mask}`);
+        assert.equal(fs.readFileSync(output, "utf8"),
+          complete ? `source=${mask === 63 ? "azure" : "secret"}\n` : "",
+          `source output for mask ${mask}`);
+        if (!complete) assert.match(result.stderr, /incomplete; refusing secret fallback/);
+      }
+    } finally {
+      fs.rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("preserves the entire legacy inventory without logging it and fails closed on invalid data", () => {
+    const workflow = parse(yaml!);
+    const step = workflow.jobs.redeem.steps.find(
+      (entry: { name?: string }) => entry.name === "Load legacy account tokens",
+    );
+    assert.equal(step.env.STFC_ACCOUNTS, "${{ secrets.STFC_ACCOUNTS }}");
+    const script = step.run.split("<<'NODE'\n")[1].replace(/\nNODE\s*$/, "");
+    const directory = fs.mkdtempSync(path.join(tmpdir(), "stfc-legacy-"));
+    const file = path.join(directory, "stfc-accounts.json");
+    const accounts = JSON.stringify([
+      { name: "main", token: "header.payload.signature" },
+      { name: "alt", token: "other.payload.signature" },
+    ]);
+    const run = (value: string) => spawnSync(process.execPath,
+      ["--input-type=module", "-e", script], {
+        cwd: REPO_ROOT, encoding: "utf8",
+        env: { ...process.env, RUNNER_TEMP: directory, STFC_ACCOUNTS: value, STFC_ACCOUNT_REFRESH: "" },
+      });
+    try {
+      const valid = run(accounts);
+      assert.equal(valid.status, 0, valid.stderr);
+      assert.equal(fs.readFileSync(file, "utf8"), accounts);
+      assert.equal(valid.stdout + valid.stderr, "");
+      fs.unlinkSync(file);
+      for (const value of ["", "private-invalid-value", "[]", '[{"name":"main","token":"not-a-jwt"}]']) {
+        const invalid = run(value);
+        assert.equal(invalid.status, 1);
+        assert.match(invalid.stderr, /::error::STFC_ACCOUNTS/);
+        assert.ok(!fs.existsSync(file));
+        if (value) assert.ok(!(invalid.stdout + invalid.stderr).includes(value));
+      }
+    } finally {
+      fs.rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
   it("workflow file exists", () => {
     assert.ok(yaml !== undefined, `expected ${WORKFLOW} to exist`);
   });
