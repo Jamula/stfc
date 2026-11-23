@@ -168,6 +168,22 @@ export async function captureFromPage(browser, context, page) {
   }
 }
 
+export async function publishFromPage(browser, context, page, {
+  fetchImpl = fetch,
+  runSecretCommand = runGithubSecretCommand,
+  checkSecretAbsent = assertSecretAbsent,
+} = {}) {
+  const { token } = await captureFromPage(browser, context, page);
+  if (!token) throw new Error('Login timed out.');
+  await verifiedIdentity(token, fetchImpl);
+  await verifyGiftAccess(token, fetchImpl);
+  checkSecretAbsent();
+  const result = runSecretCommand(['secret', 'set', REFRESH_SECRET], {
+    input: JSON.stringify({ token }), stdio: ['pipe', 'ignore', 'ignore'],
+  });
+  if (result.status !== 0) throw new Error('Encrypted override update failed.');
+}
+
 async function main() {
   if (!['--publish', '--verify-only'].includes(process.argv[2]) || !process.stdin.isTTY || !process.stdout.isTTY) {
     throw new Error('Run in a private interactive terminal.');
@@ -188,18 +204,14 @@ async function main() {
     const context = await browser.newContext();
     const page = await context.newPage();
     console.log('Sign in and enter the email OTP directly in the official browser. No credentials belong in this terminal.');
-    const { token } = await captureFromPage(browser, context, page);
-    if (!token) throw new Error('Login timed out.');
-    await verifiedIdentity(token);
-    await verifyGiftAccess(token);
     if (process.argv[2] === '--publish') {
-      assertSecretAbsent();
-      const result = runGithubSecretCommand(['secret', 'set', REFRESH_SECRET], {
-        input: JSON.stringify({ token }), stdio: ['pipe', 'ignore', 'ignore'],
-      });
-      if (result.status !== 0) throw new Error('Encrypted override update failed.');
+      await publishFromPage(browser, context, page);
       console.log('Encrypted override saved; run the recovery authentication workflow to verify inventory matching.');
     } else {
+      const { token } = await captureFromPage(browser, context, page);
+      if (!token) throw new Error('Login timed out.');
+      await verifiedIdentity(token);
+      await verifyGiftAccess(token);
       console.log('Non-redeeming authentication and gift-list access passed. No credential was saved or published.');
     }
   } finally {

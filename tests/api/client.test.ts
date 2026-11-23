@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { z } from "zod";
 import {
   ApiClient,
+  AmbiguousResponseError,
   TokenExpiredError,
   TransientError,
   SchemaMismatchError,
@@ -367,7 +368,7 @@ describe("ApiClient", () => {
     const client = new ApiClient({ baseUrl: "https://example.com", token: "tok" });
     await assert.rejects(
       () => client.request({ path: "/claim", method: "POST", body: { id: 1 }, schema: OkSchema }),
-      (err: unknown) => err instanceof TransientError && /timed out/.test(err.message),
+      (err: unknown) => err instanceof AmbiguousResponseError && err.status === 200 && /timed out/.test(err.message),
     );
     assert.equal(calls.length, 1, "a side-effecting request must never be replayed after its body fails");
   });

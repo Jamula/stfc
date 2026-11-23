@@ -115,6 +115,9 @@ interactive terminal. Enter credentials and the OTP only in the official browser
 The helper checks `/auth/me` and the non-redeeming gift list and pipes the token
 to `gh secret set`; it does not read `.env`, print the token, or alter the
 baseline or existing override. `--verify-only` checks a login without saving it.
+Capture fails closed if a login attempt is failed, tokenless, ambiguous, or still
+unresolved when the browser closes. A promo POST whose successful response body
+cannot be read is reported as unknown and is never replayed.
 
 The name was randomly generated with 256 bits of entropy; independent accidental
 collisions are extremely unlikely, not impossible. GitHub does not provide

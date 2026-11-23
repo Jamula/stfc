@@ -42,6 +42,10 @@ export class TransientError extends ApiError {
   override readonly name = "TransientError";
 }
 
+export class AmbiguousResponseError extends ApiError {
+  override readonly name = "AmbiguousResponseError";
+}
+
 export class SchemaMismatchError extends ApiError {
   override readonly name = "SchemaMismatchError";
 }
@@ -259,7 +263,16 @@ export async function readResponseText(res: Response, method: HttpMethod, path: 
   try {
     return await res.text();
   } catch (err) {
-    throw wrapNetworkError(err, method, path);
+    if (SAFE_METHODS.has(method)) throw wrapNetworkError(err, method, path);
+
+    const detail = err instanceof Error ? err.message : String(err);
+    throw new AmbiguousResponseError(
+      redactString(
+        `Could not read the HTTP ${res.status} response body for ${method} ${path}; ` +
+          `the operation result is unknown: ${detail}`,
+      ),
+      res.status,
+    );
   }
 }
 

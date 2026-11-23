@@ -435,6 +435,52 @@ describe("mergeIntoEnv error redaction (issue #211)", () => {
     assert.equal(context.listenerCount("requestfailed"), 0);
   });
 
+  it("yields for an in-flight login without a response reader and fails closed at its deadline", async () => {
+    const token = "first.token.value";
+    const context = new EventEmitter();
+    const login = makeLoginRequest();
+    let closed = false;
+    const capture = captureToken({
+      context, timeoutMs: 30_000, responseDrainTimeoutMs: 1000,
+      closeAfterCapture: async () => { closed = true; },
+    });
+    context.emit("request", {
+      url: () => "https://cdn-nv3-webstore-api.startrek.digitgaming.com/api/v2/test",
+      headers: () => ({ authorization: `Bearer ${token}` }),
+    });
+    context.emit("request", login);
+    setTimeout(() => {
+      context.emit("response", {
+        url: () => login.url(), request: () => login, status: () => 200,
+        json: async () => ({ accessToken: token }),
+      });
+      context.emit("requestfinished", login);
+    }, 10);
+
+    assert.deepEqual(await capture, { token, source: "request header" });
+    assert.equal(closed, true, "the capture should wait for the pending login lifecycle to complete");
+    assert.equal(context.listenerCount("request"), 0);
+    assert.equal(context.listenerCount("response"), 0);
+    assert.equal(context.listenerCount("requestfinished"), 0);
+    assert.equal(context.listenerCount("requestfailed"), 0);
+
+    const unresolvedContext = new EventEmitter();
+    const unresolved = captureToken({
+      context: unresolvedContext, timeoutMs: 30_000, responseDrainTimeoutMs: 10,
+      closeAfterCapture: async () => {},
+    });
+    unresolvedContext.emit("request", {
+      url: () => "https://cdn-nv3-webstore-api.startrek.digitgaming.com/api/v2/test",
+      headers: () => ({ authorization: `Bearer ${token}` }),
+    });
+    unresolvedContext.emit("request", makeLoginRequest());
+    await assert.rejects(unresolved, /ambiguous or the browser token changed/);
+    assert.equal(unresolvedContext.listenerCount("request"), 0);
+    assert.equal(unresolvedContext.listenerCount("response"), 0);
+    assert.equal(unresolvedContext.listenerCount("requestfinished"), 0);
+    assert.equal(unresolvedContext.listenerCount("requestfailed"), 0);
+  });
+
   it("drains ambiguous login responses that begin during closure without unhandled rejections", async () => {
     for (const responseKind of ["different-token", "unreadable"] as const) {
       const context = new EventEmitter();

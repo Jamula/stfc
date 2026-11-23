@@ -1239,6 +1239,55 @@ describe("runAll", () => {
     assert.equal(byCode.get("WEIRDCODE"), Outcomes.UNKNOWN_RESULT);
   });
 
+  it("reports an unreadable successful promo response as unknown without replaying the POST", async () => {
+    const codeFile = path.join(dir, "promo-body-timeout.txt");
+    fs.writeFileSync(codeFile, "ONE-SIDE-EFFECT\n", "utf8");
+    let postCount = 0;
+    const apiClient = new ApiClient({
+      token: "synthetic.test.token",
+      baseUrl: "https://example.test/api/v2",
+      fetchImpl: (async (input, init) => {
+        const url = String(input);
+        if (url.endsWith("/auth/me")) {
+          return new Response('{"id":1,"level":50}', {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          });
+        }
+        if (url.includes("/offers/gifts?available=true")) {
+          return new Response('{"items":[]}', {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          });
+        }
+        assert.ok(url.endsWith("/redeem/claim"), `unexpected request path: ${url}`);
+        assert.equal(init?.method, "POST");
+        postCount += 1;
+        const response = new Response(null, {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+        Object.defineProperty(response, "text", {
+          value: async () => { throw new DOMException("synthetic body timeout", "TimeoutError"); },
+        });
+        return response;
+      }) as typeof fetch,
+    });
+    const { result } = await runAll({
+      accounts: [{ name: "main", token: makeJwt({ exp: 9999999999 }) }],
+      clientFactory: () => apiClient,
+      promoCodesPath: codeFile,
+      summary: createSummaryWriter(undefined),
+    });
+
+    const account = result.accounts[0]!;
+    assert.equal(postCount, 1, "an ambiguous successful POST must never be replayed");
+    assert.equal(account.promoCodes[0]?.outcome, Outcomes.UNKNOWN_RESULT);
+    assert.match(account.promoCodes[0]?.detail ?? "", /HTTP 200 response body/);
+    assert.equal(account.ok, false, "the ambiguous redemption must degrade the account");
+    assert.equal(result.errors.some((entry) => /redeem_success|already used/i.test(entry.message)), false);
+  });
+
   it("marks CODE_INVALID_OR_EXPIRED as dead and skips it on subsequent runs", async () => {
     const codeFile = path.join(dir, "promo.txt");
     const deadCodesPath = path.join(dir, "promo-code-dead.json");

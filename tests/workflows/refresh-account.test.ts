@@ -4,6 +4,7 @@ import {
   mergeAvailableRefreshedAccounts,
   mergeRefreshedAccount,
   mergeRefreshedAccounts,
+  publishFromPage,
   runGithubSecretCommand,
   verifiedIdentity,
   verifyGiftAccess,
@@ -12,6 +13,7 @@ import { mkdtempSync, readFileSync, rmSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
+import { EventEmitter } from "node:events";
 import { parse } from "yaml";
 import { SchemaMismatchError, TransientError } from "../../src/api/client.ts";
 
@@ -46,6 +48,69 @@ function unreadableBodyResponse() {
 }
 
 describe("manual refresh inventory safety", () => {
+  it("never invokes the secret writer when a login before bearer capture is failed or ambiguous", async () => {
+    for (const loginOutcome of ["tokenless", "unreadable", "failed"] as const) {
+      const context = new EventEmitter();
+      const login = {
+        url: () => "https://cdn-nv3-webstore-api.startrek.digitgaming.com/api/v2/auth/login",
+        method: () => "POST",
+        headers: () => ({}),
+      };
+      let writerCalls = 0;
+      let secretChecks = 0;
+      let verificationCalls = 0;
+      const browser = { close: async () => {} };
+      const page = {
+        async goto() {
+          context.emit("request", login);
+          if (loginOutcome === "failed") {
+            context.emit("requestfailed", login);
+          } else {
+            context.emit("response", {
+              url: () => login.url(),
+              request: () => login,
+              status: () => 200,
+              json: async () => {
+                if (loginOutcome === "unreadable") throw new Error("synthetic unreadable body");
+                return {};
+              },
+            });
+            context.emit("requestfinished", login);
+          }
+          context.emit("request", {
+            url: () => "https://cdn-nv3-webstore-api.startrek.digitgaming.com/api/v2/auth/me",
+            headers: () => ({ authorization: `Bearer ${fresh}` }),
+          });
+        },
+      };
+
+      await assert.rejects(publishFromPage(
+        browser as never,
+        context as never,
+        page as never,
+        {
+          fetchImpl: (async () => {
+            verificationCalls += 1;
+            throw new Error("credential verification must not run after ambiguous capture");
+          }) as typeof fetch,
+          checkSecretAbsent: () => { secretChecks += 1; },
+          runSecretCommand: (() => {
+            writerCalls += 1;
+            return { status: 0, stdout: "", stderr: "" };
+          }),
+        },
+      ), /ambiguous or the browser token changed/);
+
+      assert.equal(writerCalls, 0, `${loginOutcome} login must not reach the secret writer`);
+      assert.equal(secretChecks, 0, `${loginOutcome} login must not begin secret publication`);
+      assert.equal(verificationCalls, 0, `${loginOutcome} login must fail before credential verification`);
+      assert.equal(context.listenerCount("request"), 0);
+      assert.equal(context.listenerCount("response"), 0);
+      assert.equal(context.listenerCount("requestfinished"), 0);
+      assert.equal(context.listenerCount("requestfailed"), 0);
+    }
+  });
+
   it("uses the production safe-GET retry policy for identity verification", async () => {
     for (const temporaryStatus of [401, 503]) {
       let attempts = 0;

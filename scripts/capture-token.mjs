@@ -151,10 +151,16 @@ async function drainPendingResponses(pending, pendingLoginRequests, timeoutMs) {
     if (pending.size > 0 || pendingLoginRequests.size > 0) {
       quietSince = null;
       const jobs = [...pending];
-      await Promise.race([
-        Promise.allSettled(jobs),
-        new Promise((resolve) => setTimeout(resolve, Math.min(25, deadline - Date.now()))),
-      ]);
+      let timer;
+      const timeout = new Promise((resolve) => {
+        timer = setTimeout(resolve, Math.min(25, deadline - Date.now()));
+      });
+      try {
+        if (jobs.length > 0) await Promise.race([Promise.allSettled(jobs), timeout]);
+        else await timeout;
+      } finally {
+        clearTimeout(timer);
+      }
       continue;
     }
     if (quietSince === null) quietSince = Date.now();
@@ -197,9 +203,9 @@ async function captureToken({ context, timeoutMs, closeAfterCapture, signal, res
       try {
         const body = await res.json();
         if (typeof body?.accessToken === "string") win(body.accessToken, "POST /auth/login response");
-        else if (closeAfterCapture && first) ambiguous = true;
+        else if (closeAfterCapture) ambiguous = true;
       } catch {
-        if (closeAfterCapture && first) ambiguous = true;
+        if (closeAfterCapture) ambiguous = true;
       }
     })();
     pending.add(job);
@@ -229,7 +235,7 @@ async function captureToken({ context, timeoutMs, closeAfterCapture, signal, res
   const onRequestFailed = (req) => {
     if (!loginRequests.has(req)) return;
     pendingLoginRequests.delete(req);
-    if (closeAfterCapture && first) ambiguous = true;
+    if (closeAfterCapture) ambiguous = true;
   };
 
   context.on("response", onResponse);

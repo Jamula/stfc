@@ -33,3 +33,13 @@ export function mergeAvailableRefreshedAccounts(
   acceptedOverrides: boolean[];
 }>;
 export function captureFromPage(browser: import('playwright').Browser, context: import('playwright').BrowserContext, page: import('playwright').Page): Promise<{ token: string | null; source: string }>;
+export function publishFromPage(
+  browser: import('playwright').Browser,
+  context: import('playwright').BrowserContext,
+  page: import('playwright').Page,
+  options?: {
+    fetchImpl?: typeof fetch;
+    runSecretCommand?: typeof runGithubSecretCommand;
+    checkSecretAbsent?: () => void;
+  },
+): Promise<void>;
