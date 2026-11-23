@@ -3,6 +3,15 @@
 End-to-end instructions for getting `stfc-gift-redeemer` running on your fork
 of this repository.
 
+## Product version and releases
+
+The current STFC product version is `0.1.0`. See the
+[versioning and release policy](VERSIONING.md) for the MVP freeze,
+review and release approval gates, independent component versions and
+manual `Release` GitHub Actions workflow. Setting up the hosted token
+store or running a redemption job is **not** a product release. The Node.js
+version below is a runtime requirement, not a product-version number.
+
 ## Prerequisites
 
 - An STFC account with access to the web store and a GitHub repository with Actions enabled.
