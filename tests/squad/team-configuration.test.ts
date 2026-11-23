@@ -35,6 +35,18 @@ function between(content: string, start: string, end: string): string {
 }
 
 describe("native Squad configuration", () => {
+  it("keeps installed error recovery aligned with the state-backend safety contract", () => {
+    const installed = read(".github", "skills", "error-recovery", "SKILL.md");
+    const template = read(".squad", "templates", "skills", "error-recovery", "SKILL.md");
+    assert.equal(installed, template);
+
+    const fallback = between(installed, "## 2. Fallback Alternatives", "## 3. Diagnose-and-Fix");
+    assert.match(fallback, /never bypass security, permissions, spending controls, or required approvals/i);
+    assert.match(fallback, /two-layer.*never fall back to direct file or Git operations/is);
+    assert.match(fallback, /halt state mutations.*verified bridge.*unavailable/is);
+    assert.match(fallback, /uncertain writes.*verify the outcome\s+before retrying/is);
+  });
+
   it("uses the requested two-layer backend and state bridge", () => {
     const config = JSON.parse(read(".squad", "config.json")) as {
       stateBackend: string;
@@ -49,6 +61,33 @@ describe("native Squad configuration", () => {
     assert.ok(mcp.mcpServers.squad_state, "Missing squad_state MCP server");
     assert.equal(mcp.mcpServers.squad_state.command, "npx");
     assert.match(mcp.mcpServers.squad_state.args.join(" "), /@bradygaster\/squad-cli@.+ state-mcp$/);
+  });
+
+  it("keeps the generated casting policy mirror identical to the authoritative policy", () => {
+    assert.deepEqual(
+      JSON.parse(read(".squad", "casting-policy.json")),
+      JSON.parse(read(".squad", "casting", "policy.json")),
+      "The generated root policy must not diverge from .squad/casting/policy.json",
+    );
+  });
+
+  it("keeps installed workflow and review guidance aligned with its templates", () => {
+    for (const name of ["git-workflow", "reviewer-protocol", "agent-collaboration", "cross-squad", "coordinator-init-mode", "coordinator-source-of-truth", "secret-handling"]) {
+      const installed = read(".github", "skills", name, "SKILL.md");
+      assert.equal(installed, read(".squad", "templates", "skills", name, "SKILL.md"), name);
+    }
+    const git = read(".github", "skills", "git-workflow", "SKILL.md");
+    assert.match(git, /`main` is the only persistent development and release branch/);
+    assert.match(git, /required reviews and branch protections/);
+    assert.match(git, /native atomic casting protocol/);
+    const reviewer = read(".github", "skills", "reviewer-protocol", "SKILL.md");
+    assert.match(reviewer, /original author\s+may address feedback/);
+    assert.match(reviewer, /independently review\s+the revised substantive changes/);
+    const source = read(".github", "skills", "coordinator-source-of-truth", "SKILL.md");
+    assert.match(source, /casting registry, history, and commit marker are the exception/);
+    assert.match(source, /native atomic casting protocol/);
+    const secrets = read(".github", "skills", "secret-handling", "SKILL.md");
+    assert.doesNotMatch(secrets, /\$matches\[0\]/i);
   });
 
   it("keeps mutable runtime state out of the source tree", () => {
@@ -66,6 +105,8 @@ describe("native Squad configuration", () => {
       ".squad/sessions/2026-01-01.md",
       ".squad/.scratch/worktree.json",
       ".squad/.cache/state.json",
+      ".squad/casting-history.json",
+      ".squad/casting-registry.json",
     ];
     for (const file of ignored) {
       const result = spawnSync("git", ["check-ignore", "--no-index", "-q", "--", file]);
@@ -77,6 +118,11 @@ describe("native Squad configuration", () => {
     ]);
     assert.ifError(config.error);
     assert.equal(config.status, 1, "The static memory configuration must remain trackable");
+    const castingPolicy = spawnSync("git", [
+      "check-ignore", "--no-index", "-q", "--", ".squad/casting-policy.json",
+    ]);
+    assert.ifError(castingPolicy.error);
+    assert.equal(castingPolicy.status, 1, "The static casting policy must remain trackable");
     const charter = spawnSync("git", [
       "check-ignore", "--no-index", "-q", "--", ".squad/agents/spock/charter.md",
     ]);
@@ -98,6 +144,7 @@ describe("native Squad configuration", () => {
       /^\.squad\/identity\//,
       /^\.squad\/memory\/(?!config\.json$)/,
       /^\.squad\/casting\/(?:history|registry)(?:-history\.commit)?\.json$/,
+      /^\.squad\/casting-(?:history|registry)\.json$/,
       /^\.squad\/\.first-run$/,
       /^\.squad\/sessions\//,
       /^\.squad\/\.scratch\//,
@@ -138,6 +185,8 @@ describe("native Squad configuration", () => {
       ".squad/sessions/2026-01-01.md",
       ".squad/.scratch/worktree.json",
       ".squad/.cache/state.json",
+      ".squad/casting-history.json",
+      ".squad/casting-registry.json",
       ".squad/casting/history.json",
       ".squad/casting/registry.json",
       ".squad/casting/registry-history.commit.json",

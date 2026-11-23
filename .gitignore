@@ -32,7 +32,9 @@ data/crew/ocr-poc/
 # so an empty dir can be committed; individual *.md files are committed by
 # discord-monitor.yml after each run.
 # Squad: ignore runtime state (logs, inbox, sessions)
-# Note: .squad/casting/* is identity and MUST be committed to main, not ignored
+# The tracked casting registry, history, and commit marker use the native atomic protocol.
+.squad/casting-history.json
+.squad/casting-registry.json
 .squad/orchestration-log/
 .squad/log/
 .squad/decisions/inbox/

@@ -83,9 +83,21 @@ test("release commit validation rejects a different main SHA", (t) => {
       encoding: "utf8",
       env: { ...process.env, EXPECTED_SHA: expected, GITHUB_SHA: actual },
     });
+
     assert.equal(result.status, status, `expected SHA ${expected || "(empty)"}, actual SHA ${actual}: ${result.stderr}`);
     if (status !== 0) {
       assert.match(result.stdout, /::error::Main advanced after promotion/);
     }
   }
+});
+
+test("active Squad release observes the existing Release workflow instead of publishing a competing release", () => {
+  const release = YAML.parse(readFileSync(".github/workflows/squad-release.yml", "utf8")) as Workflow;
+  assert.deepEqual(release.on.workflow_run, {
+    workflows: ["Release"],
+    types: ["completed"],
+    branches: ["main"],
+  });
+  assert.equal(release.permissions.contents, "read");
+  assert.match(release.jobs.report?.steps?.[0]?.run ?? "", /"\$CONCLUSION" != "success"/);
 });

@@ -23,7 +23,7 @@ No team exists yet. Propose one — but **DO NOT create any files until the user
 1. **Identify the user.** Run `git config user.name` to learn who you're working with. Use their name in conversation (e.g., *"Hey {user}, what are you building?"*). Store their name (NOT email) in `team.md` under Project Context. **Never read or store `git config user.email` — email addresses are PII and must not be written to committed files.**
 2. Ask: *"What are you building? (language, stack, what it does)"*
 3. **Cast the team.** Before proposing names, run the Casting & Persistent Naming algorithm (see that section):
-   - Determine team size (typically 4–5 + Scribe).
+   - Choose the minimum team appropriate for the user's request. Support agents and ceremonies are optional, not automatically active.
    - **Default to descriptive names** (Lead, Frontend, Backend, Tester, etc.) unless the user requests a themed universe.
    - If the user requests a specific universe (built-in or custom), allocate character names from that universe. For custom universes not in the allowlist, use your knowledge of the source material and apply spoiler-safety rules.
    - If the user asks for themed names without specifying a universe, auto-select from built-in universes using the scoring algorithm (size_fit + shape_fit + resonance_fit + LRU).
@@ -36,8 +36,6 @@ No team exists yet. Propose one — but **DO NOT create any files until the user
 ⚛️  Frontend     — Frontend Dev  React, UI, components
 🔧  Backend      — Backend Dev   APIs, database, services
 🧪  Tester       — Tester        Tests, quality, edge cases
-📋  Scribe       — (silent)      Memory, decisions, session logs
-🔄  Ralph        — (monitor)     Work queue, backlog, keep-alive
 ```
 
 5. Use the `ask_user` tool to confirm the roster. Provide choices so the user sees a selectable menu:
@@ -48,15 +46,15 @@ No team exists yet. Propose one — but **DO NOT create any files until the user
 
 ### Phase 2: Create the Team
 
-**Trigger:** The user replied to Phase 1 with confirmation ("yes", "looks good", or similar affirmative), OR the user's reply to Phase 1 is a task (treat as implicit "yes").
+**Trigger:** The user replied to Phase 1 with explicit confirmation ("yes", "looks good", or similar affirmative). An unrelated task is not confirmation.
 
 > If the user said "add someone" or "change a role," go back to Phase 1 step 3 and re-propose. Do NOT enter Phase 2 until the user confirms.
 
 6. Create the `.squad/` directory structure (see `.squad/templates/` for format guides or use the standard structure: team.md, routing.md, ceremonies.md, casting/, agents/, orchestration-log/, skills/, log/). For the governed two-layer backend, decisions and proposals use state keys `decisions.md` and `decisions/inbox/` through the state bridge; do not create local files for them. Only the local-file backend uses `.squad/decisions/decisions.md` and a local `.squad/decisions/inbox/`.
 
-**Casting state initialization:** Copy `.squad/templates/casting-policy.json` to `.squad/casting/policy.json` (or create from defaults). Create `registry.json` (entries: persistent_name, universe, created_at, legacy_named: false, status: "active") and `history.json` (first assignment snapshot with unique assignment_id).
+**Casting state initialization:** Copy `.squad/templates/casting-policy.json` to `.squad/casting/policy.json` (or create from defaults). Initialize the registry, history, and commit marker using the native atomic casting protocol; never write the registry/history pair independently.
 
-**Seeding:** Each agent's `history.md` starts with the project description, tech stack, and the user's name so they have day-1 context. Agent folder names are the cast name in lowercase (e.g., `.squad/agents/ripley/`). The Scribe's charter describes read-only review of `decisions.md` and pending inbox proposals through the state bridge; it does not merge entries.
+**Seeding:** Initialize each agent's history with project context through the configured state backend. For two-layer state, use the bridge key `agents/{name}/history.md`, not a worktree file. Agent folder names are the cast name in lowercase (e.g., `.squad/agents/ripley/`). The Scribe's charter describes read-only review of `decisions.md` and pending inbox proposals through the state bridge; it does not merge entries.
 
 **Team.md structure:** `team.md` MUST contain a section titled exactly `## Members` (not "## Team Roster" or other variations) containing the roster table. This header is hard-coded in GitHub workflows (`squad-heartbeat.yml`, `squad-issue-assign.yml`, `squad-triage.yml`, `sync-squad-labels.yml`) for label automation. If the header is missing or titled differently, label routing breaks.
 

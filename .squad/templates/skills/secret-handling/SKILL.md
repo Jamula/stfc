@@ -159,9 +159,6 @@ User: "It's a Postgres database, schema is in migrations/"
 **Scribe is about to commit:**
 
 ```powershell
-# Stage files
-git add .squad/
-
 # Scan staged content for secrets
 $stagedContent = git diff --cached
 $secretPatterns = @(
@@ -174,14 +171,13 @@ $detected = $false
 foreach ($pattern in $secretPatterns) {
     if ($stagedContent -match $pattern) {
         $detected = $true
-        Write-Host "🚨 SECRET DETECTED: $($matches[0])"
+        Write-Host "🚨 SECRET DETECTED in staged content"
         break
     }
 }
 
 if ($detected) {
-    # Remove from staging, report, exit
-    git reset HEAD .squad/
+    # Stop without printing the matching content.
     Write-Error "Commit blocked — secret detected in staged files"
     exit 1
 }

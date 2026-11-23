@@ -37,6 +37,11 @@ Standard recovery patterns for all squad agents. When something fails, **adapt**
 
 **Example:** Primary CLI tool fails → fall back to direct API call for the same operation.
 
+**Safety boundary:** Never bypass security, permissions, spending controls, or required approvals.
+For the configured `two-layer` Squad state backend, never fall back to direct file or Git operations;
+halt state mutations if the verified bridge is unavailable. For uncertain writes, verify the outcome
+before retrying to avoid duplicate or lost state.
+
 ---
 
 ## 3. Diagnose-and-Fix

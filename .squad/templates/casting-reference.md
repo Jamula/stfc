@@ -107,6 +107,10 @@ How to avoid it:
 Source template: `.squad/templates/casting-policy.json`
 Runtime location: `.squad/casting/policy.json`
 
+In this repository, `.squad/casting/policy.json` is authoritative. The generated
+root `.squad/casting-policy.json` is a compatibility mirror and must remain
+identical; update both together.
+
 ```json
 {
   "casting_policy_version": "1.1",
