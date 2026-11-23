@@ -11,6 +11,7 @@ import {
   SchemaMismatchError,
   TokenExpiredError,
   TransientError,
+  readResponseText,
   withSafeGetRetries,
 } from '../src/api/client.ts';
 import { AuthMeResponseSchema } from '../src/api/schemas.ts';
@@ -58,7 +59,8 @@ export async function verifiedIdentity(token, fetchImpl = fetch) {
     if (!/json/i.test(response.headers.get('content-type') ?? '')) {
       throw new SchemaMismatchError('Expected JSON from GET /auth/me', response.status);
     }
-    const identity = AuthMeResponseSchema.parse(document(await response.text()));
+    const body = await readResponseText(response, 'GET', '/auth/me');
+    const identity = AuthMeResponseSchema.parse(document(body));
     const id = identifier(identity?.payload?.accountId);
     if (!id) throw new Error('Verified account identity is unavailable.');
     return id;

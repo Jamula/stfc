@@ -55,6 +55,15 @@ describe("ApiClient", () => {
     });
   }
 
+  function unreadableBodyResponse(error = new DOMException("The operation timed out", "TimeoutError")): Response {
+    const response = new Response(null, {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+    Object.defineProperty(response, "text", { value: async () => { throw error; } });
+    return response;
+  }
+
   function mockStatusSequence(...statuses: number[]): {
     calls: Array<{ url: string; init: RequestInit }>;
   } {
@@ -319,6 +328,48 @@ describe("ApiClient", () => {
     const result = await client.request({ path: "/x", method: "GET", schema: OkSchema });
     assert.deepEqual(result, { ok: true });
     assert.equal(calls.length, 2, "GET should retry exactly once on 5xx");
+  });
+
+  it("GET retries a 200 response body timeout within the safe retry budget", async () => {
+    let responses = 0;
+    const { calls } = mockFetch(() => {
+      responses += 1;
+      return responses === 1 ? unreadableBodyResponse() : jsonResponse(200, { ok: true });
+    });
+    const client = new ApiClient({ baseUrl: "https://example.com", token: "tok" });
+    assert.deepEqual(await client.request({ path: "/x", method: "GET", schema: OkSchema }), { ok: true });
+    assert.equal(calls.length, 2, "a transient body timeout after headers should receive the one safe GET retry");
+
+    const exhausted = mockFetch(() => unreadableBodyResponse());
+    const exhaustedClient = new ApiClient({ baseUrl: "https://example.com", token: "tok" });
+    await assert.rejects(
+      () => exhaustedClient.request({ path: "/x", method: "GET", schema: OkSchema }),
+      (err: unknown) => err instanceof TransientError && /timed out/.test(err.message),
+    );
+    assert.equal(exhausted.calls.length, 2, "body timeouts must stop at the existing one-retry bound");
+  });
+
+  it("does not retry malformed JSON, schema errors, or a side-effecting body timeout", async () => {
+    for (const response of [
+      new Response("{", { status: 200, headers: { "content-type": "application/json" } }),
+      jsonResponse(200, { wrong: true }),
+    ]) {
+      const { calls } = mockFetch(() => response.clone());
+      const client = new ApiClient({ baseUrl: "https://example.com", token: "tok" });
+      await assert.rejects(
+        () => client.request({ path: "/x", method: "GET", schema: OkSchema }),
+        (err: unknown) => err instanceof SchemaMismatchError,
+      );
+      assert.equal(calls.length, 1, "invalid JSON and schema responses are not transient body failures");
+    }
+
+    const { calls } = mockFetch(() => unreadableBodyResponse());
+    const client = new ApiClient({ baseUrl: "https://example.com", token: "tok" });
+    await assert.rejects(
+      () => client.request({ path: "/claim", method: "POST", body: { id: 1 }, schema: OkSchema }),
+      (err: unknown) => err instanceof TransientError && /timed out/.test(err.message),
+    );
+    assert.equal(calls.length, 1, "a side-effecting request must never be replayed after its body fails");
   });
 
   it("GET stops after one transient retry", async () => {

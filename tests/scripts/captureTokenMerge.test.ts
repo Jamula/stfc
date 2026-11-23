@@ -36,6 +36,14 @@ function makeTmpEnv(content: string): string {
   return envFile;
 }
 
+function makeLoginRequest() {
+  return {
+    url: () => "https://cdn-nv3-webstore-api.startrek.digitgaming.com/api/v2/auth/login",
+    method: () => "POST",
+    headers: () => ({}),
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -312,6 +320,8 @@ describe("mergeIntoEnv error redaction (issue #211)", () => {
     assert.deepEqual(await promise, { token: "fake.token.value", source: "request header" });
     assert.equal(context.listenerCount("request"), 0);
     assert.equal(context.listenerCount("response"), 0);
+    assert.equal(context.listenerCount("requestfinished"), 0);
+    assert.equal(context.listenerCount("requestfailed"), 0);
     const child = spawnSync(process.execPath, ["--input-type=module", "-e", `
       import { EventEmitter } from 'node:events';
       import { captureToken } from './scripts/capture-token.mjs';
@@ -337,14 +347,20 @@ describe("mergeIntoEnv error redaction (issue #211)", () => {
       const capture = captureToken({ context, timeoutMs: 30000, closeAfterCapture: async () => {} });
       context.emit("request", request("first.token.value"));
       if (event === "changed") context.emit("request", request("different.token.value"));
-      else context.emit("response", {
-        url: () => "https://cdn-nv3-webstore-api.startrek.digitgaming.com/api/v2/auth/login",
-        request: () => ({ method: () => "POST" }), status: () => 200,
-        json: async () => { throw new Error("unreadable"); },
-      });
+      else {
+        const login = makeLoginRequest();
+        context.emit("request", login);
+        context.emit("response", {
+          url: () => login.url(), request: () => login, status: () => 200,
+          json: async () => { throw new Error("unreadable"); },
+        });
+        context.emit("requestfinished", login);
+      }
       await assert.rejects(capture, /ambiguous or the browser token changed/);
       assert.equal(context.listenerCount("request"), 0);
       assert.equal(context.listenerCount("response"), 0);
+      assert.equal(context.listenerCount("requestfinished"), 0);
+      assert.equal(context.listenerCount("requestfailed"), 0);
     }
   });
 
@@ -357,18 +373,20 @@ describe("mergeIntoEnv error redaction (issue #211)", () => {
       closeAfterCapture: async () => { closed = true; },
     });
     const token = "first.token.value";
+    const login = makeLoginRequest();
     context.emit("request", {
       url: () => "https://cdn-nv3-webstore-api.startrek.digitgaming.com/api/v2/test",
       headers: () => ({ authorization: `Bearer ${token}` }),
     });
+    context.emit("request", login);
     context.emit("response", {
-      url: () => "https://cdn-nv3-webstore-api.startrek.digitgaming.com/api/v2/auth/login",
-      request: () => ({ method: () => "POST" }), status: () => 200,
+      url: () => login.url(), request: () => login, status: () => 200,
       json: () => new Promise<{ accessToken: string }>((resolve) => { resolveBody = resolve; }),
     });
     await new Promise((resolve) => setImmediate(resolve));
     assert.equal(closed, false, "browser must remain open while the login response is unread");
     resolveBody({ accessToken: token });
+    context.emit("requestfinished", login);
     assert.deepEqual(await capture, { token, source: "request header" });
     assert.equal(closed, true);
 
@@ -378,17 +396,43 @@ describe("mergeIntoEnv error redaction (issue #211)", () => {
       context: timedOutContext, timeoutMs: 30_000, responseDrainTimeoutMs: 10,
       closeAfterCapture: async () => { timeoutClosed = true; },
     });
+    const timedOutLogin = makeLoginRequest();
     timedOutContext.emit("request", {
       url: () => "https://cdn-nv3-webstore-api.startrek.digitgaming.com/api/v2/test",
       headers: () => ({ authorization: `Bearer ${token}` }),
     });
+    timedOutContext.emit("request", timedOutLogin);
     timedOutContext.emit("response", {
-      url: () => "https://cdn-nv3-webstore-api.startrek.digitgaming.com/api/v2/auth/login",
-      request: () => ({ method: () => "POST" }), status: () => 200,
+      url: () => timedOutLogin.url(), request: () => timedOutLogin, status: () => 200,
       json: () => new Promise(() => {}),
     });
     await assert.rejects(timedOut, /ambiguous or the browser token changed/);
     assert.equal(timeoutClosed, true);
+  });
+
+  it("fails closed when closing would cancel a login request still in flight after token capture", async () => {
+    const context = new EventEmitter();
+    const token = "first.token.value";
+    const login = makeLoginRequest();
+    let closed = false;
+    const capture = captureToken({
+      context, timeoutMs: 30_000, responseDrainTimeoutMs: 20,
+      closeAfterCapture: async () => {
+        closed = true;
+        context.emit("requestfailed", login);
+      },
+    });
+    context.emit("request", {
+      url: () => "https://cdn-nv3-webstore-api.startrek.digitgaming.com/api/v2/test",
+      headers: () => ({ authorization: `Bearer ${token}` }),
+    });
+    context.emit("request", login);
+
+    await assert.rejects(capture, /ambiguous or the browser token changed/);
+    assert.equal(closed, true, "the browser may close only after the bounded request drain");
+    assert.equal(context.listenerCount("request"), 0);
+    assert.equal(context.listenerCount("requestfinished"), 0);
+    assert.equal(context.listenerCount("requestfailed"), 0);
   });
 
   it("drains ambiguous login responses that begin during closure without unhandled rejections", async () => {
@@ -402,15 +446,17 @@ describe("mergeIntoEnv error redaction (issue #211)", () => {
         const capture = captureToken({
           context, timeoutMs: 30_000, responseDrainTimeoutMs: 1000,
           closeAfterCapture: async () => {
+            const login = makeLoginRequest();
+            context.emit("request", login);
             context.emit("response", {
-              url: () => "https://cdn-nv3-webstore-api.startrek.digitgaming.com/api/v2/auth/login",
-              request: () => ({ method: () => "POST" }), status: () => 200,
+              url: () => login.url(), request: () => login, status: () => 200,
               json: async () => {
                 await new Promise((resolve) => setImmediate(resolve));
                 if (responseKind === "unreadable") throw new Error("synthetic response read failure");
                 return { accessToken: "second.token.value" };
               },
             });
+            context.emit("requestfinished", login);
           },
         });
         context.emit("request", {

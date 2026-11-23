@@ -13,6 +13,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { parse } from "yaml";
+import { SchemaMismatchError, TransientError } from "../../src/api/client.ts";
 
 function token(id: string) {
   return `header.${Buffer.from(JSON.stringify({ accountId: id })).toString("base64url")}.signature`;
@@ -33,6 +34,16 @@ const reply: typeof fetch = async (_url, options) => {
   assert.equal(_url, "https://cdn-nv3-webstore-api.startrek.digitgaming.com/api/v2/offers/gifts?available=true");
   return new Response("[]", { headers: { "content-type": "application/json" } });
 };
+
+function unreadableBodyResponse() {
+  const response = new Response(null, {
+    status: 200, headers: { "content-type": "application/json" },
+  });
+  Object.defineProperty(response, "text", {
+    value: async () => { throw new DOMException("The operation timed out", "TimeoutError"); },
+  });
+  return response;
+}
 
 describe("manual refresh inventory safety", () => {
   it("uses the production safe-GET retry policy for identity verification", async () => {
@@ -65,6 +76,37 @@ describe("manual refresh inventory safety", () => {
       return new Response("{}", { status: 422, headers: { "content-type": "application/json" } });
     }), /HTTP 422/);
     assert.equal(nonRetriableAttempts, 1, "non-retriable client errors must not be replayed");
+  });
+
+  it("retries transient identity-body failures but not malformed or invalid identity data", async () => {
+    let attempts = 0;
+    const identity = await verifiedIdentity(fresh, async () => {
+      attempts += 1;
+      return attempts === 1 ? unreadableBodyResponse() : new Response(
+        '{"payload":{"accountId":"one"}}',
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    });
+    assert.equal(identity, "one");
+    assert.equal(attempts, 2, "a 200 response body timeout should receive one safe retry");
+
+    attempts = 0;
+    await assert.rejects(verifiedIdentity(fresh, async () => {
+      attempts += 1;
+      return unreadableBodyResponse();
+    }), (error: unknown) => error instanceof TransientError && /timed out/.test(error.message));
+    assert.equal(attempts, 2, "identity body timeouts must stop at the existing retry limit");
+
+    for (const body of ["{", '{"payload":{"accountId":1.5}}']) {
+      attempts = 0;
+      await assert.rejects(verifiedIdentity(fresh, async () => {
+        attempts += 1;
+        return new Response(body, {
+          status: 200, headers: { "content-type": "application/json" },
+        });
+      }));
+      assert.equal(attempts, 1, "malformed JSON and invalid identity data are not transient read failures");
+    }
   });
 
   it("replaces exactly the verified identity, preserving labels and every other account", async () => {
@@ -196,6 +238,35 @@ describe("manual refresh inventory safety", () => {
       return new Response("[]", { status: 201, headers: { "content-type": "application/json" } });
     }));
     assert.equal(unexpectedSuccessAttempts, 1, "a non-200 success status must fail without retries");
+  });
+
+  it("retries gift-list body timeouts but not malformed JSON or schema errors", async () => {
+    let attempts = 0;
+    await verifyGiftAccess(fresh, async () => {
+      attempts += 1;
+      return attempts === 1 ? unreadableBodyResponse() : new Response("[]", {
+        status: 200, headers: { "content-type": "application/json" },
+      });
+    });
+    assert.equal(attempts, 2, "a 200 gift-list body timeout should receive one safe retry");
+
+    attempts = 0;
+    await assert.rejects(verifyGiftAccess(fresh, async () => {
+      attempts += 1;
+      return unreadableBodyResponse();
+    }), (error: unknown) => error instanceof TransientError && /timed out/.test(error.message));
+    assert.equal(attempts, 2, "gift-list body timeouts must stop at the existing retry limit");
+
+    for (const body of ["{", "{}"]) {
+      attempts = 0;
+      await assert.rejects(verifyGiftAccess(fresh, async () => {
+        attempts += 1;
+        return new Response(body, {
+          status: 200, headers: { "content-type": "application/json" },
+        });
+      }), (error: unknown) => error instanceof SchemaMismatchError);
+      assert.equal(attempts, 1, "malformed JSON and schema errors must not be retried");
+    }
   });
 
   it("pins GitHub secret commands to github.com regardless of GH_HOST", () => {

@@ -255,6 +255,14 @@ function wrapNetworkError(err: unknown, method: HttpMethod, path: string): Trans
   );
 }
 
+export async function readResponseText(res: Response, method: HttpMethod, path: string): Promise<string> {
+  try {
+    return await res.text();
+  } catch (err) {
+    throw wrapNetworkError(err, method, path);
+  }
+}
+
 async function parseAndValidate<T>(
   res: Response,
   schema: ZodType<T>,
@@ -311,9 +319,10 @@ async function parseAndValidate<T>(
     );
   }
 
+  const body = await readResponseText(res, method, path);
   let json: unknown;
   try {
-    json = await res.json();
+    json = JSON.parse(body);
   } catch (err) {
     const detail = err instanceof Error ? err.message : String(err);
     throw new SchemaMismatchError(
