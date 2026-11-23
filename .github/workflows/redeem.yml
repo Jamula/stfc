@@ -115,7 +115,32 @@ jobs:
 
       - run: npm ci
 
+      - name: Select account-token source
+        id: token_source
+        env:
+          AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          AZURE_TOKEN_STORAGE_ACCOUNT: ${{ vars.AZURE_TOKEN_STORAGE_ACCOUNT }}
+          AZURE_TOKEN_CONTAINER: ${{ vars.AZURE_TOKEN_CONTAINER }}
+          AZURE_TOKEN_BLOB: ${{ vars.AZURE_TOKEN_BLOB }}
+        run: |
+          node --input-type=module <<'NODE'
+          import { appendFileSync } from 'node:fs';
+          const keys = ['AZURE_CLIENT_ID', 'AZURE_TENANT_ID', 'AZURE_SUBSCRIPTION_ID',
+            'AZURE_TOKEN_STORAGE_ACCOUNT', 'AZURE_TOKEN_CONTAINER', 'AZURE_TOKEN_BLOB'];
+          const configured = keys.filter(key => process.env[key]?.trim());
+          if (configured.length !== 0 && configured.length !== keys.length) {
+            console.error('::error::Azure token configuration is incomplete; refusing secret fallback.');
+            process.exit(1);
+          }
+          const source = configured.length === keys.length ? 'azure' : 'secret';
+          appendFileSync(process.env.GITHUB_OUTPUT, `source=${source}\n`);
+          console.log(`Account-token source: ${source}`);
+          NODE
+
       - name: Sign in to Azure with GitHub OIDC
+        if: steps.token_source.outputs.source == 'azure'
         uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5  # v2.3.0
         with:
           client-id: ${{ vars.AZURE_CLIENT_ID }}
@@ -123,6 +148,7 @@ jobs:
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
       - name: Download account tokens
+        if: steps.token_source.outputs.source == 'azure'
         env:
           AZURE_STORAGE_ACCOUNT: ${{ vars.AZURE_TOKEN_STORAGE_ACCOUNT }}
           AZURE_TOKEN_CONTAINER: ${{ vars.AZURE_TOKEN_CONTAINER }}
@@ -142,6 +168,41 @@ jobs:
             --only-show-errors
           chmod 600 "$RUNNER_TEMP/stfc-accounts.json"
           test -s "$RUNNER_TEMP/stfc-accounts.json"
+
+      - name: Load legacy account tokens
+        if: steps.token_source.outputs.source == 'secret'
+        env:
+          STFC_ACCOUNTS: ${{ secrets.STFC_ACCOUNTS }}
+          STFC_ACCOUNT_REFRESH: ${{ secrets.STFC_ACCOUNT_REFRESH }}
+        run: |
+          node --input-type=module <<'NODE'
+          import { writeFileSync } from 'node:fs';
+          import { join } from 'node:path';
+          import { isTokenAccounts } from './shared/token-account-schema.mjs';
+          import { mergeRefreshedAccount } from './scripts/refresh-account.mjs';
+          let accounts;
+          try {
+            accounts = JSON.parse(process.env.STFC_ACCOUNTS ?? '');
+          } catch {
+            console.error('::error::STFC_ACCOUNTS is missing or invalid; no redemption attempted.');
+            process.exit(1);
+          }
+          if (!isTokenAccounts(accounts)) {
+            console.error('::error::STFC_ACCOUNTS account schema is invalid; no redemption attempted.');
+            process.exit(1);
+          }
+          if (process.env.STFC_ACCOUNT_REFRESH) {
+            try {
+              accounts = await mergeRefreshedAccount(process.env.STFC_ACCOUNTS,
+                process.env.STFC_ACCOUNT_REFRESH);
+            } catch {
+              console.error('::error::Refresh override identity could not be matched; no redemption attempted.');
+              process.exit(1);
+            }
+          }
+          writeFileSync(join(process.env.RUNNER_TEMP, 'stfc-accounts.json'),
+            JSON.stringify(accounts), { mode: 0o600, flag: 'wx' });
+          NODE
 
       - name: Redeem
         id: redeem

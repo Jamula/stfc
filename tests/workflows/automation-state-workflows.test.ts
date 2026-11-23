@@ -178,7 +178,7 @@ const scheduled = [
 ] as const;
 
 describe("automation-state scheduled workflow contract", () => {
-  it("reads account tokens from private Blob Storage through OIDC without mapping token secrets", () => {
+  it("reads account tokens from private Blob Storage through OIDC with a bounded redeem-only legacy fallback", () => {
     for (const [label, workflow] of [
       ["redeem.yml", redeem],
       ["discord-monitor.yml", monitor],
@@ -189,7 +189,17 @@ describe("automation-state scheduled workflow contract", () => {
       assert.match(source, /chmod 600 "\$RUNNER_TEMP\/stfc-accounts\.json"/);
       assert.match(source, /STFC_ACCOUNTS_FILE:\s*\$\{\{\s*runner\.temp\s*\}\}\/stfc-accounts\.json/);
       assert.match(source, /Remove account-token file/);
-      assert.doesNotMatch(source, /STFC_ACCOUNTS:\s*\$\{\{\s*secrets\.STFC_ACCOUNTS/);
+      if (label === "discord-monitor.yml") {
+        assert.doesNotMatch(source, /STFC_ACCOUNTS:\s*\$\{\{\s*secrets\.STFC_ACCOUNTS/);
+      } else {
+        assert.equal(namedStep(workflow, "Load legacy account tokens").if,
+          "steps.token_source.outputs.source == 'secret'");
+        for (const name of ["Sign in to Azure with GitHub OIDC", "Download account tokens"]) {
+          assert.equal(namedStep(workflow, name).if,
+            "steps.token_source.outputs.source == 'azure'");
+        }
+        assert.equal(namedStep(workflow, "Redeem").env?.STFC_ACCOUNTS, undefined);
+      }
       assert.ok(workflow.jobs, `${label} must parse as a workflow`);
 
       const workflowSteps = steps(workflow);
@@ -458,6 +468,7 @@ describe("shared stfc-gift-redeemer writer queue contract", () => {
     assert.deepEqual(
       [...new Set(sharedWriters.map((decl) => decl.file))].sort(),
       [
+        "check-recovery-auth.yml",
         "discord-command-handler.yml",
         "discord-monitor.yml",
         "redeem.yml",
