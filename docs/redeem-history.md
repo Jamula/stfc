@@ -7,6 +7,7 @@ inserted at the top**, so the most recent run is always visible first.
 
 | Date (UTC) | Time (UTC) | Account | Gifts claimed |
 | --- | --- | --- | --- |
+| 2026-11-24 | 23:51 | main | 10 Min Free Chest |
 | 2026-11-24 | 15:05 | main | Emerald Chain Tier 38-42, 4 Hr Free Chest, Radioactive Titanite, 10 Min Free Chest, Daily Mission Key Drop |
 | 2026-11-12 | 01:39 | main | Daily Mission Key Drop, 4 Hr Free Chest, 10 Min Free Chest |
 | 2026-11-11 | 19:31 | main | One Fleet: WOK Montgomery Scott, 4 Hr Free Chest, 10 Min Free Chest, Compensation Gift |
