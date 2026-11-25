@@ -7,10 +7,14 @@ export interface DiscordAttachment {
   content_type?: string;
 }
 
-export interface DiscordClientPayload {
+export interface ValidatedDiscordPayload {
   command: string;
   interaction_token: string;
   application_id: string;
+  [key: string]: unknown;
+}
+
+export interface DiscordClientPayload extends ValidatedDiscordPayload {
   guild_id?: string;
   channel_id?: string;
   discord_message_id?: string;
@@ -20,22 +24,28 @@ export interface DiscordClientPayload {
   member?: string;
   note?: string;
   attachment?: DiscordAttachment;
-  [key: string]: unknown;
 }
 
-export interface DailyIndexEntry {
+export interface PersistedDailyIndexEntry {
   filename: string;
-  captured_at: string;
-  uploader: string;
-  note: string;
   size_bytes: number;
   [key: string]: unknown;
 }
 
-export interface DailyManifestEntry {
+export interface DailyIndexEntry extends PersistedDailyIndexEntry {
+  captured_at: string;
+  uploader: string;
+  note: string;
+}
+
+export interface PersistedDailyManifestEntry {
   filename: string;
   r2_bucket: string;
   r2_key: string;
+  [key: string]: unknown;
+}
+
+export interface DailyManifestEntry extends PersistedDailyManifestEntry {
   sha256: string;
   size_bytes?: number;
   content_type?: string;
@@ -44,13 +54,12 @@ export interface DailyManifestEntry {
   note?: string;
   access?: string;
   retention?: string;
-  [key: string]: unknown;
 }
 
 export interface DailyManifest {
   version: number;
   bucket: string;
-  files: DailyManifestEntry[];
+  files: PersistedDailyManifestEntry[];
   [key: string]: unknown;
 }
 
@@ -149,7 +158,7 @@ export interface RunCliOptions {
   stderr?: { write: (chunk: string) => unknown };
 }
 
-export function validatePayload(payload: unknown): asserts payload is DiscordClientPayload;
+export function validatePayload(payload: unknown): asserts payload is ValidatedDiscordPayload;
 
 export function validateGameStatePayload(payload: DiscordClientPayload): void;
 
@@ -195,7 +204,7 @@ export function updateDailyIndexAtomic(options: {
   readFileImpl?: ReadFileLike;
   writeFileImpl?: (path: string, data: string, enc?: string) => Promise<void>;
   renameImpl?: RenameLike;
-}): Promise<{ files: DailyIndexEntry[] }>;
+}): Promise<{ files: PersistedDailyIndexEntry[] }>;
 
 export function updateDailyManifestAtomic(options: {
   manifestPath: string;

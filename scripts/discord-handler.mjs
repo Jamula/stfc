@@ -801,7 +801,7 @@ export async function handleGameStateCommand({
   };
 }
 
-export async function resolveResponseText({ payload, repo, workflowRef, stateRef, serverUrl, historyPath, r2Config, runGh, runGit, readFileImpl, writeFileImpl, mkdirImpl, renameImpl, rmImpl, fetchImpl, nowFn, reconcileAutomationStateImpl }) {
+export async function resolveResponseText({ payload, repo, workflowRef, stateRef, serverUrl, historyPath, r2Config, runGh, runGit, readFileImpl = readFile, writeFileImpl, mkdirImpl, renameImpl, rmImpl, fetchImpl, nowFn, reconcileAutomationStateImpl }) {
   const command = payload.command;
 
   if (command === "redeem-status") {

@@ -1649,4 +1649,29 @@ describe("scripts/discord-handler.mjs", () => {
     assert.equal(code, 1);
     assert.match(stderr.text(), /Missing required client_payload field\(s\): application_id/);
   });
+
+  it("resolveResponseText defaults readFileImpl when omitted for redeem-status", async () => {
+    const tmpDir = mkdtempSync(path.join(tmpdir(), "stfc-discord-status-"));
+    try {
+      const historyPath = path.join(tmpDir, "redeem-history.md");
+      writeFileSync(historyPath, "| 2026-11-25 | Main | Claimed 2 gifts |\n", "utf8");
+
+      const text = await mod.resolveResponseText({
+        payload: {
+          command: "redeem-status",
+          interaction_token: "tok",
+          application_id: "app",
+        },
+        repo: "Jamula/stfc",
+        workflowRef: "main",
+        stateRef: "automation-state",
+        serverUrl: "https://github.com",
+        historyPath,
+      });
+
+      assert.match(text, /Claimed 2 gifts/);
+    } finally {
+      rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
 });
