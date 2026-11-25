@@ -30,7 +30,7 @@ npm run typecheck                         # tsc --noEmit
 
 `scripts/*.mjs` have hand-written `.d.mts` declarations next to them. Adding an export to a `.mjs` means adding it to the `.d.mts`, or typecheck fails while tests pass.
 
-Sub-packages have their own suites and dependencies: `web/` (Vite), `worker/` (vitest), `api/` (Azure Functions).
+Sub-packages have their own suites and dependencies: `web/` (Vite), `worker/` (vitest), `api/` (Azure Functions), `pwa-browser/` and `pwa-token-api/` (Container Apps typechecks).
 
 ## Git hooks
 
@@ -45,8 +45,9 @@ Locally, prefer fixing the failing test over habitually bypassing hooks.
 - **`src/`** — the TypeScript CLI. `src/cli.ts` dispatches named skills (`run-all`, `check-auth`, `list-gifts`, `redeem-codes`, `discord-monitor`, `roster`, …); each lives in `src/skills/`. `src/api/` is the STFC web-store client (`client.ts` owns timeouts, retries, redaction and the typed-error taxonomy; `schemas.ts` holds permissive zod schemas). `src/lib/` holds cross-cutting helpers (`outcomes.ts`, `jwt.ts`, `redact.ts`, `summary.ts`).
 - **`api/`** — Azure Functions backing the web control panel.
 - **`web/`** — Vite frontend. **`worker/`** — Cloudflare Worker bridging Discord interactions.
+- **`pwa-token-api/` & `pwa-browser/`** — private Azure Blob token-store API and internal-only headless-Chromium login relay backing the owner-only token-update PWA.
 - **`scripts/`** — standalone `.mjs` utilities (token capture, pre-commit checks, CI helpers).
-- **`.github/workflows/`** — `redeem.yml` is the core loop: read `STFC_ACCOUNTS`, claim gifts, redeem promo codes, commit `docs/redeem-history.md`.
+- **`.github/workflows/`** — `redeem.yml` is the core loop: download `accounts.json` from private Azure Blob Storage via GitHub OIDC (`STFC_ACCOUNTS_FILE`; legacy `STFC_ACCOUNTS` secret is unconfigured recovery/migration fallback only), claim gifts, redeem promo codes, and persist live state (`docs/redeem-history.md`, `data/promo-code-dead.json`, `data/redeem-degraded-state.json`, `promo-codes.txt`) to the `automation-state` branch.
 
 ## Conventions
 
@@ -54,7 +55,7 @@ Locally, prefer fixing the failing test over habitually bypassing hooks.
 
 This matters because it has failed before: `isExpectedOutcome()` once treated every outcome as benign, so a dead token produced green runs claiming nothing for 11 days. When adding a code path that can fail, ask what the run *reports* when it does.
 
-**Exit codes from `run-all`:** `0` ok/partial, `1` infrastructure error, `2` all tokens rejected (rotate `STFC_ACCOUNTS`).
+**Exit codes from `run-all`:** `0` ok/partial, `1` infrastructure error, `2` all tokens rejected (refresh hosted tokens via the owner-only STFC token-update PWA, or local `.env` `STFC_ACCOUNTS` for local CLI runs).
 
 **Don't burn API cycles.** Promo codes that return `CODE_INVALID_OR_EXPIRED` are recorded in `data/promo-code-dead.json` and skipped on later runs; transient errors retry twice. Preserve that behaviour.
 

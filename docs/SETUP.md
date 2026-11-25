@@ -14,8 +14,11 @@ of this repository.
 ## Hosted token setup
 
 The scheduled workflows read `accounts.json` from private Azure Blob Storage
-through GitHub OIDC; they do not consume `STFC_ACCOUNTS` directly. After the
-owner configures the OIDC identities and storage settings, initialize the
+through GitHub OIDC (`STFC_ACCOUNTS_FILE`) and persist runtime outputs
+(`docs/redeem-history.md`, `data/promo-code-dead.json`,
+`data/redeem-degraded-state.json`, `promo-codes.txt`) on the
+`automation-state` branch; they do not consume `STFC_ACCOUNTS` directly. After
+the owner configures the OIDC identities and storage settings, initialize the
 empty store once:
 
 1. Keep the existing JSON array in the temporary `STFC_ACCOUNTS` GitHub Actions
@@ -80,17 +83,6 @@ Once the private token store and Azure OIDC identities are initialized:
   run shows what was claimed, which codes were already used, and any tokens
   that have expired.
 
-<!-- The legacy manual token-extraction instructions below are obsolete. Use the identity-bound local recovery above or the owner-only PWA for hosted updates.
-DevTools on the STFC store after logging in, switch to the **Network**
-tab, find any request to `cdn-nv3-webstore-api.startrek.digitgaming.com`,
-copy the token portion from the `Authorization` header (remove the
-`Bearer ` prefix) and paste it into the `STFC_ACCOUNTS` GitHub secret as
-`[{"name":"main","token":"<that JWT>"}]` only if that is the complete
-intended secret. Do not rely on the current browser identity alone to verify
-ownership of a token captured earlier.
-
--->
-
 ## Token refresh
 
 Use the owner-only PWA to refresh hosted tokens. The **Migrate token store**
@@ -153,8 +145,11 @@ This feature requires one additional repository secret:
 
 **Setup:**
 
-1. Read [specs/001-discord-monitor/quickstart.md](../specs/001-discord-monitor/quickstart.md)
-   for full operator instructions — this covers provisioning the bot, setting the token,
-   configuring the allow-list, and troubleshooting.
-2. The feature is dormant until the allow-list is populated and the `DISCORD_BOT_TOKEN`
-   secret is set. No danger of breakage by accident.
+1. Read [DISCORD-BOT-SETUP.md](DISCORD-BOT-SETUP.md) for full operator
+   instructions on provisioning the bot, granting least-privilege channel read
+   access, setting `DISCORD_BOT_TOKEN`, and registering optional slash commands
+   (also see [discord/RUNBOOK.md](../discord/RUNBOOK.md) for the Cloudflare
+   Worker interaction bridge and historical feature notes in
+   [specs/001-discord-monitor/quickstart.md](../specs/001-discord-monitor/quickstart.md)).
+2. The feature is dormant until `config/discord-allowlist.json` is populated and
+   the `DISCORD_BOT_TOKEN` secret is set. No danger of breakage by accident.

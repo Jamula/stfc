@@ -76,7 +76,7 @@ A JSON array of 37 `Officer` objects. Each officer has:
 | `added_in_patch` | `string` | Patch reference (e.g. `"M91"`) |
 | `source` | `string` | Provenance (e.g. `"docs/stfc-game-knowledge.md#section-6"`) |
 
-**Seeding:** The 37 v1 officers were hand-curated from
+**Seeding:** The initial 37 officers were hand-curated from
 `docs/stfc-game-knowledge.md` Section 6 and community knowledge. Coverage
 varies by faction and BDA role; the current distribution is:
 
@@ -113,7 +113,7 @@ lands, maintain rosters via `npm run skill:roster` or direct edits to
 
 ## Tasks
 
-**Location:** `data/crew/tasks/*.yaml` (4 definitions at v1 launch)
+**Location:** `data/crew/tasks/*.yaml` (4 built-in definitions)
 
 | File | id | Name |
 |---|---|---|
@@ -159,9 +159,10 @@ staleness_overrides:
 
 ### Opting out of committing a roster
 
-Rosters are tracked by default so CI can regenerate `docs/crew/` reports.
-To keep an account private, add to `.gitignore` (or `.git/info/exclude`
-for a local-only override):
+Rosters are tracked by default so `discord-monitor.yml` can answer read-only
+`!crew` commands in Discord and operators can generate `docs/crew/` reports
+locally. To keep an account private, add to `.gitignore` (or
+`.git/info/exclude` for a local-only override):
 
 ```
 # private roster — not committed
@@ -169,8 +170,8 @@ data/crew/roster/main.yaml
 ```
 
 The optimizer skips accounts whose file is absent and continues processing
-other accounts. CI will not generate a `docs/crew/main-optimize.md` report
-for the missing file.
+other accounts (no `docs/crew/main-optimize.md` report is written locally, and
+Discord `!crew` commands will not see the ignored account).
 
 ---
 
@@ -494,7 +495,7 @@ Lists available task definitions.
 **Output:**
 - Per-task line: \`{task-id}\` — {task-name}: {short description}
 
-Available task ids at v1 launch: `mining-g3`, `hostile-grind`, `armada-25`,
+Built-in task ids: `mining-g3`, `hostile-grind`, `armada-25`,
 `station-defense`. New tasks can be added to `data/crew/tasks/` — see
 [Tasks](#tasks) section above.
 
