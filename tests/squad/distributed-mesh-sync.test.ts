@@ -32,6 +32,7 @@ console.log(squads["partner-fraud"][key] || "");
   const curl = join(bin, "curl");
   writeFileSync(curl, `#!/bin/bash
 printf '%s\\0' "$@" > args.bin
+cat > header.bin
 [ "\${FAIL_CURL:-}" = 1 ] && exit 1
 while [ "$#" -gt 0 ]; do
   if [ "$1" = -o ]; then printf 'remote contract\\n' > "$2"; break; fi
@@ -58,9 +59,10 @@ done
   assert.equal(success.status, 0, success.stderr);
   assert.ok(existsSync(join(dir, "args.bin")), `curl was not called: ${success.stdout}\n${success.stderr}`);
   assert.deepEqual(readFileSync(join(dir, "args.bin"), "utf8").split("\0").slice(0, -1), [
-    "--silent", "--fail", "--header", `Authorization: Bearer ${token}`,
-    "-o", `${target}/SUMMARY.md`, "--", source,
+    "--silent", "--fail", "--header", "@-", "--url", source,
+    "-o", `${target}/SUMMARY.md`,
   ]);
+  assert.equal(readFileSync(join(dir, "header.bin"), "utf8"), `Authorization: Bearer ${token}\n`);
   assert.equal(readFileSync(join(dir, target, "SUMMARY.md"), "utf8"), "remote contract\n");
   for (const marker of ["INJECTED", "TARGET_INJECTED", "HEADER_INJECTED"]) {
     assert.equal(existsSync(join(dir, marker)), false, `${marker} must not be executed`);
@@ -69,7 +71,8 @@ done
   const failure = run({ PARTNER_FRAUD_TOKEN: "", FAIL_CURL: "1" });
   assert.equal(failure.status, 0, failure.stderr);
   assert.deepEqual(readFileSync(join(dir, "args.bin"), "utf8").split("\0").slice(0, -1), [
-    "--silent", "--fail", "-o", `${target}/SUMMARY.md`, "--", source,
+    "--silent", "--fail", "--url", source, "-o", `${target}/SUMMARY.md`,
   ]);
+  assert.equal(readFileSync(join(dir, "header.bin"), "utf8"), "\n");
   assert.match(readFileSync(join(dir, target, "SUMMARY.md"), "utf8"), /^# partner-fraud — unavailable \(/);
 });

@@ -54,3 +54,4 @@ data/crew/ocr-poc/
 # /Squad: state owned by squad-state branch
 # Squad: SubSquad activation file (local to this machine)
 .squad-workstream
+.squad/backend/

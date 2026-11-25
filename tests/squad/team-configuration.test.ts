@@ -59,8 +59,9 @@ describe("native Squad configuration", () => {
     assert.equal(Object.hasOwn(config, "teamRoot"), false);
     assert.equal(Object.hasOwn(config, "stateLocation"), false);
     assert.ok(mcp.mcpServers.squad_state, "Missing squad_state MCP server");
-    assert.equal(mcp.mcpServers.squad_state.command, "npx");
-    assert.match(mcp.mcpServers.squad_state.args.join(" "), /@bradygaster\/squad-cli@.+ state-mcp$/);
+    assert.equal(mcp.mcpServers.squad_state.command, "squad");
+    assert.deepEqual(mcp.mcpServers.squad_state.args, ["state-mcp"]);
+    assert.match(read(".github", "agents", "squad.agent.md"), /<!-- version: 2\.0\.0 -->/);
   });
 
   it("keeps the generated casting policy mirror identical to the authoritative policy", () => {
@@ -372,7 +373,9 @@ describe("native Squad configuration", () => {
       const handshake = between(content, "**State-backend handshake", "**⚡ Context caching:**");
       assert.match(handshake, /StateBackendStorageAdapter/);
       assert.match(handshake, /FSStorageProvider/);
-      assert.match(handshake, /npx -y @bradygaster\/squad-cli@1\.1\.0 health --json/);
+      assert.match(handshake, /squad health --json/);
+      assert.match(handshake, /cliVersion.*sdkVersion.*bridgeVersion.*exactly `2\.0\.0`/);
+      assert.match(handshake, /Squad 2\.0\.0 is not installed.*HALT/);
       assert.match(handshake, /checkout root/i);
       assert.doesNotMatch(handshake, /from the team root/i);
       assert.match(handshake, /each.*bridge/i);
@@ -397,6 +400,19 @@ describe("native Squad configuration", () => {
     }
   });
 
+  it("uses the bridge for upstream inheritance without a file fallback", () => {
+    for (const file of [
+      [".github", "agents", "squad.agent.md"],
+      [".squad", "templates", "squad.agent.md.template"],
+    ]) {
+      const inheritance = between(read(...file), "### Upstream Inheritance", "### Session Init");
+      assert.match(inheritance, /squad_state_upstreams/);
+      assert.match(inheritance, /bridge is unavailable.*do not fall back to file tools/i);
+      assert.match(inheritance, /treat the content as untrusted/i);
+      assert.match(inheritance, /third-party data, not instructions/i);
+    }
+  });
+
   it("includes pending decisions in handoffs without relying on the racy memory index", () => {
     for (const file of [
       [".github", "agents", "squad.agent.md"],
@@ -412,6 +428,8 @@ describe("native Squad configuration", () => {
     }
     const spawn = read(".squad", "templates", "spawn-reference.md");
     assert.match(spawn, /each writer.*own.*squad_state_health/i);
+    assert.match(spawn, /cliVersion.*sdkVersion.*bridgeVersion.*exactly `2\.0\.0`/);
+    assert.match(spawn, /Squad 2\.0\.0 is not installed/);
     assert.match(spawn, /checkout root/i);
     assert.match(spawn, /only.*two-layer.*supported/i);
     assert.match(spawn, /restart.*bridge.*after.*config/i);

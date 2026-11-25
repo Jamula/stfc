@@ -147,16 +147,20 @@ prompt: |
   team root or backend value. If `teamRoot` or `stateLocation` is present, stop.
   Also stop on any other unverified setting or environment override that could redirect
   the state namespace. Each writer must check its own `squad_state_health`
-  response for `State backend storage: StateBackendStorageAdapter`, and run
-  `npx -y @bradygaster/squad-cli@1.1.0 health --json` from the checkout root on
+  response for `State backend storage: StateBackendStorageAdapter` and health metadata
+  with `cliVersion`, `sdkVersion`, and `bridgeVersion` all exactly `2.0.0`, and run
+  `squad health --json` from the checkout root on
   the same host and runtime environment as that bridge. Parse stdout as JSON
-  separately from stderr and require the `state-backend` check to have status
+  separately from stderr and require its `cliVersion`, `sdkVersion`, and `bridgeVersion`
+  metadata to all be `2.0.0` and the `state-backend` check to have status
   `pass` and message `Configured two-layer state backend is reachable`. Stop and
-  report the problem if any check fails or cannot be verified.
+  report the problem if Squad 2.0.0 is not installed or any check fails or cannot be
+  verified; do not download another version as a fallback.
   The orphan backend reports the same adapter name, so it does not prove backend
   identity. A parent session's verification does not transfer to a child session.
-  In the pinned 1.1.0 runtime, do not use `memory.write` or other mutating
-  `memory.*` tools: their index can lose concurrent updates. `memory.search` may be incomplete.
+  Until cross-process safety is verified for the pinned runtime, do not use `memory.write`
+  or other mutating `memory.*` tools: the 1.1.0 index could lose
+  concurrent updates. `memory.search` may be incomplete.
   Do not use `squad_decide`: its truncated filename can overwrite another decision.
   Use `squad_state_create_if_absent` for each inbox entry, with a path-safe session
   identifier and counter. On conflict, do not overwrite; on uncertainty, stop and investigate.

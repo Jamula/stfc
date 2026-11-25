@@ -92,14 +92,17 @@ for squad in $(jq -r '.squads | to_entries[] | select(.value.zone == "remote-opa
 
   mkdir -p "$target"
   curl_args=(--silent --fail)
+  header=""
   if [ "$auth" = "bearer" ]; then
     token_var="$(echo "${squad}" | tr '[:lower:]-' '[:upper:]_')_TOKEN"
-    if [ -n "${!token_var:-}" ]; then
-      curl_args+=(--header "Authorization: Bearer ${!token_var}")
+    token=$(printenv "$token_var" || true)
+    if [ -n "$token" ]; then
+      curl_args+=(--header @-)
+      header="Authorization: Bearer $token"
     fi
   fi
 
-  curl "${curl_args[@]}" -o "$target/SUMMARY.md" -- "$source" 2>/dev/null \
+  printf '%s\n' "$header" | curl "${curl_args[@]}" --url "$source" -o "$target/SUMMARY.md" 2>/dev/null \
     || echo "# ${squad} — unavailable ($(date))" > "$target/SUMMARY.md"
 done
 
