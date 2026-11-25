@@ -52,9 +52,18 @@ The most common scenario: your shell defaults to the EMU account, but you need t
 ```bash
 # Push as the personal account for this one command: gh's credential helper hands git the
 # token from GH_TOKEN, so it never appears in a URL, a remote or the command line
-GH_TOKEN="$(gh auth token --user personaluser)" \
-  git -c credential.helper= -c 'credential.helper=!gh auth git-credential' \
-  push https://github.com/personaluser/repo.git branch-name
+(
+  personal_token=$(gh auth token --user personaluser) || {
+    echo "Unable to retrieve the personal GitHub token." >&2
+    exit 1
+  }
+  if [ -z "$personal_token" ]; then
+    echo "The personal GitHub token is empty." >&2
+    exit 1
+  fi
+  GH_TOKEN="$personal_token" git -c credential.helper= -c 'credential.helper=!gh auth git-credential' \
+    push https://github.com/personaluser/repo.git branch-name
+)
 ```
 
 **Why this works:** `gh auth token --user` reads from `gh`'s credential store without switching the active account. The token lives only in that one command's environment: `credential.helper=` clears the stored (EMU) helper for this command, and `gh auth git-credential` answers git's credential request with `GH_TOKEN`. Never put a token in a git URL: it shows up in shell history, process listings, tool logs and `.git/config`.
@@ -63,14 +72,29 @@ GH_TOKEN="$(gh auth token --user personaluser)" \
 
 When the default `gh` context is EMU but you need to create a PR from a personal fork:
 
-```bash
+```powershell
 # Option 1: Use --repo flag (works if token has access)
 gh pr create --repo upstream/repo --head personaluser:branch --title "..." --body "..."
 
 # Option 2: Temporarily set GH_TOKEN for one command
-$env:GH_TOKEN = $(gh auth token --user personaluser)
-gh pr create --repo upstream/repo --head personaluser:branch --title "..."
-Remove-Item Env:\GH_TOKEN
+$hadGhToken = Test-Path Env:\GH_TOKEN
+$previousGhToken = $env:GH_TOKEN
+try {
+  $tokenOutput = gh auth token --user personaluser
+  $tokenLookupExitCode = $LASTEXITCODE
+  $personalToken = ($tokenOutput -join "`n").Trim()
+  if ($tokenLookupExitCode -ne 0 -or [string]::IsNullOrWhiteSpace($personalToken)) {
+    throw "Unable to retrieve a non-empty personal GitHub token."
+  }
+  $env:GH_TOKEN = $personalToken
+  gh pr create --repo upstream/repo --head personaluser:branch --title "..."
+} finally {
+  if ($hadGhToken) {
+    $env:GH_TOKEN = $previousGhToken
+  } else {
+    Remove-Item Env:\GH_TOKEN -ErrorAction SilentlyContinue
+  }
+}
 ```
 
 ### Config Directory Isolation (Advanced)
@@ -128,9 +152,24 @@ alias ghe='gh'
 # Agent needs to push to personaluser.github.io (personal repo)
 # Default gh auth is corpalias_enterprise (EMU)
 
-$env:GH_TOKEN = gh auth token --user personaluser
-git -c credential.helper= -c 'credential.helper=!gh auth git-credential' push origin main
-Remove-Item Env:GH_TOKEN  # the token never touches the remote URL
+$hadGhToken = Test-Path Env:\GH_TOKEN
+$previousGhToken = $env:GH_TOKEN
+try {
+  $tokenOutput = gh auth token --user personaluser
+  $tokenLookupExitCode = $LASTEXITCODE
+  $personalToken = ($tokenOutput -join "`n").Trim()
+  if ($tokenLookupExitCode -ne 0 -or [string]::IsNullOrWhiteSpace($personalToken)) {
+    throw "Unable to retrieve a non-empty personal GitHub token."
+  }
+  $env:GH_TOKEN = $personalToken
+  git -c credential.helper= -c 'credential.helper=!gh auth git-credential' push origin main
+} finally {
+  if ($hadGhToken) {
+    $env:GH_TOKEN = $previousGhToken
+  } else {
+    Remove-Item Env:\GH_TOKEN -ErrorAction SilentlyContinue
+  }
+}
 ```
 
 ### ✓ Correct: Agent creates a PR from personal fork to upstream
@@ -165,9 +204,18 @@ git push https://personaluser:ghp_xxxxxxxxxxxx@github.com/personaluser/repo.git 
 # Always verify which account has access before operations
 gh auth status
 # If wrong account, hand git the personal token for this one push:
-GH_TOKEN="$(gh auth token --user personaluser)" \
-  git -c credential.helper= -c 'credential.helper=!gh auth git-credential' \
-  push https://github.com/personaluser/repo.git main
+(
+  personal_token=$(gh auth token --user personaluser) || {
+    echo "Unable to retrieve the personal GitHub token." >&2
+    exit 1
+  }
+  if [ -z "$personal_token" ]; then
+    echo "The personal GitHub token is empty." >&2
+    exit 1
+  fi
+  GH_TOKEN="$personal_token" git -c credential.helper= -c 'credential.helper=!gh auth git-credential' \
+    push https://github.com/personaluser/repo.git main
+)
 ```
 
 ## Anti-Patterns

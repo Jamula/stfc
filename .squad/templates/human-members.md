@@ -57,7 +57,7 @@ When work routes to a human member, the coordinator pauses. It never does that w
 ## Reviewing as a Human
 
 - Humans can serve as reviewers in the review process.
-- **Rejection lockout applies normally** — original author is locked out when reviewer rejects.
+- The original author may address review feedback unless the reviewer explicitly requests another owner.
 - User relays the human's verdict to the coordinator ("approved" or "rejected with changes").
 
 ## Decision Framework: When to Add a Human Member

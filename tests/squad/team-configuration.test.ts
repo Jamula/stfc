@@ -300,6 +300,13 @@ describe("native Squad configuration", () => {
     );
     assert.doesNotMatch(coordinator, /work inline \(fallback only/i);
     assert.doesNotMatch(coordinator, /original author is locked out/i);
+
+    const humanMembers = read(".squad", "templates", "human-members.md");
+    assert.match(
+      humanMembers,
+      /original author may address review feedback unless the reviewer explicitly requests another owner/i,
+    );
+    assert.doesNotMatch(humanMembers, /original author is locked out when reviewer rejects/i);
   });
 
   it("keeps Ralph briefs bounded and verifies agent failure reports", () => {
