@@ -11,7 +11,7 @@ Discord Developer Portal account that will own the bot.
 
 All placeholder values in this document use angle-bracket form (e.g.
 `<APPLICATION_ID>`, `<CHANNEL_ID>`). Never commit real client IDs, bot
-tokens, snowflakes, or anything resembling a JWT (Principle VII).
+tokens, snowflakes, or anything resembling a JWT.
 
 ---
 

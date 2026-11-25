@@ -49,7 +49,7 @@ _Tick **at least one**. Multiple selections are allowed._
 
 ## Spec linkage
 
-_For **non-trivial** changes (multi-file, cross-skill, new feature, >4 hr, build-config, or API contract change — per Principle VI), link the spec:_
+_For **non-trivial** changes (multi-file, cross-skill, new feature, >4 hr, build-config, or API contract change — see `CONTRIBUTING.md`), link the spec or issue plan:_
 
 - Spec: `specs/NNN-feature-name/spec.md` — <!-- or paste link -->
 - Exempt: `<!-- single-file fix / typo / version bump / doc only — state reason here -->`
@@ -80,10 +80,10 @@ _Complete this section when adding or tightening a gate over existing repository
 
 - [ ] This change does not violate repository rules in `.github/copilot-instructions.md`.
 
-_If there is a tension with a principle, describe it here and note how the plan's Constitution Check table addresses it:_
+_If there is a tension with a documented repository convention, describe it here and note why the tradeoff is justified:_
 
 ```
-<!-- e.g., "Tension with Principle III: selector fallback omitted for the dialog — justified in plan.md §Complexity Tracking because the dialog is only reachable on mobile and the CSS path is stable across known versions." -->
+<!-- e.g., "Tradeoff: retained duplicate config file because an existing Squad CI test pins its presence until upstream template migration completes." -->
 ```
 
 ---

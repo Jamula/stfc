@@ -1,10 +1,32 @@
-# stfc-gift-redeemer
+# stfc-gift-redeemer (`Jamula/stfc`)
 
-A headless TypeScript CLI that automatically redeems web-store gifts and promo
-codes from the **Star Trek Fleet Command** store. GitHub Actions requests a
-scheduled run every 10 minutes, but schedule delivery is best-effort—not a
-10-minute guarantee. Optionally monitors configured Discord channels for new
-promo codes and player tips, harvesting both into a daily digest.
+An automation and player-companion toolkit for **Star Trek Fleet Command**
+(`0.1.0` MVP baseline). Built for a mobile-first operator so daily web-store
+gift claims, ephemeral community promo codes, crew and progression planning,
+game-state capture, and token renewal do not depend on repetitive manual store
+logins.
+
+**Origin:** Created on `2026-01-14` for a mobile-first (iPhone) *Star Trek Fleet
+Command* player to automate daily web-store gift claims and time-sensitive
+community promo codes after an initial browser/iframe prototype hit cross-origin
+isolation, evolving across four phases into the six-subsystem `0.1.0` MVP
+platform below (see
+[docs/ARCHITECTURE.md §0](docs/ARCHITECTURE.md#0-repository-origin--evolution)).
+
+### What lives in this repository
+
+| Subsystem | Paths | Purpose |
+| --- | --- | --- |
+| **Store gift & promo-code redeemer** | `src/`, `.github/workflows/redeem.yml` | Headless Node 24 TypeScript CLI targeting the STFC Web Store v2 API with truthful `Outcome` exit codes (`0` ok/partial, `1` infra error, `2` all tokens rejected), persisting run history and dead-code caches to the orphan `automation-state` branch. GitHub Actions requests a run every 10 minutes (best-effort schedule delivery, not a hard interval guarantee). |
+| **Private token store & browser relay** | `pwa-token-api/`, `pwa-browser/`, [docs/STFC-TOKEN-PWA.md](docs/STFC-TOKEN-PWA.md) | Stores account JWTs in private Azure Blob Storage read via GitHub OIDC (`STFC_ACCOUNTS_FILE`), refreshed from an owner-only PWA tab backed by isolated Container Apps rather than long-lived GitHub secrets. |
+| **Discord community monitor & digest** | `src/discord/`, `src/digest/`, `.github/workflows/discord-monitor.yml` | Optional 4-hour read-only scanner extracting candidate promo codes and classifying player tips/tricks into daily digests persisted on `automation-state`. |
+| **Discord slash-command & capture bridge** | `worker/`, [`discord/RUNBOOK.md`](discord/RUNBOOK.md) | Cloudflare Worker and GitHub Actions bridge handling `/redeem-status`, `/trigger-redeem`, and `/game-state` media uploads to private R2 storage. |
+| **Offline crew optimizer & RAG knowledge engine** | `src/crew/`, `data/crew/`, [docs/CREW-OPTIMIZER.md](docs/CREW-OPTIMIZER.md) | Zero-credential CLI (`skill:optimize-crew`, `skill:progression`, `skill:roster`), local MiniLM embedding RAG engine (`src/crew/knowledge.ts`), and read-only `!crew` queries over curated officer/task data and link-only community references ([docs/stfc-knowledge/README.md](docs/stfc-knowledge/README.md)). |
+| **Operator web control panel** | `web/`, `api/`, [docs/SWA-SETUP.md](docs/SWA-SETUP.md) | Lit 3 + Vite dashboard and Azure Functions API on Azure Static Web Apps with two-layer operator/owner authentication. |
+
+**Release status:** Current product version is **`0.1.0`** (see
+[CHANGELOG.md](CHANGELOG.md); the earlier `v1.0.0` tag predates the 2026-11-08
+reset to the `0.1.0` MVP baseline and is preserved as historical).
 
 ---
 
@@ -12,7 +34,7 @@ promo codes and player tips, harvesting both into a daily digest.
 
 1. **Configure the private account-token store.** Follow
    [docs/STFC-TOKEN-PWA.md](docs/STFC-TOKEN-PWA.md) to provision the owner-only
-   PWA services, private Azure Blob container and GitHub OIDC reader identity.
+   PWA services, private Azure Blob container, and GitHub OIDC reader identity.
    The workflow cannot run until those external resources and settings exist.
 2. **Initialize the token store once.** Set the legacy `STFC_ACCOUNTS` secret
    temporarily, then manually dispatch **Migrate token store**. The workflow
@@ -23,8 +45,8 @@ promo codes and player tips, harvesting both into a daily digest.
 
 > **Token expiry:** after the PWA is deployed and configured, sign in through
 > its **STFC token update** tab to replace a token in the private store. The
-> `refresh-token.yml` no longer performs a provider login; the **Migrate token
-> store** workflow is only the one-time migration path.
+> `refresh-token.yml` workflow no longer performs a provider login; **Migrate
+> token store** is only the one-time migration path.
 
 > **Local development:** run `pwsh -NoProfile -File .\recover-auth.ps1` for the
 > guided, identity-bound recovery. With a prepared local `.env`, you can also
@@ -38,11 +60,11 @@ promo codes and player tips, harvesting both into a daily digest.
    only to a local `.env`; hosted token updates use the owner-only PWA.
    See [docs/SETUP.md](docs/SETUP.md) for local CLI instructions.
 
-> **Optional:** if you want to harvest promo codes and tips from the STFC
-> Discord community automatically, enable the **`Discord monitor` workflow**
+> **Optional Discord monitor:** to harvest promo codes and tips from configured
+> STFC Discord channels automatically, enable the **`Discord monitor` workflow**
 > and configure your allow-list. See
-> [specs/001-discord-monitor/quickstart.md](specs/001-discord-monitor/quickstart.md)
-> for setup instructions.
+> [docs/DISCORD-BOT-SETUP.md](docs/DISCORD-BOT-SETUP.md) (and historical feature
+> notes in [specs/001-discord-monitor/quickstart.md](specs/001-discord-monitor/quickstart.md)).
 
 ---
 
@@ -54,7 +76,7 @@ The orchestrator talks to the official STFC web-store API at:
 https://cdn-nv3-webstore-api.startrek.digitgaming.com/api/v2
 ```
 
-For each account it performs roughly:
+For each account it performs:
 
 - `GET  /auth/me`             — verify the JWT is still valid and identify the player.
 - `GET  /offers/gifts`        — list pending gifts (daily login, mail attachments, etc).
@@ -62,8 +84,9 @@ For each account it performs roughly:
 - `POST /redeem/claim`        — submit each promo code from `promo-codes.txt`.
 
 The bearer token is sent in the `Authorization` header. Scheduled workflows
-read the account list from private Azure Blob Storage using GitHub OIDC.
-The owner-only PWA updates that store after validating a real STFC login.
+read the account list from private Azure Blob Storage using GitHub OIDC
+(`STFC_ACCOUNTS_FILE`). The owner-only PWA updates that store after validating
+a real STFC login.
 
 ---
 
@@ -81,10 +104,9 @@ When configured, a scheduled workflow (`discord-monitor.yml`) runs every 4 hours
 Discord slash-command interactions are handled separately by the Worker and
 GitHub Actions bridge; see [`discord/RUNBOOK.md`](discord/RUNBOOK.md).
 
-To set up, see [specs/001-discord-monitor/quickstart.md](specs/001-discord-monitor/quickstart.md).
-For the one-time bot creation, privileged-intent toggles, install URL, and
-token rotation procedure, see [docs/DISCORD-BOT-SETUP.md](docs/DISCORD-BOT-SETUP.md).
-This feature is entirely optional — the core redemption workflow works without it.
+For bot creation, privileged-intent toggles, install URL, and token rotation,
+see [docs/DISCORD-BOT-SETUP.md](docs/DISCORD-BOT-SETUP.md). This feature is
+optional — the core redemption workflow runs independently without it.
 
 ## Discord slash commands
 
@@ -116,7 +138,7 @@ Full operator guide: **[docs/CREW-OPTIMIZER.md](docs/CREW-OPTIMIZER.md)**.
 
 ---
 
-## Project structure
+## CLI skills & diagnostics
 
 The scheduled redemption workflow runs:
 
@@ -124,9 +146,10 @@ The scheduled redemption workflow runs:
 npm run skill:run-all
 ```
 
-which iterates every account in `STFC_ACCOUNTS` and runs the full pipeline
-(check auth → list gifts → claim gifts → redeem codes), printing a per-account
-summary at the end.
+which iterates every configured account (`STFC_ACCOUNTS_FILE` in hosted
+workflows, or `STFC_ACCOUNTS` in local `.env` runs) through the full pipeline
+(check auth → list gifts → claim gifts → redeem codes) and prints a per-account
+summary with explicit outcome classification.
 
 For local diagnostics you can run individual steps:
 
@@ -137,10 +160,8 @@ For local diagnostics you can run individual steps:
 | `npm run skill:claim-gifts` | Claim pending gifts.                                     |
 | `npm run skill:redeem-codes`| Submit every code in `promo-codes.txt`.                  |
 
----
-
 For system design, deployment, and workflow details, see
-[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Setup guides are in `docs/`,
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Setup guides live in `docs/`,
 `discord/`, and `worker/`.
 
 ---
@@ -179,7 +200,7 @@ and serialization behavior.
 
 Expired tokens are reported per account without stopping other accounts.
 Interactive re-capture requires the identity-bound procedure in the setup guide.
-`run-all` exits 2 when every account is expired and 1 for infrastructure errors.
+`run-all` exits `2` when every account is expired and `1` for infrastructure errors.
 
 ---
 
@@ -187,7 +208,8 @@ Interactive re-capture requires the identity-bound procedure in the setup guide.
 
 By design this tool is **summary-only**: it does not send emails, push
 notifications, or Discord webhooks. Everything you need is on the workflow run
-page (Actions tab → Redeem gifts → latest run → job summary).
+page (Actions tab → Redeem gifts → latest run → job summary), plus automated
+issue alerts when all tokens fail or a gift bundle degrades repeatedly.
 
 If you want to be notified when a run fails, enable
 *Settings → Notifications → Actions → Send notifications for failed workflows
@@ -195,21 +217,15 @@ only* in your personal GitHub settings.
 
 ---
 
-## Disclaimer
-
-Automating interactions with the STFC web store may be against the
-**Scopely** / **Star Trek Fleet Command** Terms of Service. Use at your own
-risk — you, the operator, assume all responsibility for any consequences,
-including but not limited to account suspension. This project is provided
-for educational purposes and is not affiliated with or endorsed by Scopely,
-Digit Game Studios, CBS, or Paramount.
-
----
-
 ## Local development
 
+Node.js comes from `.nvmrc` (currently Node 24; `api/.nvmrc` uses Node 22 for
+Azure Static Web Apps Functions). `npm test` strips TypeScript types without
+checking them, so run both gates locally:
+
 ```bash
-npm install
+npm ci
+npm --prefix api ci && npm --prefix web ci && npm --prefix pwa-token-api ci && npm --prefix pwa-browser ci && npm --prefix worker ci
 npm test
 npm run typecheck
 ```
@@ -221,7 +237,38 @@ into a `.env` file in the repo root:
 STFC_ACCOUNTS=[{"name":"main","token":"<JWT>"}]
 ```
 
-then run e.g. `npm run skill:check-auth`. The `.env` file is gitignored.
+then run e.g. `npm run skill:check-auth`. The `.env` file is gitignored and
+must never be committed or read by automated agents.
+
+---
+
+## Contributing, security, sponsorship & license
+
+- **Contributing:** see [CONTRIBUTING.md](CONTRIBUTING.md) for test-first bug
+  fixes, test registration (`tests/index.test.ts`), cross-platform rules, and PR
+  gates.
+- **Security:** see [SECURITY.md](SECURITY.md) to report vulnerabilities
+  privately via GitHub Security Advisories. Never paste live tokens, OTPs, or
+  account data into issues or pull requests.
+- **Sponsorship:** support ongoing maintenance via
+  [GitHub Sponsors (@cyrusjamula)](https://github.com/sponsors/cyrusjamula) (configured in
+  [`.github/FUNDING.yml`](.github/FUNDING.yml)).
+- **License:** original project code is licensed under the
+  [Apache License 2.0](LICENSE) (`Copyright 2026 Jamula, Inc.`). Third-party
+  materials (including MIT-licensed upstream Squad templates under `.squad/` and
+  `.github/skills/`) and linked external community references remain subject to
+  their own license terms.
+
+---
+
+## Disclaimer
+
+Automating interactions with the STFC web store may be against the
+**Scopely** / **Star Trek Fleet Command** Terms of Service. Use at your own
+risk — you, the operator, assume all responsibility for any consequences,
+including but not limited to account suspension. This project is provided
+for educational purposes and is not affiliated with or endorsed by Scopely,
+Digit Game Studios, CBS, or Paramount.
 
 ---
 

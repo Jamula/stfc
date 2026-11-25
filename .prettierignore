@@ -1,0 +1,18 @@
+# Dependencies and build outputs
+node_modules/
+dist/
+**/dist/
+.wrangler/
+
+# Package manager lockfiles
+package-lock.json
+**/package-lock.json
+
+# Auto-generated schema contracts (owned by scripts/build-contracts.mjs)
+shared/contracts/
+
+# Seed/runtime data, historical specs, and Squad framework files
+data/
+specs/
+.squad/
+docs/redeem-history.md

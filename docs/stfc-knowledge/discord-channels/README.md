@@ -35,7 +35,7 @@ For Discord channels the fields map as follows:
 | **Author(s) / contributors** | Discord username (stable handle, not display name). List all contributors quoted in the artifact. |
 | **Captured on** | ISO date (YYYY-MM-DD) the snapshot was taken. Refreshes update this. |
 | **License / attribution requirements** | Verified reuse terms and evidence, or `Redistribution permission not established; source link only`. |
-| **Refresh strategy** | `node scripts/fetch-discord-channel.mjs` (requires `DISCORD_BOT_TOKEN` in env); re-fetches pins + recent messages and rewrites the snapshot files. |
+| **Refresh strategy** | Maintain source links only unless reuse terms are verified and capture is separately authorized (the former unused `scripts/fetch-discord-channel.mjs` helper was removed). |
 
 ## What's here today
 
@@ -62,8 +62,9 @@ curl -sH "Authorization: Bot $DISCORD_BOT_TOKEN" \
   "https://discord.com/api/v10/channels/1115978499400933473" | jq .
 ```
 
-Both probes require the token in the caller's environment. The fetcher and
-lineage stub exist, but **no content has been ingested**.
+Both probes require the token in the caller's environment. The lineage stub
+exists, the former unused fetcher script was removed, and **no content has been
+ingested**.
 
 **Historical context (from `src/discord/` discovery, 2026-05-18):**
 
@@ -93,18 +94,18 @@ repository.
    # Expect: "1115978499400933473"
    ```
 
-4. Only after verified reuse terms and applicable authorization, run
-   `node scripts/fetch-discord-channel.mjs` from the repo root.
+4. Only after verified reuse terms and applicable authorization, author a
+   dedicated authorized capture script under `scripts/` (per the parent
+   `docs/stfc-knowledge/README.md` lineage convention; the former unused
+   `scripts/fetch-discord-channel.mjs` helper was removed).
 
 **Who to ask:** A maintainer or moderator of the STFC Officer Tool Discord.
 
 ## Refresh procedure (only after access, reuse verification, and authorization)
 
-```bash
-export DISCORD_BOT_TOKEN="<your-bot-token>"
-node scripts/fetch-discord-channel.mjs
-```
-
-The script paginates through pinned messages first (highest signal), then recent
-channel history, writing one markdown file per high-signal post cluster under
-`docs/stfc-knowledge/discord-channels/officer-tool-data-collection/`.
+Maintain source links only until reuse terms are verified and capture is
+separately authorized. Any future authorized capture script must paginate
+through pinned messages first (highest signal), then recent channel history,
+writing one markdown file per high-signal post cluster under
+`docs/stfc-knowledge/discord-channels/officer-tool-data-collection/` with the
+six-field `## Lineage` block.

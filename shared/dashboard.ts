@@ -1,7 +1,7 @@
-import type { RunResult } from './contracts/run-result.js';
+import type { RunResult } from "./contracts/run-result.js";
 
-export type DashboardTab = 'redeems' | 'digests' | 'telemetry' | 'crew' | 'runs';
-export type Workflow = RunResult['workflow'];
+export type DashboardTab = "redeems" | "digests" | "telemetry" | "crew" | "runs";
+export type Workflow = RunResult["workflow"];
 
 export interface DashboardDocument {
   path: string;
@@ -19,7 +19,7 @@ export interface DashboardRun {
   conclusion: string | null;
   status: string;
   run_id: number | null;
-  business_result: RunResult['business_result'] | null;
+  business_result: RunResult["business_result"] | null;
 }
 
 export interface DashboardData {

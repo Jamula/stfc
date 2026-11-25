@@ -1,71 +1,71 @@
 {
-	"name": "stfc-gift-redeemer",
-	"private": true,
-	"version": "0.1.0",
-	"description": "Headless redemption of Star Trek Fleet Command web-store gifts and promo codes, runnable as a scheduled GitHub Action.",
-	"type": "module",
-	"engines": {
-		"node": ">=24"
-	},
-	"scripts": {
-		"skill:run-all": "tsx src/cli.ts run-all",
-		"skill:check-auth": "tsx src/cli.ts check-auth",
-		"skill:list-gifts": "tsx src/cli.ts list-gifts",
-		"skill:claim-gifts": "tsx src/cli.ts claim-gifts",
-		"skill:redeem-codes": "tsx src/cli.ts redeem-codes",
-		"skill:discord-monitor": "tsx src/cli.ts discord-monitor",
-		"skill:roster": "tsx src/cli.ts roster",
-		"skill:optimize-crew": "tsx src/cli.ts optimize-crew",
-		"skill:progression": "tsx src/cli.ts progression",
-		"crew:knowledge:rebuild": "tsx src/crew/knowledge.ts rebuild",
-		"test": "node --import tsx --test tests/index.test.ts",
-		"test:watch": "node --import tsx --test --watch tests/index.test.ts",
-		"test:coverage": "c8 --all --include=\"src/**/*.ts\" --include=\"scripts/**/*.mjs\" --include=\"api/src/**/*.ts\" --include=\"api/_lib/**/*.ts\" --include=\"shared/**/*.ts\" --include=\"web/src/**/*.ts\" --extension=.ts --extension=.mjs --reporter=text --check-coverage --lines=80 --branches=80 node --import tsx tests/index.test.ts",
-		"build:web": "cd web && npm run build",
-		"build:api": "cd api && npm run build",
-		"build:swa": "npm run build:web && npm run build:api",
-		"build:contracts": "node scripts/build-contracts.mjs",
-		"check:contracts": "node scripts/ci/check-contracts-types.mjs",
-		"dev:swa": "swa start http://localhost:5173 --api-location api",
-		"typecheck": "tsc --noEmit",
-		"capture-token": "node scripts/capture-token.mjs",
-		"playwright:install": "npx playwright install chromium",
-		"prepare": "simple-git-hooks"
-	},
-	"simple-git-hooks": {
-		"pre-commit": "node scripts/pre-commit.mjs",
-		"pre-push": "node scripts/pre-push.mjs"
-	},
-	"dependencies": {
-		"@discordjs/rest": "^2.6.3",
-		"@huggingface/transformers": "^4.3.2",
-		"discord-api-types": "^0.38.57",
-		"tsx": "^4.23.15",
-		"yaml": "^2.9.1",
-		"zod": "^4.6.7"
-	},
-	"overrides": {
-		"sharp": "^0.35.4",
-		"tmp": "0.2.7",
-		"adm-zip": "0.6.1",
-		"rimraf@^5.0.0": {
-			"glob": "^14.0.2",
-			"minimatch": "^11.0.1"
-		},
-		"test-exclude@^8.0.0": {
-			"glob": "^14.0.2",
-			"minimatch": "^11.0.1"
-		}
-	},
-	"devDependencies": {
-		"@azure/static-web-apps-cli": "^2.1.0",
-		"@types/node": "^26.6.6",
-		"ajv": "^8.20.0",
-		"ajv-formats": "^3.0.1",
-		"c8": "^12.0.0",
-		"json-schema-to-typescript": "^16.0.0",
-		"playwright": "^1.64.1",
-		"simple-git-hooks": "^2.14.0",
-		"typescript": "~7.0.2"
-	}
+  "name": "stfc-gift-redeemer",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Headless redemption of Star Trek Fleet Command web-store gifts and promo codes, runnable as a scheduled GitHub Action.",
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "skill:run-all": "tsx src/cli.ts run-all",
+    "skill:check-auth": "tsx src/cli.ts check-auth",
+    "skill:list-gifts": "tsx src/cli.ts list-gifts",
+    "skill:claim-gifts": "tsx src/cli.ts claim-gifts",
+    "skill:redeem-codes": "tsx src/cli.ts redeem-codes",
+    "skill:discord-monitor": "tsx src/cli.ts discord-monitor",
+    "skill:roster": "tsx src/cli.ts roster",
+    "skill:optimize-crew": "tsx src/cli.ts optimize-crew",
+    "skill:progression": "tsx src/cli.ts progression",
+    "crew:knowledge:rebuild": "tsx src/crew/knowledge.ts rebuild",
+    "test": "node --import tsx --test tests/index.test.ts",
+    "test:watch": "node --import tsx --test --watch tests/index.test.ts",
+    "test:coverage": "c8 --all --include=\"src/**/*.ts\" --include=\"scripts/**/*.mjs\" --include=\"api/src/**/*.ts\" --include=\"api/_lib/**/*.ts\" --include=\"shared/**/*.ts\" --include=\"web/src/**/*.ts\" --extension=.ts --extension=.mjs --reporter=text --check-coverage --lines=80 --branches=80 node --import tsx tests/index.test.ts",
+    "build:web": "cd web && npm run build",
+    "build:api": "cd api && npm run build",
+    "build:swa": "npm run build:web && npm run build:api",
+    "build:contracts": "node scripts/build-contracts.mjs",
+    "check:contracts": "node scripts/ci/check-contracts-types.mjs",
+    "dev:swa": "swa start http://localhost:5173 --api-location api",
+    "typecheck": "tsc --noEmit",
+    "capture-token": "node scripts/capture-token.mjs",
+    "playwright:install": "npx playwright install chromium",
+    "prepare": "simple-git-hooks"
+  },
+  "simple-git-hooks": {
+    "pre-commit": "node scripts/pre-commit.mjs",
+    "pre-push": "node scripts/pre-push.mjs"
+  },
+  "dependencies": {
+    "@discordjs/rest": "^2.6.3",
+    "@huggingface/transformers": "^4.3.2",
+    "discord-api-types": "^0.38.57",
+    "tsx": "^4.23.15",
+    "yaml": "^2.9.1",
+    "zod": "^4.6.7"
+  },
+  "overrides": {
+    "sharp": "^0.35.4",
+    "tmp": "0.2.7",
+    "adm-zip": "0.6.1",
+    "rimraf@^5.0.0": {
+      "glob": "^14.0.2",
+      "minimatch": "^11.0.1"
+    },
+    "test-exclude@^8.0.0": {
+      "glob": "^14.0.2",
+      "minimatch": "^11.0.1"
+    }
+  },
+  "devDependencies": {
+    "@azure/static-web-apps-cli": "^2.1.0",
+    "@types/node": "^26.6.6",
+    "ajv": "^8.20.0",
+    "ajv-formats": "^3.0.1",
+    "c8": "^12.0.0",
+    "json-schema-to-typescript": "^16.0.0",
+    "playwright": "^1.64.1",
+    "simple-git-hooks": "^2.14.0",
+    "typescript": "~7.0.2"
+  }
 }

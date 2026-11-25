@@ -154,11 +154,13 @@ describe("SWA project structure (T-SWA-002)", () => {
       assert.ok(exists("shared/contracts"), "shared/contracts/ missing");
     });
 
-    it("shared/contracts/.gitkeep exists (ensures empty dir is tracked)", () => {
-      assert.ok(
-        exists("shared/contracts/.gitkeep"),
-        "shared/contracts/.gitkeep missing — git won't track the empty dir",
-      );
+    it("shared/contracts/ generated contract modules exist", () => {
+      for (const file of ["run-result.ts", "audit-event.ts", "chat-tool-call.ts"]) {
+        assert.ok(
+          exists(`shared/contracts/${file}`),
+          `shared/contracts/${file} missing — generated contract module must stay tracked`,
+        );
+      }
     });
 
     it("shared/contracts/README.md exists", () => {

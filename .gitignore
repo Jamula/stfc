@@ -7,11 +7,11 @@ pnpm-debug.log*
 # Node
 node_modules
 dist
-web/dist-demo/
 
 # Local config
 .env
 .env.local
+*.local-backup
 
 # Playwright (capture-token script)
 playwright-diagnostics/
@@ -25,12 +25,6 @@ playwright-diagnostics/
 
 # CLI runtime output
 summary.md
-# Local OCR POC crops and annotations (operator-owned holdout material)
-data/crew/ocr-poc/
-# Digest writer output — *.md are now durable artifacts (constitution v2.0.0,
-# Phase 0 PR merged 2026-05-31). Only .gitkeep is still auto-ignored here
-# so an empty dir can be committed; individual *.md files are committed by
-# discord-monitor.yml after each run.
 # Squad: ignore runtime state (logs, inbox, sessions)
 # The tracked casting registry, history, and commit marker use the native atomic protocol.
 .squad/casting-history.json
