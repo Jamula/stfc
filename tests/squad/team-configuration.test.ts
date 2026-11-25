@@ -108,6 +108,9 @@ describe("native Squad configuration", () => {
       ".squad/.cache/state.json",
       ".squad/casting-history.json",
       ".squad/casting-registry.json",
+      ".github/agents/squad.agent.md.local-backup",
+      ".github/workflows/squad-ci.yml.local-backup",
+      ".squad/templates/README.md.local-backup",
     ];
     for (const file of ignored) {
       const result = spawnSync("git", ["check-ignore", "--no-index", "-q", "--", file]);
@@ -129,6 +132,11 @@ describe("native Squad configuration", () => {
     ]);
     assert.ifError(charter.error);
     assert.equal(charter.status, 1, "The static agent charter must remain trackable");
+    const templateReadme = spawnSync("git", [
+      "check-ignore", "--no-index", "-q", "--", ".squad/templates/README.md",
+    ]);
+    assert.ifError(templateReadme.error);
+    assert.equal(templateReadme.status, 1, "Static templates must remain trackable");
   });
 
   it("pairs enforcement-gate changes with a real-repository state invariant", () => {
@@ -160,6 +168,11 @@ describe("native Squad configuration", () => {
       ".squad/casting/registry.json",
     ];
     assert.ok(trackedPaths.includes(".squad/memory/config.json"), "The static memory config must remain tracked");
+    assert.deepEqual(
+      trackedPaths.filter((file) => file.endsWith(".local-backup")),
+      [],
+      "No *.local-backup crust files may be tracked",
+    );
     assert.deepEqual(
       mutableStatePaths.sort(),
       atomicCastingPaths.filter((file) => trackedPaths.includes(file)).sort(),
