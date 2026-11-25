@@ -543,4 +543,52 @@ describe("native Squad configuration", () => {
     assert.match(team, /explicit user approval/i);
     assert.match(team, /sync.*fail/i);
   });
+
+  it("keeps the PR template and active secondary docs aligned with the 0.1.0 six-subsystem baseline", () => {
+    const prTemplate = read(".github", "pull_request_template.md");
+    for (const heading of [
+      "## Type of change",
+      "## Test-first evidence",
+      "## Spec linkage",
+      "## Tests run",
+      "## Enforcement-gate changes",
+      "## Constitution check",
+      "## Reviewer lanes",
+      "## What was changed and why",
+      "## Manual smoke-test",
+    ]) {
+      assert.ok(prTemplate.includes(heading), `PR template must keep heading ${heading}`);
+    }
+
+    for (const file of [
+      [".github", "pull_request_template.md"],
+      [".github", "copilot-instructions.md"],
+      ["docs", "ARCHITECTURE.md"],
+      ["docs", "DISCORD-BOT-SETUP.md"],
+      ["docs", "SETUP.md"],
+      ["docs", "CREW-OPTIMIZER.md"],
+      ["docs", "STFC-TOKEN-PWA.md"],
+      ["docs", "SWA-SETUP.md"],
+      ["discord", "RUNBOOK.md"],
+    ]) {
+      const content = read(...file);
+      assert.doesNotMatch(
+        content,
+        /\bPrinciple [IVX]+\b|\bRule \d+[a-z]?\b|Complexity Tracking|Development Workflow & Quality Gates/,
+        `${file.join("/")} must not cite retired Spec Kit principles or removed numbered rules`,
+      );
+    }
+
+    const architecture = read("docs", "ARCHITECTURE.md");
+    assert.match(architecture, /0\.1\.0/);
+    assert.match(architecture, /pwa-token-api\//);
+    assert.match(architecture, /pwa-browser\//);
+    assert.match(architecture, /STFC_ACCOUNTS_FILE/);
+    assert.match(architecture, /automation-state/);
+
+    const instructions = read(".github", "copilot-instructions.md");
+    assert.match(instructions, /STFC_ACCOUNTS_FILE/);
+    assert.match(instructions, /automation-state/);
+    assert.doesNotMatch(instructions, /read `STFC_ACCOUNTS`, claim gifts, redeem promo codes, commit `docs\/redeem-history\.md`/);
+  });
 });

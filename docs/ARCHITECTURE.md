@@ -1,9 +1,9 @@
 # System Architecture
 
 > Single-source-of-truth overview of how the STFC product suite (`0.1.0` MVP
-> baseline) works end-to-end. Reading order: top-down — start with repository
-> origin and the topology map, drill into the subsystem you care about, and
-> follow the cross-references for per-subsystem detail.
+> six-subsystem baseline) works end-to-end. Reading order: top-down — start with
+> repository origin and the topology map, drill into the subsystem you care
+> about, and follow the cross-references for per-subsystem detail.
 
 ---
 
@@ -89,11 +89,11 @@ flowchart LR
 
 | Subsystem | Lives in | Triggered by | Owns |
 |---|---|---|---|
-| **Gift Redeemer** | `src/skills/runAll.ts`, `src/api/`, `src/lib/` | `redeem.yml` (`*/10 * * * *`) | STFC web-store API claims, exit-code semantics |
-| **Token Store & Browser Relay** | `pwa-token-api/`, `pwa-browser/` | Authenticated SWA gateway requests | Azure Blob OIDC token updates, isolated Playwright login/OTP relay |
+| **Gift Redeemer** | `src/skills/runAll.ts`, `src/api/`, `src/lib/` | `redeem.yml` (`*/10 * * * *`) | STFC web-store API claims, exit-code semantics, `automation-state` history/cache updates |
+| **Token Store & Browser Relay** | `pwa-token-api/`, `pwa-browser/` | Authenticated SWA gateway (`/api/token-session/*`) | ETag-conditioned Azure Blob `accounts.json` updates, live gift-endpoint validation, isolated Playwright login/OTP relay |
 | **Discord Monitor** | `src/discord/`, `src/digest/` | `discord-monitor.yml` (`15 */4 * * *`) | Configured-channel ingest, promo codes, digests, `!crew` commands |
 | **Crew Optimizer & RAG** | `src/crew/`, `src/skills/` | Local CLI and Discord monitor | Roster, optimization scoring, progression, local embedding RAG |
-| **Discord Interaction Bridge** | `worker/`, `scripts/discord-handler.mjs` | Discord interactions → `repository_dispatch` | Signature verification, command handling, R2 game-state uploads |
+| **Discord Interaction Bridge** | `worker/`, `scripts/discord-handler.mjs`, `discord/` | Discord interactions → `repository_dispatch` | Signature verification, slash-command handling, R2 game-state uploads |
 | **Web Control Panel** | `api/`, `web/`, `shared/contracts/` | Azure SWA HTTPS requests | Authenticated operator dashboard |
 | **CI/CD** | `.github/workflows/`, `scripts/` | Git events, schedules, manual dispatch | Tests, typecheck, deploy, release, hygiene gates |
 
@@ -149,9 +149,10 @@ Only the meaningful top-level directories. Per-subsystem detail lives in §3.
 ├── .github/
 │   ├── copilot-instructions.md # Repository-wide coding guidance
 │   └── workflows/             # GitHub Actions workflows
+├── discord/                   # Slash-command manifest (commands.json) + operator runbook
 ├── worker/                    # Cloudflare Worker for Discord interactions
 ├── staticwebapp.config.json   # SWA route + role + CSP config
-└── package.json               # CLI scripts and root dependencies
+└── package.json               # CLI scripts and root dependencies (`0.1.0` baseline)
 ```
 
 ---
@@ -173,17 +174,20 @@ cli.ts → skills/runAll.ts → for each account: api/endpoints.ts → STFC stor
                           → lib/summary.ts (markdown summary for GH UI)
 ```
 
-**Exit-code contract** (`src/skills/runAll.ts:399-407`):
+**Exit-code contract** (`src/skills/runAll.ts:891-899`):
 
 | Code | Meaning |
 |---|---|
 | **0** | One or more accounts succeeded — or partial success per account. Per-account outcomes (`CODE_USED`, `ALREADY_CLAIMED`, etc.) do **not** fail the workflow. |
 | **1** | Infrastructure error (malformed account-store data, schema mismatch, uncaught crash). `report.errors.length > 0`. |
-| **2** | All accounts have `TOKEN_EXPIRED`. Re-capture the affected tokens with the local visible-browser flow. |
+| **2** | All accounts have `TOKEN_EXPIRED`. Refresh hosted tokens through the owner-only **STFC token update** PWA (`docs/STFC-TOKEN-PWA.md`), or re-capture local `.env` tokens with the local visible-browser flow. |
 
 **Auth flow.** The private Azure Blob `accounts.json` contains the JSON array
 of `{name, token}` records. Scheduled workflows use GitHub OIDC and a
-read-only Blob identity; the owner-only PWA writes through the authenticated
+read-only Blob identity, passing the downloaded file via `STFC_ACCOUNTS_FILE`
+(the legacy `STFC_ACCOUNTS` GitHub secret is retained only for one-time Blob
+migration via `refresh-token.yml` or unconfigured recovery fallback; local CLI
+runs read `STFC_ACCOUNTS` from `.env`). The owner-only PWA writes through the authenticated
 Functions gateway to a separate token API identity using ETag-conditioned
 updates. Each `token` is a JWT against the Scopely store API. `src/lib/jwt.ts`
 decodes + describes expiry; expired tokens become `TOKEN_EXPIRED` outcomes
@@ -205,8 +209,9 @@ case-sensitive dead-cache lookup is a separate deferred concern.
 are classified by `src/lib/outcomes.ts`. Re-runs are safe.
 
 **Scheduled by.** `.github/workflows/redeem.yml` — `*/10 * * * *` (every 10
-min, 144 runs/day). It restores live history, dead-code cache, and promo codes
-from `automation-state`, then commits changed state there via `GITHUB_TOKEN`.
+min, 144 runs/day). It restores live history, dead-code cache, degraded-gift
+streak state, and promo codes from `automation-state`, then commits changed
+state there via `GITHUB_TOKEN`.
 The protected `main` tip is never the automation push target.
 
 **Ambiguous gift claims.** `data/redeem-degraded-state.json` stores per-account
@@ -393,7 +398,7 @@ The repository has several focused workflows. Selected examples:
 | `deploy-cloudflare-worker.yml` | Deploy the Discord interaction bridge | Worker changes + manual dispatch |
 | `knowledge-rebuild.yml` | Rebuild crew knowledge embeddings | Watched source changes + manual dispatch |
 | `swa-deploy.yml` | Azure Static Web Apps deploy and PR previews | `main` pushes and pull requests |
-| `test-gate.yml` | Root and Worker tests and typechecks | Pull requests |
+| `test-gate.yml` | Root and Worker tests + typechecks (plus `pwa-browser` and `pwa-token-api` typechecks) | Pull requests |
 
 Other automation and maintenance workflows live under
 `.github/workflows/`; consult their triggers and conditions before relying on
@@ -435,7 +440,8 @@ Validate at `package.json:20,28`.
 **Pinning tests.** `tests/skills/discordMonitor.test.ts`,
 `tests/workflows/*.test.ts` pin workflow values literally (crons,
 `concurrency.group`, permission scopes). Any edit to the workflow
-ships in the same commit as the pinning-test update.
+ships in the same commit as the pinning-test update (enforced locally by
+`checkWorkflowPinningTests` in `scripts/pre-commit-checks.mjs`).
 Canonical pattern is **structural parse + assert on object graph**, not
 substring grep.
 
@@ -488,7 +494,7 @@ sequenceDiagram
   Runner->>Repo: push to origin/automation-state
 ```
 
-Exit code semantics: 0 / 1 / 2 per `runAll.ts:399-407` (see §3.1).
+Exit code semantics: 0 / 1 / 2 per `runAll.ts:891-899` (see §3.1).
 
 ### 4.2 `!crew` Discord command dispatch
 
@@ -568,6 +574,9 @@ telemetry artifact producer exists; it does not invent metrics.
 
 ### 5.1 Secret management
 
+- **Hosted account tokens** live in private Azure Blob Storage (`accounts.json`)
+  and are read by scheduled workflows through GitHub OIDC (`STFC_ACCOUNTS_FILE`),
+  never long-lived GitHub secrets.
 - **CI secrets** (`DISCORD_BOT_TOKEN`, legacy `STFC_ACCOUNTS` during one-time migration,
   `AZURE_STATIC_WEB_APPS_API_TOKEN`): set via
   `gh secret set <NAME> --repo Jamula/stfc` from a **LOCAL terminal
@@ -592,7 +601,7 @@ Live automation data is intentionally split from reviewed source:
 | Runner working tree | Deterministic merged input for one run |
 
 The state allowlist is `docs/redeem-history.md`,
-`data/promo-code-dead.json`, `promo-codes.txt`, `data/discord`, and
+`data/promo-code-dead.json`, `data/redeem-degraded-state.json`, `promo-codes.txt`, `data/discord`, and
 `data/digests`. Missing optional outputs preserve the branch's existing copy,
 and each path is staged separately so one missing path cannot suppress another.
 `discord-command-handler.yml` runs the current main-branch handler script with
@@ -741,7 +750,9 @@ operational assumptions; their state is not represented by this source tree.
   `tests/index.test.ts` aggregates the root suite.
 - **Typecheck** via `npm run typecheck` (TypeScript 7; strict mode).
 - **Pre-commit hook** runs the full suite on every commit
-  (`scripts/pre-commit.mjs`). `--no-verify` is forbidden.
+  (`scripts/pre-commit.mjs`). Prefer fixing failing tests locally rather than
+  bypassing hooks (`--no-verify` is reserved for automated workflow state
+  commits on CI runners; see `.github/copilot-instructions.md`).
 - **CI checks:** `test-gate.yml` ("npm test (required)") and GitHub
   CodeQL default setup ("Analyze (javascript-typescript)"). Repository
   rules determine whether these checks are required.
@@ -782,6 +793,8 @@ operational assumptions; their state is not represented by this source tree.
 | Initial env setup | `docs/SETUP.md` |
 | STFC game terminology (canonical) | `docs/stfc-game-knowledge.md` |
 | Discord-sourced game knowledge | `docs/stfc-knowledge/` |
+| Private token store & browser relay | `docs/STFC-TOKEN-PWA.md` |
+| Discord slash-command bridge | `discord/RUNBOOK.md` |
 
 ---
 

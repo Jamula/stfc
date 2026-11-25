@@ -5,7 +5,7 @@ A stateless Cloudflare Worker (~100 LoC) that bridges Discord slash-command inte
 ## How it works
 
 ```
-Discord user types /crew
+Discord user types /redeem-status
         │
         ▼
 Discord API  ──POST──►  Cloudflare Worker (this)

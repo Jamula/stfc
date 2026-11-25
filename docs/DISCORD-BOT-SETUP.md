@@ -122,7 +122,7 @@ them, and broader permissions make the bot harder to approve.
    ```
 
 The next scheduled `discord-monitor.yml` run will pick up the new token
-automatically. The startup `getMe()` call (US3) will fail fast with a
+automatically. The startup `getMe()` call will fail fast with a
 single `DiscordAuthError` if the token is invalid, so you'll see the
 problem in the run log immediately rather than as a cascade of 401s.
 

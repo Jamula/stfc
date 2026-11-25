@@ -104,7 +104,7 @@ _One paragraph. What problem does this solve? Why this approach?_
 
 ## Manual smoke-test (required for automation-logic changes)
 
-> Required for any change to redemption flow, selector logic, or auth detection (per Development Workflow & Quality Gates).
+> Required for any change to live store redemption flow, browser-relay login automation, or auth detection.
 > Skip if this PR touches only docs, tests, types, or build config.
 
 - [ ] Smoke-tested against the live STFC store (extension).

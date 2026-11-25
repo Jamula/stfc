@@ -76,7 +76,7 @@ A JSON array of 37 `Officer` objects. Each officer has:
 | `added_in_patch` | `string` | Patch reference (e.g. `"M91"`) |
 | `source` | `string` | Provenance (e.g. `"docs/stfc-game-knowledge.md#section-6"`) |
 
-**Seeding:** The 37 v1 officers were hand-curated from
+**Seeding:** The initial 37 officers were hand-curated from
 `docs/stfc-game-knowledge.md` Section 6 and community knowledge. Coverage
 varies by faction and BDA role; the current distribution is:
 
@@ -113,7 +113,7 @@ lands, maintain rosters via `npm run skill:roster` or direct edits to
 
 ## Tasks
 
-**Location:** `data/crew/tasks/*.yaml` (4 definitions at v1 launch)
+**Location:** `data/crew/tasks/*.yaml` (4 built-in definitions)
 
 | File | id | Name |
 |---|---|---|
@@ -159,18 +159,26 @@ staleness_overrides:
 
 ### Opting out of committing a roster
 
-Rosters are tracked by default so CI can regenerate `docs/crew/` reports.
-To keep an account private, add to `.gitignore` (or `.git/info/exclude`
-for a local-only override):
+Rosters are tracked by default so `discord-monitor.yml` can answer read-only
+`!crew` commands in Discord and operators can generate `docs/crew/` reports
+locally. To keep a new account roster private, add it to `.gitignore` (or
+`.git/info/exclude` for a local-only override):
 
 ```
 # private roster — not committed
 data/crew/roster/main.yaml
 ```
 
-The optimizer skips accounts whose file is absent and continues processing
-other accounts. CI will not generate a `docs/crew/main-optimize.md` report
-for the missing file.
+If a roster was already committed, untrack it (`git rm --cached
+data/crew/roster/<account>.yaml`) and commit that removal so future hosted
+checkouts omit it.
+
+Local CLI runs read on-disk YAML files in `data/crew/roster/` without consulting
+Git ignore rules, so local runs still process an ignored roster and can still
+write `docs/crew/<account>-optimize.md` while the file exists on disk. When the
+untracked file is absent (such as in a clean `discord-monitor.yml` checkout),
+the optimizer and Discord `!crew` handlers skip the missing account and continue
+processing remaining rosters.
 
 ---
 
@@ -494,7 +502,7 @@ Lists available task definitions.
 **Output:**
 - Per-task line: \`{task-id}\` — {task-name}: {short description}
 
-Available task ids at v1 launch: `mining-g3`, `hostile-grind`, `armada-25`,
+Built-in task ids: `mining-g3`, `hostile-grind`, `armada-25`,
 `station-defense`. New tasks can be added to `data/crew/tasks/` — see
 [Tasks](#tasks) section above.
 
