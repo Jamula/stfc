@@ -1,7 +1,7 @@
-import { LitElement, html, css } from 'lit';
-import { state } from 'lit/decorators.js';
-import { loadDashboard } from '../dashboard-client.js';
-import type { DashboardData, DashboardTab } from '../../../shared/dashboard.js';
+import { LitElement, html, css } from "lit";
+import { state } from "lit/decorators.js";
+import { loadDashboard } from "../dashboard-client.js";
+import type { DashboardData, DashboardTab } from "../../../shared/dashboard.js";
 
 export abstract class DashboardTabElement extends LitElement {
   protected abstract readonly tab: DashboardTab;
@@ -37,7 +37,7 @@ export abstract class DashboardTabElement extends LitElement {
       if (!request.signal.aborted) this.data = data;
     } catch (error) {
       if (!request.signal.aborted) {
-        this.error = error instanceof Error ? error.message : 'Dashboard read failed.';
+        this.error = error instanceof Error ? error.message : "Dashboard read failed.";
       }
     }
   }
@@ -45,16 +45,16 @@ export abstract class DashboardTabElement extends LitElement {
   override render() {
     if (this.error) return html`<p role="alert">${this.error}</p>`;
     if (!this.data) return html`<p role="status">Loading ${this.tab}...</p>`;
-    if (!this.data.available) return html`<p role="status">${this.data.message ?? 'Data unavailable.'}</p>`;
-    if (this.tab === 'runs') {
+    if (!this.data.available) return html`<p role="status">${this.data.message ?? "Data unavailable."}</p>`;
+    if (this.tab === "runs") {
       if (this.data.runs.length === 0) return html`<p>No runs available.</p>`;
       return html`<div class="table"><table>
         <thead><tr><th>Started</th><th>Workflow</th><th>Actor</th><th>Trigger</th><th>Status</th><th>Correlation</th><th>Business result</th></tr></thead>
         <tbody>${this.data.runs.map(run => html`<tr>
-          <td>${run.started_at ?? (['in_progress', 'completed'].includes(run.status) ? 'Start time unavailable' : 'Not started')}</td><td>${run.workflow}</td><td>${run.actor}</td>
+          <td>${run.started_at ?? (["in_progress", "completed"].includes(run.status) ? "Start time unavailable" : "Not started")}</td><td>${run.workflow}</td><td>${run.actor}</td>
           <td>${run.trigger}</td><td>${run.conclusion ?? run.status}</td>
-          <td>${run.correlation_id ?? 'Not correlated'}</td>
-          <td><pre>${run.business_result ? JSON.stringify(run.business_result, null, 2) : 'Not emitted'}</pre></td>
+          <td>${run.correlation_id ?? "Not correlated"}</td>
+          <td><pre>${run.business_result ? JSON.stringify(run.business_result, null, 2) : "Not emitted"}</pre></td>
         </tr>`)}</tbody>
       </table></div>`;
     }
