@@ -1,16 +1,62 @@
-# Contributing to STFC Gift Redeemer
+# Contributing to `Jamula/stfc`
 
-This document covers the practices that keep the project healthy.
-For the authoritative rules, read `.github/copilot-instructions.md`.
-When this file conflicts with repo rules, the repo rules win.
+This document covers the practices that keep the repository healthy across all
+subsystems (`src/`, `api/`, `web/`, `worker/`, `pwa-token-api/`, `pwa-browser/`,
+`shared/`, and `scripts/`). For authoritative agent and repository rules, read
+[`.github/copilot-instructions.md`](.github/copilot-instructions.md). When this
+file conflicts with repository instructions, `.github/copilot-instructions.md`
+wins.
+
+---
+
+## Build, test, and typecheck gates
+
+`npm test` and `npm run typecheck` are **two independent gates** at the root:
+`npm test` runs `node --import tsx --test`, which strips TypeScript types
+without checking them. Always run both before pushing:
+
+```bash
+npm ci                                       # root dependencies
+npm --prefix api ci && npm --prefix web ci && npm --prefix pwa-token-api ci && npm --prefix pwa-browser ci
+npm test                                     # full root suite
+npx tsx --test tests/skills/runAll.test.ts   # single file while iterating
+npm run typecheck                            # tsc --noEmit (requires subpackage node_modules above)
+```
+
+### Repository-specific traps to avoid
+
+1. **Register new root tests in `tests/index.test.ts`.** Root `npm test` runs a
+   single aggregator file (`tests/index.test.ts`). Any new `tests/**/*.test.ts`
+   file that is not imported there **silently never runs**.
+2. **Keep `.mjs` and `.d.mts` pairs in sync.** Standalone JavaScript modules in
+   `scripts/*.mjs` and `shared/*.mjs` carry adjacent `.d.mts` declaration files.
+   Adding or changing an export requires updating its `.d.mts` file or
+   `npm run typecheck` will fail.
+3. **Subpackage checks.** `.github/workflows/test-gate.yml` also runs `worker/`
+   (`npm ci`, `npm run typecheck`, `npm test`) and independent `typecheck` steps
+   for `pwa-browser/` and `pwa-token-api/`. When editing `web/` or `api/`, run
+   their build scripts (`npm run build:web`, `npm run build:api`) as well.
+4. **Node versions and stack conventions.** Root workflows use Node from
+   `.nvmrc` (Node 24); `api/.nvmrc` uses Node 22 for Azure Static Web Apps
+   Functions. Preserve existing stacks when maintaining current subsystems. For
+   net-new standalone tools or systems, prefer C# on a supported .NET LTS
+   release, Node.js/TypeScript when .NET is unsuitable, and avoid Python where
+   possible.
+5. **Cross-platform portability (Windows + Linux Codespaces).** Never put
+   `:`/`*`/`?`/`"`/`<`/`>`/`|` in tracked filenames (use `2026-08-13T04-38-00Z`
+   for timestamps). Normalize CRLF (`\r?\n`) when parsing repo files, and pass
+   `shell: true` on Windows when spawning `npm`.
+6. **Schema tolerance, never silent failure.** Permissive upstream API schemas
+   must still resolve every operation to an explicit `Outcome`. Never classify
+   expired tokens, unknown responses, or transient errors as benign success.
 
 ---
 
 ## Test-first discipline for bug fixes
 
-**The rule (Principle IX):** Every bug fix MUST include a test that reproduces the
-bug — the test must fail before the fix is applied and pass after. The PR
-description MUST provide proof that this sequence actually happened.
+Every bug fix MUST include a test that reproduces the bug — the test must fail
+before the fix is applied and pass after. The PR description MUST provide proof
+that this sequence actually happened.
 
 ### Why the paper trail matters
 
@@ -71,18 +117,34 @@ implementation.
 
 ---
 
+## Secrets, licensing, and authorization boundaries
+
+- **Zero live credentials in Git or PRs.** Never read `.env` files, echo bearer
+  tokens, or include real STFC account data in commits, tests, issues, or PRs.
+  The pre-commit hook and `artifact-hygiene.yml` scan changed files for known
+  token patterns and selected STFC account fields, redacting matched content
+  (heuristics are defense-in-depth, not a guarantee).
+- **Licensing.** Original project code contributions are submitted under the
+  [Apache License 2.0](LICENSE) (`Copyright 2026 Jamula, Inc.`). Do not vendor
+  or mirror third-party or community content without verified redistribution
+  rights and attribution.
+- **Explicit owner approval gates.** Opening or merging a PR does **not**
+  authorize marking a draft PR ready, bumping the `0.1.0` product version
+  ([CHANGELOG.md](CHANGELOG.md)), publishing a release, deploying cloud
+  services, running live store redemptions, or changing external GitHub/cloud
+  settings.
+
+---
+
 ## Review and CI
 
 Review changes for correctness, security, and coverage of the documented
-acceptance criteria. Do not commit credentials or real account data: the
-pre-commit hook and `artifact-hygiene.yml` scan supported changed files under
-documentation, runtime-artifact, and code directories for known token patterns
-and selected STFC account-data fields. Findings redact matched content; this
-heuristic cannot guarantee detection of every secret or personal-data leak.
+acceptance criteria.
 
-The `test-gate.yml` workflow runs `npm run typecheck` and `npm test` for both
-the root package and the worker. Run the relevant commands locally and report
-the results in the pull request. The pre-commit hook runs the root test suite.
+The `test-gate.yml` workflow runs `npm run typecheck` and `npm test` for the
+root package and `worker/`, plus `typecheck` for `pwa-browser/` and
+`pwa-token-api/`. Run the relevant commands locally and report the results in
+the pull request. The pre-commit hook runs the root test suite.
 
 Ready PRs from branches in this repository targeting the default branch are
 automatically enrolled in squash auto-merge. The workflow also reconciles open
