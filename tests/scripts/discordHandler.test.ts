@@ -8,52 +8,7 @@ import { tmpdir } from "node:os";
 
 const execFileAsync = promisify(execFile);
 
-// @ts-ignore - untyped .mjs module imported in tests.
-const mod = await import("../../scripts/discord-handler.mjs") as {
-  runCli: (opts?: {
-    env?: Record<string, string | undefined>;
-    runGh?: (args: string[]) => Promise<string>;
-    runGit?: (args: string[], opts?: { stdin?: string }) => Promise<string>;
-    reconcileAutomationStateImpl?: (args: {
-      stateDir: string;
-      ref: string;
-      relativePaths: string[];
-    }) => Promise<string>;
-    fetchImpl?: (url: string, init?: any) => Promise<any>;
-    readFileImpl?: (path: string, enc: string) => Promise<string>;
-    writeFileImpl?: (path: string, data: any, enc?: string) => Promise<void>;
-    mkdirImpl?: (path: string, opts?: any) => Promise<void>;
-    renameImpl?: (from: string, to: string) => Promise<void>;
-    rmImpl?: (path: string, opts?: any) => Promise<void>;
-    nowFn?: () => Date;
-    stdout?: { write: (s: string) => void };
-    stderr?: { write: (s: string) => void };
-  }) => Promise<number>;
-  sanitizeFilename: (s: string) => string;
-  updateDailyIndexAtomic: (opts: {
-    indexPath: string;
-    entry: { filename: string; captured_at: string; uploader: string; note: string; size_bytes: number };
-    readFileImpl: (path: string, enc: string) => Promise<string>;
-    writeFileImpl: (path: string, data: string, enc?: string) => Promise<void>;
-    renameImpl: (from: string, to: string) => Promise<void>;
-  }) => Promise<{ files: Array<{ filename: string }> }>;
-  updateDailyManifestAtomic: (opts: {
-    manifestPath: string;
-    entry: { filename: string; r2_bucket: string; r2_key: string; sha256: string; size_bytes: number };
-    readFileImpl: (path: string, enc: string) => Promise<string>;
-    writeFileImpl: (path: string, data: string, enc?: string) => Promise<void>;
-    renameImpl: (from: string, to: string) => Promise<void>;
-  }) => Promise<{ files: Array<{ filename: string; r2_key: string }> }>;
-  uploadR2Object: (opts: {
-    config: { accountId: string; accessKeyId: string; secretAccessKey: string; bucket: string };
-    key: string;
-    buffer: Buffer;
-    contentType?: string;
-    fetchImpl: (url: string, init: any) => Promise<any>;
-    now: Date;
-    timeoutMs?: number;
-  }) => Promise<{ bucket: string; key: string; sha256: string; size: number }>;
-};
+const mod = await import("../../scripts/discord-handler.mjs");
 
 function makeStdout() {
   const chunks: string[] = [];

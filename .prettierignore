@@ -16,3 +16,6 @@ data/
 specs/
 .squad/
 docs/redeem-history.md
+summary.md
+playwright-diagnostics/
+.playwright-profiles/

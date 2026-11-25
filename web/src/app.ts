@@ -1,31 +1,31 @@
-import { LitElement, html, css } from 'lit';
-import { customElement, state } from 'lit/decorators.js';
-import './components/stfc-redeems-tab.js';
-import './components/stfc-digests-tab.js';
-import './components/stfc-telemetry-tab.js';
-import './components/stfc-crew-tab.js';
-import './components/stfc-runs-tab.js';
-import './components/stfc-token-update-tab.js';
-import './components/stfc-discord-tab.js';
+import { LitElement, html, css } from "lit";
+import { customElement, state } from "lit/decorators.js";
+import "./components/stfc-redeems-tab.js";
+import "./components/stfc-digests-tab.js";
+import "./components/stfc-telemetry-tab.js";
+import "./components/stfc-crew-tab.js";
+import "./components/stfc-runs-tab.js";
+import "./components/stfc-token-update-tab.js";
+import "./components/stfc-discord-tab.js";
 
-type Tab = 'redeems' | 'digests' | 'telemetry' | 'crew' | 'runs' | 'discord' | 'token-update';
-const TABS: readonly Tab[] = ['redeems', 'digests', 'telemetry', 'crew', 'runs', 'discord', 'token-update'] as const;
+type Tab = "redeems" | "digests" | "telemetry" | "crew" | "runs" | "discord" | "token-update";
+const TABS: readonly Tab[] = ["redeems", "digests", "telemetry", "crew", "runs", "discord", "token-update"] as const;
 const TAB_LABELS: Record<Tab, string> = {
-  redeems: 'Redeems',
-  digests: 'Digests',
-  telemetry: 'Telemetry',
-  crew: 'Crew',
-  runs: 'Runs',
-  discord: 'Discord',
-  'token-update': 'Token update',
+  redeems: "Redeems",
+  digests: "Digests",
+  telemetry: "Telemetry",
+  crew: "Crew",
+  runs: "Runs",
+  discord: "Discord",
+  "token-update": "Token update",
 };
 
 function readHash(): Tab {
-  const hash = location.hash.replace('#', '') as Tab;
-  return TABS.includes(hash) ? hash : 'redeems';
+  const hash = location.hash.replace("#", "") as Tab;
+  return TABS.includes(hash) ? hash : "redeems";
 }
 
-@customElement('stfc-app')
+@customElement("stfc-app")
 export class StfcApp extends LitElement {
   static override styles = css`
     :host {
@@ -70,16 +70,16 @@ export class StfcApp extends LitElement {
   `;
 
   @state() private _tab: Tab = readHash();
-  @state() private _tokenTabOpened = this._tab === 'token-update';
+  @state() private _tokenTabOpened = this._tab === "token-update";
 
   override connectedCallback(): void {
     super.connectedCallback();
-    window.addEventListener('hashchange', this._onHashChange);
+    window.addEventListener("hashchange", this._onHashChange);
   }
 
   override disconnectedCallback(): void {
     super.disconnectedCallback();
-    window.removeEventListener('hashchange', this._onHashChange);
+    window.removeEventListener("hashchange", this._onHashChange);
   }
 
   private readonly _onHashChange = (): void => {
@@ -87,7 +87,7 @@ export class StfcApp extends LitElement {
   };
 
   private _selectTab(tab: Tab): void {
-    if (tab === 'token-update') this._tokenTabOpened = true;
+    if (tab === "token-update") this._tokenTabOpened = true;
     location.hash = tab;
     this._tab = tab;
   }
@@ -102,7 +102,7 @@ export class StfcApp extends LitElement {
           (tab) => html`
             <button
               role="tab"
-              aria-selected=${this._tab === tab ? 'true' : 'false'}
+              aria-selected=${this._tab === tab ? "true" : "false"}
               @click=${() => this._selectTab(tab)}
             >${TAB_LABELS[tab]}</button>
           `,
@@ -111,27 +111,27 @@ export class StfcApp extends LitElement {
       <div class="tab-content" role="tabpanel">
         ${this._renderTab()}
       </div>
-      <div ?hidden=${this._tab !== 'token-update'}>
-        ${this._tokenTabOpened ? html`<stfc-token-update-tab></stfc-token-update-tab>` : ''}
+      <div ?hidden=${this._tab !== "token-update"}>
+        ${this._tokenTabOpened ? html`<stfc-token-update-tab></stfc-token-update-tab>` : ""}
       </div>
     `;
   }
 
   private _renderTab() {
     switch (this._tab) {
-      case 'redeems':   return html`<stfc-redeems-tab></stfc-redeems-tab>`;
-      case 'digests':   return html`<stfc-digests-tab></stfc-digests-tab>`;
-      case 'telemetry': return html`<stfc-telemetry-tab></stfc-telemetry-tab>`;
-      case 'crew':      return html`<stfc-crew-tab></stfc-crew-tab>`;
-      case 'runs':      return html`<stfc-runs-tab></stfc-runs-tab>`;
-      case 'discord':   return html`<stfc-discord-tab></stfc-discord-tab>`;
-      case 'token-update': return html``;
+      case "redeems":   return html`<stfc-redeems-tab></stfc-redeems-tab>`;
+      case "digests":   return html`<stfc-digests-tab></stfc-digests-tab>`;
+      case "telemetry": return html`<stfc-telemetry-tab></stfc-telemetry-tab>`;
+      case "crew":      return html`<stfc-crew-tab></stfc-crew-tab>`;
+      case "runs":      return html`<stfc-runs-tab></stfc-runs-tab>`;
+      case "discord":   return html`<stfc-discord-tab></stfc-discord-tab>`;
+      case "token-update": return html``;
     }
   }
 }
 
 declare global {
   interface HTMLElementTagNameMap {
-    'stfc-app': StfcApp;
+    "stfc-app": StfcApp;
   }
 }

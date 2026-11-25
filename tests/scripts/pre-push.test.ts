@@ -8,11 +8,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 
-// Dynamic import of .mjs from .ts test — works fine under tsx.
-// @ts-ignore — untyped .mjs script; runtime shape verified by tests below.
-const { isPushToMain } = await import("../../scripts/pre-push.mjs") as {
-  isPushToMain: (stdin: string) => boolean;
-};
+const { isPushToMain } = await import("../../scripts/pre-push.mjs");
 
 /* ── isPushToMain ──────────────────────────────────────────────────── */
 

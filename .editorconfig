@@ -1,4 +1,6 @@
 # https://editorconfig.org
+# Git tracks LF line endings via .gitattributes (`* text=auto eol=lf`); Windows
+# checkouts with core.autocrlf=true may materialize CRLF in the working tree.
 root = true
 
 [*]

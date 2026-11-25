@@ -27,14 +27,14 @@ async function api<T>(action: string, method: "GET" | "POST", body?: object): Pr
     cache: "no-store",
     credentials: "same-origin",
   });
-  if (response.redirected && new URL(response.url).pathname.startsWith('/.auth/login')) {
-    throw new TokenUpdateError('Your sign-in may have expired. Sign in again to continue.', 401);
+  if (response.redirected && new URL(response.url).pathname.startsWith("/.auth/login")) {
+    throw new TokenUpdateError("Your sign-in may have expired. Sign in again to continue.", 401);
   }
-  if (!response.headers.get('content-type')?.includes('application/json')) {
+  if (!response.headers.get("content-type")?.includes("application/json")) {
     throw new TokenUpdateError(
       response.status >= 500
-        ? 'The token-update service is unavailable. Verify the API deployment and configuration.'
-        : 'The token-update service returned an invalid response.',
+        ? "The token-update service is unavailable. Verify the API deployment and configuration."
+        : "The token-update service returned an invalid response.",
       response.status,
     );
   }
@@ -54,7 +54,7 @@ async function api<T>(action: string, method: "GET" | "POST", body?: object): Pr
   return value as T;
 }
 
-@customElement('stfc-token-update-tab')
+@customElement("stfc-token-update-tab")
 export class StfcTokenUpdateTab extends LitElement {
   static override styles = css`
     :host { display: block; max-width: 42rem; }
