@@ -15,7 +15,7 @@
 | **Author(s) / contributors** | Community contributors in the STFC Officer Tool Discord `#data-collection` channel (usernames not collected; no snapshot exists) |
 | **Captured on** | 2026-05-31 (stub only — no content ingested) |
 | **License / attribution requirements** | Redistribution permission has not been established; no content is mirrored here. Bot access and attribution do not establish reuse permission. |
-| **Refresh strategy** | Maintain source links only unless reuse terms are verified and capture is separately authorized. Historical capture tooling: `node scripts/fetch-discord-channel.mjs` (requires bot membership/access and `DISCORD_BOT_TOKEN`). |
+| **Refresh strategy** | Maintain source links only unless reuse terms are verified and capture is separately authorized. The former unused `scripts/fetch-discord-channel.mjs` helper was removed. |
 
 ## What this channel contains (anticipated)
 
@@ -64,5 +64,4 @@ bot has access:
 
 - [discord-channels/ README](../README.md) — blocker details + unblock steps
 - [community-reference-sheet/](../../community-reference-sheet/README.md) — original Google Sheet links and previously recorded community attribution
-- [fetch-discord-channel.mjs](../../../../scripts/fetch-discord-channel.mjs) — ingest script (requires bot token)
 - Issue [#76](https://github.com/Jamula/stfc/issues/76) — tracking issue

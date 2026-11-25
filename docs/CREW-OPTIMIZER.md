@@ -101,53 +101,13 @@ new officer entry is needed.
 
 ---
 
-## OCR proof of concept (crop-level only)
+## OCR roster import (planned)
 
-`src/crew/ocrPoc.ts` contains a local, CPU-only text-crop experiment. It
-generates a 5×7 bitmap font for `A`–`Z` and `0`–`9`, derives a small template
-bank from those synthetic glyphs, and recognizes a supplied grayscale text
-crop using thresholding, column segmentation, and nearest-template matching.
-It does not load external weights, contact a service, locate text in a full
-screenshot, infer roster fields, or update a roster.
-
-The input contract is intentionally narrow: one horizontal line of dark,
-separated glyphs on a light background, supplied as an 8-bit binary PGM (`P5`)
-crop with max value 255. Supported output is uppercase ASCII letters, digits,
-and inferred spaces; punctuation, accents, touching glyphs, sprites, and other
-characters are unsupported. Crop preparation and field labeling are explicit
-operator inputs; this POC guesses no screenshot coordinates or field
-semantics. Its synthetic font is a feasibility baseline, not a model trained
-on game UI or evidence of real-screenshot accuracy.
-
-To evaluate locally supplied text-crop labels, place the manifest and PGM
-crops under the ignored `data/crew/ocr-poc/` directory and run:
-
-```bash
-npx tsx src/crew/ocrPoc.ts evaluate data/crew/ocr-poc/annotations.jsonl
-```
-
-The JSONL manifest has one row per supplied crop, with a unique sample/field
-pair and paths relative to the manifest directory:
-
-```json
-{"sample":"<opaque-local-sample-id>","field":"name","crop":"crops/<local-crop>.pgm","expected":"<locally supplied label>"}
-{"sample":"<same-opaque-id>","field":"level","crop":"crops/<local-crop>.pgm","expected":"<locally supplied label>"}
-```
-
-Only `name` and `level` text crops are accepted. Evaluation is exact after
-Unicode normalization, uppercasing, and whitespace collapse. The command
-prints aggregate counts and accuracy only; it does not print crop paths,
-sample IDs, expected text, or predictions. The manifest and crops are local
-holdout material: never use them to train the synthetic templates or commit
-them. The evaluator's results cover only annotated text crops; rank/promotion
-sprite matching and the full roster field-accuracy gate remain unimplemented.
-
-`npx tsx src/crew/ocrPoc.ts benchmark` reports synthetic-model construction
-time, gzip size of the serialized template bank, and synthetic crop throughput
-for this host. These are engineering measurements on generated text only—not
-the Ubuntu per-screenshot or cold-start acceptance measurements. Human review
-time, real holdout field accuracy, and the complete #85 acceptance gate remain
-pending the operator's labels and timing.
+Automated screenshot-to-roster OCR is planned for `v0.3.0` and tracked under
+[#85](https://github.com/Jamula/stfc/issues/85) (the earlier crop-only
+synthetic bitmap experiment was removed during `0.1.0` cleanup). Until `#85`
+lands, maintain rosters via `npm run skill:roster` or direct edits to
+`data/crew/roster/{account}.yaml`.
 
 ---
 

@@ -6,15 +6,22 @@ gift claims, ephemeral community promo codes, crew and progression planning,
 game-state capture, and token renewal do not depend on repetitive manual store
 logins.
 
+**Origin:** Created on `2026-01-14` for a mobile-first (iPhone) *Star Trek Fleet
+Command* player to automate daily web-store gift claims and time-sensitive
+community promo codes after an initial browser/iframe prototype hit cross-origin
+isolation, evolving across four phases into the six-subsystem `0.1.0` MVP
+platform below (see
+[docs/ARCHITECTURE.md §0](docs/ARCHITECTURE.md#0-repository-origin--evolution)).
+
 ### What lives in this repository
 
 | Subsystem | Paths | Purpose |
 | --- | --- | --- |
-| **Store gift & promo-code redeemer** | `src/`, `.github/workflows/redeem.yml` | Headless Node 24 TypeScript CLI targeting the STFC Web Store v2 API, persisting run history and dead-code caches to the `automation-state` branch. GitHub Actions requests a run every 10 minutes (best-effort schedule delivery, not a hard interval guarantee). |
+| **Store gift & promo-code redeemer** | `src/`, `.github/workflows/redeem.yml` | Headless Node 24 TypeScript CLI targeting the STFC Web Store v2 API with truthful `Outcome` exit codes (`0` ok/partial, `1` infra error, `2` all tokens rejected), persisting run history and dead-code caches to the orphan `automation-state` branch. GitHub Actions requests a run every 10 minutes (best-effort schedule delivery, not a hard interval guarantee). |
 | **Private token store & browser relay** | `pwa-token-api/`, `pwa-browser/`, [docs/STFC-TOKEN-PWA.md](docs/STFC-TOKEN-PWA.md) | Stores account JWTs in private Azure Blob Storage read via GitHub OIDC (`STFC_ACCOUNTS_FILE`), refreshed from an owner-only PWA tab backed by isolated Container Apps rather than long-lived GitHub secrets. |
-| **Discord community monitor & digest** | `src/discord/`, `src/digest/`, `.github/workflows/discord-monitor.yml` | Optional 4-hour read-only scanner extracting candidate promo codes and classifying player tips/tricks into daily digests. |
+| **Discord community monitor & digest** | `src/discord/`, `src/digest/`, `.github/workflows/discord-monitor.yml` | Optional 4-hour read-only scanner extracting candidate promo codes and classifying player tips/tricks into daily digests persisted on `automation-state`. |
 | **Discord slash-command & capture bridge** | `worker/`, [`discord/RUNBOOK.md`](discord/RUNBOOK.md) | Cloudflare Worker and GitHub Actions bridge handling `/redeem-status`, `/trigger-redeem`, and `/game-state` media uploads to private R2 storage. |
-| **Offline crew optimizer & knowledge base** | `src/crew/`, `data/crew/`, [docs/CREW-OPTIMIZER.md](docs/CREW-OPTIMIZER.md) | Zero-credential CLI (`skill:optimize-crew`, `skill:progression`, `skill:roster`) and read-only `!crew` queries over curated officer/task data and link-only community references ([docs/stfc-knowledge/README.md](docs/stfc-knowledge/README.md)). |
+| **Offline crew optimizer & RAG knowledge engine** | `src/crew/`, `data/crew/`, [docs/CREW-OPTIMIZER.md](docs/CREW-OPTIMIZER.md) | Zero-credential CLI (`skill:optimize-crew`, `skill:progression`, `skill:roster`), local MiniLM embedding RAG engine (`src/crew/knowledge.ts`), and read-only `!crew` queries over curated officer/task data and link-only community references ([docs/stfc-knowledge/README.md](docs/stfc-knowledge/README.md)). |
 | **Operator web control panel** | `web/`, `api/`, [docs/SWA-SETUP.md](docs/SWA-SETUP.md) | Lit 3 + Vite dashboard and Azure Functions API on Azure Static Web Apps with two-layer operator/owner authentication. |
 
 **Release status:** Current product version is **`0.1.0`** (see
@@ -218,7 +225,7 @@ checking them, so run both gates locally:
 
 ```bash
 npm ci
-npm --prefix api ci && npm --prefix web ci && npm --prefix pwa-token-api ci && npm --prefix pwa-browser ci
+npm --prefix api ci && npm --prefix web ci && npm --prefix pwa-token-api ci && npm --prefix pwa-browser ci && npm --prefix worker ci
 npm test
 npm run typecheck
 ```

@@ -17,7 +17,7 @@ without checking them. Always run both before pushing:
 
 ```bash
 npm ci                                       # root dependencies
-npm --prefix api ci && npm --prefix web ci && npm --prefix pwa-token-api ci && npm --prefix pwa-browser ci
+npm --prefix api ci && npm --prefix web ci && npm --prefix pwa-token-api ci && npm --prefix pwa-browser ci && npm --prefix worker ci
 npm test                                     # full root suite
 npx tsx --test tests/skills/runAll.test.ts   # single file while iterating
 npm run typecheck                            # tsc --noEmit (requires subpackage node_modules above)
@@ -49,6 +49,10 @@ npm run typecheck                            # tsc --noEmit (requires subpackage
 6. **Schema tolerance, never silent failure.** Permissive upstream API schemas
    must still resolve every operation to an explicit `Outcome`. Never classify
    expired tokens, unknown responses, or transient errors as benign success.
+7. **Coding style & manifest invariants.** `.editorconfig`, `.prettierrc.json`,
+   and `.prettierignore` codify 2-space indentation (no tabs in `package.json`
+   or `tsconfig*.json`), UTF-8, `semi: true`, `singleQuote: false`, `"strict": true`
+   across all TypeScript configs, and `lf` line endings.
 
 ---
 

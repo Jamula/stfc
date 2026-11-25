@@ -1,9 +1,41 @@
 # System Architecture
 
-> Single-source-of-truth overview of how the STFC product suite works
-> end-to-end. Reading order: top-down — start with the topology map,
-> drill into the subsystem you care about, follow the cross-references
-> for per-subsystem detail. Last reviewed 2026-11-01.
+> Single-source-of-truth overview of how the STFC product suite (`0.1.0` MVP
+> baseline) works end-to-end. Reading order: top-down — start with repository
+> origin and the topology map, drill into the subsystem you care about, and
+> follow the cross-references for per-subsystem detail.
+
+---
+
+## 0. Repository origin & evolution
+
+Created on **`2026-01-14`** for a mobile-first (iPhone) *Star Trek Fleet
+Command* player to automate daily web-store gift claims and time-sensitive
+community promo codes after an initial browser/iframe prototype hit
+cross-origin isolation against Scopely's hosted web store.
+
+From that initial workaround, the repository evolved through four phases into a
+six-subsystem **`0.1.0` MVP** automation and companion platform:
+
+1. **Phase 1 — Headless Web Store v2 CLI (`src/`):** Node 24 + TypeScript CLI
+   talking directly to Scopely's Web Store v2 API with permissive Zod schemas,
+   explicit `Outcome` classification, and truthful exit codes (`0` ok/partial,
+   `1` infrastructure error, `2` all tokens rejected), scheduled via GitHub
+   Actions (`redeem.yml`).
+2. **Phase 2 — Private Token Lifecycle & Community Signal Ingestion (`pwa-token-api/`, `pwa-browser/`, `src/discord/`, `src/digest/`):**
+   GitHub OIDC + private Azure Blob account-token storage (`STFC_ACCOUNTS_FILE`)
+   with owner-only Container Apps browser/OTP token refresh (`pwa-token-api/`,
+   `pwa-browser/`), paired with read-only Discord REST promo/tip ingestion
+   (`src/discord/`, `src/digest/`) and runtime state isolated onto the orphan
+   `automation-state` branch.
+3. **Phase 3 — Offline Crew Intelligence & Discord Bridge (`src/crew/`, `worker/`):**
+   Deterministic offline Crew Optimizer and local MiniLM embedding RAG engine
+   (`src/crew/`), plus an Ed25519-verified Cloudflare Worker and private R2
+   game-state capture bridge (`worker/`).
+4. **Phase 4 — Operator Dashboard & Governed Delivery (`web/`, `api/`, `.squad/`):**
+   Lit 3 + Vite Azure Static Web Apps operator dashboard and Azure Functions v4
+   API (`web/`, `api/`) with two-layer operator/owner authentication,
+   correlation-ID workflow telemetry, and governed multi-agent operations.
 
 ---
 
@@ -58,9 +90,10 @@ flowchart LR
 | Subsystem | Lives in | Triggered by | Owns |
 |---|---|---|---|
 | **Gift Redeemer** | `src/skills/runAll.ts`, `src/api/`, `src/lib/` | `redeem.yml` (`*/10 * * * *`) | STFC web-store API claims, exit-code semantics |
-| **Discord Monitor** | `src/discord/` | `discord-monitor.yml` (`15 */4 * * *`) | Configured-channel ingest, promo codes, digests, `!crew` commands |
-| **Crew Optimizer** | `src/crew/`, `src/skills/` | Local CLI and Discord monitor | Roster, optimization scoring, progression, knowledge retrieval |
-| **Discord Interaction Bridge** | `worker/`, `scripts/discord-handler.mjs` | Discord interactions → `repository_dispatch` | Signature verification, command handling, game-state uploads |
+| **Token Store & Browser Relay** | `pwa-token-api/`, `pwa-browser/` | Authenticated SWA gateway requests | Azure Blob OIDC token updates, isolated Playwright login/OTP relay |
+| **Discord Monitor** | `src/discord/`, `src/digest/` | `discord-monitor.yml` (`15 */4 * * *`) | Configured-channel ingest, promo codes, digests, `!crew` commands |
+| **Crew Optimizer & RAG** | `src/crew/`, `src/skills/` | Local CLI and Discord monitor | Roster, optimization scoring, progression, local embedding RAG |
+| **Discord Interaction Bridge** | `worker/`, `scripts/discord-handler.mjs` | Discord interactions → `repository_dispatch` | Signature verification, command handling, R2 game-state uploads |
 | **Web Control Panel** | `api/`, `web/`, `shared/contracts/` | Azure SWA HTTPS requests | Authenticated operator dashboard |
 | **CI/CD** | `.github/workflows/`, `scripts/` | Git events, schedules, manual dispatch | Tests, typecheck, deploy, release, hygiene gates |
 
@@ -99,10 +132,12 @@ Only the meaningful top-level directories. Per-subsystem detail lives in §3.
 │   ├── pre-push.mjs           # pre-push checks
 │   └── ci/{check-api-auth,check-bundle-budget,check-contracts-types}.mjs
 │
-├── data/                      # Seeds on main; selected live state on automation-state
-│   ├── crew/                  # officers.json, roster/, tasks/ (crew domain)
-│   ├── digests/               # Discord digest snapshots
-│   └── discord/               # Cursor + cooldown state
+├── data/                      # Seeds on main; live runtime state on automation-state
+│   ├── crew/                  # officers.json, roster/, tasks/, knowledge-embeddings.json
+│   └── discord/               # Command channel template + game-state placeholder (cursors/digests live on automation-state)
+│
+├── pwa-token-api/             # Container App API writing ETag-conditioned tokens to private Azure Blob Storage
+├── pwa-browser/               # Isolated headless Playwright Container App relay for STFC login/OTP capture
 │
 ├── config/                    # Static config consumed by skills
 │   ├── classifier-model.json
@@ -229,7 +264,7 @@ authoritative source. On error:
 
 **Secret.** `DISCORD_BOT_TOKEN` is a GitHub Actions secret, **CI-only**.
 Codespaces cannot read it (the Codespaces-injected `GITHUB_TOKEN` lacks
-the scope, per repo Rule 13a). Local development uses fixtures + mocked
+repository-secret read scope). Local development uses fixtures + mocked
 HTTP — never the real bot token.
 
 **Scheduled by.** `discord-monitor.yml` — `15 */4 * * *` (15 min past every
@@ -400,7 +435,7 @@ Validate at `package.json:20,28`.
 **Pinning tests.** `tests/skills/discordMonitor.test.ts`,
 `tests/workflows/*.test.ts` pin workflow values literally (crons,
 `concurrency.group`, permission scopes). Any edit to the workflow
-ships in the same commit as the pinning-test update (Rule 3).
+ships in the same commit as the pinning-test update.
 Canonical pattern is **structural parse + assert on object graph**, not
 substring grep.
 
@@ -533,19 +568,18 @@ telemetry artifact producer exists; it does not invent metrics.
 
 ### 5.1 Secret management
 
-- **CI secrets** (`DISCORD_BOT_TOKEN`, legacy `STFC_ACCOUNTS` during migration,
+- **CI secrets** (`DISCORD_BOT_TOKEN`, legacy `STFC_ACCOUNTS` during one-time migration,
   `AZURE_STATIC_WEB_APPS_API_TOKEN`): set via
   `gh secret set <NAME> --repo Jamula/stfc` from a **LOCAL terminal
-  only** (Rule 21). `gh` prompts with hidden input.
+  only**. `gh` prompts with hidden input.
 - **Codespaces token scopes.** The Codespaces-injected `GITHUB_TOKEN`
   lacks `security_events` (and other) scopes, so calls like
   `gh api repos/{owner}/{repo}/code-scanning/alerts` 403 from inside a
   Codespace. This is a **token-scope** issue, NOT an Advanced Security
-  one — diagnose by checking `gh auth status | grep -i scope` (Rule 13a).
-- **Never paste secrets in chat.** The refuse-and-rotate protocol
-  (Rule 21) treats any credential pasted into the transcript as
-  compromised the moment it arrived — transcripts persist in the
-  session store.
+  one — diagnose by checking `gh auth status | grep -i scope`.
+- **Never paste secrets in chat.** Any credential pasted into a session
+  transcript must be treated as compromised and rotated immediately, as
+  transcripts persist in the session store.
 
 ### 5.2 Automation-state lifecycle
 
@@ -692,14 +726,14 @@ operational assumptions; their state is not represented by this source tree.
 - **Codespaces idle timeout.** Default 30 min — kills long fleets. Bump
   via `gh codespace edit -c "$CODESPACE_NAME" --idle-timeout 240m`
   (per-session) or set the user-default at
-  https://github.com/settings/codespaces (Rule 20). Do **not** install
+  https://github.com/settings/codespaces. Do **not** install
   `systemd`/`tmux`/cron-keepalive — the runtime is the authority.
 - **Automation state diverges from main by design.** Scheduled state commits
   land on `origin/automation-state`; source changes continue through reviewed
   pull requests to `main`.
 - **CodeQL scan lag** can reject a push briefly even when the previous
-  commit was green. Wait 30-60 s and retry (Rule 4 addendum). Never
-  amend or `--no-verify`.
+  commit was green. Wait 30-60 s and retry. Never
+  amend or `--no-verify` interactive source commits.
 
 ### 5.4 Testing & quality gates
 
