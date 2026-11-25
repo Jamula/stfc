@@ -161,7 +161,7 @@ staleness_overrides:
 
 Rosters are tracked by default so `discord-monitor.yml` can answer read-only
 `!crew` commands in Discord and operators can generate `docs/crew/` reports
-locally. To keep an account private, add to `.gitignore` (or
+locally. To keep a new account roster private, add it to `.gitignore` (or
 `.git/info/exclude` for a local-only override):
 
 ```
@@ -169,9 +169,16 @@ locally. To keep an account private, add to `.gitignore` (or
 data/crew/roster/main.yaml
 ```
 
-The optimizer skips accounts whose file is absent and continues processing
-other accounts (no `docs/crew/main-optimize.md` report is written locally, and
-Discord `!crew` commands will not see the ignored account).
+If a roster was already committed, untrack it (`git rm --cached
+data/crew/roster/<account>.yaml`) and commit that removal so future hosted
+checkouts omit it.
+
+Local CLI runs read on-disk YAML files in `data/crew/roster/` without consulting
+Git ignore rules, so local runs still process an ignored roster and can still
+write `docs/crew/<account>-optimize.md` while the file exists on disk. When the
+untracked file is absent (such as in a clean `discord-monitor.yml` checkout),
+the optimizer and Discord `!crew` handlers skip the missing account and continue
+processing remaining rosters.
 
 ---
 
