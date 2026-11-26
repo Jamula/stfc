@@ -3,14 +3,14 @@
   "accounts": {
     "0d6e4079e36703ebd37c00722f5891d28b0e2811dc114b129215123adcce3605": {
       "594507174": {
-        "streak": 8,
+        "streak": 9,
         "title": "7 Day Loyalty Chest",
-        "nextAttemptAt": "2026-11-26T17:39:42.966Z"
+        "nextAttemptAt": "2026-11-27T19:14:33.812Z"
       },
       "2038800365": {
-        "streak": 104,
+        "streak": 105,
         "title": "30 Day Loyalty Chest",
-        "nextAttemptAt": "2026-11-26T17:39:45.533Z"
+        "nextAttemptAt": "2026-11-27T19:14:35.643Z"
       }
     }
   }
