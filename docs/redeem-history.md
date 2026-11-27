@@ -7,6 +7,7 @@ inserted at the top**, so the most recent run is always visible first.
 
 | Date (UTC) | Time (UTC) | Account | Gifts claimed |
 | --- | --- | --- | --- |
+| 2026-11-27 | 19:49 | main | Daily Mission Key Drop, Automated Combat Protocol Chip, Emerald Chain Tier 38-42, 4 Hr Free Chest, UC Event Ticket Gift, Radioactive Titanite, 10 Min Free Chest, Thanksgiving Gift #4 |
 | 2026-11-27 | 10:57 | main | Automated Combat Protocol Chip, 4 Hr Free Chest, 10 Min Free Chest |
 | 2026-11-27 | 02:15 | main | 4 Hr Free Chest, 10 Min Free Chest |
 | 2026-11-26 | 19:14 | main | Automated Combat Protocol Chip, Emerald Chain Tier 38-42, 4 Hr Free Chest, Radioactive Titanite, 10 Min Free Chest, Thanksgiving Gift #3, Daily Mission Key Drop |
