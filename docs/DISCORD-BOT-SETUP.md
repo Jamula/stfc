@@ -175,6 +175,50 @@ expected digest output), see
 
 ---
 
+## 7. Receiving official STFC announcements via Discord "Follow"
+
+Discord only permits installing a private bot (`DISCORD_BOT_TOKEN`) into servers
+where you hold **Manage Server** permission, so you cannot install your own bot
+directly into Scopely's official *Star Trek Fleet Command* Discord server.
+
+To ingest official promo-code announcements without admin access on third-party
+servers, use Discord's built-in **Announcement Channel Follow** feature:
+
+1. Create a private Discord server you own (or reuse your personal operator
+   server) and create a dedicated text channel such as `#stfc-promo-feed`.
+2. Install your bot into **your** private server using the least-privilege URL
+   in §3 (`permissions=66560`: `VIEW_CHANNEL` + `READ_MESSAGE_HISTORY`).
+3. Open Scopely's official STFC Discord server (or any community server that
+   publishes announcements via a Discord Announcement channel), click **Follow**
+   in the channel header, and select your private server's `#stfc-promo-feed`
+   channel as the destination.
+4. Add an entry for your private `#stfc-promo-feed` channel in
+   `config/discord-allowlist.json` matching `DiscordAllowlistEntrySchema`
+   (include `"promo"` or `"code"` in `channelLabel` so the extractor applies the
+   promo-channel confidence bonus):
+
+   ```json
+   {
+     "version": 1,
+     "entries": [
+       {
+         "serverId": "<YOUR_PRIVATE_SERVER_ID>",
+         "serverLabel": "stfc-operator-relay",
+         "channelId": "<YOUR_PRIVATE_CHANNEL_ID>",
+         "channelLabel": "official-promo-codes",
+         "addedAt": "2026-11-26T00:00:00Z",
+         "addedBy": "<GITHUB_HANDLE>",
+         "enabled": true
+       }
+     ]
+   }
+   ```
+
+Published announcements automatically syndicate into `#stfc-promo-feed`, where
+`discord-monitor` reads them with standard REST permissions.
+
+---
+
 ## Slash commands
 
 ### `discord/commands.json` — single source of truth

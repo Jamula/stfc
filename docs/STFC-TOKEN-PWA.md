@@ -26,6 +26,36 @@ not returned to the PWA, cached by the service worker, or logged. The browser
 relay has no Blob identity. Azure Blob encryption at rest is provided by
 Azure Storage; access control and TLS are still required.
 
+```mermaid
+sequenceDiagram
+  autonumber
+  participant Owner as Owner Browser (PWA)
+  participant SWA as SWA Edge + Functions (/api/token-session)
+  participant TokenAPI as Token API Container App (pwa-token-api/)
+  participant Relay as Browser Relay Container App (pwa-browser/, internal)
+  participant STFC as STFC Web Store
+  participant Blob as Private Azure Blob (accounts.json)
+
+  Owner->>SWA: POST /api/token-session/start (accountName, email)
+  SWA->>SWA: requireOwner(X-MS-CLIENT-PRINCIPAL)
+  SWA->>TokenAPI: POST /sessions/start (Bearer PWA_TOKEN_API_KEY)
+  TokenAPI->>Relay: POST /sessions/start (Bearer PWA_BROWSER_KEY)
+  Relay->>STFC: Launch Chromium & submit email challenge
+  Relay-->>TokenAPI: { id, screenshot (PNG base64) }
+  TokenAPI-->>SWA: { id, screenshot }
+  SWA-->>Owner: Render challenge screenshot (no session secrets)
+
+  Owner->>SWA: POST /api/token-session/verify (id, 6-digit OTP)
+  SWA->>TokenAPI: POST /sessions/verify
+  TokenAPI->>Relay: POST /sessions/verify (OTP in-memory only)
+  Relay->>STFC: Submit OTP & intercept store JWT
+  Relay-->>TokenAPI: { accountName, token } (never sent to browser)
+  TokenAPI->>STFC: GET /api/v2/offers/gifts?available=true (validate JWT)
+  TokenAPI->>Blob: Conditional ETag replace in accounts.json (Managed Identity)
+  TokenAPI-->>SWA: { accountName, updatedAt } receipt only
+  SWA-->>Owner: Display update timestamp
+```
+
 ## Azure resources and identities
 
 Provision these resources in an owner-controlled Azure subscription:

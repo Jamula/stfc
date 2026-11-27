@@ -1,6 +1,8 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { readdirSync, readFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { parse } from "yaml";
 
@@ -204,8 +206,50 @@ describe("automation-state scheduled workflow contract", () => {
         const preflight = namedStep(workflow, "Validate Azure OIDC configuration");
         const preflightScript = (preflight.run ?? "").split("<<'NODE'\n")[1]?.replace(/\nNODE\s*$/, "") ?? "";
         assert.ok(preflightScript.length > 0, "discord-monitor.yml must define an executable OIDC preflight script");
-        const preflightKeys = Object.keys(preflight.env ?? {});
-        assert.equal(preflightKeys.length, 6, "discord-monitor.yml preflight must inspect all 6 Azure variables");
+        const expectedKeys = [
+          "AZURE_CLIENT_ID",
+          "AZURE_TENANT_ID",
+          "AZURE_SUBSCRIPTION_ID",
+          "AZURE_TOKEN_STORAGE_ACCOUNT",
+          "AZURE_TOKEN_CONTAINER",
+          "AZURE_TOKEN_BLOB",
+        ];
+        assert.deepEqual(Object.keys(preflight.env ?? {}), expectedKeys);
+
+        const tempDir = mkdtempSync(path.join(tmpdir(), "stfc-dm-oidc-"));
+        try {
+          const summaryFile = path.join(tempDir, "summary.md");
+          for (const mask of [0, 1, 42, 62, 63]) {
+            writeFileSync(summaryFile, "");
+            const env: NodeJS.ProcessEnv = { ...process.env, GITHUB_STEP_SUMMARY: summaryFile };
+            expectedKeys.forEach((key, idx) => {
+              env[key] = mask & (1 << idx) ? `secret-marker-${idx}` : "   ";
+            });
+            const res = spawnSync(process.execPath, ["--input-type=module", "-e", preflightScript], {
+              env,
+              encoding: "utf8",
+            });
+            const summaryText = readFileSync(summaryFile, "utf8");
+            const combinedOut = `${res.stdout}${res.stderr}${summaryText}`;
+            for (let idx = 0; idx < expectedKeys.length; idx++) {
+              assert.equal(
+                combinedOut.includes(`secret-marker-${idx}`),
+                false,
+                "preflight must never echo configured variable values",
+              );
+            }
+            if (mask === 63) {
+              assert.equal(res.status, 0, res.stderr);
+              assert.equal(summaryText, "");
+            } else {
+              assert.equal(res.status, 1, `mask ${mask} must fail closed`);
+              assert.match(res.stderr, /::error::Discord monitor requires Azure OIDC/);
+              assert.match(summaryText, /Missing Azure OIDC Configuration/);
+            }
+          }
+        } finally {
+          rmSync(tempDir, { recursive: true, force: true });
+        }
       } else {
         const loadLegacyTokens = namedStep(workflow, "Load legacy account tokens");
         assert.equal(loadLegacyTokens.if,

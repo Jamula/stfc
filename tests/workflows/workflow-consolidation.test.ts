@@ -1130,6 +1130,12 @@ describe("workflow consolidation", () => {
     assert.ok(webInstallIndex >= 0, "release.yml must install web dependencies");
     assert.ok(pwaBrowserInstallIndex >= 0, "release.yml must install pwa-browser dependencies");
     assert.ok(pwaTokenApiInstallIndex >= 0, "release.yml must install pwa-token-api dependencies");
+    const setupNodeStep = steps.find((step) =>
+      step.uses?.startsWith("actions/setup-node@"),
+    );
+    const cacheDependencyPath = String(setupNodeStep?.with?.["cache-dependency-path"] ?? "");
+    assert.match(cacheDependencyPath, /pwa-browser\/package-lock\.json/);
+    assert.match(cacheDependencyPath, /pwa-token-api\/package-lock\.json/);
     for (const installIndex of [
       rootInstallIndex,
       apiInstallIndex,

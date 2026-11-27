@@ -659,6 +659,7 @@ describe("discordMonitor / workflow YAML assertions (T027)", () => {
     const preflightIdx = yaml.indexOf("name: Validate Azure OIDC configuration");
     const loginIdx = yaml.indexOf("name: Sign in to Azure with GitHub OIDC");
     assert.ok(preflightIdx >= 0 && loginIdx > preflightIdx, "OIDC preflight must precede azure/login");
+    assert.match(yaml, /Missing Azure OIDC Configuration/);
   });
 
   it("redeem.yml cron is `*/10 * * * *` (regression guard — bumped in #7, then again to */10)", () => {
