@@ -30,6 +30,64 @@ reset to the `0.1.0` MVP baseline and is preserved as historical).
 
 ---
 
+## Architecture overview
+
+```mermaid
+flowchart TB
+  subgraph Triggers["Triggers & Operator Entrypoints"]
+    Cron[("⏰ GitHub Actions Cron")]
+    Slash[("⚡ Discord Slash Commands")]
+    Chan[("💬 Curated Discord Channels")]
+    CLI_In[("💻 Local Operator CLI")]
+    Web_In[("🌐 Operator Browser / PWA")]
+  end
+
+  subgraph Compute["0.1.0 Product Runtimes"]
+    Orch["Gift & Promo Redeemer<br/>src/skills/runAll.ts"]
+    Mon["Discord Monitor & Digest<br/>src/discord/ + src/digest/"]
+    Crew["Offline Crew Optimizer & RAG<br/>src/crew/"]
+    CFW["Discord Interaction Bridge<br/>worker/ (Cloudflare Worker)"]
+    SWA["Web Control Panel<br/>web/ (Lit 3) + api/ (Azure Functions)"]
+    TokenAPI["Token API Container App<br/>pwa-token-api/"]
+    Relay["Chromium Login Relay<br/>pwa-browser/ (internal ingress)"]
+  end
+
+  subgraph External["External & Persistence Planes"]
+    STFC["STFC Web Store v2 API"]
+    AutoState[("origin/automation-state<br/>history, digests, dead-code & streak state")]
+    Blob[("Private Azure Blob<br/>accounts.json via OIDC")]
+    R2[("Cloudflare R2<br/>/game-state media")]
+  end
+
+  Cron --> Orch
+  Cron --> Mon
+  CLI_In --> Orch
+  CLI_In --> Crew
+  Chan --> Mon
+  Mon -->|new codes| AutoState
+  Mon -->|!crew queries| Crew
+  Slash --> CFW
+  CFW -->|repository_dispatch| Orch
+  CFW -->|/game-state dispatch| R2
+  Orch -->|OIDC STFC_ACCOUNTS_FILE<br/>or recovery secret fallback| Blob
+  Mon -->|OIDC STFC_ACCOUNTS_FILE| Blob
+  Orch -->|GET/POST claims & codes| STFC
+  Orch -->|worktree restore & push| AutoState
+  Web_In --> SWA
+  SWA -->|approved reads| AutoState
+  SWA -->|owner-gated /api/token-session| TokenAPI
+  TokenAPI -->|HTTPS internal relay| Relay
+  Relay -->|email OTP sign-in| STFC
+  TokenAPI -->|validate & ETag write| Blob
+```
+
+For full subsystem boundaries, sequence flows, operational verification limits,
+and the proposed runtime/hosting consolidation direction (`#453`, `#455`), see
+**[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** (especially
+[§1.1 Runtime & cloud boundaries](docs/ARCHITECTURE.md#11-runtime--cloud-boundaries-current-010-vs-proposed-consolidation)).
+
+---
+
 ## Quick start
 
 1. **Configure the private account-token store.** Follow

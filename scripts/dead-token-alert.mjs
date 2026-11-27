@@ -62,11 +62,32 @@ function labelNames(issue) {
   );
 }
 
+const PRIORITY_RANK = new Map([
+  ['priority:p0', 0],
+  ['priority:p1', 1],
+  ['priority:p2', 2],
+  ['priority:p3', 3],
+]);
+
+function hasRequiredLabel(names, required) {
+  if (names.has(required)) return true;
+  const requiredRank = PRIORITY_RANK.get(required);
+  if (requiredRank === undefined) return false;
+  for (const candidate of names) {
+    const candidateRank = PRIORITY_RANK.get(candidate);
+    if (candidateRank !== undefined && candidateRank <= requiredRank) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /**
  * Issues that ARE the dead-token alert: exact title, all required labels
- * present, sorted oldest-first. `gh --search` is a fuzzy full-text match, so
- * this exact filter is what keeps an unrelated issue that merely quotes the
- * alert title out of the result.
+ * present (with escalated priority labels such as `priority:p0` satisfying
+ * `priority:p1`), sorted oldest-first. `gh --search` is a fuzzy full-text
+ * match, so this exact filter is what keeps an unrelated issue that merely
+ * quotes the alert title out of the result.
  */
 export function selectAlertIssues(issues, options) {
   const title = options.title;
@@ -82,7 +103,7 @@ export function selectAlertIssues(issues, options) {
     .filter((issue) => issue?.title === title)
     .filter((issue) => {
       const names = labelNames(issue);
-      return requiredLabels.every((label) => names.has(label));
+      return requiredLabels.every((label) => hasRequiredLabel(names, label));
     })
     .filter((issue) => Number.isFinite(issue?.number))
     .sort((a, b) => a.number - b.number);

@@ -653,9 +653,13 @@ describe("discordMonitor / workflow YAML assertions (T027)", () => {
     "refresh-token.yml",
   );
 
-  it("discord-monitor.yml exists and has cron `15 */4 * * *`", () => {
+  it("discord-monitor.yml exists, has cron `15 */4 * * *`, and runs OIDC preflight before Azure login", () => {
     const yaml = fs.readFileSync(yamlPath, "utf8");
     assert.match(yaml, /cron:\s*["']15 \*\/4 \* \* \*["']/);
+    const preflightIdx = yaml.indexOf("name: Validate Azure OIDC configuration");
+    const loginIdx = yaml.indexOf("name: Sign in to Azure with GitHub OIDC");
+    assert.ok(preflightIdx >= 0 && loginIdx > preflightIdx, "OIDC preflight must precede azure/login");
+    assert.match(yaml, /Missing Azure OIDC Configuration/);
   });
 
   it("redeem.yml cron is `*/10 * * * *` (regression guard — bumped in #7, then again to */10)", () => {

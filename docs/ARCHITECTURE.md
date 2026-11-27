@@ -97,6 +97,60 @@ flowchart LR
 | **Web Control Panel** | `api/`, `web/`, `shared/contracts/` | Azure SWA HTTPS requests | Authenticated operator dashboard |
 | **CI/CD** | `.github/workflows/`, `scripts/` | Git events, schedules, manual dispatch | Tests, typecheck, deploy, release, hygiene gates |
 
+### 1.1 Runtime & cloud boundaries (current `0.1.0` vs. proposed consolidation)
+
+The `0.1.0` baseline spans six runtime surfaces across GitHub Actions, Azure,
+and Cloudflare, using the orphan `automation-state` Git branch as its mutable
+operational store. Candidate simplification work tracked under `#453`
+(read-only companion MCP server) and `#455` (hosting/CI/token-service TCO
+consolidation) evaluates collapsing those boundaries into a single edge or
+`.NET LTS` host with managed state — **proposed roadmap architecture only, not
+an active or implied migration** until separately authorized:
+
+```mermaid
+flowchart TB
+  subgraph Current["Current 0.1.0 Architecture (6 Runtimes, 2 Clouds, Git-Branch State)"]
+    GHA["GitHub Actions Cron + Dispatch<br/>(redeem, discord-monitor, command-handler)"]
+    GitDB[("origin/automation-state<br/>Linked-Worktree Git State")]
+    SWA_C["Azure Static Web Apps + Functions<br/>(web/ Lit SPA + api/ Node 22)"]
+    CA1["Azure Container App<br/>pwa-token-api/"]
+    CA2["Azure Container App<br/>pwa-browser/ (internal Playwright)"]
+    Blob_C[("Private Azure Blob<br/>accounts.json (OIDC / ETag)")]
+    CFW_C["Cloudflare Worker<br/>worker/ (Ed25519 bridge)"]
+    R2_C[("Cloudflare R2<br/>stfc-game-state")]
+
+    GHA -->|restore & bounded-retry push| GitDB
+    GHA -->|OIDC read or legacy fallback| Blob_C
+    SWA_C -->|cached GitHub reads| GitDB
+    SWA_C -->|requireOwner proxy| CA1
+    CA1 -->|internal HTTPS| CA2
+    CA1 -->|validated ETag write| Blob_C
+    CFW_C -->|repository_dispatch| GHA
+    GHA -->|/game-state upload| R2_C
+  end
+
+  subgraph Target["Proposed Target Consolidation (#453, #455 — Evaluation Only)"]
+    Host["Consolidated Runtime<br/>(Cloudflare Worker/Cron OR .NET LTS Aspire Host)"]
+    StateDB[("Managed Structured State & Secrets<br/>(Cloudflare D1/KV OR Azure Table + Key Vault)")]
+    ObjStore[("Cloudflare R2<br/>(Screenshots & Media)")]
+    MCP["Authenticated Read-Only MCP Surface (#453)<br/>(ChatGPT / Copilot Companion)"]
+    Vision["Managed Multimodal Vision API (#416)<br/>(Structured Roster Extraction)"]
+
+    Host -->|transactional reads/writes| StateDB
+    Host -->|media storage| ObjStore
+    Host -->|screenshot parsing| Vision
+    MCP -->|authorized read-only tools| StateDB
+  end
+```
+
+| Boundary concern | Current `0.1.0` baseline | Proposed consolidation target (`#453`, `#455`) |
+|---|---|---|
+| **Compute runtimes** | GitHub Actions (Node 24), Azure Functions (Node 22), Lit/Vite SWA, 2 Container Apps (`pwa-token-api/`, `pwa-browser/`), Cloudflare Worker | Single primary compute plane (Cloudflare Workers/Cron **or** `.NET LTS` Aspire service) |
+| **Operational state** | Orphan `automation-state` branch via detached worktrees + `queue: max` serialization | Managed database/KV (Cloudflare D1/KV or Azure Table Storage) without Git push races |
+| **Account token storage** | Private Azure Blob (`STFC_ACCOUNTS_FILE` via OIDC; legacy secret recovery fallback) + 2 Container Apps for OTP capture | Secret Vault / KV with serverless browser rendering or guided local `recover-auth.ps1` |
+| **Discord slash commands** | Worker Ed25519 verify → `repository_dispatch` → queued Actions runner | Direct sub-second execution in the edge/service host |
+| **Operator companion UI** | Custom SWA Lit tabs (`web/`) reading committed artifacts | Read-only MCP server (`#453`) consumed directly from ChatGPT / GitHub Copilot + optional thin web view |
+
 ---
 
 ## 2. Repository layout
@@ -780,6 +834,7 @@ operational assumptions; their state is not represented by this source tree.
 | Look up | Where |
 |---|---|
 | How does subsystem X work? | §3.X |
+| Current vs. proposed consolidated runtime boundaries | §1.1 |
 | Discord `!crew` command end-to-end flow | §4.2 |
 | Scheduled gift redemption flow | §4.1 + `redeem.yml` |
 | Web panel request auth flow | §4.3 + `api/src/_lib/auth.ts` |

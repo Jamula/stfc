@@ -8,6 +8,10 @@ import {
   saveRoster,
   upsertRosterOfficer,
 } from "../crew/roster.ts";
+import {
+  exportSpocksClubRoster,
+  importSpocksClubRoster,
+} from "../crew/spocksClub.ts";
 import type { Roster, RosterEntry } from "../crew/schemas.ts";
 import { createLogger } from "../lib/logger.ts";
 
@@ -62,14 +66,20 @@ export async function roster(opts: RosterSkillOptions = {}): Promise<SkillOutput
         return await promoteCommand(rest, rosterDir, now, writer);
       case "rankup":
         return await rankupCommand(rest, rosterDir, now, writer);
+      case "import-json":
+        return await importJsonCommand(rest, rosterDir, officerDatabasePath, now, writer);
+      case "export-json":
+        return await exportJsonCommand(rest, rosterDir, officerDatabasePath, now, writer);
       default:
         writer.error(
-          "Usage: roster <status|add|promote|rankup|validate> [flags]\n" +
+          "Usage: roster <status|add|promote|rankup|validate|import-json|export-json> [flags]\n" +
             "  status [--account X | --all]\n" +
             "  add --account X --officer Y [--level N --rank R --promotions P] [--force]\n" +
             "  promote --account X --officer Y --level +N|N\n" +
             "  rankup --account X --officer Y [--rank +1|N]\n" +
-            "  validate [--account X | --all]",
+            "  validate [--account X | --all]\n" +
+            "  import-json --account X --file <spocks-club.json> [--force]\n" +
+            "  export-json --account X [--out <spocks-club.json>]",
         );
         return { result: { error: "invalid-subcommand" }, exitCode: 2 };
     }
@@ -349,6 +359,144 @@ async function rankupCommand(
   await saveRoster(next, rosterPath);
   writer.log(`Updated '${officer}' rank to ${nextRank} in '${account}'.`);
   return { result: { account, officer, rank: nextRank }, exitCode: 0 };
+}
+
+const SAFE_ROSTER_ACCOUNT_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
+
+function resolveSafeAccountRosterPath(rosterDir: string, account: string): string | undefined {
+  if (!SAFE_ROSTER_ACCOUNT_RE.test(account)) return undefined;
+  const resolvedDir = path.resolve(rosterDir);
+  const candidate = path.join(rosterDir, `${account}.yaml`);
+  if (path.dirname(path.resolve(candidate)) !== resolvedDir) return undefined;
+  return candidate;
+}
+
+async function importJsonCommand(
+  args: string[],
+  rosterDir: string,
+  officerDatabasePath: string,
+  now: () => Date,
+  writer: Writer,
+): Promise<SkillOutput> {
+  const parsed = parseFlags(args);
+  const account = parsed.values.account?.trim();
+  const inputFile = parsed.values.file?.trim();
+  const force = parsed.bools.force ?? false;
+  if (!account || !inputFile) {
+    writer.error("import-json requires --account <name> and --file <path>");
+    return { result: { error: "missing-required-flags" }, exitCode: 2 };
+  }
+  const rosterPath = resolveSafeAccountRosterPath(rosterDir, account);
+  if (!rosterPath) {
+    writer.error("Invalid --account name; use 1..64 portable characters [A-Za-z0-9._-].");
+    return { result: { error: "invalid-account" }, exitCode: 2 };
+  }
+
+  let existingRoster: Roster | undefined;
+  const alreadyExists = await fs
+    .stat(rosterPath)
+    .then(() => true)
+    .catch(() => false);
+  if (alreadyExists) {
+    if (!force) {
+      writer.error(`Roster for account '${account}' already exists. Use --force to overwrite.`);
+      return { result: { error: "roster-exists" }, exitCode: 1 };
+    }
+    try {
+      existingRoster = await loadRoster(rosterPath);
+    } catch {
+      existingRoster = undefined;
+    }
+  }
+
+  const [rawJson, database] = await Promise.all([
+    fs.readFile(inputFile, "utf8"),
+    loadOfficerDatabase(officerDatabasePath),
+  ]);
+
+  const imported = importSpocksClubRoster({
+    rawJson,
+    account,
+    database,
+    now: now(),
+  });
+  if (imported.importedCount === 0) {
+    writer.error(
+      `Import matched 0 known officers for account '${account}'; refusing to write an empty roster.`,
+    );
+    return {
+      result: { error: "empty-import", unmatchedOfficers: imported.unmatchedOfficers },
+      exitCode: 1,
+    };
+  }
+
+  const nextRoster: Roster = existingRoster?.staleness_overrides
+    ? { ...imported.roster, staleness_overrides: existingRoster.staleness_overrides }
+    : imported.roster;
+  await saveRoster(nextRoster, rosterPath);
+  writer.log(`Imported ${imported.importedCount} officer(s) into ${rosterPath}.`);
+  if (imported.unmatchedOfficers.length > 0) {
+    writer.log(
+      `WARNING ${account}: skipped ${imported.unmatchedOfficers.length} unmatched officer(s): ${imported.unmatchedOfficers.join(", ")}`,
+    );
+  }
+  return {
+    result: {
+      account,
+      rosterPath,
+      importedCount: imported.importedCount,
+      unmatchedOfficers: imported.unmatchedOfficers,
+    },
+    exitCode: 0,
+  };
+}
+
+async function exportJsonCommand(
+  args: string[],
+  rosterDir: string,
+  officerDatabasePath: string,
+  now: () => Date,
+  writer: Writer,
+): Promise<SkillOutput> {
+  const parsed = parseFlags(args);
+  const account = parsed.values.account?.trim();
+  const outFile = parsed.values.out?.trim();
+  if (!account) {
+    writer.error("export-json requires --account <name>");
+    return { result: { error: "missing-required-flags" }, exitCode: 2 };
+  }
+  const rosterPath = resolveSafeAccountRosterPath(rosterDir, account);
+  if (!rosterPath) {
+    writer.error("Invalid --account name; use 1..64 portable characters [A-Za-z0-9._-].");
+    return { result: { error: "invalid-account" }, exitCode: 2 };
+  }
+
+  const [rosterData, database] = await Promise.all([
+    loadRoster(rosterPath),
+    loadOfficerDatabase(officerDatabasePath),
+  ]);
+
+  const exported = exportSpocksClubRoster({
+    roster: rosterData,
+    database,
+    now: now(),
+  });
+  const jsonText = `${JSON.stringify(exported, null, 2)}\n`;
+  if (outFile) {
+    await fs.mkdir(path.dirname(outFile), { recursive: true });
+    await fs.writeFile(outFile, jsonText, "utf8");
+    writer.log(`Exported ${exported.officers.length} officer(s) to ${outFile}.`);
+  } else {
+    writer.log(jsonText.trimEnd());
+  }
+  return {
+    result: {
+      account,
+      exportedCount: exported.officers.length,
+      ...(outFile ? { outFile } : {}),
+    },
+    exitCode: 0,
+  };
 }
 
 async function resolveRosterFiles(rosterDir: string, account?: string): Promise<string[]> {

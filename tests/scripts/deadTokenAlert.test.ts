@@ -105,6 +105,22 @@ describe("dead-token-alert — selection", () => {
     assert.deepEqual(matches.map((match) => match.number), [101]);
   });
 
+  it("matches an alert whose priority was escalated from priority:p1 to priority:p0 (#451)", () => {
+    const escalated = issue(451, TITLE, ["bug", "priority:p0"]);
+    const matches = selectAlertIssues([escalated], { title: TITLE, requiredLabels: REQUIRED });
+    assert.deepEqual(
+      matches.map((match) => match.number),
+      [451],
+      "escalating priority:p1 -> priority:p0 during triage must not orphan the alert",
+    );
+  });
+
+  it("rejects an issue whose priority is lower than the required priority threshold", () => {
+    const downgraded = issue(452, TITLE, ["bug", "priority:p2"]);
+    const matches = selectAlertIssues([downgraded], { title: TITLE, requiredLabels: REQUIRED });
+    assert.deepEqual(matches, []);
+  });
+
   it("returns multiple exact matches oldest-first, ignoring every decoy", () => {
     const matches = selectAlertIssues(FIXTURE, { title: TITLE, requiredLabels: REQUIRED });
     assert.deepEqual(
