@@ -54,8 +54,8 @@ npm run skill:roster -- add --account main --officer chen --level 35 --rank 2 --
 npm run skill:roster -- validate --account main
 npm run skill:optimize-crew -- --account main --task mining-g3
 
-# Or import/export a spocks.club-compatible JSON roster directly:
-npm run skill:roster -- import-json --account main --file ./spocks-club-officers.json
+# Or import/export a spocks.club-compatible JSON roster directly (pass --force to replace an existing account YAML):
+npm run skill:roster -- import-json --account main --file ./spocks-club-officers.json --force
 npm run skill:roster -- export-json --account main --out ./spocks-club-export.json
 ```
 

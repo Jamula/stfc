@@ -194,6 +194,14 @@ export function parseRedditListingJson(payload: unknown): RedditPostItem[] {
 }
 
 const PROMO_POST_HINT_RE = /\b(code|codes|promo|redeem|gift|webstore|web\s+store|free)\b/i;
+const ZERO_WIDTH_RE = /[\u200B\u200C\u200D\uFEFF]/g;
+const FENCED_BLOCK_RE = /```[\s\S]*?```/g;
+const SPOILER_RE = /\|\|([^|]+?)\|\|/g;
+const BOLD_RE = /\*\*([^*]+?)\*\*/g;
+const ITAL_STAR_RE = /\*([^*]+?)\*/g;
+const BOLD_UNDER_RE = /__([^_]+?)__/g;
+const ITAL_UNDER_RE = /_([^_]+?)_/g;
+const TOKEN_SPLIT_RE = /[^A-Za-z0-9]+/;
 
 const REDDIT_HEADER_STOPLIST = new Set<string>([
   "CODES",
@@ -211,17 +219,34 @@ const REDDIT_HEADER_STOPLIST = new Set<string>([
   "OPS",
 ]);
 
+function collectUppercaseTokens(normalizedText: string): Set<string> {
+  const body = normalizedText
+    .replace(FENCED_BLOCK_RE, " ")
+    .replace(SPOILER_RE, "$1")
+    .replace(BOLD_RE, "$1")
+    .replace(BOLD_UNDER_RE, "$1")
+    .replace(ITAL_STAR_RE, "$1")
+    .replace(ITAL_UNDER_RE, "$1");
+  const out = new Set<string>();
+  for (const token of body.split(TOKEN_SPLIT_RE)) {
+    if (CORE_CODE_REGEX.test(token)) {
+      out.add(token);
+    }
+  }
+  return out;
+}
+
 /**
  * Extract reviewable promo-code candidates from normalized Reddit posts.
  *
  * Precision guardrails:
- *  - Applies the shared moderation filter before extraction.
+ *  - Strips zero-width characters before applying the shared moderation filter.
  *  - Only extracts from posts whose title or body explicitly references promo
  *    codes / webstore redemption so routine ship/officer acronyms in general
  *    gameplay threads are not surfaced as false-positive candidates.
- *  - Requires the original token in the Reddit post to appear in ALL-CAPS
- *    (`CORE_CODE_REGEX.test(matchedText)`) and not be a promo-announcement
- *    header word (`PSA`, `PROMO`, `WEBSTORE`, etc.), eliminating prose noise.
+ *  - Requires at least one non-fenced ALL-CAPS occurrence of the candidate code
+ *    in the post (even if an earlier lowercase mention appeared first) and
+ *    excludes promo-announcement header words (`PSA`, `PROMO`, `WEBSTORE`, etc.).
  *  - Collapses duplicate codes across posts while retaining the earliest post
  *    provenance (`permalink` + `publishedAt`). Does NOT trigger auto-redemption.
  */
@@ -231,7 +256,8 @@ export function extractRedditPromoCandidates(posts: readonly RedditPostItem[]): 
   let droppedModeration = 0;
 
   for (const post of ordered) {
-    const combined = `${post.title}\n${post.body}`.trim();
+    const cleanTitle = post.title.replace(ZERO_WIDTH_RE, "");
+    const combined = `${cleanTitle}\n${post.body.replace(ZERO_WIDTH_RE, "")}`.trim();
     if (isExcludedByModeration(combined, { channelLabel: "reddit-stfc" })) {
       droppedModeration += 1;
       continue;
@@ -240,17 +266,18 @@ export function extractRedditPromoCandidates(posts: readonly RedditPostItem[]): 
       continue;
     }
 
+    const uppercaseTokens = collectUppercaseTokens(combined);
     const extracted = extractCodesFromMessage(combined, {
-      channelLabel: PROMO_POST_HINT_RE.test(post.title) ? "reddit-promo-codes" : "reddit-stfc",
+      channelLabel: PROMO_POST_HINT_RE.test(cleanTitle) ? "reddit-promo-codes" : "reddit-stfc",
     });
 
     for (const candidate of extracted) {
-      if (!CORE_CODE_REGEX.test(candidate.matchedText)) continue;
+      if (!uppercaseTokens.has(candidate.value)) continue;
       if (REDDIT_HEADER_STOPLIST.has(candidate.value)) continue;
       if (byCode.has(candidate.value)) continue;
       byCode.set(candidate.value, {
         code: candidate.value,
-        matchedText: candidate.matchedText,
+        matchedText: candidate.value,
         extractionConfidence: candidate.extractionConfidence,
         postId: post.id,
         postTitle: post.title,

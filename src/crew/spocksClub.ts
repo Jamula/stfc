@@ -104,14 +104,20 @@ export function importSpocksClubRoster(args: {
   const unmatchedOfficers: string[] = [];
 
   for (const item of rawOfficers) {
-    const rawKey = item.id ?? item.officerId ?? item.name;
-    if (!rawKey) {
+    const candidateKeys = [item.id, item.officerId, item.name]
+      .map((value) => value?.trim())
+      .filter((value): value is string => Boolean(value));
+    if (candidateKeys.length === 0) {
       unmatchedOfficers.push("(unnamed-entry)");
       continue;
     }
-    const matched = lookup.get(rawKey.trim()) ?? lookup.get(normalizeLookupKey(rawKey));
+    let matched: Officer | undefined;
+    for (const key of candidateKeys) {
+      matched = lookup.get(key) ?? lookup.get(normalizeLookupKey(key));
+      if (matched) break;
+    }
     if (!matched) {
-      unmatchedOfficers.push(rawKey.trim());
+      unmatchedOfficers.push(item.name?.trim() || candidateKeys[0]!);
       continue;
     }
 

@@ -14,7 +14,7 @@ describe("spocksClub — JSON roster import/export compatibility (#472)", () => 
 
     const rawJson = JSON.stringify({
       officers: [
-        { name: "James T. Kirk", owned: true, level: 45, rank: 4, tier: 4 },
+        { id: "external-kirk-slug", name: "James T. Kirk", owned: true, level: 45, rank: 4, tier: 4 },
         { id: "chen", unlocked: true, level: 30, rank: 5, tier: 5 },
         { id: "gorkon", owned: false, level: 0, rank: 0 },
         { name: "Future Unreleased Admiral", owned: true, level: 10, rank: 1, tier: 1 },
@@ -127,6 +127,37 @@ describe("spocksClub — JSON roster import/export compatibility (#472)", () => 
         writer,
       });
       assert.equal(imp.exitCode, 0, errors.join("\n"));
+
+      // Overwriting an existing roster without --force must be rejected.
+      const overwriteBlocked = await roster({
+        argv: ["import-json", "--account", "main", "--file", inputJson],
+        rosterDir,
+        writer,
+      });
+      assert.equal(overwriteBlocked.exitCode, 1);
+
+      // Zero-match imports must fail without erasing the existing roster.
+      const unmatchedInput = path.join(dir, "unmatched.json");
+      await fs.writeFile(
+        unmatchedInput,
+        JSON.stringify([{ name: "Nonexistent Officer", owned: true, level: 10, rank: 1 }]),
+        "utf8",
+      );
+      const zeroMatch = await roster({
+        argv: ["import-json", "--account", "main", "--file", unmatchedInput, "--force"],
+        rosterDir,
+        writer,
+      });
+      assert.equal(zeroMatch.exitCode, 1);
+
+      // --force overwrite succeeds when valid matches exist.
+      const forced = await roster({
+        argv: ["import-json", "--account", "main", "--file", inputJson, "--force"],
+        rosterDir,
+        now: () => new Date("2026-11-26T20:02:00.000Z"),
+        writer,
+      });
+      assert.equal(forced.exitCode, 0, errors.join("\n"));
 
       const exp = await roster({
         argv: ["export-json", "--account", "main", "--out", outputJson],

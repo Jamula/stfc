@@ -122,17 +122,17 @@ describe("redditFeed — Atom/RSS and OAuth JSON promo discovery (#369)", () => 
 <feed xmlns="http://www.w3.org/2005/Atom">
   <entry>
     <id>t3_nested</id>
-    <title>Promo code &#x110000; drop</title>
+    <title>Promo code warp26 &#x110000; drop</title>
     <link href="https://www.reddit.com/r/startrekfleetcommand/comments/nested/promo_(2026)/" />
     <updated>2026-11-21T10:00:00Z</updated>
-    <content type="html">&lt;p&gt;Promo code WARP&amp;#8203;26 is live&lt;/p&gt;</content>
+    <content type="html">&lt;p&gt;Redeem WARP&amp;#8203;26 in the store&lt;/p&gt;</content>
   </entry>
   <entry>
     <id>t3_mod_html</id>
     <title>Free promo code SPAM99</title>
     <link href="https://www.reddit.com/r/startrekfleetcommand/comments/mod_html/free_promo/" />
     <updated>2026-11-21T11:00:00Z</updated>
-    <content type="html">&lt;p&gt;&amp;#64;everyone claim SPAM99&lt;/p&gt;</content>
+    <content type="html">&lt;p&gt;&amp;#64;every&amp;#8203;one claim SPAM99&lt;/p&gt;</content>
   </entry>
   <entry>
     <id>t3_injected_href</id>
@@ -152,7 +152,8 @@ describe("redditFeed — Atom/RSS and OAuth JSON promo discovery (#369)", () => 
     );
 
     const discovery = extractRedditPromoCandidates(posts);
-    assert.equal(discovery.droppedModeration, 1, "entity-encoded @everyone inside HTML content must be caught");
+    assert.equal(discovery.droppedModeration, 1, "zero-width-obfuscated @everyone must be caught");
     assert.deepEqual(discovery.candidates.map((c) => c.code), ["WARP26"]);
+    assert.equal(discovery.candidates[0]?.matchedText, "WARP26");
   });
 });

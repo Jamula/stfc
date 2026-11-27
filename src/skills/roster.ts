@@ -78,7 +78,7 @@ export async function roster(opts: RosterSkillOptions = {}): Promise<SkillOutput
             "  promote --account X --officer Y --level +N|N\n" +
             "  rankup --account X --officer Y [--rank +1|N]\n" +
             "  validate [--account X | --all]\n" +
-            "  import-json --account X --file <spocks-club.json>\n" +
+            "  import-json --account X --file <spocks-club.json> [--force]\n" +
             "  export-json --account X [--out <spocks-club.json>]",
         );
         return { result: { error: "invalid-subcommand" }, exitCode: 2 };
@@ -381,6 +381,7 @@ async function importJsonCommand(
   const parsed = parseFlags(args);
   const account = parsed.values.account?.trim();
   const inputFile = parsed.values.file?.trim();
+  const force = parsed.bools.force ?? false;
   if (!account || !inputFile) {
     writer.error("import-json requires --account <name> and --file <path>");
     return { result: { error: "missing-required-flags" }, exitCode: 2 };
@@ -389,6 +390,23 @@ async function importJsonCommand(
   if (!rosterPath) {
     writer.error("Invalid --account name; use 1..64 portable characters [A-Za-z0-9._-].");
     return { result: { error: "invalid-account" }, exitCode: 2 };
+  }
+
+  let existingRoster: Roster | undefined;
+  const alreadyExists = await fs
+    .stat(rosterPath)
+    .then(() => true)
+    .catch(() => false);
+  if (alreadyExists) {
+    if (!force) {
+      writer.error(`Roster for account '${account}' already exists. Use --force to overwrite.`);
+      return { result: { error: "roster-exists" }, exitCode: 1 };
+    }
+    try {
+      existingRoster = await loadRoster(rosterPath);
+    } catch {
+      existingRoster = undefined;
+    }
   }
 
   const [rawJson, database] = await Promise.all([
@@ -402,7 +420,20 @@ async function importJsonCommand(
     database,
     now: now(),
   });
-  await saveRoster(imported.roster, rosterPath);
+  if (imported.importedCount === 0) {
+    writer.error(
+      `Import matched 0 known officers for account '${account}'; refusing to write an empty roster.`,
+    );
+    return {
+      result: { error: "empty-import", unmatchedOfficers: imported.unmatchedOfficers },
+      exitCode: 1,
+    };
+  }
+
+  const nextRoster: Roster = existingRoster?.staleness_overrides
+    ? { ...imported.roster, staleness_overrides: existingRoster.staleness_overrides }
+    : imported.roster;
+  await saveRoster(nextRoster, rosterPath);
   writer.log(`Imported ${imported.importedCount} officer(s) into ${rosterPath}.`);
   if (imported.unmatchedOfficers.length > 0) {
     writer.log(
