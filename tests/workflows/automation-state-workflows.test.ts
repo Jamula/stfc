@@ -201,6 +201,11 @@ describe("automation-state scheduled workflow contract", () => {
       assert.match(source, /Remove account-token file/);
       if (label === "discord-monitor.yml") {
         assert.doesNotMatch(source, /STFC_ACCOUNTS:\s*\$\{\{\s*secrets\.STFC_ACCOUNTS/);
+        const preflight = namedStep(workflow, "Validate Azure OIDC configuration");
+        const preflightScript = (preflight.run ?? "").split("<<'NODE'\n")[1]?.replace(/\nNODE\s*$/, "") ?? "";
+        assert.ok(preflightScript.length > 0, "discord-monitor.yml must define an executable OIDC preflight script");
+        const preflightKeys = Object.keys(preflight.env ?? {});
+        assert.equal(preflightKeys.length, 6, "discord-monitor.yml preflight must inspect all 6 Azure variables");
       } else {
         const loadLegacyTokens = namedStep(workflow, "Load legacy account tokens");
         assert.equal(loadLegacyTokens.if,

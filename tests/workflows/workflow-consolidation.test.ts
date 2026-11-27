@@ -1087,7 +1087,7 @@ describe("workflow consolidation", () => {
     }
   });
 
-  it("installs root, API, and web dependencies before release validation", () => {
+  it("installs root and subpackage dependencies before release validation", () => {
     const release = workflows.find(({ file }) => file === "release.yml");
     assert.ok(release, "release.yml must exist");
     const steps = Object.values(release!.workflow.jobs ?? {}).flatMap(
@@ -1108,6 +1108,16 @@ describe("workflow consolidation", () => {
         step.run?.trim() === "npm ci" &&
         step["working-directory"] === "web",
     );
+    const pwaBrowserInstallIndex = steps.findIndex(
+      (step) =>
+        step.run?.trim() === "npm ci" &&
+        step["working-directory"] === "pwa-browser",
+    );
+    const pwaTokenApiInstallIndex = steps.findIndex(
+      (step) =>
+        step.run?.trim() === "npm ci" &&
+        step["working-directory"] === "pwa-token-api",
+    );
     const typecheckIndex = steps.findIndex(
       (step) => step.run?.trim() === "npm run typecheck",
     );
@@ -1118,10 +1128,14 @@ describe("workflow consolidation", () => {
     assert.ok(rootInstallIndex >= 0, "release.yml must install root dependencies");
     assert.ok(apiInstallIndex >= 0, "release.yml must install API dependencies");
     assert.ok(webInstallIndex >= 0, "release.yml must install web dependencies");
+    assert.ok(pwaBrowserInstallIndex >= 0, "release.yml must install pwa-browser dependencies");
+    assert.ok(pwaTokenApiInstallIndex >= 0, "release.yml must install pwa-token-api dependencies");
     for (const installIndex of [
       rootInstallIndex,
       apiInstallIndex,
       webInstallIndex,
+      pwaBrowserInstallIndex,
+      pwaTokenApiInstallIndex,
     ]) {
       assert.ok(
         installIndex < typecheckIndex && installIndex < testIndex,
