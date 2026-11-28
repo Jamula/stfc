@@ -7,6 +7,7 @@ inserted at the top**, so the most recent run is always visible first.
 
 | Date (UTC) | Time (UTC) | Account | Gifts claimed |
 | --- | --- | --- | --- |
+| 2026-11-28 | 10:33 | main | 10 Min Free Chest |
 | 2026-11-28 | 02:14 | main | 24 Hr Free Chest [BAJORAN FAVOR], Nadion Supply, Replicator Rations, 4 Hr Free Chest, Holo-Field Amplifiers, Trial Bells, Fleet Commander Materials, 10 Min Free Chest, Omega-13 Matter, Optical Diodes, Nova Squadron Supply, Archive Data Shard, Independent Archives Schematics |
 | 2026-11-27 | 19:49 | main | Daily Mission Key Drop, Automated Combat Protocol Chip, Emerald Chain Tier 38-42, 4 Hr Free Chest, UC Event Ticket Gift, Radioactive Titanite, 10 Min Free Chest, Thanksgiving Gift #4 |
 | 2026-11-27 | 10:57 | main | Automated Combat Protocol Chip, 4 Hr Free Chest, 10 Min Free Chest |
