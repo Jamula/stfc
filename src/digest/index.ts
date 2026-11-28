@@ -269,6 +269,8 @@ function mergeHealth(prior: RunHealth, next: RunHealth, runIds: string[]): RunHe
     candidatesSubmitted: prior.candidatesSubmitted + next.candidatesSubmitted,
     candidatesSuppressedDedup: prior.candidatesSuppressedDedup + next.candidatesSuppressedDedup,
     candidatesSuppressedCooldown: prior.candidatesSuppressedCooldown + next.candidatesSuppressedCooldown,
+    candidatesSuppressedDead: (prior.candidatesSuppressedDead ?? 0) + (next.candidatesSuppressedDead ?? 0),
+    deadCodeCacheUnavailable: next.deadCodeCacheUnavailable ?? false,
     candidatesDeferredCap: prior.candidatesDeferredCap + next.candidatesDeferredCap,
     tipsClassified: {
       tip: prior.tipsClassified.tip + next.tipsClassified.tip,
@@ -419,7 +421,7 @@ function render(d: DailyDigest): string {
   lines.push(`- Candidates extracted: ${h.candidatesExtracted}`);
   lines.push(
     `- Candidates submitted to redeemer: ${h.candidatesSubmitted}` +
-    ` (${h.candidatesSuppressedDedup} deduped, ${h.candidatesSuppressedCooldown} suppressed by cool-down, ${h.candidatesDeferredCap} deferred by cap)`,
+    ` (${h.candidatesSuppressedDedup} deduped, ${h.candidatesSuppressedCooldown} suppressed by cool-down, ${h.candidatesSuppressedDead ?? 0} suppressed by dead-code cache, ${h.candidatesDeferredCap} deferred by cap)`,
   );
   lines.push(
     `- Tips classified: tip=${h.tipsClassified.tip}, trick=${h.tipsClassified.trick}, hack=${h.tipsClassified.hack}, event-info=${h.tipsClassified["event-info"]}, patch-note=${h.tipsClassified["patch-note"]}`,

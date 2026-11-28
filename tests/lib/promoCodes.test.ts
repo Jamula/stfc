@@ -3,7 +3,12 @@ import assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { parsePromoCodes, readPromoCodes } from "../../src/lib/promoCodes.ts";
+import {
+  DeadCodeCacheError,
+  parsePromoCodes,
+  readDeadCodes,
+  readPromoCodes,
+} from "../../src/lib/promoCodes.ts";
 
 describe("parsePromoCodes", () => {
   it("parses simple newline list", () => {
@@ -39,6 +44,48 @@ describe("readPromoCodes", () => {
 
   beforeEach(() => {
     dir = fs.mkdtempSync(path.join(os.tmpdir(), "stfc-promo-"));
+  });
+
+  describe("readDeadCodes", () => {
+    let dir: string;
+
+    beforeEach(() => {
+      dir = fs.mkdtempSync(path.join(os.tmpdir(), "stfc-dead-codes-"));
+    });
+
+    afterEach(() => {
+      fs.rmSync(dir, { recursive: true, force: true });
+    });
+
+    it("treats a missing cache as empty and normalizes valid cache keys", async () => {
+      const file = path.join(dir, "dead.json");
+      assert.deepEqual(await readDeadCodes(file), new Set());
+      fs.writeFileSync(file, JSON.stringify({
+        " deadCode ": {
+          marked_dead_at: "2026-05-15T00:00:00.000Z",
+          first_seen_outcome: "CODE_INVALID_OR_EXPIRED",
+          accounts_tried: ["main"],
+        },
+      }));
+      assert.deepEqual(await readDeadCodes(file), new Set(["DEADCODE"]));
+    });
+
+    it("rejects malformed, invalid, and unreadable caches without revealing their contents", async () => {
+      const file = path.join(dir, "dead.json");
+      for (const raw of [
+        '{"private-cache-content"',
+        '[]',
+        '{"private-cache-content":{"first_seen_outcome":"CODE_REDEEMED"}}',
+      ]) {
+        fs.writeFileSync(file, raw);
+        await assert.rejects(readDeadCodes(file), (err: unknown) => {
+          assert.ok(err instanceof DeadCodeCacheError);
+          assert.doesNotMatch(err.message, /private-cache-content/);
+          return true;
+        });
+      }
+      await assert.rejects(readDeadCodes(dir), DeadCodeCacheError);
+    });
   });
 
   afterEach(() => {

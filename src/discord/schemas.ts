@@ -106,6 +106,7 @@ export const CandidateStatusSchema = z.enum([
   "deferred-cap",
   "suppressed-cooldown",
   "suppressed-operator-deny",
+  "suppressed-dead-code",
 ]);
 export type CandidateStatus = z.infer<typeof CandidateStatusSchema>;
 
@@ -393,6 +394,8 @@ export interface RunHealth {
   candidatesSubmitted: number;
   candidatesSuppressedDedup: number;
   candidatesSuppressedCooldown: number;
+  candidatesSuppressedDead?: number;
+  deadCodeCacheUnavailable?: boolean;
   candidatesDeferredCap: number;
   tipsClassified: {
     tip: number;

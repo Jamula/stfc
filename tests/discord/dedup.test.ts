@@ -67,6 +67,30 @@ describe("dedup priority order", () => {
     assert.equal(annotated[0]!.status, "duplicate");
   });
 
+  it("suppresses dead codes even when an operator rule allows them, and permits retry after cache reset", () => {
+    const candidate = makeCandidate("DEADCODE");
+    const prior = new Map<string, CandidateCode>([
+      ["DEADCODE", { ...candidate, status: "suppressed-dead-code" }],
+    ]);
+    const context = {
+      promoCodesTxt: new Set<string>(),
+      priorCandidates: prior,
+      suppression: {
+        DEADCODE: { action: "allow" as const, reason: "review", addedAt: "2026-05-15T00:00:00Z", addedBy: "operator" },
+      },
+      cooldowns: {},
+      now: NOW,
+    };
+
+    const blocked = dedup([candidate], { ...context, deadCodes: new Set(["DEADCODE"]) });
+    assert.deepEqual(blocked.fresh, []);
+    assert.equal(blocked.annotated[0]!.status, "suppressed-dead-code");
+
+    const reset = dedup([candidate], { ...context, deadCodes: new Set() });
+    assert.equal(reset.fresh[0]!.value, "DEADCODE");
+    assert.equal(reset.annotated[0]!.status, "pending");
+  });
+
   it("keeps a prior transient failure suppressed while its cooldown is active", () => {
     const prior = new Map<string, CandidateCode>([
       ["RETRYME", { ...makeCandidate("RETRYME"), status: "transient-failure" }],

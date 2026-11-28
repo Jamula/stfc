@@ -33,7 +33,7 @@ import {
   Outcomes,
   type Outcome,
 } from "../lib/outcomes.ts";
-import { PromoCodesFileError, readPromoCodes } from "../lib/promoCodes.ts";
+import { DEFAULT_DEAD_CODES_PATH, PromoCodesFileError, readPromoCodes } from "../lib/promoCodes.ts";
 import { redactForLog } from "../lib/redact.ts";
 import { heading, table, type SummaryWriter } from "../lib/summary.ts";
 import { AmbiguousResponseError, ApiClient, ApiError, SchemaMismatchError, TokenExpiredError, TransientError } from "../api/client.ts";
@@ -41,7 +41,6 @@ import { claimGift, getMe, listGifts, redeemCode } from "../api/endpoints.ts";
 import type { Gift } from "../api/schemas.ts";
 
 const log = createLogger("runAll");
-const DEFAULT_DEAD_CODES_PATH = "data/promo-code-dead.json";
 const PERSISTENT_TRANSIENT_RUNS = 3;
 const GIFT_CLAIM_BACKOFF_MS = 24 * 60 * 60 * 1000;
 const RETRY_DELAYS_MS = [1000, 2000] as const;
