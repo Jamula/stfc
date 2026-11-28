@@ -166,12 +166,12 @@ describe(".github/workflows/discord-ops.yml", () => {
   );
 
   it(
-    "invokes `node scripts/discord-ops/set-discord-app-metadata.mjs`",
+    "invokes `node scripts/discord-ops/set-discord-app-metadata.ts`",
     { skip: yaml === undefined },
     () => {
       assert.match(
         yaml!,
-        /node\s+scripts\/discord-ops\/set-discord-app-metadata\.mjs/,
+        /node\s+scripts\/discord-ops\/set-discord-app-metadata\.ts/,
         "workflow must invoke the metadata-setter script via node",
       );
     },

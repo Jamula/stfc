@@ -9,7 +9,7 @@ import {
 } from "node:fs";
 import path from "node:path";
 import { execFileSync, spawnSync } from "node:child_process";
-import { isAutomationStateCommitPublished, reconcileAutomationStateAfterPushFailure } from "../../scripts/automation-state-retry.mjs";
+import { isAutomationStateCommitPublished, reconcileAutomationStateAfterPushFailure } from "../../scripts/automation-state-retry.ts";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..", "..");
 const SCRATCH_ROOT = path.resolve(REPO_ROOT, "..");
@@ -266,7 +266,7 @@ describe("automation-state linked-worktree bootstrap", () => {
       git(state, "commit", "--no-verify", "-m", "state seed");
 
       const hookPath = path.join(resolveGitCommonDir(writer), "hooks", "pre-push");
-      writeFileSync(hookPath, "#!/bin/sh\nnode scripts/pre-push.mjs\n");
+      writeFileSync(hookPath, "#!/bin/sh\nnode scripts/pre-push.ts\n");
       chmodSync(hookPath, 0o755);
       git(writer, "config", "core.hooksPath", path.dirname(hookPath));
 
@@ -282,7 +282,7 @@ describe("automation-state linked-worktree bootstrap", () => {
       );
       assert.match(
         `${rejected.stdout}${rejected.stderr}`,
-        /scripts[\\/]+pre-push\.mjs/,
+        /scripts[\\/]+pre-push\.ts/,
       );
 
       const bypassed = gitResult(state, "push", "--no-verify", "origin", "HEAD:automation-state");

@@ -24,6 +24,10 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
 
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
+        with:
+          node-version-file: .nvmrc
+
       - name: Validate existing account tokens
         env:
           STFC_ACCOUNTS: ${{ secrets.STFC_ACCOUNTS }}
@@ -36,7 +40,7 @@ jobs:
           chmod 600 "$account_file"
           unset STFC_ACCOUNTS
 
-          node scripts/validate-token-accounts.mjs "$account_file"
+          node scripts/validate-token-accounts.ts "$account_file"
 
       - name: Sign in to Azure with GitHub OIDC
         uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5  # v2.3.0

@@ -109,6 +109,7 @@ describe("Discord PWA trigger-redeem handler", () => {
     const workflow = parse(readFileSync(".github/workflows/redeem.yml", "utf8"));
     assert.ok(workflow.on.workflow_dispatch, "the fixed dispatch target must remain manually triggerable");
     assert.ok(workflow.on.schedule, "the dispatch target must retain scheduled redemption");
+    assert.equal(workflow.jobs.redeem.steps[1]?.with?.["node-version-file"], ".nvmrc");
     const tokenSource = workflow.jobs.redeem.steps.find(
       (step: { id?: string }) => step.id === "token_source",
     );

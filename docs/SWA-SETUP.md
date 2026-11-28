@@ -305,7 +305,7 @@ the browser; opening the Discord tab never starts redemption.
 
 ### CI gate
 
-`scripts/ci/check-api-auth.mjs` (wired into `npm test`) fails the build if any
+`scripts/ci/check-api-auth.ts` (wired into `npm test`) fails the build if any
 Azure Functions HTTP handler file does not import and call `requireAllowedUser` or
 `requireOwner`. This prevents accidentally shipping unauthenticated endpoints.
 

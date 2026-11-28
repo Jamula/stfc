@@ -276,19 +276,19 @@ describe(".github/workflows/discord-register-commands.yml", () => {
   );
 
   it(
-    "runs validate-discord-commands.mjs BEFORE the curl command",
+    "runs validate-discord-commands.ts BEFORE the curl command",
     { skip: yaml === undefined },
     () => {
-      const validateIdx = yaml!.indexOf("validate-discord-commands.mjs");
+      const validateIdx = yaml!.indexOf("validate-discord-commands.ts");
       const curlIdx = yaml!.indexOf("curl");
       assert.ok(
         validateIdx !== -1,
-        "must reference validate-discord-commands.mjs",
+        "must reference validate-discord-commands.ts",
       );
       assert.ok(curlIdx !== -1, "must contain a curl command");
       assert.ok(
         validateIdx < curlIdx,
-        "validate-discord-commands.mjs must appear before curl in the workflow",
+        "validate-discord-commands.ts must appear before curl in the workflow",
       );
     },
   );

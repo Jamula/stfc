@@ -1,6 +1,6 @@
 # Manual one-shot Discord app metadata setter.
 #
-# Wraps `scripts/discord-ops/set-discord-app-metadata.mjs` so the operator can
+# Wraps `scripts/discord-ops/set-discord-app-metadata.ts` so the operator can
 # update STFC-News-Bot's avatar / description / username from the GitHub
 # Actions UI WITHOUT exporting DISCORD_BOT_TOKEN to a laptop or Codespace.
 #
@@ -106,4 +106,4 @@ jobs:
           [ -n "$DESCRIPTION" ] && ARGS+=(--description "$DESCRIPTION")
           [ -n "$USERNAME" ] && ARGS+=(--username "$USERNAME")
           [ "$DRY_RUN" = "true" ] && ARGS+=(--dry-run)
-          node scripts/discord-ops/set-discord-app-metadata.mjs "${ARGS[@]}"
+          node scripts/discord-ops/set-discord-app-metadata.ts "${ARGS[@]}"

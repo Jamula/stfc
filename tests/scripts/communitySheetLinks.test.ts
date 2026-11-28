@@ -80,7 +80,7 @@ describe("community sheet source links (#402)", () => {
     ].join("\n");
     const result = spawnSync(process.execPath, [
       "--import", `data:text/javascript,${encodeURIComponent(guard)}`,
-      path.join(root, "scripts", "fetch-community-sheet.mjs"),
+      path.join(root, "scripts", "fetch-community-sheet.ts"),
     ], { cwd: root, encoding: "utf8", timeout: 10_000 });
     assert.ifError(result.error);
     assert.equal(result.status, 1, result.stderr);

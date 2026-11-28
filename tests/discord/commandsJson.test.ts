@@ -1,4 +1,4 @@
-// Tests for discord/commands.json + scripts/validate-discord-commands.mjs (#144).
+// Tests for discord/commands.json + scripts/validate-discord-commands.ts (#144).
 // Verifies the single-source-of-truth command definitions are well-formed and
 // that the validator script enforces Discord's CHAT_INPUT schema constraints.
 
@@ -12,7 +12,7 @@ import { fileURLToPath } from "node:url";
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const REPO_ROOT = resolve(__dirname, "../..");
 const COMMANDS_JSON = resolve(REPO_ROOT, "discord/commands.json");
-const VALIDATOR = resolve(REPO_ROOT, "scripts/validate-discord-commands.mjs");
+const VALIDATOR = resolve(REPO_ROOT, "scripts/validate-discord-commands.ts");
 
 function runValidator(filePath?: string): { status: number | null; stdout: string; stderr: string } {
   const args = filePath ? [VALIDATOR, filePath] : [VALIDATOR];
@@ -105,7 +105,7 @@ describe("discord/commands.json", () => {
   });
 });
 
-describe("scripts/validate-discord-commands.mjs", () => {
+describe("scripts/validate-discord-commands.ts", () => {
   it("exits 0 on the current commands.json", () => {
     const r = runValidator();
     assert.equal(r.status, 0, `validator failed on valid file; stderr=${r.stderr}`);

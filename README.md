@@ -17,7 +17,7 @@ platform below (see
 
 | Subsystem | Paths | Purpose |
 | --- | --- | --- |
-| **Store gift & promo-code redeemer** | `src/`, `.github/workflows/redeem.yml` | Headless Node 24 TypeScript CLI targeting the STFC Web Store v2 API with truthful `Outcome` exit codes (`0` ok/partial, `1` infra error, `2` all tokens rejected), persisting run history and dead-code caches to the orphan `automation-state` branch. GitHub Actions requests a run every 10 minutes (best-effort schedule delivery, not a hard interval guarantee). |
+| **Store gift & promo-code redeemer** | `src/`, `.github/workflows/redeem.yml` | Headless Node 26 TypeScript CLI targeting the STFC Web Store v2 API with truthful `Outcome` exit codes (`0` ok/partial, `1` infra error, `2` all tokens rejected), persisting run history and dead-code caches to the orphan `automation-state` branch. GitHub Actions requests a run every 10 minutes (best-effort schedule delivery, not a hard interval guarantee). |
 | **Private token store & browser relay** | `pwa-token-api/`, `pwa-browser/`, [docs/STFC-TOKEN-PWA.md](docs/STFC-TOKEN-PWA.md) | Stores account JWTs in private Azure Blob Storage read via GitHub OIDC (`STFC_ACCOUNTS_FILE`), refreshed from an owner-only PWA tab backed by isolated Container Apps rather than long-lived GitHub secrets. |
 | **Discord community monitor & digest** | `src/discord/`, `src/digest/`, `.github/workflows/discord-monitor.yml` | Optional 4-hour read-only scanner extracting candidate promo codes and classifying player tips/tricks into daily digests persisted on `automation-state`. |
 | **Discord slash-command & capture bridge** | `worker/`, [`discord/RUNBOOK.md`](discord/RUNBOOK.md) | Cloudflare Worker and GitHub Actions bridge handling `/redeem-status`, `/trigger-redeem`, and `/game-state` media uploads to private R2 storage. |
@@ -106,7 +106,7 @@ and the proposed runtime/hosting consolidation direction (`#453`, `#455`), see
 > `refresh-token.yml` workflow no longer performs a provider login; **Migrate
 > token store** is only the one-time migration path.
 
-> **Local development:** run `pwsh -NoProfile -File .\recover-auth.ps1` for the
+> **Local development:** run `npm run recover-auth` for the
 > guided, identity-bound recovery. With a prepared local `.env`, you can also
 > run the capture script directly:
 
@@ -277,7 +277,7 @@ only* in your personal GitHub settings.
 
 ## Local development
 
-Node.js comes from `.nvmrc` (currently Node 24; `api/.nvmrc` uses Node 22 for
+Node.js comes from `.nvmrc` (currently Node 26 LTS; `api/.nvmrc` uses Node 22 for
 Azure Static Web Apps Functions). `npm test` strips TypeScript types without
 checking them, so run both gates locally:
 

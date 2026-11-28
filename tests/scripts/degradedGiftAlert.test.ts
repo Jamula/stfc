@@ -7,7 +7,7 @@ import {
   PERSISTENT_TRANSIENT_RUNS,
   parseDegradedState,
   syncDegradedGiftAlert,
-} from "../../scripts/degraded-gift-alert.mjs";
+} from "../../scripts/degraded-gift-alert.ts";
 
 const repeatedGift = {
   version: 2,
@@ -173,6 +173,34 @@ describe("degraded-gift-alert", () => {
     assert.equal(updates[0]!.number, 42);
     assert.match(updates[0]!.body, /Localized Loyalty Chest \(bundle 772\) — 4 consecutive runs/);
     assert.match(updates[0]!.body, /actions\/runs\/12/);
+  });
+
+  it("escapes backslashes alongside markdown metacharacters in gift titles", () => {
+    const calls: Array<{ title: string; labels: readonly string[]; body: string }> = [];
+    const result = syncDegradedGiftAlert({
+      state: {
+        version: 2,
+        accounts: {
+          accountHash: {
+            "773": {
+              streak: PERSISTENT_TRANSIENT_RUNS,
+              title: "Chest \\`Special\\` | Tier\\1",
+            },
+          },
+        },
+      },
+      runUrl: "https://github.com/Jamula/stfc/actions/runs/15",
+      listIssues: () => [],
+      createIssue: (title, labels, body) => calls.push({ title, labels, body }),
+      log: () => {},
+    });
+
+    assert.equal(result.status, "created");
+    assert.equal(calls.length, 1);
+    assert.ok(
+      calls[0]!.body.includes("- Chest \\\\\\`Special\\\\\\` \\| Tier\\\\1 (bundle 773) — 3 consecutive runs"),
+    );
+    assert.ok(calls[0]!.body.includes("Latest run: https://github.com/Jamula/stfc/actions/runs/15"));
   });
 
   it("auto-resolves the alert when no gift remains persistently degraded", () => {

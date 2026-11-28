@@ -260,7 +260,7 @@ invoke `/trigger-redeem` and `/game-state`. See [Discord permission docs](https:
 ### Validator
 
 ```bash
-node scripts/validate-discord-commands.mjs
+node scripts/validate-discord-commands.ts
 ```
 
 Exits 0 if every command satisfies Discord's CHAT_INPUT schema constraints
@@ -290,7 +290,7 @@ PUT endpoint.
 
 #### What to expect
 
-- The **Validate** step runs `scripts/validate-discord-commands.mjs` first. If validation
+- The **Validate** step runs `scripts/validate-discord-commands.ts` first. If validation
   fails, the workflow aborts before touching Discord.
 - The **Register** step does a `PUT` bulk-overwrite — this **replaces all existing
   commands** of the chosen scope (guild or global) with the contents of
@@ -329,7 +329,7 @@ To add a new slash command end-to-end:
 
 1. Add the command to `discord/commands.json`
 2. Re-register commands (`discord-register-commands.yml`)
-3. Add a new command case in `scripts/discord-handler.mjs` and, if needed,
+3. Add a new command case in `scripts/discord-handler.ts` and, if needed,
    configure the Worker dispatch and handler workflow.
 4. Add/update tests (`tests/discord/commandsJson.test.ts`,
    `tests/scripts/discordHandler.test.ts`)

@@ -23,7 +23,7 @@ When an operator types a Discord slash command (e.g. `/redeem-status`, `/trigger
 5. `discord-command-handler.yml` workflow runs, executes the command handler, and posts a Discord follow-up message with the result
 6. User sees the result update after ~10–30 seconds
 
-**No business logic runs in the Worker.** It is a thin security boundary + bridge only. All command logic lives in `scripts/discord-handler.mjs`.
+**No business logic runs in the Worker.** It is a thin security boundary + bridge only. All command logic lives in `scripts/discord-handler.ts`.
 
 ---
 
@@ -369,7 +369,7 @@ Edit `discord/commands.json` and add an entry to the array:
 - `"default_member_permissions"`: `"0"` for all members, `"8"` for ADMINISTRATOR, or a specific permission bit
 
 **Commands with options** (e.g. `/game-state`) can include an `"options"` array. The
-validator (`scripts/validate-discord-commands.mjs`) currently accepts a limited allowlist
+validator (`scripts/validate-discord-commands.ts`) currently accepts a limited allowlist
 of option types: `STRING` (type 3) and `ATTACHMENT` (type 11). Each option must have
 `name` (1-32 chars), `description` (1-100 chars), and optionally a boolean `required`.
 Subcommands and choices are not yet validated and will be rejected — see issue #159 for
@@ -398,7 +398,7 @@ Once the PR is merged to `main`:
 
 ### Step 3: Add Command Handler (if custom logic is needed)
 
-Edit `scripts/discord-handler.mjs` and add a case in the command switch:
+Edit `scripts/discord-handler.ts` and add a case in the command switch:
 
 ```javascript
 case 'crew-roster': {
@@ -514,7 +514,7 @@ export DISCORD_CLIENT_PAYLOAD='{"command":"redeem-status","interaction_token":"t
 export GH_TOKEN="your-github-token"
 export DISCORD_BOT_TOKEN="your-bot-token"
 
-node scripts/discord-handler.mjs
+node scripts/discord-handler.ts
 ```
 
 This runs the handler without going through Discord or GitHub Actions.

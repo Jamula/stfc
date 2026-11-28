@@ -1,4 +1,4 @@
-import { isTokenAccounts } from "./token-account-schema.mjs";
+import { isTokenAccounts } from "./token-account-schema.ts";
 
 export interface TokenAccount {
   name: string;

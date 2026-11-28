@@ -149,7 +149,7 @@ account identity; enter login credentials and OTP only in the official browser.
 The reviewed recovery workflow references a separate one-time secret named
 `STFC_ACCOUNT_REFRESH_61690F065F04521CBA2CAE742A6BEC0DB2606A8E38A2FF74AEA5E1CB58D4E854`.
 After independent review, integration, and explicit approval for that name,
-`node scripts/refresh-account.mjs --publish` can create it from a private
+`node scripts/refresh-account.ts --publish` can create it from a private
 interactive terminal. Enter credentials and the OTP only in the official browser.
 The helper checks `/auth/me` and the non-redeeming gift list and pipes the token
 to `gh secret set`; it does not read `.env`, print the token, or alter the
@@ -217,8 +217,8 @@ identity is separate from both GitHub identities.
 From the repository root, build both images with Node version 24:
 
 ```bash
-docker build --build-arg NODE_VERSION=24 -f pwa-token-api/Dockerfile -t stfc-token-api .
-docker build --build-arg NODE_VERSION=24 -f pwa-browser/Dockerfile -t stfc-browser-relay .
+docker build --build-arg NODE_VERSION=26 -f pwa-token-api/Dockerfile -t stfc-token-api .
+docker build --build-arg NODE_VERSION=26 -f pwa-browser/Dockerfile -t stfc-browser-relay .
 ```
 
 Deploy these images only through the owner's approved Azure process, then

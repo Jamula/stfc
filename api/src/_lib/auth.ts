@@ -8,7 +8,7 @@
  * S-1, S-2, E-1).
  *
  * Every HTTP handler MUST call requireAllowedUser() or requireOwner() as its
- * first statement — enforced by scripts/ci/check-api-auth.mjs.
+ * first statement — enforced by scripts/ci/check-api-auth.ts.
  */
 
 /** Minimal header interface — compatible with @azure/functions HttpRequest.headers. */

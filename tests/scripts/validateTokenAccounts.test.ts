@@ -5,7 +5,7 @@ import { join, resolve } from "node:path";
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 
-const SCRIPT = resolve(import.meta.dirname, "../../scripts/validate-token-accounts.mjs");
+const SCRIPT = resolve(import.meta.dirname, "../../scripts/validate-token-accounts.ts");
 const TOKEN = "eyJhbGciOiJub25lIn0.eyJzdWIiOiIxIn0.signature";
 
 function validateMigrationData(value: unknown): ReturnType<typeof spawnSync> {

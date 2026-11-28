@@ -43,7 +43,7 @@ function getNamedStep(source: string, name: string): string {
   return source.slice(start, end === -1 ? source.length : end);
 }
 
-const ALERT_SCRIPT = path.join(REPO_ROOT, "scripts", "dead-token-alert.mjs");
+const ALERT_SCRIPT = path.join(REPO_ROOT, "scripts", "dead-token-alert.ts");
 const alertScript = readIfExists(ALERT_SCRIPT);
 
 describe(".github/workflows/redeem.yml", () => {
@@ -211,7 +211,7 @@ describe(".github/workflows/redeem.yml", () => {
       );
       assert.match(
         yaml!,
-        /node scripts\/merge-promo-codes\.mjs[\s\S]*promo-codes\.txt "\$RESTORE_DIR\/promo-codes\.txt" promo-codes\.txt "\$MAIN_SHA"/,
+        /node scripts\/merge-promo-codes\.ts[\s\S]*promo-codes\.txt "\$RESTORE_DIR\/promo-codes\.txt" promo-codes\.txt "\$MAIN_SHA"/,
         "must merge with automation-state as the canonical starting point (state path second, main-seed workspace copy first per mergePromoCodeFiles(mainPath, statePath, outputPath, mainRef)) and a deterministic $MAIN_SHA seed marker (ARCH-241-R D2)",
       );
     },
@@ -429,7 +429,7 @@ describe(".github/workflows/redeem.yml", () => {
       assert.match(alertStep, /if: always\(\) && steps\.redeem\.outputs\.exit_code == '0'/);
       assert.match(alertStep, /continue-on-error:\s*true/);
       assert.match(alertStep, /STATE_FILE: data\/redeem-degraded-state\.json/);
-      assert.match(alertStep, /node scripts\/degraded-gift-alert\.mjs sync/);
+      assert.match(alertStep, /node scripts\/degraded-gift-alert\.ts sync/);
     },
   );
 
@@ -463,9 +463,9 @@ describe(".github/workflows/redeem.yml", () => {
       const createStep = getNamedStep(yaml!, "Alert on dead token");
       const resolveStep = getNamedStep(yaml!, "Auto-resolve dead-token alert");
 
-      assert.match(createStep, /existing=\$\(node scripts\/dead-token-alert\.mjs find\)/);
-      assert.match(resolveStep, /node scripts\/dead-token-alert\.mjs resolve/);
-      assert.ok(alertScript !== undefined, "scripts/dead-token-alert.mjs must exist");
+      assert.match(createStep, /existing=\$\(node scripts\/dead-token-alert\.ts find\)/);
+      assert.match(resolveStep, /node scripts\/dead-token-alert\.ts resolve/);
+      assert.ok(alertScript !== undefined, "scripts/dead-token-alert.ts must exist");
     },
   );
 
@@ -491,8 +491,8 @@ describe(".github/workflows/redeem.yml", () => {
       // loop it or swallow its contract.
       const resolveStep = getNamedStep(yaml!, "Auto-resolve dead-token alert");
       const run = resolveStep.slice(resolveStep.indexOf("run:")).replace(/\r/g, "").trim();
-      assert.equal(run, "run: node scripts/dead-token-alert.mjs resolve");
-      assert.ok(alertScript !== undefined, "scripts/dead-token-alert.mjs must exist");
+      assert.equal(run, "run: node scripts/dead-token-alert.ts resolve");
+      assert.ok(alertScript !== undefined, "scripts/dead-token-alert.ts must exist");
     },
   );
 

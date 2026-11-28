@@ -757,7 +757,7 @@ describe("workflow consolidation", () => {
       (job) => job.steps ?? [],
     );
     assert.ok(
-      steps.some((step) => step.run?.includes("node scripts/check-artifact-hygiene.mjs")),
+      steps.some((step) => step.run?.includes("node scripts/check-artifact-hygiene.ts")),
       "the PR workflow must run the artifact scanner",
     );
   });
@@ -781,7 +781,7 @@ describe("workflow consolidation", () => {
       (step) => step.name === "Scan changed artifacts for secrets",
     );
     assert.ok(hygiene, "the required gate must include the artifact scanner");
-    assert.ok(hygiene.run?.includes("check-artifact-hygiene.mjs --base-ref"));
+    assert.ok(hygiene.run?.includes("check-artifact-hygiene.ts --base-ref"));
     assert.equal(hygiene.if, undefined, "the required scan must not be conditional");
     assert.equal(
       hygiene["continue-on-error"],
@@ -912,7 +912,7 @@ describe("workflow consolidation", () => {
         assert.equal(scanned.status, 0, scanned.stderr);
         assert.deepEqual(
           readFileSync(capture).toString("utf8").split("\0").filter(Boolean),
-          ["scripts/check-artifact-hygiene.mjs", ...filenames],
+          ["scripts/check-artifact-hygiene.ts", ...filenames],
           "the scanner must receive changed documents, runtime data, and code files as separate arguments",
         );
 

@@ -51,7 +51,7 @@ refresh cannot accidentally drop attribution.
 3. Prefer source-link stubs; each file **must** start with the six-field
    `## Lineage` block. Capture content only after reuse terms are verified
    and the applicable authorization is obtained.
-4. For a separately authorized capture, put any ingest script under `scripts/fetch-<source>.mjs`
+4. For a separately authorized capture, put any ingest script under `scripts/fetch-<source>.ts`
    and have it generate the lineage block from constants. Re-running the
    script on unchanged upstream should be a content-only diff (no header
    churn except the **Captured on** date).

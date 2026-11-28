@@ -7,7 +7,7 @@ RUN npm ci
 COPY pwa-token-api/tsconfig.json ./pwa-token-api/tsconfig.json
 COPY pwa-token-api/src ./pwa-token-api/src
 COPY shared/token-accounts.ts ./shared/token-accounts.ts
-COPY shared/token-account-schema.mjs shared/token-account-schema.d.mts ./shared/
+COPY shared/token-account-schema.ts ./shared/token-account-schema.ts
 RUN npx tsc -p pwa-token-api/tsconfig.json && npm prune --omit=dev
 
 ENV NODE_ENV=production

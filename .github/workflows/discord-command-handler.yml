@@ -14,7 +14,7 @@ env:
 concurrency:
   # `/game-state` is the only Discord
   # command that writes automation-state directly — scripts/discord-
-  # handler.mjs commits and pushes the upload from inside this job. That is
+  # handler.ts commits and pushes the upload from inside this job. That is
   # exactly the writer the original race was about (a monitor run fetching
   # automation-state's tip *after* a handler push landed, then wholesale-
   # replacing data/discord — a fast-forward commit with nothing for the
@@ -42,7 +42,7 @@ concurrency:
   #
   # GitHub's `==` and concurrency group names are both case-insensitive, so a
   # case variant like `GAME-STATE` resolves to the shared writer group and
-  # over-serializes. scripts/discord-handler.mjs dispatches on exact lower-
+  # over-serializes. scripts/discord-handler.ts dispatches on exact lower-
   # case strings, so such a payload returns "Unknown command" without ever
   # touching git — safe in the conservative direction.
   group: ${{ github.event.client_payload.command == 'game-state' && 'stfc-gift-redeemer' || format('stfc-discord-handler-{0}', github.event.client_payload.command) }}
@@ -132,7 +132,7 @@ jobs:
           STFC_GAME_STATE_R2_BUCKET: ${{ vars.STFC_GAME_STATE_R2_BUCKET }}
           DISCORD_CLIENT_PAYLOAD: ${{ toJson(github.event.client_payload) }}
           STFC_STATE_BRANCH: automation-state
-        run: node "$GITHUB_WORKSPACE/scripts/discord-handler.mjs"
+        run: node "$GITHUB_WORKSPACE/scripts/discord-handler.ts"
 
       - name: Remove automation-state handler worktree
         if: always() && steps.state_worktree.outputs.complete == 'true'

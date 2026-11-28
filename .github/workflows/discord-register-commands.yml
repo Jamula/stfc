@@ -53,7 +53,7 @@ jobs:
 
       - name: Validate discord/commands.json
         run: |
-          if ! node scripts/validate-discord-commands.mjs; then
+          if ! node scripts/validate-discord-commands.ts; then
             echo "::error::discord/commands.json failed validation — aborting registration to avoid sending invalid data to Discord."
             exit 1
           fi

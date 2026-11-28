@@ -443,4 +443,42 @@ describe("coding style & repository manifest invariants", () => {
     assert.match(architecture, /STFC_ACCOUNTS_FILE/);
     assert.match(architecture, /automation-state/);
   });
+
+  it("enforces TypeScript script consolidation and Node 26 LTS baseline across tracked files", () => {
+    const lsFiles = spawnSync("git", ["ls-files", "-z"], {
+      cwd: REPO_ROOT,
+      encoding: "utf8",
+    });
+    assert.ifError(lsFiles.error);
+    assert.equal(lsFiles.status, 0, `git ls-files failed: ${lsFiles.stderr}`);
+
+    const trackedPaths = lsFiles.stdout.split("\0").filter(Boolean);
+    assert.deepEqual(
+      trackedPaths.filter((file) => /\.(mjs|mts|ps1)$/i.test(file)),
+      [],
+      "No .mjs, .d.mts, or .ps1 scripts may remain tracked; consolidate on TypeScript (.ts)",
+    );
+
+    const rootNodeVersion = readFileSync(path.join(REPO_ROOT, ".nvmrc"), "utf8").trim();
+    assert.equal(rootNodeVersion, "26");
+
+    for (const relPkg of [
+      "package.json",
+      "web/package.json",
+      "pwa-browser/package.json",
+      "pwa-token-api/package.json",
+    ]) {
+      const pkg = JSON.parse(readFileSync(path.join(REPO_ROOT, relPkg), "utf8")) as {
+        engines?: { node?: string };
+      };
+      assert.equal(
+        pkg.engines?.node,
+        `>=${rootNodeVersion}`,
+        `${relPkg} engines.node must match root .nvmrc (>=${rootNodeVersion})`,
+      );
+    }
+
+    const apiNodeVersion = readFileSync(path.join(REPO_ROOT, "api", ".nvmrc"), "utf8").trim();
+    assert.equal(apiNodeVersion, "22", "Azure SWA managed Functions runtime stays pinned to Node 22");
+  });
 });

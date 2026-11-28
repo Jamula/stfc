@@ -26,14 +26,14 @@ const SCRIPT = path.join(
   REPO_ROOT,
   "scripts",
   "discord-ops",
-  "set-discord-app-metadata.mjs",
+  "set-discord-app-metadata.ts",
 );
 const STUB_PATH = path.join(
   REPO_ROOT,
   "tests",
   "fixtures",
   "discord-ops",
-  "fetch-stub-by-path.mjs",
+  "fetch-stub-by-path.ts",
 );
 const STUB = pathToFileURL(STUB_PATH).href;
 const SENTINEL = "BOT_TOKEN_SENTINEL_DO_NOT_LEAK_a8f3c91e";
@@ -181,7 +181,7 @@ describe(
                 "tests",
                 "fixtures",
                 "discord-ops",
-                "fetch-throw-stub.mjs",
+                "fetch-throw-stub.ts",
               ),
             ).href,
             SCRIPT,

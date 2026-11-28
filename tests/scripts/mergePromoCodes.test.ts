@@ -4,7 +4,7 @@ import {
   GENERATED_MARKER,
   mergePromoCodeText,
   normalizePromoCodeLine,
-} from "../../scripts/merge-promo-codes.mjs";
+} from "../../scripts/merge-promo-codes.ts";
 
 describe("merge-promo-codes", () => {
   it("normalizes the code token after stripping comments", () => {
