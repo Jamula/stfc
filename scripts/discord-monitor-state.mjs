@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { cp, mkdir, stat } from "node:fs/promises";
+import { cp, mkdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import { pathToFileURL } from "node:url";
@@ -19,6 +19,26 @@ export const DISCORD_MONITOR_STATE_DIRECTORIES = [
 
 export const DISCORD_MONITOR_PROMO_CODES = "promo-codes.txt";
 const DISCORD_MONITOR_DEAD_CODES = "data/promo-code-dead.json";
+const DISCORD_MONITOR_ALLOWLIST = "config/discord-allowlist.json";
+
+async function promoScanEnabled(workspaceRoot) {
+  const allowlistPath = path.join(workspaceRoot, DISCORD_MONITOR_ALLOWLIST);
+  const allowlist = JSON.parse(await readFile(allowlistPath, "utf8"));
+  // The monitor performs full schema validation; restoration must at least
+  // determine scan eligibility without treating ambiguous configuration as off.
+  if (
+    allowlist === null ||
+    typeof allowlist !== "object" ||
+    allowlist.version !== 1 ||
+    !Array.isArray(allowlist.entries) ||
+    allowlist.entries.some(
+      (entry) => entry === null || typeof entry !== "object" || typeof entry.enabled !== "boolean",
+    )
+  ) {
+    throw new Error(`Invalid Discord promo-channel allowlist: ${allowlistPath}`);
+  }
+  return allowlist.entries.some((entry) => entry.enabled);
+}
 
 async function pathType(targetPath) {
   try {
@@ -64,11 +84,13 @@ export async function restoreDiscordMonitorState({
     await copyDirectoryIfPresent(restoreRoot, workspaceRoot, relativePath);
   }
 
-  const deadCodesType = await pathType(path.join(restoreRoot, DISCORD_MONITOR_DEAD_CODES));
-  if (deadCodesType !== undefined && deadCodesType !== "file") {
-    throw new Error("The dead-code cache on automation-state is not a file.");
+  if (await promoScanEnabled(workspaceRoot)) {
+    const deadCodesType = await pathType(path.join(restoreRoot, DISCORD_MONITOR_DEAD_CODES));
+    if (deadCodesType !== undefined && deadCodesType !== "file") {
+      throw new Error("The dead-code cache on automation-state is not a file.");
+    }
+    await copyFileIfPresent(restoreRoot, workspaceRoot, DISCORD_MONITOR_DEAD_CODES);
   }
-  await copyFileIfPresent(restoreRoot, workspaceRoot, DISCORD_MONITOR_DEAD_CODES);
 
   const statePromoCodes = path.join(restoreRoot, DISCORD_MONITOR_PROMO_CODES);
   if ((await pathType(statePromoCodes)) === "file") {
