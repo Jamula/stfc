@@ -99,25 +99,22 @@ jobs:
         run: |
           node --input-type=module <<'NODE'
           import { appendFileSync } from 'node:fs';
-          const keys = [
-            'AZURE_CLIENT_ID',
-            'AZURE_TENANT_ID',
-            'AZURE_SUBSCRIPTION_ID',
-            'AZURE_TOKEN_STORAGE_ACCOUNT',
-            'AZURE_TOKEN_CONTAINER',
-            'AZURE_TOKEN_BLOB',
-          ];
-          const missing = keys.filter((key) => !process.env[key]?.trim());
-          if (missing.length > 0) {
-            const names = missing.join(', ');
-            console.error(`::error::Discord monitor requires Azure OIDC token-store configuration; missing repository variable(s): ${names}. Refusing unauthenticated run or legacy secret fallback.`);
+          import { validateAzureTokenConfig } from './scripts/azure-token-preflight.ts';
+          const { missing, invalid } = validateAzureTokenConfig(process.env);
+          if (missing.length > 0 || invalid.length > 0) {
+            const problems = [
+              ...(missing.length ? [`missing repository variable(s): ${missing.join(', ')}`] : []),
+              ...(invalid.length ? [`invalid repository variable(s): ${invalid.join(', ')}`] : []),
+            ];
+            console.error(`::error::Discord monitor requires Azure OIDC token-store configuration; ${problems.join('; ')}. Refusing unauthenticated run or legacy secret fallback.`);
             if (process.env.GITHUB_STEP_SUMMARY) {
               appendFileSync(
                 process.env.GITHUB_STEP_SUMMARY,
-                `## ❌ Discord Monitor — Missing Azure OIDC Configuration\n\n` +
+                `## ❌ Discord Monitor — ${missing.length ? 'Missing' : 'Invalid'} Azure OIDC Configuration\n\n` +
                   `Scheduled Discord ingestion requires the canonical private Azure Blob token store (` +
-                  `\`docs/STFC-TOKEN-PWA.md\`). Missing Actions repository variable(s):\n\n` +
-                  missing.map((name) => `- \`${name}\``).join('\n') +
+                  `\`docs/STFC-TOKEN-PWA.md\`).\n\n` +
+                  (missing.length ? `Missing Actions repository variable(s):\n\n${missing.map((name) => `- \`${name}\``).join('\n')}\n\n` : '') +
+                  (invalid.length ? `Invalid Actions repository variable(s):\n\n${invalid.map((name) => `- \`${name}\``).join('\n')}\n\n` : '') +
                   `\n\nNo Discord API calls or store redemptions were attempted.\n`,
               );
             }
@@ -196,6 +193,9 @@ jobs:
           if [ -f "$STATE_DIR/data/discord/cursors.json" ]; then
             git -C "$STATE_DIR" add -A -- data/discord/cursors.json
           fi
+          if [ -f "$STATE_DIR/data/discord/command-acks.json" ]; then
+            git -C "$STATE_DIR" add -f -A -- data/discord/command-acks.json
+          fi
           if [ -f "$STATE_DIR/data/discord/candidates.jsonl" ]; then
             git -C "$STATE_DIR" add -A -- data/discord/candidates.jsonl
           fi
@@ -227,7 +227,7 @@ jobs:
               if git ls-remote --exit-code --heads origin automation-state >/dev/null; then
                 node scripts/automation-state-retry.mjs \
                   "$STATE_DIR" automation-state \
-                  data/discord/cursors.json data/discord/candidates.jsonl \
+                  data/discord/cursors.json data/discord/command-acks.json data/discord/candidates.jsonl \
                   data/discord/tips-seen.jsonl data/discord/cooldowns.json \
                   data/digests promo-codes.txt
                 branch_exists=true

@@ -185,6 +185,32 @@ describe("degraded-gift-alert", () => {
       log: () => {},
     });
 
+    it("updates and resolves an alert after its priority is downgraded or removed", () => {
+      for (const labels of [["bug", "priority:p3"], ["bug"]]) {
+        const listIssues = () => [{ number: 42, title: DEGRADED_ALERT_TITLE, labels }];
+        const updates: number[] = [];
+        const closes: number[] = [];
+        const open = syncDegradedGiftAlert({
+          state: repeatedGift,
+          listIssues,
+          createIssue: () => assert.fail("the existing alert must not be duplicated"),
+          updateIssue: (number) => updates.push(number),
+          log: () => {},
+        });
+        const recovered = syncDegradedGiftAlert({
+          state: { version: 1, accounts: {} },
+          listIssues,
+          closeIssue: (number) => closes.push(number),
+          log: () => {},
+        });
+
+        assert.equal(open.status, "already-open");
+        assert.equal(recovered.status, "resolved");
+        assert.deepEqual(updates, [42]);
+        assert.deepEqual(closes, [42]);
+      }
+    });
+
     it("recognizes an existing alert with unrelated extra labels", () => {
       const result = syncDegradedGiftAlert({
         state: repeatedGift,

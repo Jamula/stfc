@@ -138,6 +138,19 @@ describe("state I/O", () => {
       assert.deepEqual(got, OKAY_CURSORS);
     });
 
+    it("preserves the previous cursor if atomic replacement fails", async (t) => {
+      const file = path.join(dir, "cursors.json");
+      await saveCursors(OKAY_CURSORS, file);
+      const before = fs.readFileSync(file, "utf8");
+      t.mock.method(fs.promises, "rename", async () => {
+        throw new Error("simulated rename failure");
+      });
+
+      await assert.rejects(() => saveCursors({}, file), /simulated rename failure/);
+      assert.equal(fs.readFileSync(file, "utf8"), before);
+      assert.deepEqual(fs.readdirSync(dir), ["cursors.json"]);
+    });
+
     it("missing file → {} (skill creates on first successful run)", async () => {
       const file = path.join(dir, "missing.json");
       assert.deepEqual(await loadCursors(file), {});

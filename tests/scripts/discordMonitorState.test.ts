@@ -148,6 +148,7 @@ describe("scripts/discord-monitor-state.mjs", () => {
     writeFile(restoreRoot, "data/discord/cursors.json", '{"channel":"old"}\n');
     writeFile(restoreRoot, "data/discord/candidates.jsonl", '{"value":"OLD"}\n');
     writeFile(restoreRoot, "data/discord/cooldowns.json", '{}\n');
+    writeFile(restoreRoot, "data/discord/command-acks.json", '{"channel":["message"]}\n');
     writeFile(restoreRoot, "data/digests/2026-08-24.md", "old digest\n");
     writeFile(restoreRoot, "promo-codes.txt", "STATECODE\n");
     writeFile(workspaceRoot, "promo-codes.txt", "MAINCODE\n");
@@ -157,6 +158,10 @@ describe("scripts/discord-monitor-state.mjs", () => {
       workspaceRoot,
       mainRef: "a1d97c3",
     });
+    assert.equal(
+      fs.readFileSync(path.join(workspaceRoot, "data/discord/command-acks.json"), "utf8"),
+      '{"channel":["message"]}\n',
+    );
 
     fs.cpSync(restoreRoot, stateRoot, { recursive: true, force: true });
     writeFile(
@@ -172,6 +177,7 @@ describe("scripts/discord-monitor-state.mjs", () => {
 
     writeFile(workspaceRoot, "data/discord/cursors.json", '{"channel":"new"}\n');
     writeFile(workspaceRoot, "data/discord/tips-seen.jsonl", '{"contentHash":"tip"}\n');
+    writeFile(workspaceRoot, "data/discord/command-acks.json", '{"channel":["next"]}\n');
     writeFile(workspaceRoot, "data/digests/2026-08-24.md", "new digest\n");
 
     await persistDiscordMonitorState({
@@ -193,6 +199,10 @@ describe("scripts/discord-monitor-state.mjs", () => {
     assert.equal(
       fs.readFileSync(path.join(stateRoot, "data/discord/tips-seen.jsonl"), "utf8"),
       '{"contentHash":"tip"}\n',
+    );
+    assert.equal(
+      fs.readFileSync(path.join(stateRoot, "data/discord/command-acks.json"), "utf8"),
+      '{"channel":["next"]}\n',
     );
     assert.match(
       fs.readFileSync(path.join(stateRoot, "promo-codes.txt"), "utf8"),

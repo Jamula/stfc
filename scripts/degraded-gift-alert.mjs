@@ -1,12 +1,11 @@
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
-import { findAlertIssue, resolveDeadTokenAlert } from './dead-token-alert.mjs';
+import { DEFAULT_REQUIRED_LABELS, findAlertIssue, resolveDeadTokenAlert } from './dead-token-alert.mjs';
 
 export const PERSISTENT_TRANSIENT_RUNS = 3;
 export const DEGRADED_ALERT_TITLE = 'STFC redemption degraded — repeated gift claim failures';
 export const DEGRADED_ALERT_LABELS = ['bug', 'priority:p2'];
-const REQUIRED_LABELS = ['bug', 'priority:p2'];
 const DEFAULT_STATE_PATH = 'data/redeem-degraded-state.json';
 
 export function parseDegradedState(raw) {
@@ -60,7 +59,7 @@ export function syncDegradedGiftAlert(options = {}) {
   const log = options.log ?? ((line) => console.error(line));
   const title = options.title ?? DEGRADED_ALERT_TITLE;
   const labels = options.labels ?? DEGRADED_ALERT_LABELS;
-  const requiredLabels = options.requiredLabels ?? REQUIRED_LABELS;
+  const requiredLabels = options.requiredLabels ?? DEFAULT_REQUIRED_LABELS;
   const runUrl = options.runUrl ?? '(unknown run)';
   let persistentFailures;
   try {

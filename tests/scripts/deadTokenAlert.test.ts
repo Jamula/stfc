@@ -220,6 +220,32 @@ describe("dead-token-alert — lookup-shape failures propagate on find, are swal
 });
 
 describe("dead-token-alert — find", () => {
+  it("finds and resolves the same alert regardless of its mutable priority", () => {
+    for (const labels of [
+      ["bug", "priority:p0"],
+      ["bug", "priority:p2"],
+      ["bug"],
+    ]) {
+      const listIssues = () => [
+        issue(88, `Retro: ${TITLE}`, labels),
+        issue(95, TITLE, ["priority:p1"]),
+        issue(101, TITLE, labels),
+      ];
+      const closed: number[] = [];
+      const found = findAlertIssue({ title: TITLE, listIssues, log: () => {} });
+      const resolved = resolveDeadTokenAlert({
+        title: TITLE,
+        listIssues,
+        closeIssue: (number) => closed.push(number),
+        log: () => {},
+      });
+
+      assert.equal(found.number, 101);
+      assert.equal(resolved.number, 101);
+      assert.deepEqual(closed, [101]);
+    }
+  });
+
   it("returns the oldest exact match and warns about duplicates", () => {
     const { lines, log } = recorder();
     const result = findAlertIssue({

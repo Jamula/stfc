@@ -11,9 +11,9 @@
 //   5. Classify tips — STUB; full implementation lands at T033 (Phase 4).
 //   6. Dedup (T022) + redeem via `redeemCodes({ extraCandidates })` (T023).
 //   7. Auto-commit ≤ AUTO_COMMIT_PER_RUN_CAP redeemed codes to promo-codes.txt.
-//   8. State flush — cursors, candidates.jsonl, cooldowns (with eviction).
+//   8. State flush — candidates.jsonl, cooldowns (with eviction).
 //   9. Write digest (minimal renderer in src/digest/; full at T034).
-//  10. Job summary — STUB; lands at T038.
+//  10. Mark tips seen, save cursors, and emit the job summary.
 //  11. Return `{ result, exitCode }`. Never calls process.exit.
 
 import { promises as fs } from "node:fs";
@@ -42,6 +42,7 @@ import {
   appendTipSeen,
   loadAllowlist,
   loadCommandChannelAllowlist,
+  loadCommandAcknowledgements,
   loadCooldowns,
   loadCursors,
   loadSuppression,
@@ -49,6 +50,7 @@ import {
   readTipsSeen,
   saveCooldowns,
   saveCursors,
+  saveCommandAcknowledgements,
   DEFAULT_PATHS,
 } from "../discord/state.ts";
 import type {
@@ -58,6 +60,7 @@ import type {
   DiscordAllowlist,
   DiscordAllowlistEntry,
   IngestedMessage,
+  IngestionCursorMap,
   RunHealth,
   SourceRef,
   Tip,
@@ -81,7 +84,7 @@ export const AUTO_COMMIT_PER_RUN_CAP = 10;
  *  distinct so a monitoring dashboard can page on the right team.
  *
  *  0 — success / graceful no-op (empty allowlist, normal run).
- *  1 — infrastructure failure (digest could not be written).
+ *  1 — infrastructure failure (channel access, rate limit, or output write).
  *  2 — Discord auth / token failure (DiscordAuthError or DiscordTokenMissingError).
  */
 export const DISCORD_MONITOR_EXIT_OK = 0;
@@ -100,6 +103,7 @@ export interface DiscordMonitorOptions {
     allowlist?: string;
     commandChannels?: string;
     cursors?: string;
+    commandAcks?: string;
     candidates?: string;
     tipsSeen?: string;
     suppression?: string;
@@ -138,6 +142,7 @@ export async function discordMonitor(
   const allowlistPath = opts.paths?.allowlist ?? DEFAULT_PATHS.allowlist;
   const commandChannelsPath = opts.paths?.commandChannels ?? DEFAULT_PATHS.commandChannels;
   const cursorsPath = opts.paths?.cursors ?? DEFAULT_PATHS.cursors;
+  const commandAcksPath = opts.paths?.commandAcks ?? DEFAULT_PATHS.commandAcks;
   const candidatesPath = opts.paths?.candidates ?? DEFAULT_PATHS.candidates;
   const tipsSeenPath = opts.paths?.tipsSeen ?? DEFAULT_PATHS.tipsSeen;
   const suppressionPath = opts.paths?.suppression ?? DEFAULT_PATHS.suppression;
@@ -246,6 +251,7 @@ export async function discordMonitor(
   let allAnnotated: CandidateCode[] = [];
   let classifiedTips: Tip[] = [];
   let newCursors = await loadCursors(cursorsPath);
+  const previousCursors = newCursors;
   let cooldowns = await loadCooldowns(cooldownsPath);
   let botUsername: string | undefined;
 
@@ -269,6 +275,18 @@ export async function discordMonitor(
       newCursors = ingestOut.newCursors;
       botUsername = ingestOut.botIdentity.username;
       mergeHealth(health, ingestOut.health);
+      for (const channelError of health.channelsErrored) {
+        recordError(health, channelError.errorClass);
+        log.error({
+          msg: "discord channel read failed",
+          channelId: channelError.channelId,
+          reason: channelError.reason ?? "unknown",
+          remediation: channelError.remediation,
+        });
+      }
+      if (health.channelsErrored.length > 0) {
+        failureExitCode = DISCORD_MONITOR_EXIT_INFRA_FAILURE;
+      }
       const erroredChannelIds = new Set(
         (ingestOut.health.channelsErrored ?? []).map((entry) => entry.channelId),
       );
@@ -286,13 +304,38 @@ export async function discordMonitor(
 
       if (commandChannels.length > 0 && ingestOut.discordMessages.length > 0) {
         if (isCrewCommandResponder(client)) {
+          const acknowledged = await loadCommandAcknowledgements(commandAcksPath);
+          let pruned = false;
+          for (const [channelId, messageIds] of Object.entries(acknowledged)) {
+            const cursor = previousCursors[channelId]?.lastMessageId;
+            if (cursor === undefined) continue;
+            const pending = messageIds.filter((id) => BigInt(id) > BigInt(cursor));
+            if (pending.length !== messageIds.length) {
+              pruned = true;
+              if (pending.length === 0) delete acknowledged[channelId];
+              else acknowledged[channelId] = pending;
+            }
+          }
+          if (pruned) await saveCommandAcknowledgements(acknowledged, commandAcksPath);
           const commandStats = await processCrewCommands(
-            ingestOut.discordMessages,
+            ingestOut.discordMessages.filter((message) =>
+              !acknowledged[message.channel_id]?.includes(message.id)),
             commandChannels,
             client,
             {
               now,
               logger: (message) => log.info(message),
+              onProcessed: async (message) => {
+                (acknowledged[message.channel_id] ??= []).push(message.id);
+                try {
+                  await saveCommandAcknowledgements(acknowledged, commandAcksPath);
+                } catch (err) {
+                  throw new Error(
+                    `Discord reply was sent but its acknowledgement could not be saved; replay may repeat it: ${redactForLog(err)}`,
+                    { cause: err },
+                  );
+                }
+              },
             },
           );
           if (commandStats.seen > 0 || commandStats.rateLimited > 0) {
@@ -522,27 +565,37 @@ export async function discordMonitor(
   }
 
   // ── Step 8: state flush ───────────────────────────────────────────────────
-  await saveCursors(newCursors, cursorsPath);
-  for (const c of allAnnotated) {
+  const digestAnnotated = [...allAnnotated];
+  const durableAnnotated = allAnnotated.map((candidate, index) => {
+    const prior = priorCandidates.get(candidate.value);
+    const replaySuppressed = candidate.status === "already-known" ||
+      candidate.status === "duplicate" || candidate.status === "suppressed-cooldown";
+    if (
+      replaySuppressed && prior && prior.lastAttempted !== null &&
+      prior.perAccountOutcome.length > 0 &&
+      prior.source.channelId === candidate.source.channelId &&
+      prior.source.messageId === candidate.source.messageId
+    ) {
+      digestAnnotated[index] = prior;
+      return prior;
+    }
+    if (candidate.status === "suppressed-cooldown" && prior?.status === "transient-failure") {
+      return prior;
+    }
+    return candidate;
+  });
+  let stateWriteFailed = false;
+  const noteStateWriteFailure = (err: unknown): void => {
+    log.error(`could not persist Discord monitor state; cursors not advanced: ${redactForLog(err)}`);
+    recordError(health, "StateWriteError");
+    stateWriteFailed = true;
+    failureExitCode = Math.max(failureExitCode, DISCORD_MONITOR_EXIT_INFRA_FAILURE);
+  };
+  for (const c of durableAnnotated) {
     try {
       await appendCandidate(c, candidatesPath);
     } catch (err) {
-      log.warn(`could not append candidate ${c.value}: ${redactForLog(err)}`);
-    }
-  }
-  // Persist classified tips to tips-seen.jsonl.
-  for (const t of classifiedTips) {
-    try {
-      await appendTipSeen(
-        {
-          contentHash: t.contentHash as `${string}`,
-          firstSeenAt: t.source[0]?.timestamp ?? now.toISOString(),
-          category: t.category as "tip" | "trick" | "hack" | "event-info" | "patch-note",
-        },
-        tipsSeenPath,
-      );
-    } catch (err) {
-      log.warn(`could not append tip-seen ${t.contentHash}: ${redactForLog(err)}`);
+      noteStateWriteFailure(err);
     }
   }
   // Cooldowns: recordFailure for each failed redeem, then evict + save.
@@ -550,7 +603,11 @@ export async function discordMonitor(
     cooldowns = recordFailure(cooldowns, code, outcome, now);
   }
   cooldowns = evictExpired(cooldowns, now);
-  await saveCooldowns(cooldowns, now, cooldownsPath);
+  try {
+    await saveCooldowns(cooldowns, now, cooldownsPath);
+  } catch (err) {
+    noteStateWriteFailure(err);
+  }
 
   // ── Step 9: digest ────────────────────────────────────────────────────────
   return finalize({
@@ -559,12 +616,17 @@ export async function discordMonitor(
     now,
     digestsDir,
     runId,
-    annotated: allAnnotated,
+    annotated: digestAnnotated,
     tips: classifiedTips,
     redeemedCodes,
     deferredCodes,
     botUsername,
     failureExitCode,
+    pendingState: stateWriteFailed ? undefined : {
+      cursors: newCursors,
+      cursorsPath,
+      tipsSeenPath,
+    },
   });
 }
 
@@ -625,6 +687,11 @@ interface FinalizeArgs {
    *  Preserved through `finalize` so that a digest-write error can only
    *  raise, never lower, the exit code. */
   failureExitCode?: number;
+  pendingState?: {
+    cursors: IngestionCursorMap;
+    cursorsPath: string;
+    tipsSeenPath: string;
+  };
 }
 
 async function finalize(args: FinalizeArgs): Promise<DiscordMonitorOutput> {
@@ -658,12 +725,33 @@ async function finalize(args: FinalizeArgs): Promise<DiscordMonitorOutput> {
   };
 
   let digestPath: string | undefined;
-  let digestWriteFailed = false;
+  let exitCode = args.failureExitCode ?? DISCORD_MONITOR_EXIT_OK;
   try {
     digestPath = (await writeDigest(digest, { outputDir: args.digestsDir })).filePath;
   } catch (err) {
-    log.warn(`could not write digest: ${redactForLog(err)}`);
-    digestWriteFailed = true;
+    log.error(`could not write digest; cursors not advanced: ${redactForLog(err)}`);
+    recordError(args.health, "DigestWriteError");
+    exitCode = Math.max(exitCode, DISCORD_MONITOR_EXIT_INFRA_FAILURE);
+  }
+
+  if (digestPath !== undefined && args.pendingState) {
+    try {
+      for (const tip of args.tips) {
+        await appendTipSeen(
+          {
+            contentHash: tip.contentHash,
+            firstSeenAt: tip.source[0]?.timestamp ?? args.now.toISOString(),
+            category: tip.category as "tip" | "trick" | "hack" | "event-info" | "patch-note",
+          },
+          args.pendingState.tipsSeenPath,
+        );
+      }
+      await saveCursors(args.pendingState.cursors, args.pendingState.cursorsPath);
+    } catch (err) {
+      log.error(`could not persist Discord monitor state; cursors not advanced: ${redactForLog(err)}`);
+      recordError(args.health, "StateWriteError");
+      exitCode = Math.max(exitCode, DISCORD_MONITOR_EXIT_INFRA_FAILURE);
+    }
   }
 
   // ── Step 10: Job Summary (T038 — FR-027) ────────────────────────────────
@@ -671,7 +759,9 @@ async function finalize(args: FinalizeArgs): Promise<DiscordMonitorOutput> {
   try {
     await emitJobSummary(args.health);
   } catch (err) {
-    log.warn(`could not emit job summary: ${redactForLog(err)}`);
+    log.error(`could not emit job summary: ${redactForLog(err)}`);
+    recordError(args.health, "SummaryWriteError");
+    exitCode = Math.max(exitCode, DISCORD_MONITOR_EXIT_INFRA_FAILURE);
   }
 
   const result = {
@@ -681,10 +771,6 @@ async function finalize(args: FinalizeArgs): Promise<DiscordMonitorOutput> {
     deferredCodes: args.deferredCodes ?? [],
     ...(args.reason ? { reason: args.reason } : {}),
   };
-  const exitCode = Math.max(
-    args.failureExitCode ?? DISCORD_MONITOR_EXIT_OK,
-    digestWriteFailed ? DISCORD_MONITOR_EXIT_INFRA_FAILURE : DISCORD_MONITOR_EXIT_OK,
-  );
   return { result, exitCode };
 }
 
@@ -760,6 +846,9 @@ async function emitJobSummary(h: RunHealth): Promise<void> {
   if (!summaryPath) return;
 
   const errorEntries = Object.entries(h.errorsByClass).sort(([a], [b]) => (a < b ? -1 : 1));
+  const channelFailures = h.channelsErrored.map(
+    (entry) => `${entry.channelId}: ${entry.reason ?? "unknown"}`,
+  );
   const lines: string[] = [
     `### 🔭 Discord Monitor — Run Health`,
     "",
@@ -770,6 +859,7 @@ async function emitJobSummary(h: RunHealth): Promise<void> {
     `| Finished | ${h.finishedAt} |`,
     `| Promo-code scan | ${formatPromoScanStatus(h)} |`,
     `| Channels read | ${h.channelsRead} / ${h.channelsConfigured}${h.channelsErrored.length > 0 ? ` (${h.channelsErrored.length} errored)` : ""} |`,
+    `| Channel failures | ${channelFailures.length === 0 ? "none" : channelFailures.join(", ")} |`,
     `| Messages scanned | ${h.messagesScanned} |`,
     `| Candidates extracted | ${h.candidatesExtracted} |`,
     `| Candidates submitted | ${h.candidatesSubmitted} |`,

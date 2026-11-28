@@ -10,10 +10,9 @@
  * something unrelated. They agree here by construction: both call
  * `selectAlertIssues`.
  *
- * Identity is: exact title match, plus every required label present. Required
- * labels are the stable pair (`bug`, `priority:p1`); additional routing
- * labels are deliberately NOT identity, because reassigning an alert must not
- * orphan it. Extra labels are allowed — the check is a superset test, not
+ * Identity is: exact title match, plus the stable `bug` label. Priority and
+ * other routing labels are deliberately NOT identity, because triage must not
+ * orphan an alert. Extra labels are allowed — the check is a superset test, not
  * equality. When several issues match, the oldest (lowest number) wins and the
  * duplicates are reported as a workflow warning.
  *
@@ -28,7 +27,7 @@ import { execFileSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 
 /** Labels that must be present for an issue to count as the dead-token alert. */
-export const DEFAULT_REQUIRED_LABELS = ['bug', 'priority:p1'];
+export const DEFAULT_REQUIRED_LABELS = ['bug'];
 const DEFAULT_ALERT_NAME = 'Dead-token alert';
 
 /**

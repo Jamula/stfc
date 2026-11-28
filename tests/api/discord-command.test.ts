@@ -109,6 +109,12 @@ describe("Discord PWA trigger-redeem handler", () => {
     const workflow = parse(readFileSync(".github/workflows/redeem.yml", "utf8"));
     assert.ok(workflow.on.workflow_dispatch, "the fixed dispatch target must remain manually triggerable");
     assert.ok(workflow.on.schedule, "the dispatch target must retain scheduled redemption");
+    const tokenSource = workflow.jobs.redeem.steps.find(
+      (step: { id?: string }) => step.id === "token_source",
+    );
+    assert.ok(tokenSource, "manual dispatch must validate the account-token source");
+    assert.equal(tokenSource.if, undefined, "token-source validation must not skip manual runs");
+    assert.match(tokenSource.run, /validateAzureTokenConfig/);
     process.env["PWA_GITHUB_DISPATCH_TOKEN"] = TEST_TOKEN;
     globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
       fetchCalls.push({ input, init });

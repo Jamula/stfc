@@ -8,6 +8,7 @@ import { mergePromoCodeFiles } from "./merge-promo-codes.mjs";
 
 export const DISCORD_MONITOR_STATE_FILES = [
   "data/discord/cursors.json",
+  "data/discord/command-acks.json",
   "data/discord/candidates.jsonl",
   "data/discord/tips-seen.jsonl",
   "data/discord/cooldowns.json",

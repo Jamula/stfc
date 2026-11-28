@@ -15,8 +15,10 @@
 
 import { promises as fs } from "node:fs";
 import * as path from "node:path";
+import { writeFileAtomic } from "../lib/atomicFile.ts";
 import {
   CandidateCodeSchema,
+  CommandAcknowledgementsSchema,
   CommandChannelAllowlistSchema,
   CooldownEntrySchema,
   CooldownMapSchema,
@@ -25,6 +27,7 @@ import {
   OperatorSuppressionMapSchema,
   TipsSeenLineSchema,
   type CandidateCode,
+  type CommandAcknowledgements,
   type CommandChannelAllowlistEntry,
   type CooldownMap,
   type DiscordAllowlist,
@@ -39,6 +42,7 @@ export const DEFAULT_PATHS = {
   allowlist: "config/discord-allowlist.json",
   commandChannels: "data/discord/command-channels.json",
   cursors: "data/discord/cursors.json",
+  commandAcks: "data/discord/command-acks.json",
   candidates: "data/discord/candidates.jsonl",
   tipsSeen: "data/discord/tips-seen.jsonl",
   suppression: "data/discord/suppression.json",
@@ -95,11 +99,6 @@ async function readJsonOrUndefined(filePath: string): Promise<unknown | undefine
       `Malformed JSON in ${filePath}: ${(err as Error).message}`,
     );
   }
-}
-
-async function writeFileAtomic(filePath: string, contents: string): Promise<void> {
-  await fs.mkdir(path.dirname(filePath), { recursive: true });
-  await fs.writeFile(filePath, contents, "utf8");
 }
 
 async function readJsonlLines(filePath: string): Promise<unknown[]> {
@@ -202,6 +201,31 @@ export async function saveCursors(
     throw new StateFileError(
       `Refusing to write cursors: ${parsed.error.message}`,
     );
+  }
+  await writeFileAtomic(filePath, stringifyDeterministic(parsed.data));
+}
+
+export async function loadCommandAcknowledgements(
+  filePath: string = DEFAULT_PATHS.commandAcks,
+): Promise<CommandAcknowledgements> {
+  const raw = await readJsonOrUndefined(filePath);
+  if (raw === undefined) return {};
+  const parsed = CommandAcknowledgementsSchema.safeParse(raw);
+  if (!parsed.success) {
+    throw new StateFileError(
+      `Command acknowledgements file ${filePath} failed schema validation: ${parsed.error.message}`,
+    );
+  }
+  return parsed.data;
+}
+
+export async function saveCommandAcknowledgements(
+  map: CommandAcknowledgements,
+  filePath: string = DEFAULT_PATHS.commandAcks,
+): Promise<void> {
+  const parsed = CommandAcknowledgementsSchema.safeParse(map);
+  if (!parsed.success) {
+    throw new StateFileError(`Refusing to write command acknowledgements: ${parsed.error.message}`);
   }
   await writeFileAtomic(filePath, stringifyDeterministic(parsed.data));
 }

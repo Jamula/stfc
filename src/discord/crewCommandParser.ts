@@ -156,6 +156,7 @@ export async function processCrewCommands(
     rateLimiter?: CrewCommandRateLimiter;
     logger?: (message: string) => void;
     handlers?: CrewCommandHandlerMap;
+    onProcessed?: (message: DiscordMessage) => Promise<void>;
   } = {},
 ): Promise<CrewCommandProcessStats> {
   const rateLimiter = options.rateLimiter ?? new CrewCommandRateLimiter();
@@ -186,6 +187,7 @@ export async function processCrewCommands(
 
     const output = await handleCrewCommand(command, options.handlers);
     await responder.postMessage(message.channel_id, output);
+    await options.onProcessed?.(message);
     stats.processed++;
   }
 

@@ -107,6 +107,8 @@ export interface DiscordClientOptions {
 export interface GetChannelMessagesOpts {
   after?: string;
   limit?: number;
+  /** Override the client's per-request 429 retries when the caller owns the budget. */
+  rateLimitRetryCap?: number;
 }
 
 export class DiscordClient {
@@ -157,7 +159,7 @@ export class DiscordClient {
     params.set("limit", String(opts.limit ?? 100));
     if (opts.after !== undefined) params.set("after", opts.after);
     const path = `/channels/${channelId}/messages?${params.toString()}`;
-    const json = await this.requestJson("GET", path);
+    const json = await this.requestJson("GET", path, undefined, opts.rateLimitRetryCap);
     const parsed = DiscordMessageArraySchema.safeParse(json);
     if (!parsed.success) {
       throw new SchemaMismatchError(
@@ -189,6 +191,7 @@ export class DiscordClient {
     method: DiscordHttpMethod,
     path: string,
     body?: unknown,
+    rateLimitRetryCap = this.rateLimitRetryCap,
   ): Promise<unknown> {
     let retries = 0;
     let transientRetries = 0;
@@ -231,7 +234,7 @@ export class DiscordClient {
       }
 
       if (status === 429) {
-        if (retries >= this.rateLimitRetryCap) {
+        if (retries >= rateLimitRetryCap) {
           const retryMs = await readRetryAfterMs(res);
           throw new DiscordRateLimitError(
             redactString(`Rate-limited (429) on ${method} ${path} after ${retries} retries`),
