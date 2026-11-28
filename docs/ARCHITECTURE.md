@@ -32,10 +32,10 @@ six-subsystem **`0.1.0` MVP** automation and companion platform:
    Deterministic offline Crew Optimizer and local MiniLM embedding RAG engine
    (`src/crew/`), plus an Ed25519-verified Cloudflare Worker and private R2
    game-state capture bridge (`worker/`).
-4. **Phase 4 — Operator Dashboard & Governed Delivery (`web/`, `api/`, `.squad/`):**
+4. **Phase 4 — Operator Dashboard & CI Hardening (`web/`, `api/`, `.github/workflows/`):**
    Lit 3 + Vite Azure Static Web Apps operator dashboard and Azure Functions v4
    API (`web/`, `api/`) with two-layer operator/owner authentication,
-   correlation-ID workflow telemetry, and governed multi-agent operations.
+   correlation-ID workflow telemetry, and repository hygiene/contract gates.
 
 ---
 

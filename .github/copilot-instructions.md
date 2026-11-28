@@ -63,83 +63,14 @@ This matters because it has failed before: `isExpectedOutcome()` once treated ev
 
 **Cross-platform.** No `:`/`*`/`?`/`"`/`<`/`>`/`|` in filenames — they are illegal on Windows, and a colon-named file that reaches the index can block every commit there. Use `2026-08-13T04-38-00Z`. When spawning `npm` from Node, pass `shell: true` on Windows (`npm` is `npm.cmd`). When parsing repo files, normalize CRLF — `core.autocrlf` means a Windows checkout has `\r\n`, and `split("\n")` with `$`-anchored regexes will silently match nothing.
 
-## Squad operating policy
+## Operating and review policy
 
-Seven coordinates; Spock implements and tests; Data independently reviews the current substantive revision; Uhura owns documentation and operational guidance. `@copilot` is optional and is not automatically assigned.
-
-Work autonomously within the user's request: address PR feedback, conflicts, failing tests, and CI; enable Agent merge and automatic merging where authorized and supported. Preserve required approvals and protections, and ask only when a genuine blocker or consequential decision needs a human. Do not mark a PR ready, deploy, run live redemption, change external configuration, or spend money without the applicable user authorization.
+Substantive revisions should receive independent code review before merge. Work autonomously within the user's request: address PR feedback, conflicts, failing tests, and CI; enable Agent merge and automatic merging where authorized and supported. Preserve required approvals and protections, and ask only when a genuine blocker or consequential decision needs a human. Do not mark a PR ready, deploy, run live redemption, change external configuration, or spend money without the applicable user authorization.
 
 Consider fleet mode when work can be split safely, and use separate worktrees for parallel changes. When PRs are requested, use app-native stacked PRs for suitable dependent layers rather than forcing a stack for a small independent change.
 
-The `two-layer` backend owns mutable Squad state. Read and write decisions and histories through the Squad state bridge, and use the native atomic casting protocol for the registry/history pair. Do not use direct `.squad/` file or Git operations as a fallback if the bridge is unavailable.
-
 ## Enforcement gates over existing state
 
-Before adding or tightening a gate, classify every guarded path as static configuration or mutable runtime state. Static configuration—including `.squad/config.json`, team and routing files, agent charters, templates, and `.squad/memory/config.json`—must remain trackable and must not be swept into a mutable-state guard. Runtime-owned histories, decisions, logs, identity, audit, memory data, sessions, scratch, and cache files are mutable; exclude them from source control according to the active backend. The only tracked mutable-state exception is `.squad/casting/registry.json`, `.squad/casting/history.json`, and `.squad/casting/registry-history.commit.json`, which must use the native atomic casting protocol.
+Before adding or tightening a gate, classify every guarded path as static configuration or mutable runtime state. Static configuration must remain trackable and must not be swept into a mutable-state guard. Mutable runtime state—such as runtime-owned logs, sessions, scratch files, caches, and live operational outputs—must be excluded from the `main` source tree (`automation-state` or `.gitignore` as appropriate).
 
 Any gate over existing repository state must ship its companion migration in the same PR. That migration must make the real checkout satisfy the gate, including untracking and ignoring mutable files and removing unsafe merge attributes where applicable. Add a test that inspects the actual repository invariant (for example, `git ls-files` and effective Git attributes), not just synthetic fixtures. Any exception must name the exact path and its required protocol.
-
-<!-- squad:copilot-instructions:start -->
-# Copilot Coding Agent — Squad Instructions
-
-You are working on a project that uses **Squad**, an AI team framework. When picking up issues autonomously, follow these guidelines.
-
-## Coordinator Canary Check
-
-**IMPORTANT — run this check on EVERY session start, before doing any work:**
-
-Inspect your `agent_instructions` for the coordinator canaries. This is a **two-state payload-integrity check within a known Squad coordinator session**; it verifies whether the coordinator payload loaded fully or was visibly truncated. It is **not** proof that an agent with no canaries is safely non-Squad — wholly absent payloads and proven non-Squad agents require a host-level identity beacon before custom-agent instruction ingestion.
-
-1. If the HEAD canary `SQUAD_COORDINATOR_CANARY_HEAD_b7d2` is **absent**, the Squad coordinator payload is not observable from inside this prompt. Treat non-Squad discrimination as an **OPEN host-level concern**; do not claim this check proved the current agent is non-Squad.
-2. If the HEAD canary `SQUAD_COORDINATOR_CANARY_HEAD_b7d2` is **present** and the EOF canary `SQUAD_COORDINATOR_CANARY_a8f3` is **present**, the coordinator prompt loaded fully. Proceed with normal Squad behavior.
-3. If the HEAD canary `SQUAD_COORDINATOR_CANARY_HEAD_b7d2` is **present** but the EOF canary `SQUAD_COORDINATOR_CANARY_a8f3` is **absent**, the coordinator prompt loaded but was **truncated** before the end.
-
-**When the coordinator prompt is truncated, you MUST:**
-1. **STOP** — do not proceed with standard Squad behavior.
-2. **WARN the user** with this exact message:
-   ```
-   ⚠️ Squad coordinator (squad.agent.md) loaded but appears to be truncated before the EOF canary. Do NOT proceed with standard Squad behavior — Squad's safety rails are incomplete. Please restart your session.
-   ```
-3. Do not continue with normal Squad routing, spawning, PR, or branch-protection behavior after emitting the warning.
-
-## Team Context
-
-Before starting work on any issue:
-
-1. Read `.squad/team.md` for the team roster, member roles, and your capability profile.
-2. Read `.squad/routing.md` for work routing rules.
-3. If the issue has a `squad:{member}` label, read that member's charter at `.squad/agents/{member}/charter.md` to understand their domain expertise and coding style — work in their voice.
-
-## Capability Self-Check
-
-Before starting work, check your capability profile in `.squad/team.md` under the **Coding Agent → Capabilities** section.
-
-- **🟢 Good fit** — proceed autonomously within the authorized assignment.
-- **🟡 Needs review** — proceed within the authorized assignment and flag the scope for review.
-- **🔴 Not suitable** — do NOT start work. Instead, comment on the issue:
-  ```
-  🤖 This issue doesn't match my capability profile (reason: {why}). Suggesting reassignment to a squad member.
-  ```
-
-## Branch Naming
-
-Use the squad branch convention:
-```
-squad/{issue-number}-{kebab-case-slug}
-```
-Example: `squad/42-fix-login-validation`
-
-## PR Guidelines
-
-When opening a PR:
-- Use `Closes #{issue-number}` only when the work fully resolves the issue; otherwise use a non-closing reference.
-- If the issue had a `squad:{member}` label, mention the member: `Working as {member} ({role})`
-- Data independently reviews every substantive revision, including changes by `@copilot`.
-- Read relevant project decisions through the configured Squad state bridge.
-
-## Decisions
-
-Before any state mutation, verify your own `squad_state_health` response and the checkout-root health probe described in `.squad/templates/spawn-reference.md`; a parent session's result does not transfer. If you make a decision that affects other team members, create an inbox entry through `squad_state_create_if_absent` and verify it through `squad_state_read`. If creation or verification fails or cannot be attempted, report the unpersisted or unverified decision and its content in your handoff. Do not use `squad_decide`, which can overwrite another decision. Read relevant inbox entries as pending proposals, not accepted policy. If the verified `two-layer` state bridge is unavailable, report the limitation; do not write directly to `.squad/decisions/`.
-
-The 1.1.0 runtime's memory index could lose concurrent updates. Until cross-process safety is verified for the pinned runtime, do not use `memory.write` or other mutating `memory.*` tools; `memory.search` may be incomplete.
-<!-- squad:copilot-instructions:end -->

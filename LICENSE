@@ -201,7 +201,6 @@
    limitations under the License.
 
    Scope: This Apache-2.0 license applies to original project code only. It does
-   not cover third-party materials—including upstream MIT-licensed Squad,
-   agency-agents, and squad-skills files documented under .squad/LICENSE.* and
-   .github/skills/, or linked external publisher and community references—which
-   remain subject to their own license terms and attribution requirements.
+   not cover third-party materials or linked external publisher and community
+   references, which remain subject to their own license terms and attribution
+   requirements.

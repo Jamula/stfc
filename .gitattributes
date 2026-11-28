@@ -2,6 +2,3 @@
 *.png binary
 *.jpg binary
 *.ico binary
-# Squad mutable state is runtime-owned by the configured two-layer backend.
-# The casting registry/history pair uses its separate native atomic protocol.
-.squad/casting/*.json text eol=lf

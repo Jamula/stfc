@@ -25,27 +25,3 @@ playwright-diagnostics/
 
 # CLI runtime output
 summary.md
-# Squad: ignore runtime state (logs, inbox, sessions)
-# The tracked casting registry, history, and commit marker use the native atomic protocol.
-.squad/casting-history.json
-.squad/casting-registry.json
-.squad/orchestration-log/
-.squad/log/
-.squad/decisions/inbox/
-.squad/sessions/
-.squad/.scratch/
-.squad/.cache/
-# Squad: state owned by squad-state branch (two-layer/orphan backend)
-.squad/decisions.md
-.squad/agents/*/history.md
-.squad/agents/*/history-archive.md
-.squad/identity/
-.squad/rai/audit-trail.md
-.squad/fact-checker/audit-trail.md
-.squad/memory/*
-!.squad/memory/config.json
-.squad/.first-run
-# /Squad: state owned by squad-state branch
-# Squad: SubSquad activation file (local to this machine)
-.squad-workstream
-.squad/backend/

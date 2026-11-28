@@ -313,9 +313,8 @@ must never be committed or read by automated agents.
   [`.github/FUNDING.yml`](.github/FUNDING.yml)).
 - **License:** original project code is licensed under the
   [Apache License 2.0](LICENSE) (`Copyright 2026 Jamula, Inc.`). Third-party
-  materials (including MIT-licensed upstream Squad templates under `.squad/` and
-  `.github/skills/`) and linked external community references remain subject to
-  their own license terms.
+  materials and linked external publisher and community references remain
+  subject to their own license terms and attribution requirements.
 
 ---
 
