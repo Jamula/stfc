@@ -1,11 +1,17 @@
 version: 2
-# Minor and patch updates are grouped; major updates remain separate pull requests.
+# Routine updates are grouped; major updates remain separate by dependency.
 updates:
   - package-ecosystem: "npm"
-    directory: "/"
+    directories:
+      - "/"
+      - "/pwa-browser"
     schedule:
       interval: "weekly"
     groups:
+      playwright:
+        patterns:
+          - "playwright"
+        group-by: "dependency-name"
       routine:
         patterns:
           - "*"
@@ -39,6 +45,18 @@ updates:
 
   - package-ecosystem: "npm"
     directory: "/api"
+    schedule:
+      interval: "weekly"
+    groups:
+      routine:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  - package-ecosystem: "npm"
+    directory: "/pwa-token-api"
     schedule:
       interval: "weekly"
     groups:
