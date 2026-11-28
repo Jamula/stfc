@@ -11,7 +11,7 @@
  */
 
 import { spawnSync } from "node:child_process";
-import { existsSync, promises as fs } from "node:fs";
+import { promises as fs } from "node:fs";
 import path from "node:path";
 import process, { stdin as defaultStdin, stdout as defaultStdout } from "node:process";
 import { createInterface } from "node:readline/promises";
@@ -237,6 +237,13 @@ function assertUniqueJsonObjectKeys(jsonText: string): void {
   }
 }
 
+async function directoryContainsEnvFile(rootDir: string): Promise<boolean> {
+  const entries = await fs.readdir(rootDir);
+  return process.platform === "win32"
+    ? entries.some((entry) => entry.toLowerCase() === ".env")
+    : entries.includes(".env");
+}
+
 export async function runRecoverAuth(options: RecoverAuthOptions = {}): Promise<number> {
   const rootDir = options.rootDir ?? DEFAULT_ROOT;
   const nodeVersion = options.nodeVersion ?? process.versions.node;
@@ -254,8 +261,14 @@ export async function runRecoverAuth(options: RecoverAuthOptions = {}): Promise<
     return 1;
   }
 
-  const envPath = path.join(rootDir, ".env");
-  if (existsSync(envPath)) {
+  let envAlreadyPresent = false;
+  try {
+    envAlreadyPresent = await directoryContainsEnvFile(rootDir);
+  } catch {
+    log("Stopped: could not safely create .env. No account data was sent to GitHub.");
+    return 1;
+  }
+  if (envAlreadyPresent) {
     log("Stopped: this worktree already has an .env. Nothing was changed.");
     return 1;
   }
@@ -299,19 +312,26 @@ export async function runRecoverAuth(options: RecoverAuthOptions = {}): Promise<
     return 1;
   }
 
+  const envPath = path.join(rootDir, ".env");
+  let created = false;
   try {
     const handle = await fs.open(envPath, "wx", 0o600);
+    created = true;
     try {
       await handle.writeFile(`STFC_ACCOUNTS='${baseline}'\n`, "utf8");
       await handle.sync();
     } finally {
       await handle.close();
     }
+    created = false;
   } catch {
     log("Stopped: could not safely create .env. No account data was sent to GitHub.");
     return 1;
   } finally {
     baseline = null;
+    if (created) {
+      await fs.unlink(envPath).catch(() => {});
+    }
   }
 
   const previousEnvironment = new Map<string, string | undefined>();

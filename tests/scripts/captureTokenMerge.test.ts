@@ -792,4 +792,71 @@ describe("mergeIntoEnv error redaction (issue #211)", () => {
       assert.equal(callerEnv["STFC_DEBUG_DIR"], "original-debug");
     }
   });
+
+  it("fails fast before prompting on pre-existing .env and fails closed on concurrent .env creation", async () => {
+    const existingContent = "STFC_ACCOUNTS='[{\"name\":\"existing\",\"token\":\"a.b.c\"}]'\n";
+    const envFile = makeTmpEnv(existingContent);
+    const dir = dirname(envFile);
+    tmpDirs.push(dir);
+    const validBaseline = '[{"name":"main","token":"aaa.bbb.ccc"}]';
+
+    // 1. Pre-existing .env stops before requesting backup or confirmation.
+    let prompted = false;
+    const preExistingLogs: string[] = [];
+    const preExistingStatus = await runRecoverAuth({
+      rootDir: dir,
+      nodeVersion: "26.13.1",
+      preflight: () => true,
+      log: (line) => preExistingLogs.push(line),
+      readBackup: async () => {
+        prompted = true;
+        return validBaseline;
+      },
+      confirmConditions: async () => {
+        prompted = true;
+        return "YES";
+      },
+    });
+    assert.equal(preExistingStatus, 1);
+    assert.equal(prompted, false);
+    assert.match(preExistingLogs.join("\n"), /already has an \.env/);
+    assert.equal(readFileSync(envFile, "utf8"), existingContent);
+
+    // 2. Cancelled/declined recovery never leaves an empty .env behind.
+    rmSync(envFile);
+    const declinedStatus = await runRecoverAuth({
+      rootDir: dir,
+      nodeVersion: "26.13.1",
+      preflight: () => true,
+      log: () => {},
+      readBackup: async () => validBaseline,
+      confirmConditions: async () => "NO",
+    });
+    assert.equal(declinedStatus, 1);
+    assert.throws(() => readFileSync(envFile), /ENOENT/);
+
+    // 3. Concurrent .env creation before exclusive open fails closed without overwriting.
+    const concurrentContent = "STFC_ACCOUNTS='[{\"name\":\"concurrent\",\"token\":\"x.y.z\"}]'\n";
+    let captureRan = false;
+    const concurrentLogs: string[] = [];
+    const concurrentStatus = await runRecoverAuth({
+      rootDir: dir,
+      nodeVersion: "26.13.1",
+      preflight: () => true,
+      log: (line) => concurrentLogs.push(line),
+      readBackup: async () => validBaseline,
+      confirmConditions: async () => {
+        writeFileSync(envFile, concurrentContent, "utf8");
+        return "YES";
+      },
+      runCapture: () => {
+        captureRan = true;
+        return 0;
+      },
+    });
+    assert.equal(concurrentStatus, 1);
+    assert.equal(captureRan, false);
+    assert.match(concurrentLogs.join("\n"), /could not safely create \.env/);
+    assert.equal(readFileSync(envFile, "utf8"), concurrentContent);
+  });
 });

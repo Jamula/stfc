@@ -949,9 +949,6 @@ async function promptAndSubmitOtp({
   maxAttempts?: number;
   headless?: boolean;
 }): Promise<boolean> {
-  const OTP_READY_FILE = "/tmp/stfc-otp-ready";
-  const OTP_CODE_FILE = "/tmp/stfc-otp";
-
   const OTP_ERROR_SELECTORS = [
     '[data-se="o-form-error-container"]:not(:empty)',
     ".okta-form-infobox-error",
@@ -973,27 +970,8 @@ async function promptAndSubmitOtp({
       log(`auto-login: using OTP from STFC_OTP env var${attemptLabel}`);
       code = envOtp;
     } else if (headless) {
-      await fs.unlink(OTP_CODE_FILE).catch(() => {});
-      await fs
-        .writeFile(OTP_READY_FILE, `attempt:${attempt}\ntimestamp:${new Date().toISOString()}\n`, "utf8")
-        .catch(() => {});
-      log(`\nauto-login: waiting for OTP code in ${OTP_CODE_FILE}${attemptLabel}`);
-      log(`  → write the 6-digit code to that file, e.g.:  echo '123456' > ${OTP_CODE_FILE}\n`);
-
-      const pollDeadline = Date.now() + 300_000;
-      while (Date.now() < pollDeadline) {
-        if (existsSync(OTP_CODE_FILE)) {
-          code = (await fs.readFile(OTP_CODE_FILE, "utf8").catch(() => "")).trim();
-          await fs.unlink(OTP_CODE_FILE).catch(() => {});
-          if (code) break;
-        }
-        await new Promise((r) => setTimeout(r, 1_000));
-      }
-      if (!code) {
-        log("auto-login: timed out waiting for OTP file — giving up.");
-        await fs.unlink(OTP_READY_FILE).catch(() => {});
-        return false;
-      }
+      log("auto-login: headless OTP challenge requires STFC_OTP env var — aborting.");
+      return false;
     } else {
       const rl = createInterface({ input, output });
       try {
@@ -1036,7 +1014,6 @@ async function promptAndSubmitOtp({
     }
 
     if (!rejected) {
-      await fs.unlink(OTP_READY_FILE).catch(() => {});
       log("auto-login: OTP submitted. Network listeners will catch the resulting JWT.");
       return true;
     }
@@ -1046,7 +1023,6 @@ async function promptAndSubmitOtp({
     }
   }
 
-  await fs.unlink(OTP_READY_FILE).catch(() => {});
   log(`auto-login: OTP rejected after ${maxAttempts} attempt(s) — falling back to interactive login.`);
   return false;
 }
@@ -1096,13 +1072,13 @@ async function tryAutoLogin(
 
   if (primaryOtpEntry) {
     log(`auto-login: email code (primary OTP) challenge detected — ${primaryOtpEntry.kind} input.`);
-    if (ci && !process.env["STFC_OTP"]) {
+    if (ci && !process.env["STFC_OTP"]?.trim()) {
       err(
         "auto-login: email-code challenge requires user input and cannot run unattended. Run the workflow manually via workflow_dispatch with an otp input.",
       );
       process.exit(2);
     }
-    const submitted = await promptAndSubmitOtp({ page, entry: primaryOtpEntry, log, headless });
+    const submitted = await promptAndSubmitOtp({ page, entry: primaryOtpEntry, log, headless: ci || headless });
     if (!submitted) return false;
     return true;
   }
@@ -1144,13 +1120,13 @@ async function tryAutoLogin(
     }
     if (secondaryOtpEntry) {
       log(`auto-login: secondary MFA/OTP challenge detected — ${secondaryOtpEntry.kind} input.`);
-      if (ci && !process.env["STFC_OTP"]) {
+      if (ci && !process.env["STFC_OTP"]?.trim()) {
         err(
           "auto-login: MFA challenge requires user input and cannot run unattended. Run the workflow manually via workflow_dispatch with an otp input.",
         );
         process.exit(2);
       }
-      const submitted = await promptAndSubmitOtp({ page, entry: secondaryOtpEntry, log, headless });
+      const submitted = await promptAndSubmitOtp({ page, entry: secondaryOtpEntry, log, headless: ci || headless });
       if (!submitted) return false;
     } else {
       log("auto-login: no secondary OTP challenge detected. Network listeners will catch the resulting JWT.");
@@ -1305,7 +1281,7 @@ async function main(
   }
 
   log(
-    `  mode         : ${args.ci ? "CI (headless)" : args.headless ? "headless (file OTP)" : "interactive (visible browser)"}`,
+    `  mode         : ${args.ci ? "CI (headless)" : "interactive (visible browser)"}`,
   );
   log("");
 
@@ -1342,7 +1318,7 @@ async function main(
   await page.goto(STORE_URL, { waitUntil: "domcontentloaded" }).catch(() => {});
 
   if (wantAutoLogin) {
-    tryAutoLogin(page as Page, { email, password, log, err, ci: args.ci, headless: args.headless }).catch(() => {
+    tryAutoLogin(page as Page, { email, password, log, err, ci: args.ci, headless: runHeadless }).catch(() => {
       err("auto-login failed.");
     });
   }
@@ -1490,6 +1466,7 @@ if (isDirectRun) {
 export {
   findOtpEntry,
   fillOtp,
+  promptAndSubmitOtp,
   OTP_SELECTORS,
   SPLIT_OTP_SELECTOR,
   mergeIntoEnv,

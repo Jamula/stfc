@@ -646,7 +646,7 @@ describe("manual refresh inventory safety", () => {
   it("references the same one-time secret in both workflows and the publisher", () => {
     const name = "STFC_ACCOUNT_REFRESH_61690F065F04521CBA2CAE742A6BEC0DB2606A8E38A2FF74AEA5E1CB58D4E854";
     const script = readFileSync("scripts/refresh-account.ts", "utf8");
-    assert.match(script, new RegExp(`const REFRESH_SECRET = ["']${name}["']`));
+    assert.match(script, new RegExp(`const REFRESH_SECRET_NAME = ["']${name}["']`));
     for (const file of [".github/workflows/redeem.yml", ".github/workflows/check-recovery-auth.yml"]) {
       const workflow = parse(readFileSync(file, "utf8"));
       const job = file.includes("redeem.yml") ? "redeem" : "check";

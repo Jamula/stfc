@@ -36,7 +36,7 @@ export type GithubSecretCommandRunner = (
 ) => GithubSecretCommandResult;
 
 const API = "https://cdn-nv3-webstore-api.startrek.digitgaming.com/api/v2/auth/me";
-const REFRESH_SECRET = "STFC_ACCOUNT_REFRESH_61690F065F04521CBA2CAE742A6BEC0DB2606A8E38A2FF74AEA5E1CB58D4E854";
+const REFRESH_SECRET_NAME = "STFC_ACCOUNT_REFRESH_61690F065F04521CBA2CAE742A6BEC0DB2606A8E38A2FF74AEA5E1CB58D4E854";
 const GITHUB_REPO = "github.com/Jamula/stfc";
 
 function identifier(value: unknown): string | null {
@@ -255,7 +255,7 @@ export async function publishFromPage(
   await verifiedIdentity(token, fetchImpl);
   await verifyGiftAccess(token, fetchImpl);
   checkSecretAbsent();
-  const result = runSecretCommand(["secret", "set", REFRESH_SECRET], {
+  const result = runSecretCommand(["secret", "set", REFRESH_SECRET_NAME], {
     input: JSON.stringify({ token }),
     stdio: ["pipe", "ignore", "ignore"],
   });
@@ -272,7 +272,7 @@ async function main(): Promise<void> {
     try {
       if (
         (await terminal.question(
-          `Type YES only if this exact secret name is approved, no other writer will use it, and it will be retained until safely incorporated: ${REFRESH_SECRET}\n`,
+          `Type YES only if this exact secret name is approved, no other writer will use it, and it will be retained until safely incorporated: ${REFRESH_SECRET_NAME}\n`,
         )) !== "YES"
       ) {
         throw new Error("Publishing approval was not confirmed.");
@@ -313,7 +313,7 @@ function assertSecretAbsent(): void {
         !secret ||
         typeof secret !== "object" ||
         typeof (secret as Record<string, unknown>)["name"] !== "string" ||
-        (secret as Record<string, unknown>)["name"] === REFRESH_SECRET,
+        (secret as Record<string, unknown>)["name"] === REFRESH_SECRET_NAME,
     )
   ) {
     throw new Error("The proposed override name already exists; refusing to replace it.");

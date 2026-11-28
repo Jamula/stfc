@@ -193,7 +193,7 @@ function formatIssueBody(failures: DegradedGiftFailure[], runUrl: string): strin
 }
 
 function escapeMarkdown(value: unknown): string {
-  return String(value).replace(/[\r\n]+/g, " ").replace(/[`|]/g, "\\$&");
+  return String(value).replace(/[\r\n]+/g, " ").replace(/[\\`|]/g, "\\$&");
 }
 
 function ghCreateIssue(title: string, labels: readonly string[], body: string): void {
