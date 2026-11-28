@@ -15,6 +15,7 @@
 
 import { promises as fs } from "node:fs";
 import * as path from "node:path";
+import { writeFileAtomic } from "../lib/atomicFile.ts";
 import {
   CandidateCodeSchema,
   CommandChannelAllowlistSchema,
@@ -95,11 +96,6 @@ async function readJsonOrUndefined(filePath: string): Promise<unknown | undefine
       `Malformed JSON in ${filePath}: ${(err as Error).message}`,
     );
   }
-}
-
-async function writeFileAtomic(filePath: string, contents: string): Promise<void> {
-  await fs.mkdir(path.dirname(filePath), { recursive: true });
-  await fs.writeFile(filePath, contents, "utf8");
 }
 
 async function readJsonlLines(filePath: string): Promise<unknown[]> {

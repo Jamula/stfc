@@ -544,7 +544,13 @@ describe("manual refresh inventory safety", () => {
       throw new Error("unexpected endpoint");
     };`;
     const workflow = parse(readFileSync(".github/workflows/redeem.yml", "utf8"));
-    const step = workflow.jobs.redeem.steps.find((item: { name?: string }) => item.name === "Load legacy account tokens");
+    const steps = workflow.jobs.redeem.steps;
+    const sourceIndex = steps.findIndex((item: { id?: string }) => item.id === "token_source");
+    const legacyIndex = steps.findIndex((item: { name?: string }) => item.name === "Load legacy account tokens");
+    assert.ok(sourceIndex >= 0 && legacyIndex > sourceIndex, "validate the source before loading the legacy inventory");
+    assert.match(steps[sourceIndex].run, /validateAzureTokenConfig/);
+    const step = steps[legacyIndex];
+    assert.equal(step.if, "steps.token_source.outputs.source == 'secret'");
     const script = step.run.match(/node --input-type=module <<'NODE'\r?\n([\s\S]*?)\r?\nNODE/)?.[1];
     assert.ok(script);
     const directory = mkdtempSync(join(tmpdir(), "stfc-override-test-"));

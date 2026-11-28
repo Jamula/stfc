@@ -8,8 +8,8 @@
 // Rate-limit + permission posture per discord-bot.contract.md:
 //   - 401 (auth) → re-throw DiscordAuthError; orchestrator records
 //     `auth_failed` health and skips the Discord half (redeemer still runs).
-//   - 429 (rate limit) → bounded retry inside the client (≤ 3× per request);
-//     if the client gives up, the channel is marked errored and we move on.
+//   - 429 (rate limit) → at most 3 retries across all pages of one channel;
+//     once exhausted, the channel is marked errored and we move on.
 //   - 403 / 404 → channel marked errored, remaining channels continue.
 //   - 5xx → wrapped as DiscordTransientError; one retry already happens in
 //     the client; here we mark the channel errored.
@@ -103,7 +103,7 @@ export interface IngestClient {
   getMe(): Promise<unknown>;
   getChannelMessages(
     channelId: string,
-    opts: { after?: string; limit?: number },
+    opts: { after?: string; limit?: number; rateLimitRetryCap?: number },
   ): Promise<IngestDiscordMessage[]>;
 }
 
@@ -222,9 +222,13 @@ async function pageChannel(
   let after = startAfter;
   let lastMessageId: string | undefined = startAfter;
   let lastTimestamp: string | undefined;
+  const retryBudget = { remaining: RATE_LIMIT_RETRY_CAP };
 
   for (let page = 0; page < PER_CHANNEL_PAGE_CAP; page++) {
-    const opts: { after?: string; limit?: number } = { limit: PAGE_LIMIT };
+    const opts: { after?: string; limit?: number; rateLimitRetryCap?: number } = {
+      limit: PAGE_LIMIT,
+      rateLimitRetryCap: 0,
+    };
     if (after !== undefined) opts.after = after;
 
     const msgs = await fetchPageWithRateLimitRetry(
@@ -232,6 +236,7 @@ async function pageChannel(
       channelId,
       opts,
       sleep,
+      retryBudget,
     );
     if (msgs.length === 0) break;
 
@@ -268,20 +273,22 @@ async function pageChannel(
   return { msgs: all, lastMessageId, lastTimestamp };
 }
 
-/** Retry on 429 up to 3× total attempts, honoring `retryAfterMs` on the error. */
+/** Retry on 429 within the channel's shared budget, honoring `retryAfterMs`. */
 async function fetchPageWithRateLimitRetry(
   client: IngestClient,
   channelId: string,
-  opts: { after?: string; limit?: number },
+  opts: { after?: string; limit?: number; rateLimitRetryCap?: number },
   sleep: (ms: number) => Promise<void>,
+  retryBudget: { remaining: number },
 ): Promise<Awaited<ReturnType<IngestClient["getChannelMessages"]>>> {
-  for (let attempt = 1; ; attempt++) {
+  for (;;) {
     try {
       return await client.getChannelMessages(channelId, opts);
     } catch (err) {
       const isRateLimit =
         (err as Error).name === "DiscordRateLimitError";
-      if (isRateLimit && attempt < RATE_LIMIT_RETRY_CAP) {
+      if (isRateLimit && retryBudget.remaining > 0) {
+        retryBudget.remaining--;
         const retryAfterMs =
           (err as { retryAfterMs?: number }).retryAfterMs ?? 1000;
         await sleep(retryAfterMs);

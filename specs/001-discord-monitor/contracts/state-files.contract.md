@@ -206,16 +206,16 @@ This file is read on every run. A change to `id`, `revision`, or
 ## § Rerun behavior after partial failure
 
 A workflow rerun after partial failure (where `cursors.json` was not
-flushed because the run terminated before step 8) will re-extract
+flushed after durable state and digest writes) will re-extract
 messages between the last successful cursor position and the current
 channel head. This is bounded and intentional, not a bug:
 
-- **Candidates:** `candidates.jsonl` membership dedup (step 6, via
-  `dedup.ts`) prevents re-submission to the STFC API. A candidate that
-  was already appended to `candidates.jsonl` in a prior run will be
-  annotated `duplicate` and never reaches the redeemer.
-- **Tips:** `tips-seen.jsonl` contentHash dedup prevents duplicate tip
-  entries in the daily digest.
+- **Candidates:** `candidates.jsonl` membership and the auto-appended
+  `promo-codes.txt` prevent re-submission of recorded results. A replay of
+  the same message preserves its prior attempt in state and the digest.
+  If neither record could be written, retrying may repeat the API attempt.
+- **Tips:** The digest is written before `tips-seen.jsonl` and the cursor.
+  Content-hash merging preserves tips without duplicate digest entries.
 - **Promo codes:** `promo-codes.txt` membership check in step 7
   prevents duplicate appends.
 - **Cooldowns:** `cooldowns.json` entries are idempotent —

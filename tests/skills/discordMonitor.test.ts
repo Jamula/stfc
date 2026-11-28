@@ -12,8 +12,10 @@ import {
   DISCORD_MONITOR_EXIT_INFRA_FAILURE,
   DISCORD_MONITOR_EXIT_OK,
   discordMonitor,
+  type DiscordMonitorOptions,
 } from "../../src/skills/discordMonitor.ts";
 import { ApiClient } from "../../src/api/client.ts";
+import { DiscordChannelAccessError } from "../../src/discord/client.ts";
 import type { IngestClient } from "../../src/discord/ingest.ts";
 
 const NOW = new Date("2026-05-16T08:00:00Z");
@@ -624,6 +626,211 @@ describe("discordMonitor / cooldown writes only", () => {
   });
 });
 
+describe("discordMonitor / durable state failures", () => {
+  let ds: DirSet;
+  let savedToken: string | undefined;
+  let savedSummary: string | undefined;
+  let summaryFile: string;
+
+  beforeEach(() => {
+    ds = setUpDirs();
+    writeAllowlist(ds.allowlist, [{ id: "222222222222222222", label: "promos" }]);
+    savedToken = process.env.DISCORD_BOT_TOKEN;
+    savedSummary = process.env.GITHUB_STEP_SUMMARY;
+    process.env.DISCORD_BOT_TOKEN = "fixture-token";
+    summaryFile = path.join(ds.dir, "summary.md");
+    process.env.GITHUB_STEP_SUMMARY = summaryFile;
+  });
+
+  afterEach(() => {
+    fs.rmSync(ds.dir, { recursive: true, force: true });
+    if (savedToken === undefined) delete process.env.DISCORD_BOT_TOKEN;
+    else process.env.DISCORD_BOT_TOKEN = savedToken;
+    if (savedSummary === undefined) delete process.env.GITHUB_STEP_SUMMARY;
+    else process.env.GITHUB_STEP_SUMMARY = savedSummary;
+  });
+
+  it("retains the cursor and avoids re-redeeming when candidate persistence fails", async () => {
+    const channelId = "222222222222222222";
+    const oldId = "111111111111111110";
+    const priorCursor = {
+      [channelId]: {
+        channelLabel: "promos",
+        lastMessageId: oldId,
+        lastTimestamp: "2026-05-16T06:00:00Z",
+        lastRunId: "prior-run",
+        lastRunAt: "2026-05-16T06:00:00Z",
+      },
+    };
+    fs.writeFileSync(ds.cursors, JSON.stringify(priorCursor), "utf8");
+    const message = {
+      id: "111111111111111111",
+      channel_id: channelId,
+      content: "RETRYCODE",
+      timestamp: "2026-05-16T07:00:00Z",
+      edited_timestamp: null,
+      author: { id: "999999999999999999", username: "poster", bot: false },
+      type: 0,
+    };
+    let redeemCalls = 0;
+    const options: DiscordMonitorOptions = {
+      accounts: [{ name: "main", token: makeJwt() }],
+      paths: {
+        allowlist: ds.allowlist,
+        commandChannels: path.join(ds.dir, "command-channels.json"),
+        cursors: ds.cursors,
+        candidates: ds.candidates,
+        suppression: ds.suppression,
+        cooldowns: ds.cooldowns,
+        digestsDir: ds.digestsDir,
+        promoCodes: ds.promoCodes,
+        tipsSeen: path.join(ds.dir, "tips-seen.jsonl"),
+      },
+      clientFactory: () => ({
+        getMe: async () => ({ id: "bot", username: "stfc-monitor" }),
+        getChannelMessages: async (_id, opts) => opts.after === oldId ? [message] : [],
+      }),
+      now: () => NOW,
+      redeemFn: async (opts) => {
+        redeemCalls++;
+        return {
+          result: {
+            rows: [{
+              accountName: "main",
+              attempts: (opts.extraCandidates ?? []).map((code) => ({
+                code,
+                outcome: "CODE_REDEEMED" as const,
+              })),
+            }],
+          },
+          exitCode: 0,
+        };
+      },
+      onPromoCodesAppend: () => fs.mkdirSync(ds.candidates),
+    };
+
+    const failed = await discordMonitor({ ...options, runId: "state-write-failed" });
+    assert.equal(failed.exitCode, DISCORD_MONITOR_EXIT_INFRA_FAILURE);
+    assert.equal(failed.result.errorsByClass.StateWriteError, 1);
+    assert.deepEqual(JSON.parse(fs.readFileSync(ds.cursors, "utf8")), priorCursor);
+    assert.match(fs.readFileSync(summaryFile, "utf8"), /StateWriteError=1/);
+    assert.match(fs.readFileSync(ds.promoCodes, "utf8"), /RETRYCODE/);
+
+    fs.rmdirSync(ds.candidates);
+    const recovered = await discordMonitor({ ...options, runId: "state-write-recovered" });
+    assert.equal(recovered.exitCode, DISCORD_MONITOR_EXIT_OK);
+    assert.equal(redeemCalls, 1, "the persisted promo-code list prevents a second redemption");
+    assert.equal(JSON.parse(fs.readFileSync(ds.cursors, "utf8"))[channelId].lastMessageId, message.id);
+    assert.match(fs.readFileSync(ds.candidates, "utf8"), /RETRYCODE/);
+    assert.match(fs.readFileSync(recovered.result.digestPath!, "utf8"), /Codes redeemed \(1\)/);
+  });
+
+  it("replays results and tips after digest and tips-seen write failures", async (t) => {
+    const channelId = "222222222222222222";
+    const oldId = "111111111111111110";
+    const priorCursor = {
+      [channelId]: {
+        channelLabel: "promos",
+        lastMessageId: oldId,
+        lastTimestamp: "2026-05-16T06:00:00Z",
+        lastRunId: "prior-run",
+        lastRunAt: "2026-05-16T06:00:00Z",
+      },
+    };
+    fs.writeFileSync(ds.cursors, JSON.stringify(priorCursor), "utf8");
+    const blockingFile = path.join(ds.dir, "not-a-directory");
+    fs.writeFileSync(blockingFile, "blocked", "utf8");
+    const tipsSeen = path.join(ds.dir, "tips-seen.jsonl");
+    const message = {
+      id: "111111111111111111",
+      channel_id: channelId,
+      content: "RETRYCODE",
+      timestamp: "2026-05-16T07:00:00Z",
+      edited_timestamp: null,
+      author: { id: "999999999999999999", username: "poster", bot: false },
+      type: 0,
+    };
+    let redeemCalls = 0;
+    const options: DiscordMonitorOptions = {
+      accounts: [{ name: "main", token: makeJwt() }],
+      paths: {
+        allowlist: ds.allowlist,
+        commandChannels: path.join(ds.dir, "command-channels.json"),
+        cursors: ds.cursors,
+        candidates: ds.candidates,
+        suppression: ds.suppression,
+        cooldowns: ds.cooldowns,
+        digestsDir: path.join(blockingFile, "digests"),
+        promoCodes: ds.promoCodes,
+        tipsSeen,
+      },
+      clientFactory: () => ({
+        getMe: async () => ({ id: "bot", username: "stfc-monitor" }),
+        getChannelMessages: async (_id, opts) => opts.after === oldId ? [message] : [],
+      }),
+      classifierFactory: () => ({
+        load: async () => {},
+        classify: async () => ({ label: "tip", confidence: 0.9, method: "heuristic", scores: { tip: 0.9 } }),
+        unload: async () => {},
+      }),
+      redeemFn: async (opts) => {
+        redeemCalls++;
+        return {
+          result: {
+            rows: [{
+              accountName: "main",
+              attempts: (opts.extraCandidates ?? []).map((code) => ({
+                code,
+                outcome: "CODE_REDEEMED" as const,
+              })),
+            }],
+          },
+          exitCode: 0,
+        };
+      },
+      now: () => NOW,
+    };
+
+    const failed = await discordMonitor({ ...options, runId: "digest-failed" });
+    assert.equal(failed.exitCode, DISCORD_MONITOR_EXIT_INFRA_FAILURE);
+    assert.equal(failed.result.errorsByClass.DigestWriteError, 1);
+    assert.deepEqual(JSON.parse(fs.readFileSync(ds.cursors, "utf8")), priorCursor);
+    assert.equal(fs.existsSync(tipsSeen), false, "tips must not be marked seen before their digest exists");
+
+    const originalAppend = fs.promises.appendFile.bind(fs.promises);
+    const appendMock = t.mock.method(fs.promises, "appendFile", async (...args: Parameters<typeof fs.promises.appendFile>) => {
+      if (String(args[0]) === tipsSeen) throw new Error("simulated tips-seen failure");
+      await originalAppend(...args);
+    });
+    const tipFailure = await discordMonitor({
+      ...options,
+      paths: { ...options.paths, digestsDir: ds.digestsDir },
+      runId: "tips-seen-failed",
+    });
+    appendMock.mock.restore();
+    assert.equal(tipFailure.exitCode, DISCORD_MONITOR_EXIT_INFRA_FAILURE);
+    assert.equal(tipFailure.result.errorsByClass.StateWriteError, 1);
+    assert.deepEqual(JSON.parse(fs.readFileSync(ds.cursors, "utf8")), priorCursor);
+    assert.equal(fs.existsSync(tipsSeen), false);
+
+    const recovered = await discordMonitor({
+      ...options,
+      paths: { ...options.paths, digestsDir: ds.digestsDir },
+      runId: "digest-recovered",
+    });
+    assert.equal(recovered.exitCode, DISCORD_MONITOR_EXIT_OK);
+    const digest = fs.readFileSync(recovered.result.digestPath!, "utf8");
+    assert.match(digest, /Codes redeemed \(1\)/, "the original redemption survives repeated replay");
+    assert.match(digest, /RETRYCODE/);
+    assert.equal(redeemCalls, 1, "replay must not submit an already-persisted code again");
+    const candidates = fs.readFileSync(ds.candidates, "utf8").trim().split(/\r?\n/).map((line) => JSON.parse(line));
+    assert.equal(candidates.at(-1)?.status, "redeemed");
+    assert.equal(candidates.at(-1)?.perAccountOutcome[0]?.outcome, "CODE_REDEEMED");
+    assert.equal(JSON.parse(fs.readFileSync(ds.cursors, "utf8"))[channelId].lastMessageId, message.id);
+    assert.ok(fs.existsSync(tipsSeen));
+  });
+});
+
 describe("discordMonitor / workflow YAML assertions (T027)", () => {
   // T018 sub-assertion that needs T027's YAML to exist. Read the workflow
   // once and verify the bit-for-bit values that the spec requires.
@@ -659,7 +866,7 @@ describe("discordMonitor / workflow YAML assertions (T027)", () => {
     const preflightIdx = yaml.indexOf("name: Validate Azure OIDC configuration");
     const loginIdx = yaml.indexOf("name: Sign in to Azure with GitHub OIDC");
     assert.ok(preflightIdx >= 0 && loginIdx > preflightIdx, "OIDC preflight must precede azure/login");
-    assert.match(yaml, /Missing Azure OIDC Configuration/);
+    assert.match(yaml, /validateAzureTokenConfig/);
   });
 
   it("redeem.yml cron is `*/10 * * * *` (regression guard — bumped in #7, then again to */10)", () => {
@@ -1022,10 +1229,7 @@ describe("discordMonitor / RunHealth counters (T035 — US3)", () => {
       getMe: async () => ({ id: "bot", username: "stfc-monitor" }),
       getChannelMessages: async (channelId, opts) => {
         if (channelId === "333333333333333333") {
-          const err = new Error("403 Forbidden") as Error & { status: number };
-          err.status = 403;
-          err.name = "DiscordChannelAccessError";
-          throw err;
+          throw new DiscordChannelAccessError("403 Forbidden", { discordErrorCode: 50013 });
         }
         if (opts.after !== undefined) return [];
         return [{
@@ -1040,7 +1244,7 @@ describe("discordMonitor / RunHealth counters (T035 — US3)", () => {
       },
     };
 
-    const { result } = await discordMonitor({
+    const { result, exitCode } = await discordMonitor({
       accounts: [],
       paths: {
         allowlist: ds.allowlist,
@@ -1062,6 +1266,9 @@ describe("discordMonitor / RunHealth counters (T035 — US3)", () => {
       `channelsRead (${result.channelsRead}) should be < channelsConfigured (${result.channelsConfigured})`);
     assert.equal(result.promoChannelsConfigured, 2);
     assert.equal(result.promoChannelsRead, 1);
+    assert.equal(exitCode, DISCORD_MONITOR_EXIT_INFRA_FAILURE);
+    assert.equal(result.errorsByClass.DiscordChannelAccessError, 1);
+    assert.equal(result.channelsErrored[0]?.reason, "forbidden_channel");
     const digest = fs.readFileSync(
       path.join(ds.digestsDir, "2026-05-16.md"),
       "utf8",
@@ -1277,7 +1484,27 @@ describe("discordMonitor / GitHub Actions Job Summary (T036 — US3)", () => {
       now: () => NOW,
       runId: "run-no-summary",
     });
+
     assert.equal(exitCode, 0);
+  });
+
+  it("reports a summary write failure as infrastructure failure", async () => {
+    process.env.GITHUB_STEP_SUMMARY = ds.dir;
+    writeEmptyAllowlist(ds.allowlist);
+
+    const { result, exitCode } = await discordMonitor({
+      accounts: [],
+      paths: {
+        allowlist: ds.allowlist,
+        commandChannels: path.join(ds.dir, "command-channels.json"),
+        digestsDir: ds.digestsDir,
+      },
+      now: () => NOW,
+      runId: "summary-write-failed",
+    });
+
+    assert.equal(exitCode, DISCORD_MONITOR_EXIT_INFRA_FAILURE);
+    assert.equal(result.errorsByClass.SummaryWriteError, 1);
   });
 });
 

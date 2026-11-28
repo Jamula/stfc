@@ -116,6 +116,12 @@ variables** (not secrets) as follows:
 | `AZURE_TOKEN_CONTAINER` | Private token container name |
 | `AZURE_TOKEN_BLOB` | Blob name, normally `accounts.json` |
 
+Derive the identity IDs from the approved Entra application and subscription.
+Derive the storage account, container and blob names from the approved private
+store; they must match the token API's `STFC_TOKEN_STORAGE_ACCOUNT`,
+`STFC_TOKEN_STORAGE_CONTAINER`, and `AZURE_TOKEN_BLOB` settings. Never put
+tokens, access keys or account contents in Actions variables, logs or evidence.
+
 Create a federated credential for the read identity with audience
 `api://AzureADTokenExchange` and subject
 `repo:Jamula/stfc:ref:refs/heads/main`. Grant it `Storage Blob Data Reader`
@@ -127,7 +133,10 @@ For recovery, `redeem.yml` uses the existing `STFC_ACCOUNTS` GitHub secret
 only when all six Azure variables are absent or empty. It validates the whole
 account list and writes it to the same restricted temporary file, without
 changing the secret or dropping accounts. Partial Azure configuration fails
-explicitly; a configured Azure login or download failure never falls back.
+explicitly; malformed values or a configured Azure login or download failure
+never trigger fallback. Both workflows check input formats without logging
+values. This preflight cannot verify that the identity, federation, container
+privacy or Blob permissions actually work; those require authorized live checks.
 `discord-monitor.yml` still requires Azure configuration.
 
 This fallback does not refresh expired tokens. Without a current complete
