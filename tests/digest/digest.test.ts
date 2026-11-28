@@ -102,6 +102,21 @@ afterEach(() => {
 });
 
 describe("digest / idempotency on identical re-run (US2 Scenario 1, Picard C5)", () => {
+  it("preserves the previous digest if atomic replacement fails", async (t) => {
+    const first = await writeDigest(baseDigest({ runId: RUN_A }), { outputDir: outDir });
+    const before = fs.readFileSync(first.filePath, "utf8");
+    t.mock.method(fs.promises, "rename", async () => {
+      throw new Error("simulated rename failure");
+    });
+
+    await assert.rejects(
+      () => writeDigest(baseDigest({ runId: RUN_B }), { outputDir: outDir }),
+      /simulated rename failure/,
+    );
+    assert.equal(fs.readFileSync(first.filePath, "utf8"), before);
+    assert.deepEqual(fs.readdirSync(outDir), [`${DATE}.md`]);
+  });
+
   it("second call with identical input → mode merged-idempotent, bytesWritten 0, byte-identical file", async () => {
     const input = baseDigest({
       runId: RUN_A,
@@ -121,6 +136,36 @@ describe("digest / idempotency on identical re-run (US2 Scenario 1, Picard C5)",
 });
 
 describe("digest / merge with new content on same-day re-run", () => {
+  it("preserves a redemption on replay while allowing a new source to update it", async () => {
+    const source = {
+      channelLabel: "promos",
+      timestamp: "2026-05-16T08:00:00Z",
+      jumpLink: "https://discord.com/channels/1/2/3",
+    };
+    const redeemed = baseDigest({
+      runId: RUN_A,
+      codes: { redeemed: [{ code: "RETRYCODE", accounts: ["main"], source }] },
+    });
+    await writeDigest(redeemed, { outputDir: outDir });
+    const replay = baseDigest({
+      runId: RUN_B,
+      codes: { alreadyKnown: [{ code: "RETRYCODE", source }] },
+    });
+    const second = await writeDigest(replay, { outputDir: outDir });
+    const replayedState = parseStateBlock(fs.readFileSync(second.filePath, "utf8"));
+    assert.equal(replayedState.codes.redeemed[0]?.code, "RETRYCODE");
+    assert.equal(replayedState.codes.alreadyKnown.length, 0);
+
+    const newSource = baseDigest({
+      runId: "run-C",
+      codes: { alreadyKnown: [{ code: "RETRYCODE", source: { ...source, jumpLink: "https://discord.com/channels/1/2/4" } }] },
+    });
+    const third = await writeDigest(newSource, { outputDir: outDir });
+    const latestState = parseStateBlock(fs.readFileSync(third.filePath, "utf8"));
+    assert.equal(latestState.codes.redeemed.length, 0);
+    assert.equal(latestState.codes.alreadyKnown[0]?.source.jumpLink, "https://discord.com/channels/1/2/4");
+  });
+
   it("new tips added → mode merged-idempotent, bytesWritten > 0, runIds union, counters summed", async () => {
     const a = baseDigest({
       runId: RUN_A,

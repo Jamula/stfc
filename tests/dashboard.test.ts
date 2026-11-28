@@ -7,6 +7,7 @@ import { after, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { parse } from "yaml";
 import type { HttpRequest, InvocationContext } from "../api/node_modules/@azure/functions/types/index.js";
 import type { RunResult } from "../shared/contracts/run-result.ts";
 import type { DashboardData, DashboardRun, DashboardTab, Workflow } from "../shared/dashboard.ts";
@@ -528,6 +529,14 @@ describe("dashboard data source loading", () => {
     assert.match(redeemWorkflow, /schedule:/, "the redeem workflow must remain scheduled");
     assert.match(redeemWorkflow, /mergeAvailableRefreshedAccounts/,
       "the scheduled workflow must validate refresh candidates before using them");
+    const workflow = parse(redeemWorkflow);
+    const tokenSource = workflow.jobs.redeem.steps.find(
+      (step: { id?: string }) => step.id === "token_source",
+    );
+    assert.ok(tokenSource, "scheduled runs must validate the account-token source");
+    assert.equal(tokenSource.if, undefined, "token-source validation must not skip scheduled runs");
+    assert.match(tokenSource.run, /GITHUB_STEP_SUMMARY/,
+      "configuration failures must remain visible in the run summary");
     await withMockFetch(url => {
       if (url.endsWith("/contents/data/runs?ref=main")) return new Response(null, { status: 404 });
       if (url.endsWith("/actions/workflows/redeem.yml/runs?per_page=20")) {

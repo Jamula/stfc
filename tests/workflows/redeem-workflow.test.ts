@@ -54,6 +54,14 @@ describe(".github/workflows/redeem.yml", () => {
     );
     const script = step.run.split("<<'NODE'\n")[1].replace(/\nNODE\s*$/, "");
     const keys = Object.keys(step.env);
+    const values: Record<string, string> = {
+      AZURE_CLIENT_ID: "11111111-1111-1111-1111-111111111111",
+      AZURE_TENANT_ID: "fixture.onmicrosoft.com",
+      AZURE_SUBSCRIPTION_ID: "33333333-3333-3333-3333-333333333333",
+      AZURE_TOKEN_STORAGE_ACCOUNT: "teststorage1",
+      AZURE_TOKEN_CONTAINER: "private-token-store",
+      AZURE_TOKEN_BLOB: "fixture/accounts.json",
+    };
     assert.equal(keys.length, 6);
     const directory = fs.mkdtempSync(path.join(tmpdir(), "stfc-source-"));
     try {
@@ -61,7 +69,7 @@ describe(".github/workflows/redeem.yml", () => {
         const output = path.join(directory, "output");
         fs.writeFileSync(output, "");
         const env: NodeJS.ProcessEnv = { ...process.env, GITHUB_OUTPUT: output };
-        keys.forEach((key, index) => { env[key] = mask & (1 << index) ? "configured" : ""; });
+        keys.forEach((key, index) => { env[key] = mask & (1 << index) ? values[key] : ""; });
         const result = spawnSync(process.execPath, ["--input-type=module", "-e", script], { env, encoding: "utf8" });
         const complete = mask === 0 || mask === 63;
         assert.equal(result.status, complete ? 0 : 1, `configuration mask ${mask}`);
@@ -69,6 +77,51 @@ describe(".github/workflows/redeem.yml", () => {
           complete ? `source=${mask === 63 ? "azure" : "secret"}\n` : "",
           `source output for mask ${mask}`);
         if (!complete) assert.match(result.stderr, /incomplete; refusing secret fallback/);
+      }
+    } finally {
+      fs.rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("refuses secret fallback for each invalid complete Azure configuration without logging values", () => {
+    const workflow = parse(yaml!);
+    const step = workflow.jobs.redeem.steps.find(
+      (entry: { id?: string }) => entry.id === "token_source",
+    );
+    const script = step.run.split("<<'NODE'\n")[1].replace(/\nNODE\s*$/, "");
+    const values: Record<string, string> = {
+      AZURE_CLIENT_ID: "11111111-1111-1111-1111-111111111111",
+      AZURE_TENANT_ID: "fixture.onmicrosoft.com",
+      AZURE_SUBSCRIPTION_ID: "33333333-3333-3333-3333-333333333333",
+      AZURE_TOKEN_STORAGE_ACCOUNT: "teststorage1",
+      AZURE_TOKEN_CONTAINER: "private-token-store",
+      AZURE_TOKEN_BLOB: "fixture/accounts.json",
+    };
+    const invalidValues: Record<string, string> = {
+      AZURE_CLIENT_ID: "invalid-client-marker",
+      AZURE_TENANT_ID: "invalid tenant marker",
+      AZURE_SUBSCRIPTION_ID: "invalid-subscription-marker",
+      AZURE_TOKEN_STORAGE_ACCOUNT: "InvalidStorageMarker",
+      AZURE_TOKEN_CONTAINER: "invalid--container-marker",
+      AZURE_TOKEN_BLOB: "x".repeat(1025),
+    };
+    const directory = fs.mkdtempSync(path.join(tmpdir(), "stfc-source-invalid-"));
+    try {
+      const output = path.join(directory, "output");
+      for (const [key, value] of Object.entries(invalidValues)) {
+        fs.writeFileSync(output, "");
+        const result = spawnSync(process.execPath, ["--input-type=module", "-e", script], {
+          env: { ...process.env, ...values, [key]: value, GITHUB_OUTPUT: output },
+          encoding: "utf8",
+        });
+        assert.equal(result.status, 1, `${key} must fail closed`);
+        assert.match(result.stderr, /invalid; refusing secret fallback/);
+        assert.ok(result.stderr.includes(key));
+        assert.ok(!(result.stdout + result.stderr).includes(value));
+        for (const validValue of Object.values(values)) {
+          assert.ok(!(result.stdout + result.stderr).includes(validValue));
+        }
+        assert.equal(fs.readFileSync(output, "utf8"), "");
       }
     } finally {
       fs.rmSync(directory, { recursive: true, force: true });
@@ -363,7 +416,7 @@ describe(".github/workflows/redeem.yml", () => {
       );
 
       assert.deepEqual(titles, [expectedTitle, expectedTitle]);
-      assert.deepEqual(requiredLabels, ["bug,priority:p1", "bug,priority:p1"]);
+      assert.deepEqual(requiredLabels, ["bug", "bug"]);
       assert.match(yaml!, /--label "bug,priority:p1"/);
     },
   );

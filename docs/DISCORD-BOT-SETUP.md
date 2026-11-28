@@ -168,6 +168,14 @@ No code change or redeploy is required.
 | Health section shows `forbidden_guild` (Discord code `50001`)     | Bot is not a member of the target server                           | Send the server admin the URL from §3.                                                |
 | Health section shows `forbidden_channel` (Discord code `50013`)   | Bot is in the server but lacks per-channel View / Read History     | §3 — admin grants permissions via role or channel override.                           |
 | Health section shows `not_found` (Discord code `10003` / HTTP 404)| Channel ID is wrong, channel was deleted, or bot was never invited | Verify `channelId` in `config/discord-allowlist.json`; re-check the install in §3.    |
+| Health section shows `rate_limited` | Discord returned 429 after the channel's three-retry budget | Honor the reported retry delay; reduce monitored channels or increase the interval. |
+| `StateWriteError` or `DigestWriteError` | Durable state or digest could not be written | Inspect the run error and state-branch persistence; after repair, rerun with authorization so messages are replayed. |
+
+Channel read failures leave the affected channel's cursor unchanged while
+healthy channels continue. A channel, state, digest, or configured job-summary
+write failure returns exit code 1; Discord authentication failures return 2.
+Cursors are saved only after candidate/cooldown state and the digest are written,
+so a failed handoff can be retried without skipping the affected messages.
 
 For the channel-onboarding walkthrough (allowlist edit, smoke test, and
 expected digest output), see

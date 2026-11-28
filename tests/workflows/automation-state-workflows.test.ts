@@ -5,6 +5,7 @@ import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "n
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { parse } from "yaml";
+import { validateAzureTokenConfig } from "../../scripts/azure-token-preflight.ts";
 
 type Step = {
   name?: string;
@@ -180,6 +181,18 @@ const scheduled = [
 ] as const;
 
 describe("automation-state scheduled workflow contract", () => {
+  it("accepts supported Azure tenant and blob name forms without normalizing them", () => {
+    const result = validateAzureTokenConfig({
+      AZURE_CLIENT_ID: "11111111-1111-1111-1111-111111111111",
+      AZURE_TENANT_ID: "22222222-2222-2222-2222-222222222222",
+      AZURE_SUBSCRIPTION_ID: "33333333-3333-3333-3333-333333333333",
+      AZURE_TOKEN_STORAGE_ACCOUNT: "teststorage1",
+      AZURE_TOKEN_CONTAINER: "$root",
+      AZURE_TOKEN_BLOB: "private/folder with spaces/accounts.json",
+    });
+    assert.deepEqual(result, { missing: [], invalid: [] });
+  });
+
   it("requires the fresh secret for recovery checks and validates it on the shared queue", () => {
     const recoverySource = readFileSync(path.join(WORKFLOW_DIR, "check-recovery-auth.yml"), "utf8");
     const recovery = parse(recoverySource) as Workflow & { concurrency: Concurrency };
@@ -214,16 +227,33 @@ describe("automation-state scheduled workflow contract", () => {
           "AZURE_TOKEN_CONTAINER",
           "AZURE_TOKEN_BLOB",
         ];
+        const validValues: Record<string, string> = {
+          AZURE_CLIENT_ID: "11111111-1111-1111-1111-111111111111",
+          AZURE_TENANT_ID: "fixture.onmicrosoft.com",
+          AZURE_SUBSCRIPTION_ID: "33333333-3333-3333-3333-333333333333",
+          AZURE_TOKEN_STORAGE_ACCOUNT: "teststorage1",
+          AZURE_TOKEN_CONTAINER: "private-token-store",
+          AZURE_TOKEN_BLOB: "fixture/folder with spaces/accounts.json",
+        };
+        const invalidValues: Record<string, string> = {
+          AZURE_CLIENT_ID: "invalid-client-marker",
+          AZURE_TENANT_ID: "invalid tenant marker",
+          AZURE_SUBSCRIPTION_ID: "invalid-subscription-marker",
+          AZURE_TOKEN_STORAGE_ACCOUNT: "InvalidStorageMarker",
+          AZURE_TOKEN_CONTAINER: "invalid--container-marker",
+          AZURE_TOKEN_BLOB: "x".repeat(1025),
+        };
         assert.deepEqual(Object.keys(preflight.env ?? {}), expectedKeys);
 
         const tempDir = mkdtempSync(path.join(tmpdir(), "stfc-dm-oidc-"));
         try {
           const summaryFile = path.join(tempDir, "summary.md");
-          for (const mask of [0, 1, 42, 62, 63]) {
+          const masks = new Set([0, 1, 42, 63, ...expectedKeys.map((_, idx) => 63 ^ (1 << idx))]);
+          for (const mask of masks) {
             writeFileSync(summaryFile, "");
             const env: NodeJS.ProcessEnv = { ...process.env, GITHUB_STEP_SUMMARY: summaryFile };
             expectedKeys.forEach((key, idx) => {
-              env[key] = mask & (1 << idx) ? `secret-marker-${idx}` : "   ";
+              env[key] = mask & (1 << idx) ? validValues[key] : "   ";
             });
             const res = spawnSync(process.execPath, ["--input-type=module", "-e", preflightScript], {
               env,
@@ -231,9 +261,9 @@ describe("automation-state scheduled workflow contract", () => {
             });
             const summaryText = readFileSync(summaryFile, "utf8");
             const combinedOut = `${res.stdout}${res.stderr}${summaryText}`;
-            for (let idx = 0; idx < expectedKeys.length; idx++) {
+            for (const value of Object.values(validValues)) {
               assert.equal(
-                combinedOut.includes(`secret-marker-${idx}`),
+                combinedOut.includes(value),
                 false,
                 "preflight must never echo configured variable values",
               );
@@ -247,6 +277,29 @@ describe("automation-state scheduled workflow contract", () => {
               assert.match(summaryText, /Missing Azure OIDC Configuration/);
             }
           }
+          for (const [key, value] of Object.entries(invalidValues)) {
+            writeFileSync(summaryFile, "");
+            const env = { ...process.env, ...validValues, [key]: value, GITHUB_STEP_SUMMARY: summaryFile };
+            const res = spawnSync(process.execPath, ["--input-type=module", "-e", preflightScript], {
+              env,
+              encoding: "utf8",
+            });
+            const summaryText = readFileSync(summaryFile, "utf8");
+            const combinedOut = `${res.stdout}${res.stderr}${summaryText}`;
+            assert.equal(res.status, 1, `${key} must fail closed when invalid`);
+            assert.match(res.stderr, /invalid repository variable\(s\)/);
+            assert.match(summaryText, /Invalid Azure OIDC Configuration/);
+            assert.ok(combinedOut.includes(key));
+            assert.ok(!combinedOut.includes(value), `${key}'s value must not be logged`);
+            for (const validValue of Object.values(validValues)) {
+              assert.ok(!combinedOut.includes(validValue), "configured values must not be logged");
+            }
+          }
+          const rootContainer = spawnSync(process.execPath, ["--input-type=module", "-e", preflightScript], {
+            env: { ...process.env, ...validValues, AZURE_TOKEN_CONTAINER: "$root", GITHUB_STEP_SUMMARY: summaryFile },
+            encoding: "utf8",
+          });
+          assert.equal(rootContainer.status, 0, rootContainer.stderr);
         } finally {
           rmSync(tempDir, { recursive: true, force: true });
         }

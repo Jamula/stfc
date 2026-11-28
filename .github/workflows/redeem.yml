@@ -127,14 +127,21 @@ jobs:
         run: |
           node --input-type=module <<'NODE'
           import { appendFileSync } from 'node:fs';
-          const keys = ['AZURE_CLIENT_ID', 'AZURE_TENANT_ID', 'AZURE_SUBSCRIPTION_ID',
-            'AZURE_TOKEN_STORAGE_ACCOUNT', 'AZURE_TOKEN_CONTAINER', 'AZURE_TOKEN_BLOB'];
-          const configured = keys.filter(key => process.env[key]?.trim());
-          if (configured.length !== 0 && configured.length !== keys.length) {
-            console.error('::error::Azure token configuration is incomplete; refusing secret fallback.');
+          import { AZURE_TOKEN_CONFIG_KEYS, validateAzureTokenConfig } from './scripts/azure-token-preflight.ts';
+          const { missing, invalid } = validateAzureTokenConfig(process.env);
+          if (missing.length !== AZURE_TOKEN_CONFIG_KEYS.length && (missing.length > 0 || invalid.length > 0)) {
+            const problems = [
+              ...(missing.length ? [`Missing repository variable(s): ${missing.join(', ')}.`] : []),
+              ...(invalid.length ? [`Invalid repository variable(s): ${invalid.join(', ')}.`] : []),
+            ];
+            const message = `Azure token configuration is ${missing.length ? 'incomplete' : 'invalid'}; refusing secret fallback. ${problems.join(' ')}`;
+            console.error(`::error::${message}`);
+            if (process.env.GITHUB_STEP_SUMMARY) {
+              appendFileSync(process.env.GITHUB_STEP_SUMMARY, `## ❌ Azure token configuration\n\n${message}\n`);
+            }
             process.exit(1);
           }
-          const source = configured.length === keys.length ? 'azure' : 'secret';
+          const source = missing.length === 0 ? 'azure' : 'secret';
           appendFileSync(process.env.GITHUB_OUTPUT, `source=${source}\n`);
           console.log(`Account-token source: ${source}`);
           NODE
@@ -240,7 +247,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TITLE: "STFC token rejected — redemption is stopped until STFC_ACCOUNTS is refreshed"
-          REQUIRED_LABELS: "bug,priority:p1"
+          REQUIRED_LABELS: "bug"
         run: |
           set -euo pipefail
           run_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
@@ -292,7 +299,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TITLE: "STFC token rejected — redemption is stopped until STFC_ACCOUNTS is refreshed"
-          REQUIRED_LABELS: "bug,priority:p1"
+          REQUIRED_LABELS: "bug"
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: node scripts/dead-token-alert.mjs resolve
 

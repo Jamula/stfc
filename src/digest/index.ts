@@ -28,6 +28,7 @@ import type {
   TipCategory,
 } from "../discord/schemas.ts";
 import { formatPromoScanStatus } from "../discord/scanStatus.ts";
+import { writeFileAtomic } from "../lib/atomicFile.ts";
 
 // ── Public surface ─────────────────────────────────────────────────────────
 
@@ -97,14 +98,18 @@ export async function writeDigest(
 
   // Byte-compare; skip write if identical.
   let existing: Buffer | null = null;
-  try { existing = await fs.readFile(filePath); } catch { /* fresh */ }
+  try {
+    existing = await fs.readFile(filePath);
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
+  }
 
   const buf = Buffer.from(rendered, "utf8");
   if (existing && existing.equals(buf)) {
     return { filePath, bytesWritten: 0, mode };
   }
 
-  await fs.writeFile(filePath, buf);
+  await writeFileAtomic(filePath, buf);
   return { filePath, bytesWritten: buf.byteLength, mode };
 }
 
@@ -231,7 +236,13 @@ function mergeCodes(
   for (const r of prior.deferredCap) byCode.set(r.code, { kind: "deferredCap", row: r });
   for (const r of next.redeemed) byCode.set(r.code, { kind: "redeemed", row: r });
   for (const r of next.failed) byCode.set(r.code, { kind: "failed", row: r });
-  for (const r of next.alreadyKnown) byCode.set(r.code, { kind: "alreadyKnown", row: r });
+  for (const r of next.alreadyKnown) {
+    const previous = byCode.get(r.code);
+    if (previous && previous.kind !== "alreadyKnown" && previous.row.source.jumpLink === r.source.jumpLink) {
+      continue;
+    }
+    byCode.set(r.code, { kind: "alreadyKnown", row: r });
+  }
   for (const r of next.deferredCap) byCode.set(r.code, { kind: "deferredCap", row: r });
 
   const out: DailyDigest["codes"] = {
