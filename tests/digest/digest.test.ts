@@ -121,6 +121,24 @@ describe("digest / idempotency on identical re-run (US2 Scenario 1, Picard C5)",
 });
 
 describe("digest / merge with new content on same-day re-run", () => {
+  it("reports the latest scan status after a dead-cache failure is repaired", async () => {
+    const failed = baseDigest({ runId: RUN_A });
+    failed.health.promoChannelsConfigured = 1;
+    failed.health.promoChannelsRead = 1;
+    failed.health.deadCodeCacheUnavailable = true;
+    failed.health.errorsByClass.DeadCodeCacheError = 1;
+    const first = await writeDigest(failed, { outputDir: outDir });
+    assert.match(fs.readFileSync(first.filePath, "utf8"), /Promo-code scan: FAILED.*dead-code cache unavailable/);
+
+    const recovered = baseDigest({ runId: RUN_B });
+    recovered.health.promoChannelsConfigured = 1;
+    recovered.health.promoChannelsRead = 1;
+    const second = await writeDigest(recovered, { outputDir: outDir });
+    const text = fs.readFileSync(second.filePath, "utf8");
+    assert.match(text, /Promo-code scan: COMPLETE/);
+    assert.match(text, /DeadCodeCacheError=1/);
+  });
+
   it("new tips added → mode merged-idempotent, bytesWritten > 0, runIds union, counters summed", async () => {
     const a = baseDigest({
       runId: RUN_A,

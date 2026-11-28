@@ -18,6 +18,7 @@ export const DISCORD_MONITOR_STATE_DIRECTORIES = [
 ];
 
 export const DISCORD_MONITOR_PROMO_CODES = "promo-codes.txt";
+const DISCORD_MONITOR_DEAD_CODES = "data/promo-code-dead.json";
 
 async function pathType(targetPath) {
   try {
@@ -62,6 +63,12 @@ export async function restoreDiscordMonitorState({
   for (const relativePath of DISCORD_MONITOR_STATE_DIRECTORIES) {
     await copyDirectoryIfPresent(restoreRoot, workspaceRoot, relativePath);
   }
+
+  const deadCodesType = await pathType(path.join(restoreRoot, DISCORD_MONITOR_DEAD_CODES));
+  if (deadCodesType !== undefined && deadCodesType !== "file") {
+    throw new Error("The dead-code cache on automation-state is not a file.");
+  }
+  await copyFileIfPresent(restoreRoot, workspaceRoot, DISCORD_MONITOR_DEAD_CODES);
 
   const statePromoCodes = path.join(restoreRoot, DISCORD_MONITOR_PROMO_CODES);
   if ((await pathType(statePromoCodes)) === "file") {

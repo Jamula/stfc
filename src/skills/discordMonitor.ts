@@ -21,7 +21,7 @@ import * as path from "node:path";
 import type { Account } from "../lib/accounts.ts";
 import { createLogger } from "../lib/logger.ts";
 import { Outcomes, type Outcome } from "../lib/outcomes.ts";
-import { readPromoCodes } from "../lib/promoCodes.ts";
+import { DeadCodeCacheError, readDeadCodes, readPromoCodes } from "../lib/promoCodes.ts";
 import { redactForLog } from "../lib/redact.ts";
 import {
   DiscordAuthError,
@@ -104,6 +104,7 @@ export interface DiscordMonitorOptions {
     tipsSeen?: string;
     suppression?: string;
     cooldowns?: string;
+    deadCodes?: string;
     digestsDir?: string;
     promoCodes?: string;
   };
@@ -122,7 +123,7 @@ export interface DiscordMonitorOutput {
     digestPath?: string;
     redeemedCodes: string[];
     deferredCodes: string[];
-    reason?: "no-channels-configured" | "no-token";
+    reason?: "no-channels-configured" | "no-token" | "dead-code-cache-unavailable";
   };
   exitCode: number;
 }
@@ -141,6 +142,7 @@ export async function discordMonitor(
   const tipsSeenPath = opts.paths?.tipsSeen ?? DEFAULT_PATHS.tipsSeen;
   const suppressionPath = opts.paths?.suppression ?? DEFAULT_PATHS.suppression;
   const cooldownsPath = opts.paths?.cooldowns ?? DEFAULT_PATHS.cooldowns;
+  const deadCodesPath = opts.paths?.deadCodes;
   const digestsDir = opts.paths?.digestsDir ?? DEFAULT_DIGESTS_DIR;
   const promoCodesPath = opts.paths?.promoCodes ?? opts.promoCodesPath ?? "promo-codes.txt";
 
@@ -160,6 +162,7 @@ export async function discordMonitor(
     candidatesSubmitted: 0,
     candidatesSuppressedDedup: 0,
     candidatesSuppressedCooldown: 0,
+    candidatesSuppressedDead: 0,
     candidatesDeferredCap: 0,
     tipsClassified: {
       tip: 0, trick: 0, hack: 0, "event-info": 0, "patch-note": 0,
@@ -210,6 +213,29 @@ export async function discordMonitor(
       failureExitCode = DISCORD_MONITOR_EXIT_AUTH_FAILURE;
     } else {
       throw err;
+    }
+  }
+
+  let deadCodes = new Set<string>();
+  if (token !== null && enabledPromoChannels.length > 0) {
+    try {
+      deadCodes = await readDeadCodes(deadCodesPath);
+    } catch (err) {
+      if (!(err instanceof DeadCodeCacheError)) throw err;
+      log.error(`Dead-code cache unavailable; no candidates submitted or cursors advanced: ${redactForLog(err)}`);
+      recordError(health, err.name);
+      health.deadCodeCacheUnavailable = true;
+      return finalize({
+        health,
+        startedAt,
+        now,
+        digestsDir,
+        runId,
+        reason: "dead-code-cache-unavailable",
+        annotated: [],
+        tips: [],
+        failureExitCode: DISCORD_MONITOR_EXIT_INFRA_FAILURE,
+      });
     }
   }
 
@@ -370,14 +396,37 @@ export async function discordMonitor(
     await classifier.unload();
   }
 
-  // Step 6: dedup against the four sources.
+  // Step 6: dedup against existing state and the shared dead-code cache.
   const promoCodesTxt = new Set((await readPromoCodes(promoCodesPath)).map((c) => c.toUpperCase()));
   const priorCandidates = await readCandidates(candidatesPath);
   const suppression = await loadSuppression(suppressionPath);
 
-  const { fresh, annotated } = dedup(extractedCandidates, {
+  const candidatesByCode = new Map<string, CandidateCode>();
+  for (const candidate of extractedCandidates) {
+    const prior = candidatesByCode.get(candidate.value);
+    if (!prior) {
+      candidatesByCode.set(candidate.value, candidate);
+      continue;
+    }
+    const timestamp = Date.parse(candidate.source.timestamp);
+    const priorTimestamp = Date.parse(prior.source.timestamp);
+    const fraction = subMillisecondFraction(candidate.source.timestamp);
+    const priorFraction = subMillisecondFraction(prior.source.timestamp);
+    if (
+      timestamp < priorTimestamp ||
+      (timestamp === priorTimestamp && (
+        fraction < priorFraction ||
+        (fraction === priorFraction && candidate.source.jumpLink < prior.source.jumpLink)
+      ))
+    ) {
+      candidatesByCode.set(candidate.value, candidate);
+    }
+  }
+
+  const { fresh, annotated } = dedup([...candidatesByCode.values()], {
     promoCodesTxt,
     priorCandidates,
+    deadCodes,
     suppression,
     cooldowns,
     now,
@@ -385,12 +434,18 @@ export async function discordMonitor(
   freshAnnotated = fresh;
   allAnnotated = annotated;
 
-  health.candidatesSuppressedDedup = annotated.filter(
+  health.candidatesSuppressedDedup = extractedCandidates.length - candidatesByCode.size + annotated.filter(
     (c) => c.status === "already-known" || c.status === "duplicate" || c.status === "suppressed-operator-deny",
   ).length;
   health.candidatesSuppressedCooldown = annotated.filter(
     (c) => c.status === "suppressed-cooldown",
   ).length;
+  health.candidatesSuppressedDead = annotated.filter(
+    (c) => c.status === "suppressed-dead-code",
+  ).length;
+  if (health.candidatesSuppressedDead > 0) {
+    log.info(`suppressed ${health.candidatesSuppressedDead} candidate(s) found in the dead-code cache`);
+  }
 
   // Step 6b: redeem via the existing skill — exactly ONE call per run, only
   // when there's at least one fresh candidate (matches the integration
@@ -515,6 +570,12 @@ export async function discordMonitor(
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
+function subMillisecondFraction(timestamp: string): string {
+  // Discord timestamps can retain precision that Date.parse truncates.
+  const fraction = /\.(\d+)Z$/.exec(timestamp)?.[1] ?? "";
+  return fraction.padEnd(3, "0").slice(3).replace(/0+$/, "");
+}
+
 function isCrewCommandResponder(client: IngestClient): client is IngestClient & CrewCommandResponder {
   return typeof (client as Partial<CrewCommandResponder>).postMessage === "function";
 }
@@ -555,7 +616,7 @@ interface FinalizeArgs {
   tips: Tip[];
   redeemedCodes?: string[];
   deferredCodes?: string[];
-  reason?: "no-channels-configured" | "no-token";
+  reason?: "no-channels-configured" | "no-token" | "dead-code-cache-unavailable";
   /** Feature 003 (T024 / US3): bot username from `getMe()`, threaded into
    *  the digest health header. Undefined when token was missing or
    *  ingest never ran (e.g. allowlist empty). */
@@ -714,6 +775,7 @@ async function emitJobSummary(h: RunHealth): Promise<void> {
     `| Candidates submitted | ${h.candidatesSubmitted} |`,
     `| Suppressed (dedup) | ${h.candidatesSuppressedDedup} |`,
     `| Suppressed (cooldown) | ${h.candidatesSuppressedCooldown} |`,
+    `| Suppressed (dead cache) | ${h.candidatesSuppressedDead ?? 0} |`,
     `| Deferred (cap) | ${h.candidatesDeferredCap} |`,
     `| Tips classified | tip=${h.tipsClassified.tip}, trick=${h.tipsClassified.trick}, hack=${h.tipsClassified.hack}, event-info=${h.tipsClassified["event-info"]}, patch-note=${h.tipsClassified["patch-note"]} |`,
     `| Dropped | moderation=${h.dropped.moderation}, low-confidence=${h.dropped.lowConfidence}, chatter=${h.dropped.chatter} |`,

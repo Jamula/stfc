@@ -42,6 +42,37 @@ afterEach(() => {
 });
 
 describe("scripts/discord-monitor-state.mjs", () => {
+  it("restores the dead-code cache for reading without persisting monitor changes to it", async () => {
+    const restoreRoot = makeScratchDir("discord-monitor-dead-restore");
+    const workspaceRoot = makeScratchDir("discord-monitor-dead-workspace");
+    const stateRoot = makeScratchDir("discord-monitor-dead-state");
+    const relativePath = "data/promo-code-dead.json";
+
+    writeFile(restoreRoot, relativePath, '{"DEADCODE":{"first_seen_outcome":"CODE_INVALID_OR_EXPIRED"}}\n');
+    writeFile(stateRoot, relativePath, "original state\n");
+
+    await restoreDiscordMonitorState({ restoreRoot, workspaceRoot });
+    assert.equal(
+      fs.readFileSync(path.join(workspaceRoot, relativePath), "utf8"),
+      '{"DEADCODE":{"first_seen_outcome":"CODE_INVALID_OR_EXPIRED"}}\n',
+    );
+
+    writeFile(workspaceRoot, relativePath, "changed workspace\n");
+    await persistDiscordMonitorState({ workspaceRoot, stateRoot });
+    assert.equal(fs.readFileSync(path.join(stateRoot, relativePath), "utf8"), "original state\n");
+  });
+
+  it("rejects a dead-code cache path that is not a file", async () => {
+    const restoreRoot = makeScratchDir("discord-monitor-dead-directory");
+    const workspaceRoot = makeScratchDir("discord-monitor-dead-workspace");
+    fs.mkdirSync(path.join(restoreRoot, "data", "promo-code-dead.json"), { recursive: true });
+
+    await assert.rejects(
+      restoreDiscordMonitorState({ restoreRoot, workspaceRoot }),
+      /dead-code cache.*not a file/i,
+    );
+  });
+
   it("preserves a concurrent /game-state upload when the monitor later persists its own state", async () => {
     const restoreRoot = makeScratchDir("discord-monitor-restore");
     const workspaceRoot = makeScratchDir("discord-monitor-workspace");
