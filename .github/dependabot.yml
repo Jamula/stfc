@@ -49,6 +49,30 @@ updates:
           - "minor"
           - "patch"
 
+  - package-ecosystem: "npm"
+    directory: "/pwa-browser"
+    schedule:
+      interval: "weekly"
+    groups:
+      routine:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  - package-ecosystem: "npm"
+    directory: "/pwa-token-api"
+    schedule:
+      interval: "weekly"
+    groups:
+      routine:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:

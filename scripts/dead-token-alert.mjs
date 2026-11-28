@@ -28,7 +28,7 @@ import { execFileSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 
 /** Labels that must be present for an issue to count as the dead-token alert. */
-export const DEFAULT_REQUIRED_LABELS = ['bug', 'priority:p1'];
+const DEFAULT_REQUIRED_LABELS = ['bug', 'priority:p1'];
 const DEFAULT_ALERT_NAME = 'Dead-token alert';
 
 /**

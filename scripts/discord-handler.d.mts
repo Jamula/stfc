@@ -105,23 +105,6 @@ export type ReconcileAutomationStateLike = (args: {
   relativePaths: string[];
 }) => Promise<string>;
 
-export interface HandleGameStateOptions {
-  payload: DiscordClientPayload;
-  repo: string;
-  ref: string;
-  serverUrl: string;
-  r2Config: R2Config;
-  fetchImpl?: DiscordFetchImpl;
-  runGit?: RunGitLike;
-  readFileImpl?: ReadFileLike;
-  writeFileImpl?: WriteFileLike;
-  mkdirImpl?: MkdirLike;
-  renameImpl?: RenameLike;
-  rmImpl?: RmLike;
-  nowFn?: () => Date;
-  reconcileAutomationStateImpl?: ReconcileAutomationStateLike;
-}
-
 export interface ResolveResponseTextOptions {
   payload: DiscordClientPayload;
   repo: string;
@@ -158,45 +141,7 @@ export interface RunCliOptions {
   stderr?: { write: (chunk: string) => unknown };
 }
 
-export function validatePayload(payload: unknown): asserts payload is ValidatedDiscordPayload;
-
-export function validateGameStatePayload(payload: DiscordClientPayload): void;
-
 export function sanitizeFilename(input: unknown): string;
-
-export function sanitizeLine(input: unknown, fallback?: string, maxLength?: number): string;
-
-export function parseAllowedGuildIds(raw: unknown): string[];
-
-export function assertGuildAllowed(payload: DiscordClientPayload, allowedGuildIds: readonly string[]): void;
-
-export function validateCdnUrl(rawUrl: string): URL;
-
-export function formatRedeemStatus(historyContent: string, maxLines?: number): string;
-
-export function triggerRedeemWorkflow(options: {
-  runGh?: RunGhLike;
-  repo: string;
-  ref: string;
-  serverUrl?: string;
-  nowFn?: () => Date;
-  sleep?: (ms: number) => Promise<void>;
-}): Promise<{ runId: string; runUrl: string }>;
-
-export function postDiscordFollowup(options: {
-  applicationId: string;
-  interactionToken: string;
-  content: string;
-  botToken: string;
-  fetchImpl?: DiscordFetchImpl;
-  allowedMentions?: Record<string, unknown>;
-}): Promise<unknown>;
-
-export function downloadDiscordAttachment(options: {
-  attachment: DiscordAttachment;
-  fetchImpl?: DiscordFetchImpl;
-  timeoutMs?: number;
-}): Promise<{ buffer: Buffer; responseContentType: string }>;
 
 export function updateDailyIndexAtomic(options: {
   indexPath: string;
@@ -214,26 +159,11 @@ export function updateDailyManifestAtomic(options: {
   renameImpl?: RenameLike;
 }): Promise<DailyManifest>;
 
-export function r2ConfigFromEnv(env: Record<string, string | undefined>): R2Config;
-
 export function uploadR2Object(options: SignedR2RequestOptions): Promise<{
   bucket: string;
   key: string;
   sha256: string;
   size: number;
-}>;
-
-export function deleteR2Object(options: SignedR2RequestOptions): Promise<{
-  bucket: string;
-  key: string;
-  sha256: string;
-  size: number;
-}>;
-
-export function handleGameStateCommand(options: HandleGameStateOptions): Promise<{
-  responseText: string;
-  outFile: string;
-  fileUrl: string;
 }>;
 
 export function resolveResponseText(options: ResolveResponseTextOptions): Promise<string>;

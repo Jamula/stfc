@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
-import { readdirSync, readFileSync } from "node:fs";
+import { execFileSync, spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, it } from "node:test";
+import { parse as parseYaml } from "yaml";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..", "..");
 const IGNORED_WALK_DIRS = new Set([".git", "node_modules", "dist", ".wrangler", ".squad"]);
@@ -246,5 +249,165 @@ describe("coding style & repository manifest invariants", () => {
       "utf8",
     ).replace(/\r\n/g, "\n");
     assert.match(prettierignore, /^shared\/contracts\/$/m);
+  });
+
+  it("covers every npm package directory and github-actions with weekly routine grouping in .github/dependabot.yml (#316)", () => {
+    const dependabotPath = path.join(REPO_ROOT, ".github", "dependabot.yml");
+    assert.ok(existsSync(dependabotPath), ".github/dependabot.yml must exist");
+
+    const parsed = parseYaml(readFileSync(dependabotPath, "utf8")) as {
+      version?: number;
+      updates?: Array<{
+        "package-ecosystem"?: string;
+        directory?: string;
+        schedule?: { interval?: string };
+        groups?: Record<
+          string,
+          { patterns?: string[]; "update-types"?: string[] }
+        >;
+      }>;
+    };
+
+    assert.equal(parsed.version, 2);
+    const updates = parsed.updates ?? [];
+
+    const packageJsonDirs = collectManifests(
+      REPO_ROOT,
+      (name) => name === "package.json",
+    ).map((filePath) => {
+      const relDir = toPosix(path.dirname(path.relative(REPO_ROOT, filePath)));
+      return relDir === "." ? "/" : `/${relDir}`;
+    });
+
+    for (const expectedDir of packageJsonDirs) {
+      const entry = updates.find(
+        (u) => u["package-ecosystem"] === "npm" && u.directory === expectedDir,
+      );
+      assert.ok(
+        entry,
+        `.github/dependabot.yml must configure npm updates for ${expectedDir}`,
+      );
+      assert.equal(
+        entry.schedule?.interval,
+        "weekly",
+        `Dependabot npm schedule for ${expectedDir} must be weekly`,
+      );
+      const routineTypes = entry.groups?.routine?.["update-types"] ?? [];
+      assert.deepEqual(
+        [...routineTypes].sort(),
+        ["minor", "patch"],
+        `Dependabot routine group for ${expectedDir} must batch minor and patch updates while leaving major updates ungrouped`,
+      );
+    }
+
+    const actionsEntry = updates.find(
+      (u) => u["package-ecosystem"] === "github-actions" && u.directory === "/",
+    );
+    assert.ok(
+      actionsEntry,
+      ".github/dependabot.yml must configure github-actions updates for /",
+    );
+    assert.equal(actionsEntry.schedule?.interval, "weekly");
+    assert.deepEqual(
+      [...(actionsEntry.groups?.routine?.["update-types"] ?? [])].sort(),
+      ["minor", "patch"],
+    );
+  });
+
+  it("keeps non-Squad tracked files free of unapproved byte-identical duplicates (#454)", () => {
+    const trackedPaths = execFileSync("git", ["ls-files"], {
+      cwd: REPO_ROOT,
+      encoding: "utf8",
+    })
+      .replace(/\r\n/g, "\n")
+      .split("\n")
+      .filter(Boolean)
+      .filter(
+        (rel) =>
+          !rel.startsWith(".squad/") &&
+          !rel.startsWith(".github/skills/") &&
+          !(rel.startsWith(".github/workflows/") && rel.includes("squad")) &&
+          rel !== ".github/agents/squad.agent.md" &&
+          !rel.startsWith("tests/squad/"),
+      );
+
+    const byHash = new Map<string, string[]>();
+    for (const rel of trackedPaths) {
+      const fullPath = path.join(REPO_ROOT, rel);
+      if (!existsSync(fullPath)) continue;
+      const digest = createHash("sha256")
+        .update(readFileSync(fullPath))
+        .digest("hex");
+      const group = byHash.get(digest) ?? [];
+      group.push(rel);
+      byHash.set(digest, group);
+    }
+
+    const allowedDuplicateGroup = [
+      "tests/ci/fixtures/badPosition/_lib/auth.ts",
+      "tests/ci/fixtures/good/_lib/auth.ts",
+      "tests/ci/fixtures/goodTryWrap/_lib/auth.ts",
+    ];
+
+    const unexpectedDuplicates = [...byHash.values()]
+      .filter((paths) => paths.length > 1)
+      .map((paths) => [...paths].sort())
+      .filter(
+        (paths) =>
+          JSON.stringify(paths) !== JSON.stringify(allowedDuplicateGroup),
+      );
+
+    assert.deepEqual(
+      unexpectedDuplicates,
+      [],
+      `Unexpected byte-identical tracked files found: ${JSON.stringify(unexpectedDuplicates)}`,
+    );
+  });
+
+  it("verifies artifact-hygiene clean and contaminated spec fixtures end-to-end (#454)", () => {
+    const scanner = path.join(REPO_ROOT, "scripts", "check-artifact-hygiene.mjs");
+    const cleanFixture = path.join(
+      REPO_ROOT,
+      "tests",
+      "fixtures",
+      "artifact-hygiene",
+      "clean-spec.md",
+    );
+    const contaminatedFixture = path.join(
+      REPO_ROOT,
+      "fixtures",
+      "artifact-hygiene",
+      "contaminated-spec.md",
+    );
+
+    const cleanRun = spawnSync(process.execPath, [scanner, cleanFixture], {
+      cwd: REPO_ROOT,
+      encoding: "utf8",
+    });
+    assert.equal(cleanRun.status, 0, cleanRun.stderr);
+
+    const contaminatedRun = spawnSync(
+      process.execPath,
+      [scanner, contaminatedFixture],
+      {
+        cwd: REPO_ROOT,
+        encoding: "utf8",
+      },
+    );
+    assert.equal(contaminatedRun.status, 1);
+    for (const patternName of [
+      "JWT",
+      "BEARER_TOKEN",
+      "GITHUB_TOKEN",
+      "AWS_ACCESS_KEY",
+      "API_KEY",
+      "STFC_ACCOUNT_DATA",
+    ]) {
+      assert.match(
+        contaminatedRun.stderr,
+        new RegExp(`\\[${patternName}\\]`),
+        `Expected contaminated-spec.md to trigger ${patternName}`,
+      );
+    }
   });
 });

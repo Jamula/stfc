@@ -58,7 +58,7 @@ import process from "node:process";
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
-export const DISCORD_API_BASE = "https://discord.com/api/v10";
+const DISCORD_API_BASE = "https://discord.com/api/v10";
 const USER_AGENT =
   "STFC-Discord-Ops (https://github.com/Jamula/stfc, set-discord-app-metadata)";
 const MAX_ICON_BYTES = 10 * 1024 * 1024; // Discord hard limit
@@ -99,7 +99,7 @@ const AUTH_HEADER_RE =
  *  - Bare JWT-shaped 3-segment values
  *  - The literal `DISCORD_BOT_TOKEN` value when supplied.
  */
-export function redactString(input, token) {
+function redactString(input, token) {
   let out = String(input)
     .replace(AUTH_HEADER_RE, "$1[REDACTED]")
     .replace(JWT_RE, "[REDACTED-JWT]");
@@ -118,7 +118,7 @@ export function redactString(input, token) {
  * Unknown flags throw. Repeated flags overwrite (last-wins) so the
  * workflow wrapper can pass through optional inputs cleanly.
  */
-export function parseArgs(argv) {
+function parseArgs(argv) {
   const out = {
     icon: undefined,
     description: undefined,
@@ -160,7 +160,7 @@ const GIF87_SIG = Buffer.from("GIF87a", "ascii");
 const GIF89_SIG = Buffer.from("GIF89a", "ascii");
 
 /** Returns "image/png" | "image/jpeg" | "image/gif" or throws. */
-export function detectImageMime(buf) {
+function detectImageMime(buf) {
   if (buf.length >= 8 && buf.subarray(0, 8).equals(PNG_SIG)) return "image/png";
   if (buf.length >= 3 && buf.subarray(0, 3).equals(JPEG_SOI)) return "image/jpeg";
   if (
@@ -178,7 +178,7 @@ export function detectImageMime(buf) {
  * Best-effort width/height probe using only the headers. Returns
  * { width, height } or null if the format couldn't be probed cheaply.
  */
-export function probeImageDimensions(buf, mime) {
+function probeImageDimensions(buf, mime) {
   try {
     if (mime === "image/png") {
       // IHDR chunk starts at byte 8; chunk data begins at byte 16.
@@ -240,7 +240,7 @@ const DATA_URI_RE = /^data:(image\/(?:png|jpeg|gif));base64,(.+)$/i;
  * Returns { dataUri, mime, byteLength, dimensions, warnings[] } or throws.
  * Validates magic-byte mime, hard size cap, soft dimension floor.
  */
-export async function loadIconAsDataUri(input) {
+async function loadIconAsDataUri(input) {
   const warnings = [];
   let bytes;
   let mime;
@@ -289,7 +289,7 @@ export async function loadIconAsDataUri(input) {
 
 // ── Validation for the text fields ───────────────────────────────────────────
 
-export function validateDescription(text) {
+function validateDescription(text) {
   if (typeof text !== "string") {
     throw new Error("--description must be a string.");
   }
@@ -303,7 +303,7 @@ export function validateDescription(text) {
   }
 }
 
-export function validateUsername(name) {
+function validateUsername(name) {
   if (typeof name !== "string") {
     throw new Error("--username must be a string.");
   }
@@ -321,7 +321,7 @@ export function validateUsername(name) {
  * Distinct from plain Error (transport failure) so the caller can
  * apply different exit codes per the runAll.ts convention.
  */
-export class DiscordApiError extends Error {
+class DiscordApiError extends Error {
   constructor(message, { status, code } = {}) {
     super(message);
     this.name = "DiscordApiError";
@@ -336,7 +336,7 @@ export class DiscordApiError extends Error {
  * request) or plain Error on transport failure. The token is captured
  * in closure so it can be redacted from any error.
  */
-export async function discordPatch({ path, body, token, fetchImpl, baseUrl }) {
+async function discordPatch({ path, body, token, fetchImpl, baseUrl }) {
   const url = `${baseUrl ?? DISCORD_API_BASE}${path}`;
   const f = fetchImpl ?? fetch;
   let res;
@@ -394,7 +394,7 @@ function truncate(s, n) {
   return s.length <= n ? s : `${s.slice(0, n)}…`;
 }
 
-// ── Main entry point (exported for tests) ────────────────────────────────────
+// ── Main entry point ─────────────────────────────────────────────────────────
 
 // Exit codes (runAll.ts convention):
 //   0 = success / dry-run preview
@@ -402,11 +402,10 @@ function truncate(s, n) {
 //   2 = Discord rejected a well-formed request (4xx/5xx)
 
 /**
- * Run the CLI. Returns the exit code. All I/O is injectable so tests
- * can capture stdout/stderr and stub fetch. The token is read from
+ * Run the CLI. Returns the exit code. The token is read from
  * `env.DISCORD_BOT_TOKEN` and never echoed back.
  */
-export async function runCli({
+async function runCli({
   argv = [],
   env = process.env,
   fetchImpl = fetch,

@@ -36,8 +36,6 @@ export interface AlertResolveResult {
   matchCount: number;
 }
 
-export const DEFAULT_REQUIRED_LABELS: readonly string[];
-
 export function parseIssues(raw: string | undefined | null): AlertIssue[];
 
 export function selectAlertIssues(issues: unknown, options: AlertSelectOptions): AlertIssue[];

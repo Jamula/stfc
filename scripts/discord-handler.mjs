@@ -27,7 +27,7 @@ const R2_REQUEST_TIMEOUT_MS = 30_000;
 
 class R2UploadFailureError extends Error {}
 
-export function validatePayload(payload) {
+function validatePayload(payload) {
   if (!payload || typeof payload !== "object") {
     throw new Error("client_payload must be a JSON object");
   }
@@ -43,7 +43,7 @@ export function validatePayload(payload) {
   }
 }
 
-export function validateGameStatePayload(payload) {
+function validateGameStatePayload(payload) {
   const attachment = payload.attachment;
   const missing = [];
   if (!attachment || typeof attachment !== "object") {
@@ -91,7 +91,7 @@ export function sanitizeFilename(input) {
   return value;
 }
 
-export function sanitizeLine(input, fallback = "unknown", maxLength = 120) {
+function sanitizeLine(input, fallback = "unknown", maxLength = 120) {
   const raw = typeof input === "string" ? input : "";
   const clean = raw
     .normalize("NFKC")
@@ -103,7 +103,7 @@ export function sanitizeLine(input, fallback = "unknown", maxLength = 120) {
   return clean.length > 0 ? clean : fallback;
 }
 
-export function parseAllowedGuildIds(raw) {
+function parseAllowedGuildIds(raw) {
   if (typeof raw !== "string") return [];
   return raw
     .split(",")
@@ -111,7 +111,7 @@ export function parseAllowedGuildIds(raw) {
     .filter((v) => v.length > 0);
 }
 
-export function assertGuildAllowed(payload, allowedGuildIds) {
+function assertGuildAllowed(payload, allowedGuildIds) {
   if (!["game-state", "trigger-redeem"].includes(payload.command)) return;
 
   if (!payload.guild_id || typeof payload.guild_id !== "string") {
@@ -125,7 +125,7 @@ export function assertGuildAllowed(payload, allowedGuildIds) {
   }
 }
 
-export function validateCdnUrl(rawUrl) {
+function validateCdnUrl(rawUrl) {
   let parsed;
   try {
     parsed = new URL(rawUrl);
@@ -157,7 +157,7 @@ export function validateCdnUrl(rawUrl) {
   return parsed;
 }
 
-export function formatRedeemStatus(historyContent, maxLines = 10) {
+function formatRedeemStatus(historyContent, maxLines = 10) {
   const lines = historyContent
     .split(/\r?\n/)
     .map((line) => line.trimEnd())
@@ -185,7 +185,7 @@ export function formatRedeemStatus(historyContent, maxLines = 10) {
   ].join("\n");
 }
 
-export async function triggerRedeemWorkflow({
+async function triggerRedeemWorkflow({
   runGh = defaultRunGh,
   repo,
   ref,
@@ -236,7 +236,7 @@ export async function triggerRedeemWorkflow({
   throw new Error("Redeem workflow dispatch succeeded, but run ID was not discoverable yet");
 }
 
-export async function postDiscordFollowup({
+async function postDiscordFollowup({
   applicationId,
   interactionToken,
   content,
@@ -271,7 +271,7 @@ export async function postDiscordFollowup({
   return parsed;
 }
 
-export async function downloadDiscordAttachment({ attachment, fetchImpl = fetch, timeoutMs = 30_000 }) {
+async function downloadDiscordAttachment({ attachment, fetchImpl = fetch, timeoutMs = 30_000 }) {
   validateCdnUrl(attachment.url);
 
   const controller = new AbortController();
@@ -457,7 +457,7 @@ export async function updateDailyManifestAtomic({
   return doc;
 }
 
-export function r2ConfigFromEnv(env) {
+function r2ConfigFromEnv(env) {
   const config = {
     accountId: env.CLOUDFLARE_ACCOUNT_ID,
     accessKeyId: env.CLOUDFLARE_R2_ACCESS_KEY_ID,
@@ -586,7 +586,7 @@ export async function uploadR2Object(options) {
   return signedR2Request({ ...options, method: "PUT" });
 }
 
-export async function deleteR2Object(options) {
+async function deleteR2Object(options) {
   return signedR2Request({ ...options, method: "DELETE" });
 }
 
@@ -601,7 +601,7 @@ function getSignatureKey(secretAccessKey, dateStamp, regionName, serviceName) {
   return createHmac("sha256", kService).update("aws4_request").digest();
 }
 
-export async function handleGameStateCommand({
+async function handleGameStateCommand({
   payload,
   repo,
   ref,

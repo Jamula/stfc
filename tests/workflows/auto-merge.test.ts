@@ -135,9 +135,9 @@ describe("auto-merge workflow", () => {
     assert.match(appConfigStep.run ?? "", /configured=false/);
     assert.match(appConfigStep.run ?? "", /auto-merge is disabled/);
     assert.equal(appTokenStep.if, "steps.app-config.outputs.configured == 'true'");
-    assert.equal(
-      appTokenStep.uses,
-      "actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510",
+    assert.match(
+      appTokenStep.uses ?? "",
+      /^actions\/create-github-app-token@[0-9a-f]{40}$/,
     );
     assert.deepEqual(appTokenStep.with, {
       "client-id": "${{ vars.AUTO_MERGE_APP_CLIENT_ID }}",

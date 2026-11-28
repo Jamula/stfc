@@ -6,18 +6,18 @@ import process from "node:process";
 import { pathToFileURL } from "node:url";
 import { mergePromoCodeFiles } from "./merge-promo-codes.mjs";
 
-export const DISCORD_MONITOR_STATE_FILES = [
+const DISCORD_MONITOR_STATE_FILES = [
   "data/discord/cursors.json",
   "data/discord/candidates.jsonl",
   "data/discord/tips-seen.jsonl",
   "data/discord/cooldowns.json",
 ];
 
-export const DISCORD_MONITOR_STATE_DIRECTORIES = [
+const DISCORD_MONITOR_STATE_DIRECTORIES = [
   "data/digests",
 ];
 
-export const DISCORD_MONITOR_PROMO_CODES = "promo-codes.txt";
+const DISCORD_MONITOR_PROMO_CODES = "promo-codes.txt";
 
 async function pathType(targetPath) {
   try {

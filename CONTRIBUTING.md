@@ -167,3 +167,29 @@ a GitHub App installed only on this repository with Contents and Pull requests
 write permissions and no ruleset bypass. The workflow uses this scoped App token
 for API and CLI operations so resulting merges trigger downstream workflows;
 it fails closed if the App can bypass a protected ruleset.
+
+---
+
+## Dependency maintenance and Dependabot policy
+
+Repository dependency updates are managed through [`.github/dependabot.yml`](.github/dependabot.yml)
+under the owner-approved maintenance policy (`#316`, `2026-11-07`):
+
+- **Weekly cadence across all manifests and Actions.** Dependabot runs weekly
+  for every npm package directory (`/`, `/web`, `/worker`, `/api`,
+  `/pwa-browser`, and `/pwa-token-api`) and for `github-actions` (`/`).
+- **Grouped routine updates (`minor` and `patch`).** Routine patch and minor
+  updates are batched per ecosystem/directory under the `routine` group to avoid
+  per-package PR floods. Routine Dependabot PRs may merge once required checks
+  (`npm test (required)` and `verify`) and applicable package builds/tests are
+  green.
+- **Ungrouped major updates with explicit maintainer review.** Major version
+  bumps (especially CI-critical GitHub Actions that interact with `.nvmrc`, OIDC
+  `azure/login`, or checkout/token permissions, as well as major runtime/test
+  framework upgrades) remain separate ungrouped pull requests.
+- **No blanket auto-merge for major bumps.** Major-version Dependabot PRs
+  require explicit maintainer review of breaking changes, workflow/action pin
+  interactions, and all required CI checks passing before manual merge (or
+  deliberate deferral/closure when superseded). Weekly triage owns clearing stale
+  or superseded Dependabot branches so the open PR queue stays actionable.
+

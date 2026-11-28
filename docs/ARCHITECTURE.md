@@ -151,6 +151,10 @@ flowchart TB
 | **Discord slash commands** | Worker Ed25519 verify → `repository_dispatch` → queued Actions runner | Direct sub-second execution in the edge/service host |
 | **Operator companion UI** | Custom SWA Lit tabs (`web/`) reading committed artifacts | Read-only MCP server (`#453`) consumed directly from ChatGPT / GitHub Copilot + optional thin web view |
 
+Detailed service-by-service TCO telemetry, published free-tier/overage rates,
+sensitivity bounds, and Phase A vs. Phase B consolidation tradeoffs live in
+[`docs/TCO-AND-CONSOLIDATION.md`](TCO-AND-CONSOLIDATION.md).
+
 ---
 
 ## 2. Repository layout
@@ -834,7 +838,9 @@ operational assumptions; their state is not represented by this source tree.
 | Look up | Where |
 |---|---|
 | How does subsystem X work? | §3.X |
-| Current vs. proposed consolidated runtime boundaries | §1.1 |
+| Current vs. proposed consolidated runtime boundaries | §1.1 + `docs/TCO-AND-CONSOLIDATION.md` |
+| Hosting, CI & token-service TCO and consolidation options | `docs/TCO-AND-CONSOLIDATION.md` |
+| Dead-code, duplicate-blob & `.d.mts` shim audit | `docs/CODEBASE-HYGIENE-AUDIT.md` |
 | Discord `!crew` command end-to-end flow | §4.2 |
 | Scheduled gift redemption flow | §4.1 + `redeem.yml` |
 | Web panel request auth flow | §4.3 + `api/src/_lib/auth.ts` |
