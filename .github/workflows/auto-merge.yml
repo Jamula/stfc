@@ -80,6 +80,13 @@ jobs:
                 core.notice(`Skipping ineligible or already configured PR #${pull_number}.`);
                 continue;
               }
+              if (!pr.user?.login) {
+                throw new Error(`Cannot determine author of PR #${pull_number}; refusing auto-merge enrollment.`);
+              }
+              if (pr.user.login === "dependabot[bot]") {
+                core.notice(`Skipping Dependabot PR #${pull_number}; maintainer triage is required.`);
+                continue;
+              }
               candidates.push(pr);
             }
             if (candidates.length === 0) return;

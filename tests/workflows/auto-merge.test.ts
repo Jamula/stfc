@@ -8,6 +8,7 @@ type PullRequest = {
   state: string;
   draft: boolean;
   auto_merge: object | null;
+  user: { login: string } | null;
   base: { ref: string };
   head: { repo: { id: number } | null; sha: string };
 };
@@ -44,6 +45,7 @@ const runScript = new AsyncFunction("github", "context", "core", "require", scri
 function pr(number: number, overrides: Partial<PullRequest> = {}): PullRequest {
   return {
     number, state: "open", draft: false, auto_merge: null,
+    user: { login: "contributor" },
     base: { ref: "main" }, head: { repo: { id: 1 }, sha: `sha-${number}` },
     ...overrides,
   };
@@ -135,9 +137,9 @@ describe("auto-merge workflow", () => {
     assert.match(appConfigStep.run ?? "", /configured=false/);
     assert.match(appConfigStep.run ?? "", /auto-merge is disabled/);
     assert.equal(appTokenStep.if, "steps.app-config.outputs.configured == 'true'");
-    assert.equal(
-      appTokenStep.uses,
-      "actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510",
+    assert.match(
+      appTokenStep.uses ?? "",
+      /^actions\/create-github-app-token@[0-9a-f]{40}$/,
     );
     assert.deepEqual(appTokenStep.with, {
       "client-id": "${{ vars.AUTO_MERGE_APP_CLIENT_ID }}",
@@ -175,6 +177,23 @@ describe("auto-merge workflow", () => {
     ]);
     await h.run("schedule");
     assert.deepEqual(h.commands.map((command) => command[3]), ["1", "8"]);
+  });
+
+  it("does not automatically enroll Dependabot PRs on events or scheduled sweeps", async () => {
+    const dependabotPr = pr(1, { user: { login: "dependabot[bot]" } });
+    const event = harness([dependabotPr]);
+    await event.run("pull_request_target");
+    assert.deepEqual(event.commands, []);
+
+    const sweep = harness([dependabotPr, pr(2)]);
+    await sweep.run("schedule");
+    assert.deepEqual(sweep.commands.map((command) => command[3]), ["2"]);
+  });
+
+  it("fails closed when the pull request author is unavailable", async () => {
+    const h = harness([pr(1, { user: null })]);
+    await assert.rejects(h.run("schedule"), /author.*PR #1/i);
+    assert.deepEqual(h.commands, []);
   });
 
   it("fails closed if a required check is missing or supplied by another integration", async () => {

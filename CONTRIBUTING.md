@@ -151,10 +151,11 @@ root package and `worker/`, plus `typecheck` for `pwa-browser/` and
 the pull request. The pre-commit hook runs the root test suite.
 
 Ready PRs from branches in this repository targeting the default branch are
-automatically enrolled in squash auto-merge. The workflow also reconciles open
-PRs every 15 minutes, including those created by GitHub Actions, and will
-re-enable auto-merge if it is manually disabled. Drafts and fork PRs are excluded.
-Use a draft to keep a same-repository PR from being enrolled.
+automatically enrolled in squash auto-merge, except Dependabot PRs. The workflow
+also reconciles open PRs every 15 minutes, including those created by GitHub
+Actions, and will re-enable auto-merge if it is manually disabled. Drafts and fork
+PRs are excluded. Use a draft to keep an eligible same-repository PR from being
+enrolled.
 
 The default-branch ruleset must strictly require the GitHub Actions checks
 `npm test (required)` and `verify` (Protected paths). GitHub also enforces any
@@ -167,3 +168,26 @@ a GitHub App installed only on this repository with Contents and Pull requests
 write permissions and no ruleset bypass. The workflow uses this scoped App token
 for API and CLI operations so resulting merges trigger downstream workflows;
 it fails closed if the App can bypass a protected ruleset.
+
+---
+
+## Dependency maintenance and Dependabot policy
+
+The owner-approved [policy in #316](https://github.com/Jamula/stfc/issues/316)
+designates Seven for weekly Dependabot triage. If Seven is unavailable, the
+owner should designate an alternate maintainer. Dependabot checks each npm
+package and GitHub Actions weekly; minor and patch updates are grouped by
+ecosystem and directory, while major updates remain separate by dependency.
+Playwright version updates are grouped by dependency name across the root and
+`pwa-browser` so both lockfiles can move together. Dependabot can still open
+separate PRs for incompatible constraints or security updates; keep
+`playwright` and `playwright-core` versions aligned in both lockfiles.
+
+Major updates require explicit maintainer review and passing required checks
+before a **manual merge**; they must not be blanket auto-merged. Routine updates
+also require maintainer triage and applicable checks before merging. The repository's
+auto-merge workflow does not automatically enroll any Dependabot PR because it
+cannot reliably distinguish every major update. It does not cancel existing
+auto-merge requests: check their state during triage, and do not enable one for
+a major update. The workflow's exclusion does not prevent someone from
+enrolling a PR through another mechanism.
