@@ -7,8 +7,10 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { ingestDiscord, PER_CHANNEL_PAGE_CAP } from "../../src/discord/ingest.ts";
 import {
+  DiscordClient,
   DiscordChannelAccessError,
   DiscordChannelNotFoundError,
+  DiscordRateLimitError,
 } from "../../src/discord/client.ts";
 import type {
   DiscordAllowlist,
@@ -166,6 +168,36 @@ describe("ingestDiscord — pagination", () => {
 });
 
 describe("ingestDiscord — 429 retry", () => {
+  it("does not multiply the real client's exhausted retry budget", async () => {
+    const channelId = "111111111111111111";
+    let channelRequests = 0;
+    const sleeps: number[] = [];
+    const client = new DiscordClient({
+      token: "fixture-token",
+      fetchImpl: async (input) => {
+        if (String(input).endsWith("/users/@me")) {
+          return Response.json({ id: "999999999999999999", username: "bot", bot: true });
+        }
+        channelRequests++;
+        return new Response(null, { status: 429, headers: { "Retry-After": "0.001" } });
+      },
+      sleep: async () => assert.fail("ingest owns the channel retry budget"),
+    });
+
+    const { health } = await ingestDiscord(
+      makeAllowlist([{ id: channelId, label: "a" }]),
+      {},
+      client,
+      "run-1",
+      NOW,
+      { sleep: async (ms) => { sleeps.push(ms); } },
+    );
+
+    assert.equal(channelRequests, 4, "one request plus three retries, not three retry loops");
+    assert.deepEqual(sleeps, [1, 1, 1]);
+    assert.equal(health.channelsErrored?.[0]?.reason, "rate_limited");
+  });
+
   it("honors Retry-After and retries up to 3× per channel", async () => {
     const channelId = "111111111111111111";
     let calls = 0;
@@ -205,6 +237,36 @@ describe("ingestDiscord — 429 retry", () => {
     assert.equal(health.channelsRead, 1);
   });
 
+  it("shares the retry budget across pages of the same channel", async () => {
+    const channelId = "111111111111111111";
+    let calls = 0;
+    const sleeps: number[] = [];
+    const client: StubClient = {
+      getMe: async () => ({}),
+      getChannelMessages: async (_id, opts) => {
+        calls++;
+        if (opts.after === undefined && calls === 3) {
+          return [makeMessage(channelId, "1000", "2026-05-16T00:00:01Z")];
+        }
+        throw new DiscordRateLimitError("429", 5);
+      },
+    };
+    const { health, messages, newCursors } = await ingestDiscord(
+      makeAllowlist([{ id: channelId, label: "a" }]),
+      {},
+      client,
+      "run-1",
+      NOW,
+      { sleep: async (ms) => { sleeps.push(ms); } },
+    );
+
+    assert.equal(calls, 5);
+    assert.deepEqual(sleeps, [5, 5, 5]);
+    assert.equal(health.channelsErrored?.[0]?.reason, "rate_limited");
+    assert.deepEqual(messages, []);
+    assert.deepEqual(newCursors, {}, "a partially read channel remains replayable");
+  });
+
   it("after 3 rate-limit retries, channel is recorded as errored, others continue", async () => {
     const a = "111111111111111111";
     const b = "111111111111111112";
@@ -214,11 +276,7 @@ describe("ingestDiscord — 429 retry", () => {
       getChannelMessages: async (id) => {
         if (id === a) {
           aCalls++;
-          const err: Error & { retryAfterMs?: number } = Object.assign(
-            new Error("429"),
-            { name: "DiscordRateLimitError" as const, retryAfterMs: 1 },
-          );
-          throw err;
+          throw new DiscordRateLimitError("429", 1);
         }
         return [makeMessage(b, "2000", "2026-05-16T00:00:01Z")];
       },
@@ -231,7 +289,7 @@ describe("ingestDiscord — 429 retry", () => {
       NOW,
       { sleep: async () => {} },
     );
-    assert.equal(aCalls, 3, "rate-limit attempts stop at the configured cap");
+    assert.equal(aCalls, 4, "one request plus three retries exhausts the channel budget");
     assert.equal(messages.length, 1, "channel b still ingested");
     assert.equal(
       health.channelsErrored!.find((e) => e.channelId === a)?.errorClass,
