@@ -11,10 +11,9 @@ package-lock.json
 # Auto-generated schema contracts (owned by scripts/build-contracts.mjs)
 shared/contracts/
 
-# Seed/runtime data, historical specs, and Squad framework files
+# Seed/runtime data and historical specs
 data/
 specs/
-.squad/
 docs/redeem-history.md
 summary.md
 playwright-diagnostics/

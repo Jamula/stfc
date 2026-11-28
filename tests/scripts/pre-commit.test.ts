@@ -567,10 +567,17 @@ describe("checkWorkflowPinningTests", () => {
     );
   });
 
-  it("does not confuse a suffixed workflow name with an exact filename", () => {
-    const matches = grepTestsForWorkflow("release.yml");
-    assert.ok(matches.includes("tests/workflows/workflow-consolidation.test.ts"));
-    assert.ok(!matches.includes("tests/workflows/squad-release-templates.test.ts"));
+  it("does not confuse a prefixed workflow name with an exact filename", () => {
+    assert.ok(
+      grepTestsForWorkflow("test-gate.yml").includes(
+        "tests/workflows/workflow-consolidation.test.ts",
+      ),
+    );
+    assert.ok(
+      !grepTestsForWorkflow("gate.yml").includes(
+        "tests/workflows/workflow-consolidation.test.ts",
+      ),
+    );
   });
 });
 

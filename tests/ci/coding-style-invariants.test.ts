@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, it } from "node:test";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..", "..");
-const IGNORED_WALK_DIRS = new Set([".git", "node_modules", "dist", ".wrangler", ".squad"]);
+const IGNORED_WALK_DIRS = new Set([".git", "node_modules", "dist", ".wrangler"]);
 
 function parseJsonc(raw: string): unknown {
   let out = "";
@@ -72,10 +73,7 @@ function collectTestFiles(dir: string): string[] {
   return results;
 }
 
-function collectManifests(
-  dir: string,
-  predicate: (fileName: string) => boolean,
-): string[] {
+function collectManifests(dir: string, predicate: (fileName: string) => boolean): string[] {
   const results: string[] = [];
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     if (IGNORED_WALK_DIRS.has(entry.name)) continue;
@@ -179,9 +177,7 @@ describe("coding style & repository manifest invariants", () => {
   });
 
   it("retains compilerOptions.strict === true across all tsconfig*.json files", () => {
-    const tsconfigs = collectManifests(REPO_ROOT, (name) =>
-      /^tsconfig(?:\..+)?\.json$/.test(name),
-    );
+    const tsconfigs = collectManifests(REPO_ROOT, (name) => /^tsconfig(?:\..+)?\.json$/.test(name));
     assert.ok(tsconfigs.length >= 6, "Expected root and all 5 subpackage tsconfig files");
 
     const strictViolations: string[] = [];
@@ -241,10 +237,100 @@ describe("coding style & repository manifest invariants", () => {
     assert.equal(prettierrc.useTabs, false);
     assert.equal(prettierrc.endOfLine, "lf");
 
-    const prettierignore = readFileSync(
-      path.join(REPO_ROOT, ".prettierignore"),
-      "utf8",
-    ).replace(/\r\n/g, "\n");
+    const prettierignore = readFileSync(path.join(REPO_ROOT, ".prettierignore"), "utf8").replace(
+      /\r\n/g,
+      "\n",
+    );
     assert.match(prettierignore, /^shared\/contracts\/$/m);
+  });
+
+  it("keeps *.local-backup crust untracked and ignored across the repository", () => {
+    const lsFiles = spawnSync("git", ["ls-files", "-z"], {
+      cwd: REPO_ROOT,
+      encoding: "utf8",
+    });
+    assert.ifError(lsFiles.error);
+    assert.equal(lsFiles.status, 0, `git ls-files failed: ${lsFiles.stderr}`);
+
+    const trackedPaths = lsFiles.stdout.split("\0").filter(Boolean);
+    assert.deepEqual(
+      trackedPaths.filter((file) => file.endsWith(".local-backup")),
+      [],
+      "No *.local-backup crust files may be tracked",
+    );
+
+    const checkIgnore = spawnSync(
+      "git",
+      ["check-ignore", "--no-index", "-q", "--", "README.md.local-backup"],
+      { cwd: REPO_ROOT },
+    );
+    assert.ifError(checkIgnore.error);
+    assert.equal(checkIgnore.status, 0, "README.md.local-backup must remain gitignored");
+  });
+
+  it("keeps the PR template, enforcement-gate checklist, and secondary docs aligned with the 0.1.0 baseline", () => {
+    const readRepoFile = (...segments: string[]): string =>
+      readFileSync(path.join(REPO_ROOT, ...segments), "utf8").replace(/\r\n/g, "\n");
+
+    const prTemplate = readRepoFile(".github", "pull_request_template.md");
+    for (const heading of [
+      "## Type of change",
+      "## Test-first evidence",
+      "## Spec linkage",
+      "## Tests run",
+      "## Enforcement-gate changes",
+      "## Constitution check",
+      "## Reviewer lanes",
+      "## What was changed and why",
+      "## Manual smoke-test",
+    ]) {
+      assert.ok(prTemplate.includes(heading), `PR template must keep heading ${heading}`);
+    }
+
+    assert.match(prTemplate, /same PR includes the migration/i);
+    assert.match(prTemplate, /tracked mutable paths are untracked and ignored/i);
+    assert.match(prTemplate, /static configuration remains trackable/i);
+    assert.match(prTemplate, /real repository invariant, not only synthetic fixtures/i);
+    assert.match(prTemplate, /classified as static or mutable/i);
+
+    const instructions = readRepoFile(".github", "copilot-instructions.md");
+    assert.match(
+      instructions,
+      /classify every guarded path as static configuration or mutable runtime state/i,
+    );
+    assert.match(instructions, /companion migration in the same PR/i);
+    assert.match(instructions, /actual repository invariant/i);
+    assert.match(instructions, /STFC_ACCOUNTS_FILE/);
+    assert.match(instructions, /automation-state/);
+    assert.doesNotMatch(
+      instructions,
+      /read `STFC_ACCOUNTS`, claim gifts, redeem promo codes, commit `docs\/redeem-history\.md`/,
+    );
+
+    for (const file of [
+      [".github", "pull_request_template.md"],
+      [".github", "copilot-instructions.md"],
+      ["docs", "ARCHITECTURE.md"],
+      ["docs", "DISCORD-BOT-SETUP.md"],
+      ["docs", "SETUP.md"],
+      ["docs", "CREW-OPTIMIZER.md"],
+      ["docs", "STFC-TOKEN-PWA.md"],
+      ["docs", "SWA-SETUP.md"],
+      ["discord", "RUNBOOK.md"],
+    ]) {
+      const content = readRepoFile(...file);
+      assert.doesNotMatch(
+        content,
+        /\bPrinciple [IVX]+\b|\bRule \d+[a-z]?\b|Complexity Tracking|Development Workflow & Quality Gates/,
+        `${file.join("/")} must not cite retired Spec Kit principles or removed numbered rules`,
+      );
+    }
+
+    const architecture = readRepoFile("docs", "ARCHITECTURE.md");
+    assert.match(architecture, /0\.1\.0/);
+    assert.match(architecture, /pwa-token-api\//);
+    assert.match(architecture, /pwa-browser\//);
+    assert.match(architecture, /STFC_ACCOUNTS_FILE/);
+    assert.match(architecture, /automation-state/);
   });
 });

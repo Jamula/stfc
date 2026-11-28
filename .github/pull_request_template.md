@@ -72,7 +72,6 @@ _Complete this section when adding or tightening a gate over existing repository
 - [ ] Tracked mutable paths are untracked and ignored, and conflicting merge attributes are removed; static configuration remains trackable.
 - [ ] Tests assert the real repository invariant, not only synthetic fixtures.
 - [ ] Guarded paths are classified as static or mutable; every exception is explicit and narrowly scoped.
-- [ ] The tracked Squad casting registry/history pair and commit marker are the only mutable-state exception; they use the native atomic casting protocol.
 
 ---
 
@@ -83,7 +82,7 @@ _Complete this section when adding or tightening a gate over existing repository
 _If there is a tension with a documented repository convention, describe it here and note why the tradeoff is justified:_
 
 ```
-<!-- e.g., "Tradeoff: retained duplicate config file because an existing Squad CI test pins its presence until upstream template migration completes." -->
+<!-- e.g., "Tradeoff: retained legacy fallback helper until external consumers migrate to the new contract." -->
 ```
 
 ---
