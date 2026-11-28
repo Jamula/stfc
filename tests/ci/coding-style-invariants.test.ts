@@ -109,27 +109,60 @@ describe("coding style & repository manifest invariants", () => {
       version: number;
       updates: Array<{
         "package-ecosystem": string;
-        directory: string;
+        directory?: string;
+        directories?: string[];
         schedule: { interval: string };
-        groups: Record<string, { patterns?: string[]; "update-types"?: string[] }>;
+        groups: Record<string, {
+          patterns?: string[];
+          "group-by"?: string;
+          "update-types"?: string[];
+        }>;
       }>;
     };
     assert.equal(config.version, 2);
-    for (const [ecosystem, directory] of [
-      ...npmDirectories.map((directory) => ["npm", directory]),
+    const sharedPlaywright = config.updates.find((entry) =>
+      entry["package-ecosystem"] === "npm" &&
+      entry.directories?.includes("/") && entry.directories.includes("/pwa-browser"));
+    assert.ok(sharedPlaywright, "root and browser relay must share a Dependabot update entry");
+    assert.deepEqual(sharedPlaywright.directories, ["/", "/pwa-browser"]);
+    assert.equal(Object.keys(sharedPlaywright.groups)[0], "playwright");
+    assert.deepEqual(sharedPlaywright.groups.playwright?.patterns, ["playwright"]);
+    assert.equal(sharedPlaywright.groups.playwright?.["group-by"], "dependency-name");
+    assert.equal(sharedPlaywright.groups.playwright?.["update-types"], undefined);
+
+    const expectedEntries: Array<[string, string]> = [
+      ...npmDirectories.map((directory): [string, string] => ["npm", directory]),
       ["github-actions", "/"],
-    ]) {
+    ];
+    for (const [ecosystem, directory] of expectedEntries) {
       const entries = config.updates.filter((entry) =>
-        entry["package-ecosystem"] === ecosystem && entry.directory === directory);
+        entry["package-ecosystem"] === ecosystem &&
+        (entry.directory === directory || entry.directories?.includes(directory)));
       assert.equal(entries.length, 1, `expected exactly one ${ecosystem} entry for ${directory}`);
       const entry = entries[0]!;
       assert.equal(entry.schedule.interval, "weekly", `${ecosystem} ${directory} cadence`);
       assert.deepEqual(entry.groups.routine?.patterns, ["*"]);
       assert.deepEqual([...(entry.groups.routine?.["update-types"] ?? [])].sort(), ["minor", "patch"]);
       for (const [name, group] of Object.entries(entry.groups)) {
+        if (entry === sharedPlaywright && name === "playwright") continue;
         assert.ok(group["update-types"], `${ecosystem} ${directory} group ${name} must not include majors`);
         assert.ok(!group["update-types"].includes("major"), `${ecosystem} ${directory} group ${name} includes majors`);
       }
+    }
+  });
+
+  it("keeps the root and browser relay Playwright lockfiles aligned", () => {
+    const readLock = (...segments: string[]) =>
+      JSON.parse(readFileSync(path.join(REPO_ROOT, ...segments), "utf8")) as {
+        packages: Record<string, { version?: string }>;
+      };
+    const root = readLock("package-lock.json");
+    const browser = readLock("pwa-browser", "package-lock.json");
+    for (const dependency of ["playwright", "playwright-core"]) {
+      const key = `node_modules/${dependency}`;
+      const rootVersion = root.packages[key]?.version;
+      assert.ok(rootVersion, `${dependency} must be present in the root lockfile`);
+      assert.equal(browser.packages[key]?.version, rootVersion, `${dependency} versions must match`);
     }
   });
 
