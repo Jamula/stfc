@@ -529,6 +529,8 @@ describe("dashboard data source loading", () => {
     assert.match(redeemWorkflow, /schedule:/, "the redeem workflow must remain scheduled");
     assert.match(redeemWorkflow, /mergeAvailableRefreshedAccounts/,
       "the scheduled workflow must validate refresh candidates before using them");
+    assert.match(redeemWorkflow, /\.\/scripts\/refresh-account\.ts/,
+      "the scheduled workflow must import the TypeScript refresh helper");
     const workflow = parse(redeemWorkflow);
     const tokenSource = workflow.jobs.redeem.steps.find(
       (step: { id?: string }) => step.id === "token_source",

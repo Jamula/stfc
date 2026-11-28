@@ -66,7 +66,7 @@ jobs:
               refs/heads/automation-state:refs/remotes/origin/automation-state
             git worktree add --detach "$RESTORE_DIR" origin/automation-state
             MAIN_SHA=$(git rev-parse HEAD)
-            node scripts/discord-monitor-state.mjs restore \
+            node scripts/discord-monitor-state.ts restore \
               "$RESTORE_DIR" "$GITHUB_WORKSPACE" "$MAIN_SHA"
 
             git worktree remove "$RESTORE_DIR" --force
@@ -185,7 +185,7 @@ jobs:
             git -C "$STATE_DIR" rm -rf --cached --ignore-unmatch .
           fi
 
-          node scripts/discord-monitor-state.mjs persist \
+          node scripts/discord-monitor-state.ts persist \
             "$GITHUB_WORKSPACE" "$STATE_DIR"
 
           git -C "$STATE_DIR" config user.name  "github-actions[bot]"
@@ -225,7 +225,7 @@ jobs:
             if [ "$attempt" -lt 3 ]; then
               echo "Push attempt $attempt failed; pulling with rebase before retry…"
               if git ls-remote --exit-code --heads origin automation-state >/dev/null; then
-                node scripts/automation-state-retry.mjs \
+                node scripts/automation-state-retry.ts \
                   "$STATE_DIR" automation-state \
                   data/discord/cursors.json data/discord/command-acks.json data/discord/candidates.jsonl \
                   data/discord/tips-seen.jsonl data/discord/cooldowns.json \

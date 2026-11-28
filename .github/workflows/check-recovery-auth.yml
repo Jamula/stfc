@@ -29,8 +29,8 @@ jobs:
           REPOSITORY_VARIABLES: ${{ toJSON(vars) }}
         run: |
           node --input-type=module <<'NODE'
-          import { mergeAvailableRefreshedAccounts, verifiedIdentity, verifyGiftAccess } from './scripts/refresh-account.mjs';
-          import { isTokenAccounts } from './shared/token-account-schema.mjs';
+          import { mergeAvailableRefreshedAccounts, verifiedIdentity, verifyGiftAccess } from './scripts/refresh-account.ts';
+          import { isTokenAccounts } from './shared/token-account-schema.ts';
           try {
             const vars = JSON.parse(process.env.REPOSITORY_VARIABLES);
             const keys = ['AZURE_CLIENT_ID', 'AZURE_TENANT_ID', 'AZURE_SUBSCRIPTION_ID',

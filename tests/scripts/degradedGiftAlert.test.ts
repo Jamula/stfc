@@ -7,7 +7,7 @@ import {
   PERSISTENT_TRANSIENT_RUNS,
   parseDegradedState,
   syncDegradedGiftAlert,
-} from "../../scripts/degraded-gift-alert.mjs";
+} from "../../scripts/degraded-gift-alert.ts";
 
 const repeatedGift = {
   version: 2,

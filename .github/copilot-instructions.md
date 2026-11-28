@@ -6,7 +6,7 @@ marking it ready; those actions require an explicit user request.
 ## Repository facts
 
 - The working directory is `stfc-gift-redeemer`, but **the GitHub repo is `Jamula/stfc`**. Never infer the repo from the folder name.
-- Node version comes from `.nvmrc` (currently `24`). Every workflow reads it; no workflow hardcodes a version.
+- Node version comes from `.nvmrc` (currently `26`; `api/.nvmrc` uses `22` for Azure Static Web Apps Functions). Every workflow reads `.nvmrc`; no workflow hardcodes a version.
 - The repo is worked on from **both Windows and Linux Codespaces**. Keep tooling cross-platform.
 
 ## Technology preferences
@@ -28,7 +28,7 @@ npm run typecheck                         # tsc --noEmit
 
 **New test files must be registered.** `npm test` runs a single aggregator, `tests/index.test.ts`, which is just a list of `import` lines. A test file that is not imported there **silently never runs**.
 
-`scripts/*.mjs` have hand-written `.d.mts` declarations next to them. Adding an export to a `.mjs` means adding it to the `.d.mts`, or typecheck fails while tests pass.
+`scripts/**/*.ts` and `shared/**/*.ts` use erasable TypeScript syntax so Node 26 can execute standalone scripts directly (`node scripts/<name>.ts`) while `npm run typecheck` checks them under `strict: true` without separate `.d.mts` sidecars.
 
 Sub-packages have their own suites and dependencies: `web/` (Vite), `worker/` (vitest), `api/` (Azure Functions), `pwa-browser/` and `pwa-token-api/` (Container Apps typechecks).
 
@@ -46,7 +46,7 @@ Locally, prefer fixing the failing test over habitually bypassing hooks.
 - **`api/`** — Azure Functions backing the web control panel.
 - **`web/`** — Vite frontend. **`worker/`** — Cloudflare Worker bridging Discord interactions.
 - **`pwa-token-api/` & `pwa-browser/`** — private Azure Blob token-store API and internal-only headless-Chromium login relay backing the owner-only token-update PWA.
-- **`scripts/`** — standalone `.mjs` utilities (token capture, pre-commit checks, CI helpers).
+- **`scripts/`** — standalone `.ts` utilities (token capture, local auth recovery, pre-commit checks, CI helpers) executed natively on Node 26.
 - **`.github/workflows/`** — `redeem.yml` is the core loop: download `accounts.json` from private Azure Blob Storage via GitHub OIDC (`STFC_ACCOUNTS_FILE`; legacy `STFC_ACCOUNTS` secret is unconfigured recovery/migration fallback only), claim gifts, redeem promo codes, and persist live state (`docs/redeem-history.md`, `data/promo-code-dead.json`, `data/redeem-degraded-state.json`, `promo-codes.txt`) to the `automation-state` branch.
 
 ## Conventions

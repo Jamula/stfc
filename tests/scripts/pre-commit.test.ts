@@ -49,14 +49,14 @@ function setupPreCommitTestRepo(dir: string): NodeJS.ProcessEnv {
   mkdirSync(scriptsDir, { recursive: true });
   mkdirSync(binDir);
   writeFileSync(
-    join(scriptsDir, "pre-commit.mjs"),
-    readFileSync(resolve("scripts/pre-commit.mjs"), "utf8"),
+    join(scriptsDir, "pre-commit.ts"),
+    readFileSync(resolve("scripts/pre-commit.ts"), "utf8"),
   );
   writeFileSync(
-    join(scriptsDir, "pre-commit-checks.mjs"),
-    readFileSync(resolve("scripts/pre-commit-checks.mjs"), "utf8"),
+    join(scriptsDir, "pre-commit-checks.ts"),
+    readFileSync(resolve("scripts/pre-commit-checks.ts"), "utf8"),
   );
-  writeFileSync(join(scriptsDir, "check-artifact-hygiene.mjs"), "process.exit(0);\n");
+  writeFileSync(join(scriptsDir, "check-artifact-hygiene.ts"), "process.exit(0);\n");
 
   const pathKey = Object.keys(isolatedGitEnv).find((key) => key.toLowerCase() === "path") ?? "PATH";
   const pathSeparator = process.platform === "win32" ? ";" : ":";
@@ -89,7 +89,7 @@ describe("parseNameStatus", () => {
   };
 
   beforeEach(async () => {
-    const mod = await import("../../scripts/pre-commit-checks.mjs");
+    const mod = await import("../../scripts/pre-commit-checks.ts");
     parseNameStatus = mod.parseNameStatus;
   });
 
@@ -179,7 +179,7 @@ describe("checkPortableFilenames", () => {
   beforeEach(async () => {
     exitState = captureExit();
     mock.method(console, "error", () => {});
-    const mod = await import("../../scripts/pre-commit-checks.mjs");
+    const mod = await import("../../scripts/pre-commit-checks.ts");
     checkPortableFilenames = mod.checkPortableFilenames;
   });
 
@@ -245,27 +245,27 @@ describe("checkWorkflowPinningTests", () => {
   beforeEach(async () => {
     exitState = captureExit();
     mock.method(console, "error", () => {});
-    const mod = await import("../../scripts/pre-commit-checks.mjs");
+    const mod = await import("../../scripts/pre-commit-checks.ts");
     checkWorkflowPinningTests = mod.checkWorkflowPinningTests;
     grepTestsForWorkflow = mod.grepTestsForWorkflow;
   });
 
   describe("pre-commit runner", () => {
     it("scans staged artifacts for secrets before running tests", () => {
-      const source = readFileSync("scripts/pre-commit.mjs", "utf8");
-      const scanAt = source.indexOf("check-artifact-hygiene.mjs --staged");
+      const source = readFileSync("scripts/pre-commit.ts", "utf8");
+      const scanAt = source.indexOf("check-artifact-hygiene.ts --staged");
       const testAt = source.indexOf("npm test");
       assert.ok(scanAt >= 0, "artifact hygiene scanner must be enabled");
       assert.ok(testAt > scanAt, "artifact hygiene scanner must run before tests");
     });
 
     it("clears hook-only Git environment before running tests in nested repositories", () => {
-      const source = readFileSync("scripts/pre-commit.mjs", "utf8");
-      const envSetupAt = source.indexOf("const testEnv = { ...process.env };");
+      const source = readFileSync("scripts/pre-commit.ts", "utf8");
+      const envSetupAt = source.indexOf("const testEnv");
       const envClearAt = source.indexOf(
-        "if (key.startsWith('GIT_')) delete testEnv[key];",
+        'if (key.startsWith("GIT_")) delete testEnv[key];',
       );
-      const testCallAt = source.indexOf("execSync('npm test'");
+      const testCallAt = source.indexOf('execSync("npm test"');
 
       assert.ok(envSetupAt >= 0, "the test runner must copy the process env");
       assert.ok(
@@ -280,7 +280,7 @@ describe("checkWorkflowPinningTests", () => {
 
     it("artifact hygiene scans index content rather than the working tree", () => {
       const dir = mkdtempSync(join(tmpdir(), "stfc-hygiene-index-"));
-      const scanner = resolve("scripts/check-artifact-hygiene.mjs");
+      const scanner = resolve("scripts/check-artifact-hygiene.ts");
       const artifact = join(dir, "docs", "capture.md");
       const isolatedGitEnv = { ...process.env };
       for (const key of Object.keys(isolatedGitEnv)) {
@@ -321,7 +321,7 @@ describe("checkWorkflowPinningTests", () => {
 
     it("scans staged JSONL and HTML files for raw tokens", () => {
       const dir = mkdtempSync(join(tmpdir(), "stfc-hygiene-jsonl-"));
-      const scanner = resolve("scripts/check-artifact-hygiene.mjs");
+      const scanner = resolve("scripts/check-artifact-hygiene.ts");
       const artifact = join(dir, "data", "discord", "records.JSONL");
       const html = join(dir, "web", "index.html");
       const isolatedGitEnv = { ...process.env };
@@ -367,7 +367,7 @@ describe("checkWorkflowPinningTests", () => {
 
     it("scans changed contribution documents and source code for secrets and account data", () => {
       const dir = mkdtempSync(join(tmpdir(), "stfc-hygiene-changed-"));
-      const scanner = resolve("scripts/check-artifact-hygiene.mjs");
+      const scanner = resolve("scripts/check-artifact-hygiene.ts");
       const isolatedGitEnv = { ...process.env };
       for (const key of Object.keys(isolatedGitEnv)) {
         if (key.startsWith("GIT_")) delete isolatedGitEnv[key];
@@ -476,7 +476,7 @@ describe("checkWorkflowPinningTests", () => {
         writeFileSync(join(dir, "src", "change.ts"), "export const value = 1;\n");
         execFileSync("git", ["add", "src/change.ts"], { cwd: dir, env });
 
-        const result = spawnSync(process.execPath, [join(dir, "scripts", "pre-commit.mjs")], {
+        const result = spawnSync(process.execPath, [join(dir, "scripts", "pre-commit.ts")], {
           cwd: dir,
           encoding: "utf8",
           env,
@@ -1712,7 +1712,7 @@ describe("coding-style and structural repository invariants", () => {
     );
   });
 
-  it("pairs every exporting .mjs module with an export-identical .d.mts declaration", () => {
+  it("eliminates legacy .mjs and .d.mts modules from scripts/ and shared/", () => {
     const mjsFiles = [
       ...walkFiles(join(REPO_ROOT, "scripts"), (rel) => rel.endsWith(".mjs")),
       ...walkFiles(join(REPO_ROOT, "shared"), (rel) => rel.endsWith(".mjs")),
@@ -1722,26 +1722,30 @@ describe("coding-style and structural repository invariants", () => {
       ...walkFiles(join(REPO_ROOT, "shared"), (rel) => rel.endsWith(".d.mts")),
     ];
 
-    const mjsMap = new Map(mjsFiles.map((rel) => [rel, readFileSync(join(REPO_ROOT, rel), "utf8")]));
-    const dmtsMap = new Map(dmtsFiles.map((rel) => [rel, readFileSync(join(REPO_ROOT, rel), "utf8")]));
+    assert.deepEqual(mjsFiles, [], "scripts/ and shared/ must use native .ts modules instead of .mjs");
+    assert.deepEqual(dmtsFiles, [], "hand-written .d.mts sidecars must not remain in scripts/ or shared/");
 
-    assert.deepEqual(evaluateMjsDeclarationPairing(mjsMap, dmtsMap), []);
-
-    // Negative mutation checks: missing .d.mts or drifted export list turns red.
-    const missingPairMap = new Map(dmtsMap);
-    missingPairMap.delete("scripts/pre-push.d.mts");
+    // Synthetic checks proving the pairing evaluator still flags missing or drifted .d.mts pairs.
+    const syntheticMjs = new Map<string, string>([
+      [
+        "scripts/pre-push.mjs",
+        [
+          "export function isPushToMain(stdin) { return Boolean(stdin); }",
+          "export function getCommitsBehind() { return 0; }",
+          "export function rebaseOntoOrigin() { return { success: true }; }",
+        ].join("\n"),
+      ],
+    ]);
     assert.match(
-      evaluateMjsDeclarationPairing(mjsMap, missingPairMap).join("\n"),
+      evaluateMjsDeclarationPairing(syntheticMjs, new Map()).join("\n"),
       /scripts\/pre-push\.mjs: exports .* missing paired scripts\/pre-push\.d\.mts/,
     );
 
-    const driftedExportMap = new Map(dmtsMap);
-    driftedExportMap.set(
-      "scripts/pre-push.d.mts",
-      "export function isPushToMain(stdin: string): boolean;\n",
-    );
+    const driftedExportMap = new Map<string, string>([
+      ["scripts/pre-push.d.mts", "export function isPushToMain(stdin: string): boolean;\n"],
+    ]);
     assert.match(
-      evaluateMjsDeclarationPairing(mjsMap, driftedExportMap).join("\n"),
+      evaluateMjsDeclarationPairing(syntheticMjs, driftedExportMap).join("\n"),
       /scripts\/pre-push\.d\.mts: missing value exports \[getCommitsBehind, rebaseOntoOrigin\]/,
     );
 
@@ -1832,8 +1836,8 @@ describe("coding-style and structural repository invariants", () => {
       readFileSync(join(REPO_ROOT, "tests/contracts/types-sync.test.ts"), "utf8"),
     );
     const multilineSingleQuoteMutated = typesSyncSource.replace(
-      '} from "../../scripts/lib/generate-contracts.mjs";',
-      "} from '../../scripts/lib/generate-contracts.mjs';",
+      '} from "../../scripts/lib/generate-contracts.ts";',
+      "} from '../../scripts/lib/generate-contracts.ts';",
     );
     assert.notEqual(multilineSingleQuoteMutated, typesSyncSource);
     assert.match(
@@ -1841,10 +1845,12 @@ describe("coding-style and structural repository invariants", () => {
       /tests\/contracts\/types-sync\.test\.ts:23: uses single-quoted module specifier/,
     );
 
-    const multilineTsIgnoreMutated = typesSyncSource.replace(
-      "import {\n  SCHEMAS,",
-      "// @ts-ignore\nimport {\n  SCHEMAS,",
-    );
+    const multilineTsIgnoreMutated = typesSyncSource
+      .replace(
+        '} from "../../scripts/lib/generate-contracts.ts";',
+        '} from "../../scripts/lib/generate-contracts.mjs";',
+      )
+      .replace("import {\n  SCHEMAS,", "// @ts-ignore\nimport {\n  SCHEMAS,");
     assert.notEqual(multilineTsIgnoreMutated, typesSyncSource);
     assert.match(
       findTsStyleAndImportViolations("tests/contracts/types-sync.test.ts", multilineTsIgnoreMutated).join("\n"),

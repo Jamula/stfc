@@ -7,7 +7,7 @@ import {
   runGithubSecretCommand,
   verifiedIdentity,
   verifyGiftAccess,
-} from "../../scripts/refresh-account.mjs";
+} from "../../scripts/refresh-account.ts";
 import { mkdtempSync, readFileSync, rmSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -603,7 +603,7 @@ describe("manual refresh inventory safety", () => {
     const script = `
       import { EventEmitter } from "node:events";
       import assert from "node:assert/strict";
-      import { captureFromPage } from "./scripts/refresh-account.mjs";
+      import { captureFromPage } from "./scripts/refresh-account.ts";
       const token = ${JSON.stringify(fresh)};
       const context = new EventEmitter();
       let rejectNavigation;
@@ -638,15 +638,15 @@ describe("manual refresh inventory safety", () => {
   });
 
   it("refuses publishing outside an interactive terminal", () => {
-    const result = spawnSync(process.execPath, ["scripts/refresh-account.mjs", "--publish"], { encoding: "utf8" });
+    const result = spawnSync(process.execPath, ["scripts/refresh-account.ts", "--publish"], { encoding: "utf8" });
     assert.equal(result.status, 1);
     assert.match(result.stderr, /Secure account refresh failed/);
   });
 
   it("references the same one-time secret in both workflows and the publisher", () => {
     const name = "STFC_ACCOUNT_REFRESH_61690F065F04521CBA2CAE742A6BEC0DB2606A8E38A2FF74AEA5E1CB58D4E854";
-    const script = readFileSync("scripts/refresh-account.mjs", "utf8");
-    assert.match(script, new RegExp(`const REFRESH_SECRET = '${name}'`));
+    const script = readFileSync("scripts/refresh-account.ts", "utf8");
+    assert.match(script, new RegExp(`const REFRESH_SECRET = ["']${name}["']`));
     for (const file of [".github/workflows/redeem.yml", ".github/workflows/check-recovery-auth.yml"]) {
       const workflow = parse(readFileSync(file, "utf8"));
       const job = file.includes("redeem.yml") ? "redeem" : "check";

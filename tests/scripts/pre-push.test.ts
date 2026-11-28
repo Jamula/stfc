@@ -1,5 +1,5 @@
 /**
- * Tests for the pre-push rebase guard (scripts/pre-push.mjs).
+ * Tests for the pre-push rebase guard (scripts/pre-push.ts).
  *
  * Validates the exported helper functions that determine whether
  * a push targets main and drive the rebase logic.
@@ -8,7 +8,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 
-const { isPushToMain } = await import("../../scripts/pre-push.mjs");
+const { isPushToMain } = await import("../../scripts/pre-push.ts");
 
 /* ── isPushToMain ──────────────────────────────────────────────────── */
 

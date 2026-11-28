@@ -2,7 +2,7 @@
 #
 # This file is a PASS fixture for the artifact hygiene scanner.
 # It demonstrates correct use of <REDACTED> placeholders in spec files.
-# Scanner: node scripts/check-artifact-hygiene.mjs tests/fixtures/artifact-hygiene/clean-spec.md
+# Scanner: node scripts/check-artifact-hygiene.ts tests/fixtures/artifact-hygiene/clean-spec.md
 # Expected exit code: 0 (no violations)
 
 ## API Contract

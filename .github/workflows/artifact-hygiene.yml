@@ -105,7 +105,7 @@ jobs:
           echo "---"
 
           # Pass NUL-delimited paths to preserve spaces and other valid filename characters.
-          printf '%s\0' "${FILES[@]}" | xargs -0 node scripts/check-artifact-hygiene.mjs
+          printf '%s\0' "${FILES[@]}" | xargs -0 node scripts/check-artifact-hygiene.ts
 
       # Post human-readable remediation guidance as a PR comment when blocked.
       - name: Post remediation guidance

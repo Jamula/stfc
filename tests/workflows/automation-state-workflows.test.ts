@@ -123,7 +123,7 @@ describe("legacy account-store migration workflow", () => {
     assert.match(refreshTokenSource, /actions\/checkout@[0-9a-f]{40}/);
     assert.match(refreshTokenSource, /azure\/login@[0-9a-f]{40}/);
     assert.match(refreshTokenSource, /secrets\.STFC_ACCOUNTS/);
-    assert.match(refreshTokenSource, /node scripts\/validate-token-accounts\.mjs "\$account_file"/);
+    assert.match(refreshTokenSource, /node scripts\/validate-token-accounts\.ts "\$account_file"/);
     assert.doesNotMatch(refreshTokenSource, /jq -e/);
     assert.match(refreshTokenSource, /az storage blob upload[\s\S]*--overwrite false/);
     assert.match(refreshTokenSource, /unset STFC_ACCOUNTS/);
@@ -427,7 +427,7 @@ describe("automation-state scheduled workflow contract", () => {
       assert.match(loop, /push --no-verify origin "HEAD:automation-state"/);
       assert.doesNotMatch(loop, /push origin "HEAD:automation-state"/);
       assert.match(loop, /if git ls-remote --exit-code --heads origin automation-state/);
-      assert.match(loop, /node scripts\/automation-state-retry\.mjs/);
+      assert.match(loop, /node scripts\/automation-state-retry\.ts/);
       assert.match(persist.slice(finalError), /exit 1/);
       assert.doesNotMatch(persist, /HEAD:\$GITHUB_REF_NAME/);
     });
@@ -437,7 +437,7 @@ describe("automation-state scheduled workflow contract", () => {
     const persist = namedStep(redeem, "Commit redeem state to automation-state (if changed)").run ?? "";
     assert.match(
       persist,
-      /node scripts\/automation-state-retry\.mjs \\\n\s+"\$STATE_DIR" automation-state \\\n\s+docs\/redeem-history\.md data\/promo-code-dead\.json \\\n\s+data\/redeem-degraded-state\.json promo-codes\.txt/,
+      /node scripts\/automation-state-retry\.ts \\\n\s+"\$STATE_DIR" automation-state \\\n\s+docs\/redeem-history\.md data\/promo-code-dead\.json \\\n\s+data\/redeem-degraded-state\.json promo-codes\.txt/,
     );
   });
 
@@ -451,12 +451,12 @@ describe("automation-state scheduled workflow contract", () => {
       if (workflow === redeem) {
       assert.match(
         restore,
-        /node scripts\/merge-promo-codes\.mjs[\s\S]*promo-codes\.txt "\$RESTORE_DIR\/promo-codes\.txt" promo-codes\.txt "\$MAIN_SHA"/,
+        /node scripts\/merge-promo-codes\.ts[\s\S]*promo-codes\.txt "\$RESTORE_DIR\/promo-codes\.txt" promo-codes\.txt "\$MAIN_SHA"/,
       );
       } else {
       assert.match(
         restore,
-        /node scripts\/discord-monitor-state\.mjs restore[\s\S]*"\$RESTORE_DIR" "\$GITHUB_WORKSPACE" "\$MAIN_SHA"/,
+        /node scripts\/discord-monitor-state\.ts restore[\s\S]*"\$RESTORE_DIR" "\$GITHUB_WORKSPACE" "\$MAIN_SHA"/,
       );
       }
     }
@@ -573,7 +573,7 @@ describe("automation-state Discord handler contract", () => {
     assert.equal(route.env?.CLOUDFLARE_ACCOUNT_ID, "${{ secrets.CLOUDFLARE_ACCOUNT_ID }}");
     assert.equal(route.env?.CLOUDFLARE_R2_ACCESS_KEY_ID, "${{ secrets.CLOUDFLARE_R2_ACCESS_KEY_ID }}");
     assert.equal(route.env?.CLOUDFLARE_R2_SECRET_ACCESS_KEY, "${{ secrets.CLOUDFLARE_R2_SECRET_ACCESS_KEY }}");
-    assert.equal(route.run, 'node "$GITHUB_WORKSPACE/scripts/discord-handler.mjs"');
+    assert.equal(route.run, 'node "$GITHUB_WORKSPACE/scripts/discord-handler.ts"');
     assert.equal(
       cleanup.if,
       "always() && steps.state_worktree.outputs.complete == 'true'",

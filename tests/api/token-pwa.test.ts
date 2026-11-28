@@ -177,7 +177,7 @@ describe("PWA token API", () => {
       "-p", "pwa-token-api/tsconfig.json", "--listEmittedFiles",
     ], { encoding: "utf8" });
     assert.equal(build.status, 0, build.stderr || build.stdout);
-    assert.match(build.stdout.replaceAll("\\", "/"), /TSFILE: .*\/dist\/shared\/token-account-schema\.mjs/);
+    assert.match(build.stdout.replaceAll("\\", "/"), /TSFILE: .*\/dist\/shared\/token-account-schema\.js/);
 
     const env = { ...process.env };
     delete env["PWA_TOKEN_API_KEY"];
@@ -197,9 +197,9 @@ describe("PWA token API", () => {
     assert.equal(load.status, 0, load.stderr || load.stdout);
   });
 
-  it("copies both shared schema files into the token API container build", () => {
+  it("copies the shared schema file into the token API container build", () => {
     const dockerfile = readFileSync("pwa-token-api/Dockerfile", "utf8").replaceAll("\r\n", "\n");
-    assert.match(dockerfile, /^COPY shared\/token-account-schema\.mjs shared\/token-account-schema\.d\.mts \.\/shared\/$/m);
+    assert.match(dockerfile, /^COPY shared\/token-account-schema\.ts \.\/shared\/token-account-schema\.ts$/m);
   });
 
   it("validates tokens against the non-destructive endpoint redemption relies on", async () => {

@@ -1,4 +1,4 @@
-// Executable behaviour tests for scripts/dead-token-alert.mjs.
+// Executable behaviour tests for scripts/dead-token-alert.ts.
 //
 // The previous version of this coverage only regex-matched YAML substrings in
 // the scheduled redemption workflow, which cannot distinguish a correct predicate
@@ -20,7 +20,7 @@ import assert from "node:assert/strict";
 const TITLE = "STFC token rejected — redemption is stopped until STFC_ACCOUNTS is refreshed";
 const REQUIRED = ["bug", "priority:p1"];
 
-const mod = await import("../../scripts/dead-token-alert.mjs");
+const mod = await import("../../scripts/dead-token-alert.ts");
 const { parseIssues, selectAlertIssues, findAlertIssue, resolveDeadTokenAlert } = mod;
 
 /** Shape returned by `gh issue list --json number,title,labels`. */
@@ -284,7 +284,7 @@ describe("dead-token-alert — find", () => {
 
   it("routes its default diagnostics to stderr, never stdout", () => {
     // The workflow's create step captures this function's stdout with
-    // `existing=$(node scripts/dead-token-alert.mjs find)` to get a single
+    // `existing=$(node scripts/dead-token-alert.ts find)` to get a single
     // issue number. If the default logger wrote the duplicate warning to
     // stdout too, `existing` would become a multi-line value and corrupt the
     // downstream `gh issue comment "$existing"` call.

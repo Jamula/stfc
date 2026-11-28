@@ -72,8 +72,8 @@ describe(".github/workflows/discord-command-handler.yml", () => {
     }
   });
 
-  it("invokes main's scripts/discord-handler.mjs from the state worktree", { skip: yaml === undefined }, () => {
-    assert.match(yaml!, /node\s+"\$GITHUB_WORKSPACE\/scripts\/discord-handler\.mjs"/);
+  it("invokes main's scripts/discord-handler.ts from the state worktree", { skip: yaml === undefined }, () => {
+    assert.match(yaml!, /node\s+"\$GITHUB_WORKSPACE\/scripts\/discord-handler\.ts"/);
     assert.match(yaml!, /working-directory:\s*\$\{\{\s*steps\.state_worktree\.outputs\.state_dir\s*\}\}/);
     assert.match(yaml!, /STFC_STATE_BRANCH:\s*automation-state/);
     assert.match(yaml!, /DISCORD_BOT_TOKEN:\s*\$\{\{\s*secrets\.DISCORD_BOT_TOKEN\s*\}\}/);
@@ -107,7 +107,7 @@ describe(".github/workflows/discord-command-handler.yml", () => {
       // #241 — automation state lives on automation-state, not main), so
       // /redeem-status would report stale data without this restore step.
       const restoreIdx = yaml!.indexOf("Prepare automation-state handler worktree");
-      const runIdx = yaml!.indexOf('node "$GITHUB_WORKSPACE/scripts/discord-handler.mjs"');
+      const runIdx = yaml!.indexOf('node "$GITHUB_WORKSPACE/scripts/discord-handler.ts"');
       assert.notEqual(restoreIdx, -1, "must have a restore-state step");
       assert.ok(restoreIdx < runIdx, "restore must precede the handler invocation");
       assert.match(yaml!, /git worktree add -B automation-state/);

@@ -8,7 +8,7 @@ import { tmpdir } from "node:os";
 
 const execFileAsync = promisify(execFile);
 
-const mod = await import("../../scripts/discord-handler.mjs");
+const mod = await import("../../scripts/discord-handler.ts");
 
 function makeStdout() {
   const chunks: string[] = [];
@@ -98,17 +98,17 @@ function gameStatePayload(overrides: Record<string, unknown> = {}) {
   };
 }
 
-describe("scripts/discord-handler.mjs", () => {
+describe("scripts/discord-handler.ts", () => {
   it("scans staged game-state artifacts before bypassing commit hooks", () => {
-    const source = readFileSync("scripts/discord-handler.mjs", "utf8");
-    const scanAt = source.indexOf('check-artifact-hygiene.mjs');
+    const source = readFileSync("scripts/discord-handler.ts", "utf8");
+    const scanAt = source.indexOf("check-artifact-hygiene.ts");
     const commitAt = source.indexOf('["commit", "--no-verify"');
     assert.ok(scanAt >= 0);
     assert.ok(commitAt > scanAt);
   });
 
   it("pins the automation-state push hook bypass in source", () => {
-    const source = readFileSync("scripts/discord-handler.mjs", "utf8");
+    const source = readFileSync("scripts/discord-handler.ts", "utf8");
     assert.ok(source.includes('["push", "--no-verify", "origin", `HEAD:${ref}`]'));
   });
 

@@ -96,7 +96,7 @@ jobs:
             fi
             if [ -f "$RESTORE_DIR/promo-codes.txt" ]; then
               MAIN_SHA=$(git rev-parse HEAD)
-              node scripts/merge-promo-codes.mjs \
+              node scripts/merge-promo-codes.ts \
                 promo-codes.txt "$RESTORE_DIR/promo-codes.txt" promo-codes.txt "$MAIN_SHA"
             else
               echo "promo-codes.txt is not on automation-state yet; preserving the main seed."
@@ -186,8 +186,8 @@ jobs:
           node --input-type=module <<'NODE'
           import { appendFileSync, writeFileSync } from 'node:fs';
           import { join } from 'node:path';
-          import { isTokenAccounts } from './shared/token-account-schema.mjs';
-          import { mergeAvailableRefreshedAccounts } from './scripts/refresh-account.mjs';
+          import { isTokenAccounts } from './shared/token-account-schema.ts';
+          import { mergeAvailableRefreshedAccounts } from './scripts/refresh-account.ts';
           let accounts;
           try {
             accounts = JSON.parse(process.env.STFC_ACCOUNTS ?? '');
@@ -251,7 +251,7 @@ jobs:
         run: |
           set -euo pipefail
           run_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
-          existing=$(node scripts/dead-token-alert.mjs find)
+          existing=$(node scripts/dead-token-alert.ts find)
 
           if [ -n "$existing" ]; then
             echo "Alert already open as #$existing — not filing a duplicate."
@@ -291,7 +291,7 @@ jobs:
       # the first time a run is no longer in the all-tokens-rejected state.
       #
       # Both halves share one selection implementation
-      # (scripts/dead-token-alert.mjs), so the create-side and resolve-side
+      # (scripts/dead-token-alert.ts), so the create-side and resolve-side
       # notions of "which issue is the alert" cannot drift apart.
       - name: Auto-resolve dead-token alert
         if: always() && steps.redeem.outputs.exit_code == '0'
@@ -301,7 +301,7 @@ jobs:
           TITLE: "STFC token rejected — redemption is stopped until STFC_ACCOUNTS is refreshed"
           REQUIRED_LABELS: "bug"
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: node scripts/dead-token-alert.mjs resolve
+        run: node scripts/dead-token-alert.ts resolve
 
       - name: Sync persistent degraded-gift alert
         if: always() && steps.redeem.outputs.exit_code == '0'
@@ -310,7 +310,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           STATE_FILE: data/redeem-degraded-state.json
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: node scripts/degraded-gift-alert.mjs sync
+        run: node scripts/degraded-gift-alert.ts sync
 
       - name: Commit redeem state to automation-state (if changed)
         if: always() && steps.restore_state.outputs.complete == 'true'
@@ -388,7 +388,7 @@ jobs:
             if [ "$attempt" -lt 3 ]; then
               echo "Push attempt $attempt failed; pulling with rebase before retry…"
               if git ls-remote --exit-code --heads origin automation-state >/dev/null; then
-                node scripts/automation-state-retry.mjs \
+                node scripts/automation-state-retry.ts \
                   "$STATE_DIR" automation-state \
                   docs/redeem-history.md data/promo-code-dead.json \
                   data/redeem-degraded-state.json promo-codes.txt

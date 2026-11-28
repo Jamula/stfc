@@ -1,5 +1,5 @@
 /**
- * Tests for scripts/ci/check-api-auth.mjs CI grep gate.
+ * Tests for scripts/ci/check-api-auth.ts CI grep gate.
  *
  * Runs the gate as a subprocess against pre-built fixture directories:
  *   tests/ci/fixtures/good/  — one handler with proper auth → exit 0
@@ -16,7 +16,7 @@ import { dirname, join } from "node:path";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(__dirname, "../..");
-const SCRIPT = join(REPO_ROOT, "scripts/ci/check-api-auth.mjs");
+const SCRIPT = join(REPO_ROOT, "scripts/ci/check-api-auth.ts");
 const FIXTURES = join(__dirname, "fixtures");
 
 function runGate(apiDir: string) {

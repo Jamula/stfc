@@ -33,9 +33,10 @@
     "src/discord/**/*.ts",
     "src/lib/**/*.ts",
     "src/skills/**/*.ts",
+    "scripts/**/*.ts",
     "tests/**/*.ts",
     "src/crew/**/*.ts",
-    "shared/contracts/**/*.ts",
+    "shared/**/*.ts",
     "api/_lib/**/*.ts"
   ],
   "exclude": [

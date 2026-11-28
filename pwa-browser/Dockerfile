@@ -6,7 +6,7 @@ COPY pwa-browser/package.json pwa-browser/package-lock.json ./
 RUN npm ci
 COPY pwa-browser/tsconfig.json ./pwa-browser/tsconfig.json
 COPY pwa-browser/src ./pwa-browser/src
-COPY scripts/capture-token.mjs scripts/capture-token.d.mts ./scripts/
+COPY scripts/capture-token.ts ./scripts/capture-token.ts
 RUN npx tsc -p pwa-browser/tsconfig.json \
     && npx playwright install --with-deps chromium \
     && npm prune --omit=dev
@@ -14,4 +14,4 @@ RUN npx tsc -p pwa-browser/tsconfig.json \
 ENV NODE_ENV=production
 ENV PORT=8080
 EXPOSE 8080
-CMD ["node", "pwa-browser/dist/main.js"]
+CMD ["node", "pwa-browser/dist/pwa-browser/src/main.js"]

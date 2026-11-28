@@ -41,16 +41,17 @@ npm run typecheck                            # tsc --noEmit (requires subpackage
 1. **Register new root tests in `tests/index.test.ts`.** Root `npm test` runs a
    single aggregator file (`tests/index.test.ts`). Any new `tests/**/*.test.ts`
    file that is not imported there **silently never runs**.
-2. **Keep `.mjs` and `.d.mts` pairs in sync.** Standalone JavaScript modules in
-   `scripts/*.mjs` and `shared/*.mjs` carry adjacent `.d.mts` declaration files.
-   Adding or changing an export requires updating its `.d.mts` file or
-   `npm run typecheck` will fail.
+2. **Keep `scripts/**/*.ts` erasable-syntax TypeScript.** Standalone utilities in
+   `scripts/` and `shared/` run directly under Node 26 (`node scripts/<name>.ts`)
+   and are covered by `npm run typecheck` — do not add `.mjs`, `.d.mts`, or `.ps1`
+   scripts, and avoid non-erasable TypeScript features (`enum`, `namespace`,
+   constructor parameter properties) in directly executed scripts.
 3. **Subpackage checks.** `.github/workflows/test-gate.yml` also runs `worker/`
    (`npm ci`, `npm run typecheck`, `npm test`) and independent `typecheck` steps
    for `pwa-browser/` and `pwa-token-api/`. When editing `web/` or `api/`, run
    their build scripts (`npm run build:web`, `npm run build:api`) as well.
 4. **Node versions and stack conventions.** Root workflows use Node from
-   `.nvmrc` (Node 24); `api/.nvmrc` uses Node 22 for Azure Static Web Apps
+   `.nvmrc` (Node 26 LTS); `api/.nvmrc` uses Node 22 for Azure Static Web Apps
    Functions. Preserve existing stacks when maintaining current subsystems. For
    net-new standalone tools or systems, prefer C# on a supported .NET LTS
    release, Node.js/TypeScript when .NET is unsuitable, and avoid Python where

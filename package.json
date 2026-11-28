@@ -5,7 +5,7 @@
   "description": "Headless redemption of Star Trek Fleet Command web-store gifts and promo codes, runnable as a scheduled GitHub Action.",
   "type": "module",
   "engines": {
-    "node": ">=24"
+    "node": ">=26"
   },
   "scripts": {
     "skill:run-all": "tsx src/cli.ts run-all",
@@ -20,21 +20,22 @@
     "crew:knowledge:rebuild": "tsx src/crew/knowledge.ts rebuild",
     "test": "node --import tsx --test tests/index.test.ts",
     "test:watch": "node --import tsx --test --watch tests/index.test.ts",
-    "test:coverage": "c8 --all --include=\"src/**/*.ts\" --include=\"scripts/**/*.mjs\" --include=\"api/src/**/*.ts\" --include=\"api/_lib/**/*.ts\" --include=\"shared/**/*.ts\" --include=\"web/src/**/*.ts\" --extension=.ts --extension=.mjs --reporter=text --check-coverage --lines=80 --branches=80 node --import tsx tests/index.test.ts",
+    "test:coverage": "c8 --all --include=\"src/**/*.ts\" --include=\"scripts/**/*.ts\" --include=\"api/src/**/*.ts\" --include=\"api/_lib/**/*.ts\" --include=\"shared/**/*.ts\" --include=\"web/src/**/*.ts\" --extension=.ts --reporter=text --check-coverage --lines=80 --branches=80 node --import tsx tests/index.test.ts",
     "build:web": "cd web && npm run build",
     "build:api": "cd api && npm run build",
     "build:swa": "npm run build:web && npm run build:api",
-    "build:contracts": "node scripts/build-contracts.mjs",
-    "check:contracts": "node scripts/ci/check-contracts-types.mjs",
+    "build:contracts": "node scripts/build-contracts.ts",
+    "check:contracts": "node scripts/ci/check-contracts-types.ts",
     "dev:swa": "swa start http://localhost:5173 --api-location api",
     "typecheck": "tsc --noEmit",
-    "capture-token": "node scripts/capture-token.mjs",
+    "capture-token": "node scripts/capture-token.ts",
+    "recover-auth": "node scripts/recover-auth.ts",
     "playwright:install": "npx playwright install chromium",
     "prepare": "simple-git-hooks"
   },
   "simple-git-hooks": {
-    "pre-commit": "node scripts/pre-commit.mjs",
-    "pre-push": "node scripts/pre-push.mjs"
+    "pre-commit": "node scripts/pre-commit.ts",
+    "pre-push": "node scripts/pre-push.ts"
   },
   "dependencies": {
     "@discordjs/rest": "^2.6.3",

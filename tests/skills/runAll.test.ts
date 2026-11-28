@@ -7,7 +7,7 @@ import { createHash } from "node:crypto";
 import { runAll } from "../../src/skills/runAll.ts";
 import { createSummaryWriter } from "../../src/lib/summary.ts";
 import { Outcomes } from "../../src/lib/outcomes.ts";
-import { DEGRADED_ALERT_LABELS, DEGRADED_ALERT_TITLE, syncDegradedGiftAlert } from "../../scripts/degraded-gift-alert.mjs";
+import { DEGRADED_ALERT_LABELS, DEGRADED_ALERT_TITLE, syncDegradedGiftAlert } from "../../scripts/degraded-gift-alert.ts";
 // Note: the api/client module exports these; the orchestrator may need them too.
 import {
   ApiClient,

@@ -6,7 +6,7 @@ import path from "node:path";
 import {
   persistDiscordMonitorState,
   restoreDiscordMonitorState,
-} from "../../scripts/discord-monitor-state.mjs";
+} from "../../scripts/discord-monitor-state.ts";
 
 const scratchRoot = path.join(process.cwd(), ".test-scratch");
 const createdDirs = new Set<string>();
@@ -57,7 +57,7 @@ afterEach(() => {
   }
 });
 
-describe("scripts/discord-monitor-state.mjs", () => {
+describe("scripts/discord-monitor-state.ts", () => {
   it("restores the dead-code cache for reading without persisting monitor changes to it", async () => {
     const restoreRoot = makeScratchDir("discord-monitor-dead-restore");
     const workspaceRoot = makeScratchDir("discord-monitor-dead-workspace");
@@ -98,7 +98,7 @@ describe("scripts/discord-monitor-state.mjs", () => {
     fs.mkdirSync(path.join(restoreRoot, "data", "promo-code-dead.json"), { recursive: true });
 
     const result = spawnSync(process.execPath, [
-      path.join(process.cwd(), "scripts", "discord-monitor-state.mjs"),
+      path.join(process.cwd(), "scripts", "discord-monitor-state.ts"),
       "restore", restoreRoot, workspaceRoot, "HEAD",
     ], { encoding: "utf8" });
 
@@ -118,7 +118,7 @@ describe("scripts/discord-monitor-state.mjs", () => {
       writeFile(restoreRoot, "data/discord/cursors.json", '{"command":"42"}\n');
 
       const result = spawnSync(process.execPath, [
-        path.join(process.cwd(), "scripts", "discord-monitor-state.mjs"),
+        path.join(process.cwd(), "scripts", "discord-monitor-state.ts"),
         "restore", restoreRoot, workspaceRoot, "HEAD",
       ], { encoding: "utf8" });
 
@@ -138,7 +138,6 @@ describe("scripts/discord-monitor-state.mjs", () => {
       /Invalid Discord promo-channel allowlist/,
     );
   });
-
   it("preserves a concurrent /game-state upload when the monitor later persists its own state", async () => {
     const restoreRoot = makeScratchDir("discord-monitor-restore");
     const workspaceRoot = makeScratchDir("discord-monitor-workspace");

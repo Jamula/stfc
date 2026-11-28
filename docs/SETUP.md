@@ -9,7 +9,7 @@ of this repository.
 - The private Azure resources and owner-only PWA configured as described in
   [STFC token PWA setup](STFC-TOKEN-PWA.md). No Azure configuration or deployment
   is performed by this guide.
-- Node.js 24+ locally for CLI development and the local `capture-token` utility.
+- Node.js 26+ locally for CLI development and the local `capture-token` / `recover-auth` utilities.
 
 ## Hosted token setup
 
@@ -39,11 +39,11 @@ The Playwright capture script is for local CLI use only. It writes the updated
 account list to the ignored local `.env`; hosted token updates must use the
 owner-only PWA described in [STFC-TOKEN-PWA.md](STFC-TOKEN-PWA.md).
 
-```powershell
-pwsh -NoProfile -File .\recover-auth.ps1
+```bash
+npm run recover-auth
 ```
 
-The recovery launcher requires PowerShell 7 or later, Node.js 24+, project
+The recovery launcher (`scripts/recover-auth.ts`) requires Node.js 26+, project
 dependencies, and Playwright's Chromium. Install missing project dependencies
 with `npm ci` and Chromium with `npm run playwright:install`.
 The launcher checks prerequisites before requesting the backup.

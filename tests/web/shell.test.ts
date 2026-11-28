@@ -210,7 +210,7 @@ describe("bundle-budget gate", () => {
   it("current build is within 80 KB gzipped budget", () => {
     const result = spawnSync(
       "node",
-      ["scripts/ci/check-bundle-budget.mjs"],
+      ["scripts/ci/check-bundle-budget.ts"],
       {
         cwd: REPO,
         encoding: "utf8",

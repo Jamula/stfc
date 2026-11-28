@@ -1,4 +1,4 @@
-// Regression tests for the OTP widget handling in scripts/capture-token.mjs.
+// Regression tests for the OTP widget handling in scripts/capture-token.ts.
 //
 // Scopely moved to passwordless login, where the 6-digit code is rendered as
 // six separate maxlength="1" boxes. The original selectors only matched a
@@ -13,7 +13,7 @@ import { describe, it, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { chromium, type Browser, type Page } from "playwright";
 
-import { findOtpEntry, fillOtp } from "../../scripts/capture-token.mjs";
+import { findOtpEntry, fillOtp } from "../../scripts/capture-token.ts";
 
 const SPLIT_OTP_PAGE = `
   <html><body>

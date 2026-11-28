@@ -5,7 +5,7 @@ import {
   clickFirstAvailable,
   fillOtp,
   findOtpEntry,
-} from "../../scripts/capture-token.mjs";
+} from "../../scripts/capture-token.ts";
 import type { BrowserLoginSession, BrowserSessionFactory } from "./login-sessions.js";
 import { LoginSessionError } from "./login-sessions.js";
 

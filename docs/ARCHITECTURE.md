@@ -17,7 +17,7 @@ cross-origin isolation against Scopely's hosted web store.
 From that initial workaround, the repository evolved through four phases into a
 six-subsystem **`0.1.0` MVP** automation and companion platform:
 
-1. **Phase 1 — Headless Web Store v2 CLI (`src/`):** Node 24 + TypeScript CLI
+1. **Phase 1 — Headless Web Store v2 CLI (`src/`):** Node 26 + TypeScript CLI
    talking directly to Scopely's Web Store v2 API with permissive Zod schemas,
    explicit `Outcome` classification, and truthful exit codes (`0` ok/partial,
    `1` infrastructure error, `2` all tokens rejected), scheduled via GitHub
@@ -93,7 +93,7 @@ flowchart LR
 | **Token Store & Browser Relay** | `pwa-token-api/`, `pwa-browser/` | Authenticated SWA gateway (`/api/token-session/*`) | ETag-conditioned Azure Blob `accounts.json` updates, live gift-endpoint validation, isolated Playwright login/OTP relay |
 | **Discord Monitor** | `src/discord/`, `src/digest/` | `discord-monitor.yml` (`15 */4 * * *`) | Configured-channel ingest, promo codes, digests, `!crew` commands |
 | **Crew Optimizer & RAG** | `src/crew/`, `src/skills/` | Local CLI and Discord monitor | Roster, optimization scoring, progression, local embedding RAG |
-| **Discord Interaction Bridge** | `worker/`, `scripts/discord-handler.mjs`, `discord/` | Discord interactions → `repository_dispatch` | Signature verification, slash-command handling, R2 game-state uploads |
+| **Discord Interaction Bridge** | `worker/`, `scripts/discord-handler.ts`, `discord/` | Discord interactions → `repository_dispatch` | Signature verification, slash-command handling, R2 game-state uploads |
 | **Web Control Panel** | `api/`, `web/`, `shared/contracts/` | Azure SWA HTTPS requests | Authenticated operator dashboard |
 | **CI/CD** | `.github/workflows/`, `scripts/` | Git events, schedules, manual dispatch | Tests, typecheck, deploy, release, hygiene gates |
 
@@ -145,9 +145,9 @@ flowchart TB
 
 | Boundary concern | Current `0.1.0` baseline | Proposed consolidation target (`#453`, `#455`) |
 |---|---|---|
-| **Compute runtimes** | GitHub Actions (Node 24), Azure Functions (Node 22), Lit/Vite SWA, 2 Container Apps (`pwa-token-api/`, `pwa-browser/`), Cloudflare Worker | Single primary compute plane (Cloudflare Workers/Cron **or** `.NET LTS` Aspire service) |
+| **Compute runtimes** | GitHub Actions (Node 26), Azure Functions (Node 22), Lit/Vite SWA, 2 Container Apps (`pwa-token-api/`, `pwa-browser/`), Cloudflare Worker | Single primary compute plane (Cloudflare Workers/Cron **or** `.NET LTS` Aspire service) |
 | **Operational state** | Orphan `automation-state` branch via detached worktrees + `queue: max` serialization | Managed database/KV (Cloudflare D1/KV or Azure Table Storage) without Git push races |
-| **Account token storage** | Private Azure Blob (`STFC_ACCOUNTS_FILE` via OIDC; legacy secret recovery fallback) + 2 Container Apps for OTP capture | Secret Vault / KV with serverless browser rendering or guided local `recover-auth.ps1` |
+| **Account token storage** | Private Azure Blob (`STFC_ACCOUNTS_FILE` via OIDC; legacy secret recovery fallback) + 2 Container Apps for OTP capture | Secret Vault / KV with serverless browser rendering or guided local `npm run recover-auth` |
 | **Discord slash commands** | Worker Ed25519 verify → `repository_dispatch` → queued Actions runner | Direct sub-second execution in the edge/service host |
 | **Operator companion UI** | Custom SWA Lit tabs (`web/`) reading committed artifacts | Read-only MCP server (`#453`) consumed directly from ChatGPT / GitHub Copilot + optional thin web view |
 
@@ -182,9 +182,9 @@ Only the meaningful top-level directories. Per-subsystem detail lives in §3.
 │
 ├── tests/                     # node:test suite (run via tsx)
 ├── scripts/
-│   ├── pre-commit.mjs         # simple-git-hooks pre-commit (runs npm test)
-│   ├── pre-push.mjs           # pre-push checks
-│   └── ci/{check-api-auth,check-bundle-budget,check-contracts-types}.mjs
+│   ├── pre-commit.ts          # simple-git-hooks pre-commit (runs npm test)
+│   ├── pre-push.ts            # pre-push checks
+│   └── ci/{check-api-auth,check-bundle-budget,check-contracts-types}.ts
 │
 ├── data/                      # Seeds on main; live runtime state on automation-state
 │   ├── crew/                  # officers.json, roster/, tasks/, knowledge-embeddings.json
@@ -249,7 +249,7 @@ decodes + describes expiry; expired tokens become `TOKEN_EXPIRED` outcomes
 
 **Promo-code source.** Humans maintain `promo-codes.txt` on `main`; scheduled
 jobs consume and persist its operational union on `automation-state`. Before
-both redeem and Discord-monitor runs, `scripts/merge-promo-codes.mjs` starts
+both redeem and Discord-monitor runs, `scripts/merge-promo-codes.ts` starts
 from the operational `automation-state` file, keys codes by the
 comment-stripped `trim().toUpperCase()` token, collapses duplicate normalized
 lines within each input, preserves the `automation-state` line on cross-input
@@ -396,7 +396,7 @@ Browser → Azure SWA edge → /api/* → Linked Azure Function (api/)
    - `requireRole(req, role)` is deliberately **not** accepted by the
      grep gate — forces username allowlist or owner re-check.
 
-**CI gate.** `scripts/ci/check-api-auth.mjs` walks `api/src/**.ts`
+**CI gate.** `scripts/ci/check-api-auth.ts` walks `api/src/**.ts`
 (excluding `_lib`, `dist`, `node_modules`) and asserts every HTTP handler
 calls `requireAllowedUser`/`requireOwner` as its first non-trivial
 statement. Opt-out via
@@ -414,7 +414,7 @@ returned to the PWA or persisted in browser storage. The relay must use
 internal Container Apps ingress; only the token API may call it.
 
 **Bundle budget.** 81 920 bytes (= 80 KiB) gzipped JS,
-enforced by `scripts/ci/check-bundle-budget.mjs`. The checker excludes
+enforced by `scripts/ci/check-bundle-budget.ts`. The checker excludes
 `rag-index.json`.
 
 **Shared contracts.** TypeScript types + Zod schemas auto-generated from
@@ -459,11 +459,11 @@ Other automation and maintenance workflows live under
 them. In particular, `refresh-token.yml` no longer performs a provider login
 or refresh; token updates happen in the owner-only PWA.
 
-**Pre-commit.** `scripts/pre-commit.mjs` (installed by `simple-git-hooks`):
+**Pre-commit.** `scripts/pre-commit.ts` (installed by `simple-git-hooks`):
 
-1. Runs `check-artifact-hygiene.mjs --staged` on staged content.
+1. Runs `check-artifact-hygiene.ts --staged` on staged content.
 2. Parses staged changes via `git diff --cached --name-status -z -M -C`
-   (`parseNameStatus` in `scripts/pre-commit-checks.mjs`). `-z` emits
+   (`parseNameStatus` in `scripts/pre-commit-checks.ts`). `-z` emits
    NUL-delimited records so filenames with spaces, unicode, or characters
    Git would otherwise quote parse safely; `-M -C` enable explicit
    rename/copy detection rather than relying on the repo's `diff.renames`
@@ -484,18 +484,18 @@ Validate at `package.json:20,28`.
 
 **Other CI gates** invoked from workflows (not pre-commit):
 
-- `scripts/ci/check-api-auth.mjs` — Function-handler first-statement auth.
-- `scripts/ci/check-bundle-budget.mjs` — 80 KiB gzipped JS cap.
-- `scripts/ci/check-contracts-types.mjs` — generated TS vs JSON Schema
+- `scripts/ci/check-api-auth.ts` — Function-handler first-statement auth.
+- `scripts/ci/check-bundle-budget.ts` — 80 KiB gzipped JS cap.
+- `scripts/ci/check-contracts-types.ts` — generated TS vs JSON Schema
   drift.
-- `scripts/check-artifact-hygiene.mjs` — secret / token redaction,
+- `scripts/check-artifact-hygiene.ts` — secret / token redaction,
   also invoked by `artifact-hygiene.yml` and the pre-commit hook.
 
 **Pinning tests.** `tests/skills/discordMonitor.test.ts`,
 `tests/workflows/*.test.ts` pin workflow values literally (crons,
 `concurrency.group`, permission scopes). Any edit to the workflow
 ships in the same commit as the pinning-test update (enforced locally by
-`checkWorkflowPinningTests` in `scripts/pre-commit-checks.mjs`).
+`checkWorkflowPinningTests` in `scripts/pre-commit-checks.ts`).
 Canonical pattern is **structural parse + assert on object graph**, not
 substring grep.
 
@@ -671,7 +671,7 @@ pushes to `automation-state` never interleave.
 command-dependent: `/game-state` — the only Discord command that uploads game
 state to Cloudflare R2 and commits the small `manifest.json`, `.lineage.json`,
 and `_index.json` metadata to `automation-state` directly
-(`scripts/discord-handler.mjs`) — joins that same `stfc-gift-redeemer` lock,
+(`scripts/discord-handler.ts`) — joins that same `stfc-gift-redeemer` lock,
 because the exact interleaving that let a monitor run silently delete a handler
 upload (fetch the tip *after* a handler push landed, then fast-forward a
 wholesale replace of `data/discord` — a non-conflicting commit the push-retry
@@ -709,7 +709,7 @@ therefore declares `queue: max`:
   keep `cancel-in-progress: false`.
 - **Case-insensitivity.** GitHub compares both concurrency group names and the
   `==` operator case-insensitively, so a `GAME-STATE` payload resolves to the
-  shared writer group and *over*-serializes. `scripts/discord-handler.mjs`
+  shared writer group and *over*-serializes. `scripts/discord-handler.ts`
   dispatches on exact lower-case strings, so such a payload answers "Unknown
   command" without touching git — safe in the conservative direction.
 
@@ -757,7 +757,7 @@ must inspect that location before retrying or deleting anything. Other PUT
 errors also include the bucket/key for diagnosis.
 
 `discord-monitor.yml` additionally never stages `data/discord/game-state`
-(`scripts/discord-monitor-state.mjs` copies only its own allowlisted files),
+(`scripts/discord-monitor-state.ts` copies only its own allowlisted files),
 which is defense in depth on top of the shared lock, not a substitute for it —
 `tests/workflows/automation-state-race.test.ts` exercises the exact git-level
 interleaving against real plumbing to prove the ownership exclusion holds even
@@ -804,7 +804,7 @@ operational assumptions; their state is not represented by this source tree.
   `tests/index.test.ts` aggregates the root suite.
 - **Typecheck** via `npm run typecheck` (TypeScript 7; strict mode).
 - **Pre-commit hook** runs the full suite on every commit
-  (`scripts/pre-commit.mjs`). Prefer fixing failing tests locally rather than
+  (`scripts/pre-commit.ts`). Prefer fixing failing tests locally rather than
   bypassing hooks (`--no-verify` is reserved for automated workflow state
   commits on CI runners; see `.github/copilot-instructions.md`).
 - **CI checks:** `test-gate.yml` ("npm test (required)") and GitHub
@@ -818,13 +818,13 @@ operational assumptions; their state is not represented by this source tree.
   `actions/upload-code-coverage`; restoring both is the deliberate re-enable
   path.
 - **Bundle budget:** 80 KiB gzipped JS for `web/dist/`
-  (`scripts/ci/check-bundle-budget.mjs`).
+  (`scripts/ci/check-bundle-budget.ts`).
 - **Artifact hygiene:** `artifact-hygiene.yml` scans PR diffs for
   JWTs, API keys, account data; redacts to `<REDACTED-TOKEN>` in any
   output.
 - **Contract drift:** `npm run check:contracts` against
   `shared/contracts/*.ts`.
-- **API auth gate:** `scripts/ci/check-api-auth.mjs` (first-statement
+- **API auth gate:** `scripts/ci/check-api-auth.ts` (first-statement
   enforcement).
 
 ---

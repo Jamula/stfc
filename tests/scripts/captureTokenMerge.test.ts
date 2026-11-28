@@ -12,7 +12,8 @@ import { dirname, join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { EventEmitter } from "node:events";
 
-import { mergeIntoEnv, mergeAfterIdentityConfirmation, captureToken, verifyAccountId, validateRecoveryBaseline, readAccountName, readExpectedAccountId, main } from "../../scripts/capture-token.mjs";
+import { mergeIntoEnv, mergeAfterIdentityConfirmation, captureToken, verifyAccountId, validateRecoveryBaseline, readAccountName, readExpectedAccountId, main } from "../../scripts/capture-token.ts";
+import { readMaskedLine, runRecoverAuth, validateSingleLineBackup } from "../../scripts/recover-auth.ts";
 
 // ---------------------------------------------------------------------------
 // Fake fixture values — clearly not real credentials.
@@ -324,7 +325,7 @@ describe("mergeIntoEnv error redaction (issue #211)", () => {
     assert.equal(context.listenerCount("requestfailed"), 0);
     const child = spawnSync(process.execPath, ["--input-type=module", "-e", `
       import { EventEmitter } from 'node:events';
-      import { captureToken } from './scripts/capture-token.mjs';
+      import { captureToken } from './scripts/capture-token.ts';
       const context = new EventEmitter();
       const result = captureToken({ context, timeoutMs: 30000 });
       context.emit('request', { url: () => 'https://cdn-nv3-webstore-api.startrek.digitgaming.com/x', headers: () => ({ authorization: 'Bearer a.b.c' }) });
@@ -522,13 +523,13 @@ describe("mergeIntoEnv error redaction (issue #211)", () => {
     const dir = dirname(makeTmpEnv(""));
     tmpDirs.push(dir);
     mkdirSync(join(dir, "scripts"));
-    const script = join(dir, "scripts", "capture-token.mjs");
-    const source = readFileSync(join(process.cwd(), "scripts", "capture-token.mjs"), "utf8");
+    const script = join(dir, "scripts", "capture-token.ts");
+    const source = readFileSync(join(process.cwd(), "scripts", "capture-token.ts"), "utf8");
     const identityMutant = source.replace("actual !== null && actual === expectedId", "actual !== null");
     assert.notEqual(identityMutant, source, "identity gate must be present in the real source");
     writeFileSync(script, identityMutant);
     const identity = spawnSync(process.execPath, ["--input-type=module", "-e", `
-      import { verifyAccountId } from './scripts/capture-token.mjs';
+      import { verifyAccountId } from './scripts/capture-token.ts';
       if (await verifyAccountId('one.two.three', 'expected', async () => new Response('{"payload":{"accountId":"other"}}'))) process.exit(17);
     `], { cwd: dir, encoding: "utf8", timeout: 15000 });
     assert.equal(identity.status, 17, "mismatched-identity regression must be detected");
@@ -537,7 +538,7 @@ describe("mergeIntoEnv error redaction (issue #211)", () => {
     writeFileSync(script, tokenMutant);
     const token = spawnSync(process.execPath, ["--input-type=module", "-e", `
       import { EventEmitter } from 'node:events';
-      import { captureToken } from './scripts/capture-token.mjs';
+      import { captureToken } from './scripts/capture-token.ts';
       const ctx = new EventEmitter();
       const req = token => ({ url: () => 'https://cdn-nv3-webstore-api.startrek.digitgaming.com/x', headers: () => ({ authorization: 'Bearer ' + token }) });
       const result = captureToken({ context: ctx, timeoutMs: 1000, closeAfterCapture: async () => ctx.emit('request', req('two.two.two')) });
@@ -623,8 +624,8 @@ describe("mergeIntoEnv error redaction (issue #211)", () => {
     const dir = dirname(envFile);
     tmpDirs.push(dir);
     mkdirSync(join(dir, "scripts"));
-    const script = join(dir, "scripts", "capture-token.mjs");
-    copyFileSync(join(process.cwd(), "scripts", "capture-token.mjs"), script);
+    const script = join(dir, "scripts", "capture-token.ts");
+    copyFileSync(join(process.cwd(), "scripts", "capture-token.ts"), script);
     for (const [args, message] of [
       [[], /private identifier input is invalid/],
       [["--headless"], /requires a visible browser/],
@@ -650,96 +651,145 @@ describe("mergeIntoEnv error redaction (issue #211)", () => {
     assert.equal(readFileSync(envFile, "utf8"), original);
   });
 
-  it("rejects Windows PowerShell 5 before requesting or writing the backup", (t) => {
+  it("rejects older Node versions before requesting or writing the backup", async () => {
     const dir = dirname(makeTmpEnv(""));
     tmpDirs.push(dir);
     rmSync(join(dir, ".env"));
-    const script = join(dir, "recover-auth.ps1");
-    copyFileSync(join(process.cwd(), "recover-auth.ps1"), script);
-    let available = 0;
-    for (const [command, message] of [["powershell", /PowerShell 7 or later is required.*pwsh/]] as const) {
-      const probe = spawnSync(command, ["-NoProfile", "-Command", "$PSVersionTable.PSVersion.Major"], { encoding: "utf8" });
-      if (probe.error || probe.status !== 0 || (command === "powershell" && Number(probe.stdout.trim()) >= 7)) continue;
-      available++;
-      const shellArgs = command === "powershell" ? ["-NoProfile", "-ExecutionPolicy", "Bypass"] : ["-NoProfile"];
-      const result = spawnSync(command, [...shellArgs, "-File", script], {
-        cwd: dir, input: "\n", encoding: "utf8", timeout: 30000,
-      });
-      assert.equal(result.status, 1, result.stderr || String(result.error));
-      assert.match(result.stdout + result.stderr, message);
-      assert.doesNotMatch(result.stdout + result.stderr, /Complete backup|Paste the complete/);
-      assert.throws(() => readFileSync(join(dir, ".env")), /ENOENT/);
-    }
-    if (available === 0) t.skip("PowerShell not installed");
+    const logs: string[] = [];
+    let backupRequested = false;
+    const status = await runRecoverAuth({
+      rootDir: dir,
+      nodeVersion: "24.11.0",
+      log: (line) => logs.push(line),
+      readBackup: async () => {
+        backupRequested = true;
+        return "";
+      },
+    });
+    assert.equal(status, 1);
+    assert.equal(backupRequested, false);
+    assert.match(logs.join("\n"), /Node\.js 26 or later is required/);
+    assert.doesNotMatch(logs.join("\n"), /Complete backup|Paste the complete/);
+    assert.throws(() => readFileSync(join(dir, ".env")), /ENOENT/);
   });
 
-  it("checks prerequisites before requesting or writing a backup", (t) => {
-    const pwsh = spawnSync("pwsh", ["-NoProfile", "-Command", "$PSVersionTable.PSVersion.Major"], { encoding: "utf8" });
-    if (pwsh.error) return t.skip("PowerShell not installed");
+  it("checks prerequisites and backup integrity before writing .env", async () => {
     const envFile = makeTmpEnv("");
     const dir = dirname(envFile);
     tmpDirs.push(dir);
     rmSync(envFile);
-    copyFileSync(join(process.cwd(), "recover-auth.ps1"), join(dir, "recover-auth.ps1"));
-    const wrapper = join(dir, "preflight.ps1");
-    writeFileSync(wrapper, `
-function node { $global:LASTEXITCODE = 1 }
-function gh { }
-function Read-Host { throw 'backup must not be requested' }
-& "$PSScriptRoot\\recover-auth.ps1"
-exit $LASTEXITCODE
-`, "utf8");
-    const result = spawnSync("pwsh", ["-NoProfile", "-File", wrapper], { cwd: dir, encoding: "utf8", timeout: 30000 });
-    assert.equal(result.status, 1, result.stderr);
-    assert.match(result.stdout, /install the project dependencies and Playwright Chromium/);
-    assert.doesNotMatch(result.stdout + result.stderr, /backup must not be requested/);
+
+    const preflightLogs: string[] = [];
+    const preflightStatus = await runRecoverAuth({
+      rootDir: dir,
+      nodeVersion: "26.13.1",
+      preflight: () => false,
+      log: (line) => preflightLogs.push(line),
+      readBackup: async () => {
+        throw new Error("backup must not be requested");
+      },
+    });
+    assert.equal(preflightStatus, 1);
+    assert.match(preflightLogs.join("\n"), /install the project dependencies and Playwright Chromium/);
     assert.throws(() => readFileSync(envFile), /ENOENT/);
+
+    for (const bad of [
+      "",
+      "{}",
+      "[]",
+      '[{"name":"main","token":"not-jwt"}]',
+      '[{"name":"main","token":"a.b.c"},{"name":"main","token":"d.e.f"}]',
+      '[{"name":"main","name":"dup","token":"a.b.c"}]',
+      '[{"name":"a\'b","token":"a.b.c"}]',
+      '[{"name":"a\\\\b","token":"a.b.c"}]',
+      '[{"name":"   ","token":"a.b.c"}]',
+    ]) {
+      assert.throws(() => validateSingleLineBackup(bad));
+    }
+    assert.equal(validateSingleLineBackup('[{"name":"main#1","token":"aaa.bbb.ccc"}]'), 1);
+
+    let maskedOutput = "";
+    const stdin = Object.assign(new EventEmitter(), {
+      isTTY: true,
+      isRaw: false,
+      setRawMode(value: boolean) {
+        this.isRaw = value;
+      },
+      resume() {},
+      pause() {},
+    });
+    const stdout = {
+      isTTY: true,
+      write: (value: string) => {
+        maskedOutput += value;
+      },
+    };
+    const maskedPromise = readMaskedLine("Complete backup: ", { stdin, stdout });
+    stdin.emit("data", Buffer.from('[{"name":"main","token":"secret.jwt.val"}]\r'));
+    assert.equal(await maskedPromise, '[{"name":"main","token":"secret.jwt.val"}]');
+    assert.doesNotMatch(maskedOutput, /secret\.jwt\.val/);
   });
 
-  it("quotes hash values for Node and restores the caller's environment", (t) => {
-    const pwsh = spawnSync("pwsh", ["-NoProfile", "-Command", "$PSVersionTable.PSVersion.Major"], { encoding: "utf8" });
-    if (pwsh.error) return t.skip("PowerShell not installed");
+  it("quotes hash values for Node and restores the caller's environment", async () => {
     const envFile = makeTmpEnv("");
     const dir = dirname(envFile);
     tmpDirs.push(dir);
     rmSync(envFile);
-    copyFileSync(join(process.cwd(), "recover-auth.ps1"), join(dir, "recover-auth.ps1"));
-    const wrapper = join(dir, "check.ps1");
-    const executable = process.execPath.replace(/'/g, "''");
-    writeFileSync(wrapper, `
-$ErrorActionPreference = 'Stop'
-$global:step = 0
-function Read-Host {
-  param([string]$Prompt, [switch]$AsSecureString)
-  $global:step++
-  if ($global:step -eq 1) { return ConvertTo-SecureString $env:CAPTURE_TEST_BASELINE -AsPlainText -Force }
-  if ($global:step -eq 2) { return 'YES' }
-  return 'YES'
-}
-function gh { }
-function node {
-  if ($args -contains '--input-type=module') { $global:LASTEXITCODE = 0; return }
-  if ($env:GH_REPO -ne 'original/repo' -or $env:GH_HOST -ne 'original.host' -or $env:STFC_EMAIL -or $env:STFC_PASSWORD -or $env:STFC_OTP -or $env:STFC_DEBUG_DIR) { throw 'incorrect child environment' }
-  $envPath = Join-Path $PSScriptRoot '.env'
-  & '${executable}' "--env-file=$envPath" -e "if (process.env.STFC_ACCOUNTS !== process.env.CAPTURE_TEST_BASELINE) process.exit(3)"
-  if ($LASTEXITCODE -ne 0) { throw 'invalid env value' }
-  if ($env:CAPTURE_TEST_THROW -eq 'yes') { throw 'simulated capture error' }
-  $global:LASTEXITCODE = 0
-}
-$env:GH_REPO = 'original/repo'; $env:GH_HOST = 'original.host'; $env:STFC_EMAIL = 'original-email'
-$env:STFC_PASSWORD = 'original-password'; $env:STFC_OTP = 'original-otp'; $env:STFC_DEBUG_DIR = 'original-debug'
-$caught = $false
-try { & "$PSScriptRoot\\recover-auth.ps1" } catch { if ($env:CAPTURE_TEST_THROW -ne 'yes' -or $_.Exception.Message -ne 'simulated capture error') { throw }; $caught = $true }
-if ($env:CAPTURE_TEST_THROW -eq 'yes' -and -not $caught) { throw 'expected simulated error' }
-if ($env:GH_REPO -ne 'original/repo' -or $env:GH_HOST -ne 'original.host' -or $env:STFC_EMAIL -ne 'original-email' -or $env:STFC_PASSWORD -ne 'original-password' -or $env:STFC_OTP -ne 'original-otp' -or $env:STFC_DEBUG_DIR -ne 'original-debug') { throw 'environment not restored' }
-`, "utf8");
+    const baseline = '[{"name":"main#1","token":"aaa.bbb.ccc"}]';
+
     for (const shouldThrow of [false, true]) {
-      if (shouldThrow) rmSync(envFile);
-      const result = spawnSync("pwsh", ["-NoProfile", "-File", wrapper], {
-        encoding: "utf8",
-        env: { ...process.env, CAPTURE_TEST_BASELINE: `[{"name":"main#1","token":"aaa.bbb.ccc"}]`, CAPTURE_TEST_THROW: shouldThrow ? "yes" : "no" },
-      });
-      assert.equal(result.status, 0, result.stderr || result.stdout);
+      if (shouldThrow) rmSync(envFile, { force: true });
+      const callerEnv: NodeJS.ProcessEnv = {
+        ...process.env,
+        GH_REPO: "original/repo",
+        GH_HOST: "original.host",
+        STFC_EMAIL: "original-email",
+        STFC_PASSWORD: "original-password",
+        STFC_OTP: "original-otp",
+        STFC_DEBUG_DIR: "original-debug",
+      };
+
+      const run = () =>
+        runRecoverAuth({
+          rootDir: dir,
+          nodeVersion: "26.13.1",
+          env: callerEnv,
+          preflight: () => true,
+          log: () => {},
+          readBackup: async () => baseline,
+          confirmConditions: async () => "YES",
+          runCapture: ({ env: childEnv }) => {
+            assert.equal(childEnv["GH_REPO"], "original/repo");
+            assert.equal(childEnv["GH_HOST"], "original.host");
+            assert.equal(childEnv["STFC_EMAIL"], undefined);
+            assert.equal(childEnv["STFC_PASSWORD"], undefined);
+            assert.equal(childEnv["STFC_OTP"], undefined);
+            assert.equal(childEnv["STFC_DEBUG_DIR"], undefined);
+
+            const parsed = spawnSync(
+              process.execPath,
+              [`--env-file=${envFile}`, "-e", "process.stdout.write(process.env.STFC_ACCOUNTS ?? '')"],
+              { encoding: "utf8" },
+            );
+            assert.equal(parsed.status, 0);
+            assert.equal(parsed.stdout, baseline);
+            if (shouldThrow) throw new Error("simulated capture error");
+            return 0;
+          },
+        });
+
+      if (shouldThrow) {
+        await assert.rejects(run(), /simulated capture error/);
+      } else {
+        assert.equal(await run(), 0);
+      }
+
+      assert.equal(callerEnv["GH_REPO"], "original/repo");
+      assert.equal(callerEnv["GH_HOST"], "original.host");
+      assert.equal(callerEnv["STFC_EMAIL"], "original-email");
+      assert.equal(callerEnv["STFC_PASSWORD"], "original-password");
+      assert.equal(callerEnv["STFC_OTP"], "original-otp");
+      assert.equal(callerEnv["STFC_DEBUG_DIR"], "original-debug");
     }
   });
 });

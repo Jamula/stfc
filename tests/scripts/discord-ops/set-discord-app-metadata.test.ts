@@ -23,14 +23,14 @@ const SCRIPT = path.join(
   REPO_ROOT,
   "scripts",
   "discord-ops",
-  "set-discord-app-metadata.mjs",
+  "set-discord-app-metadata.ts",
 );
 const STUB_PATH = path.join(
   REPO_ROOT,
   "tests",
   "fixtures",
   "discord-ops",
-  "fetch-stub.mjs",
+  "fetch-stub.ts",
 );
 const STUB = pathToFileURL(STUB_PATH).href;
 const SENTINEL = "BOT_TOKEN_SENTINEL_DO_NOT_LEAK_a8f3c91e";
@@ -92,7 +92,7 @@ const scriptExists = fs.existsSync(SCRIPT);
 // (and reports a clean "skipped — script not yet committed" message)
 // when the script has not landed yet. Once the file exists, the
 // tests become real regression guards.
-describe("scripts/discord-ops/set-discord-app-metadata.mjs", { skip: !scriptExists }, () => {
+describe("scripts/discord-ops/set-discord-app-metadata.ts", { skip: !scriptExists }, () => {
   it("--help prints usage and exits 0", () => {
     const r = run({ args: ["--help"] });
     assert.equal(r.status, 0, `expected exit 0, got ${r.status}; stderr=${r.stderr}`);

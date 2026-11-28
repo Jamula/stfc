@@ -36,13 +36,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Scan changed artifacts for secrets
-        env:
-          BASE_REF: ${{ github.base_ref }}
-        run: |
-          git fetch --no-tags --quiet origin "refs/heads/${BASE_REF}:refs/remotes/origin/${BASE_REF}"
-          node scripts/check-artifact-hygiene.mjs --base-ref "origin/${BASE_REF}"
-
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
         with:
           node-version-file: .nvmrc
@@ -54,6 +47,13 @@ jobs:
             worker/package-lock.json
             pwa-browser/package-lock.json
             pwa-token-api/package-lock.json
+
+      - name: Scan changed artifacts for secrets
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          git fetch --no-tags --quiet origin "refs/heads/${BASE_REF}:refs/remotes/origin/${BASE_REF}"
+          node scripts/check-artifact-hygiene.ts --base-ref "origin/${BASE_REF}"
 
       - run: npm ci
 

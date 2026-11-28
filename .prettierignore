@@ -8,7 +8,7 @@ dist/
 package-lock.json
 **/package-lock.json
 
-# Auto-generated schema contracts (owned by scripts/build-contracts.mjs)
+# Auto-generated schema contracts (owned by scripts/build-contracts.ts)
 shared/contracts/
 
 # Seed/runtime data and historical specs

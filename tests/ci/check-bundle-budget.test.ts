@@ -1,5 +1,5 @@
 /**
- * Tests for scripts/ci/check-bundle-budget.mjs.
+ * Tests for scripts/ci/check-bundle-budget.ts.
  *
  * Uses fixture directories with synthetic JS files to validate the
  * pass/fail logic without a real Vite build.
@@ -18,7 +18,7 @@ import { randomBytes } from "node:crypto";
 import { tmpdir } from "node:os";
 
 const REPO = resolve(import.meta.dirname, "../..");
-const SCRIPT = join(REPO, "scripts", "ci", "check-bundle-budget.mjs");
+const SCRIPT = join(REPO, "scripts", "ci", "check-bundle-budget.ts");
 const SCRIPT_TIMEOUT_MS = 30_000;
 
 /** Generate N random bytes — nearly incompressible (gzipped ≈ raw size). */

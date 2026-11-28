@@ -8,10 +8,10 @@
     "noImplicitOverride": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "allowJs": true,
+    "rewriteRelativeImportExtensions": true,
     "rootDir": "..",
     "outDir": "dist",
     "types": ["node"]
   },
-  "include": ["src/**/*.ts", "../shared/token-account-schema.mjs"]
+  "include": ["src/**/*.ts", "../shared/token-account-schema.ts"]
 }

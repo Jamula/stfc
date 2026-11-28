@@ -20,7 +20,7 @@ import {
   SCHEMAS_DIR,
   generateTypes,
   compileSchema,
-} from "../../scripts/lib/generate-contracts.mjs";
+} from "../../scripts/lib/generate-contracts.ts";
 
 // ── 1. Generator produces output for every schema ───────────────────────────
 

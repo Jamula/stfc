@@ -32,7 +32,7 @@ const SCRIPT = path.join(
   REPO_ROOT,
   "scripts",
   "discord-ops",
-  "set-discord-app-metadata.mjs",
+  "set-discord-app-metadata.ts",
 );
 
 const scriptExists = fs.existsSync(SCRIPT);
@@ -59,7 +59,7 @@ const FORBIDDEN_PREFIXES = [
 ];
 
 describe(
-  "scripts/discord-ops/set-discord-app-metadata.mjs — endpoint narrowing",
+  "scripts/discord-ops/set-discord-app-metadata.ts — endpoint narrowing",
   { skip: !scriptExists },
   () => {
     it("DISCORD_API_BASE is exactly `https://discord.com/api/v10` (no trailing path)", () => {
