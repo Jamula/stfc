@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
+import { spawnSync, type SpawnSyncReturns } from "node:child_process";
 import {
   chmodSync,
   existsSync,
@@ -57,6 +57,7 @@ const workflows = workflowSources.map(({ file, source }) => ({
           uses?: string;
           "working-directory"?: string;
           with?: Record<string, unknown>;
+          env?: Record<string, string>;
         }>;
       }
     >;
@@ -70,6 +71,36 @@ const workflowSteps = workflows.flatMap(({ file, workflow }) =>
 
 const suppressesFailures = (value: unknown): boolean =>
   value !== undefined && value !== false;
+
+type ReleaseStep = {
+  run?: string;
+  "working-directory"?: string;
+  if?: string;
+  "continue-on-error"?: boolean | string;
+};
+
+function assertReleaseDependencies(steps: ReleaseStep[]): void {
+  const validations = ["npm run typecheck", "npm test"].map((command) => {
+    const index = steps.findIndex(
+      (step) => step.run?.trim() === command && !step["working-directory"],
+    );
+    assert.ok(index >= 0, `release job must run ${command} at the repository root`);
+    assert.equal(steps[index]?.if, undefined, `${command} must not be conditional`);
+    assert.ok(!suppressesFailures(steps[index]?.["continue-on-error"]));
+    return index;
+  });
+  for (const directory of [undefined, "api", "web", "pwa-browser", "pwa-token-api"]) {
+    const index = steps.findIndex(
+      (step) => step.run?.trim() === "npm ci" && step["working-directory"] === directory,
+    );
+    const label = directory ?? "root";
+    assert.ok(index >= 0, `release job must install ${label} dependencies`);
+    assert.equal(steps[index]?.if, undefined, `${label} install must not be conditional`);
+    assert.ok(!suppressesFailures(steps[index]?.["continue-on-error"]));
+    assert.ok(validations.every((validation) => index < validation),
+      `${label} install must precede both validations`);
+  }
+}
 
 // --- node --test guard helpers (#242, #214, #222) -------------------------
 //
@@ -1056,7 +1087,7 @@ describe("workflow consolidation", () => {
     }
   });
 
-  it("runs the canonical suite entry point on push to main (#242, #222)", () => {
+  it("runs the canonical suite during release validation (#242, #222)", () => {
     const release = workflows.find(({ file }) => file === "release.yml");
     assert.ok(release, "release.yml must exist");
     const steps = Object.values(release!.workflow.jobs ?? {}).flatMap(
@@ -1072,6 +1103,113 @@ describe("workflow consolidation", () => {
       steps.some((step) => step.run?.trim() === "npm run typecheck"),
       "release.yml must run npm run typecheck alongside npm test",
     );
+  });
+
+  it("requires a manual release request and validates it before publication", () => {
+    const release = workflows.find(({ file }) => file === "release.yml");
+    assert.ok(release, "release.yml must exist");
+    const triggers = (release.workflow.on ?? {}) as Record<string, unknown>;
+    assert.deepEqual(Object.keys(triggers), ["workflow_dispatch"]);
+    const dispatch = triggers.workflow_dispatch as {
+      inputs?: { version?: { required?: boolean; type?: string } };
+    };
+    assert.equal(dispatch.inputs?.version?.required, true);
+    assert.equal(dispatch.inputs?.version?.type, "string");
+
+    const steps = release.workflow.jobs?.release?.steps ?? [];
+    const gate = steps.findIndex((step) => step.name === "Verify release request");
+    assert.ok(gate >= 0);
+    assert.equal(steps[gate]?.if, undefined);
+    assert.ok(!suppressesFailures(steps[gate]?.["continue-on-error"]));
+    assert.equal(steps[gate]?.env?.APPROVED_VERSION, "${{ inputs.version }}");
+    assert.equal(steps[gate]?.env?.RELEASE_REF, "${{ github.ref }}");
+    for (const name of ["Create git tag", "Create GitHub Release"]) {
+      const publish = steps.findIndex((step) => step.name === name);
+      assert.ok(publish > gate, `${name} must follow release request validation`);
+      for (const command of ["npm run typecheck", "npm test"]) {
+        const validation = steps.findIndex((step) => step.run?.trim() === command);
+        assert.ok(validation >= 0 && validation < publish, `${command} must precede ${name}`);
+      }
+    }
+
+    const script = steps[gate]?.run?.match(/node --input-type=module <<'NODE'\r?\n([\s\S]*?)\r?\nNODE/)?.[1];
+    assert.ok(script, "release request validation script must be present");
+    const version = (JSON.parse(readFileSync("package.json", "utf8")) as { version: string }).version;
+    const validate = (approvedVersion: string, ref: string, files?: Record<string, string>) => spawnSync(
+      process.execPath,
+      ["--input-type=module"],
+      {
+        input: files
+          ? script.replace(
+            "import { readFileSync } from 'node:fs';",
+            "const files = JSON.parse(process.env.RELEASE_TEST_FILES); const readFileSync = name => files[name];",
+          )
+          : script,
+        env: {
+          ...process.env,
+          APPROVED_VERSION: approvedVersion,
+          RELEASE_REF: ref,
+          RELEASE_TEST_FILES: JSON.stringify(files ?? {}),
+        },
+      },
+    ).status;
+    assert.equal(validate(version, "refs/heads/main"), 0);
+    assert.notEqual(validate(version, "refs/heads/other"), 0);
+    assert.notEqual(validate("not-a-version", "refs/heads/main"), 0);
+    assert.notEqual(validate("999.0.0", "refs/heads/main"), 0);
+    const fixture = (value: string): Record<string, string> => ({
+      "package.json": JSON.stringify({ version: value }),
+      "package-lock.json": JSON.stringify({ version: value, packages: { "": { version: value } } }),
+      "CHANGELOG.md": `# Changelog\r\n## [${value}] - 2026-11-08\r\n`,
+    });
+    const valid = fixture("0.2.0-rc.1");
+    assert.equal(validate("0.2.0-rc.1", "refs/heads/main", valid), 0);
+    assert.notEqual(validate("0.2.0-rc.01", "refs/heads/main", fixture("0.2.0-rc.01")), 0);
+    assert.notEqual(validate("0.2.0-rc.1", "refs/heads/main", {
+      ...valid,
+      "package-lock.json": JSON.stringify({ version: "0.2.0-rc.1", packages: { "": { version: "0.1.0" } } }),
+    }), 0);
+    assert.notEqual(validate("0.2.0-rc.1", "refs/heads/main", {
+      ...valid,
+      "CHANGELOG.md": "## [0.2.0-rc.1] - not-a-date\n",
+    }), 0);
+  });
+
+  it("publishes prereleases without promoting them to latest", (t) => {
+    const bash = spawnSync("bash", ["--version"], { encoding: "utf8" });
+    if (process.platform === "win32" && bash.status !== 0) {
+      t.skip("Bash is required to exercise the Ubuntu release workflow");
+      return;
+    }
+    assert.equal(bash.status, 0, "Bash must be available to test the release workflow");
+
+    const release = workflows.find(({ file }) => file === "release.yml");
+    const step = release?.workflow.jobs?.release?.steps?.find(
+      (candidate) => candidate.name === "Create GitHub Release",
+    );
+    assert.ok(step?.run);
+
+    for (const [version, flags] of [
+      ["0.2.0", ["--latest"]],
+      ["0.2.0-rc.1", ["--prerelease", "--latest=false"]],
+      ["0.2.0-alpha-beta.2", ["--prerelease", "--latest=false"]],
+    ] as const) {
+      const tag = `v${version}`;
+      const result: SpawnSyncReturns<string> = spawnSync(
+        "bash",
+        ["-c", `gh() { printf '%s\\n' "$@"; }\n${step.run.replaceAll("${{ steps.version.outputs.tag }}", tag)}`],
+        {
+          encoding: "utf8",
+          env: { ...process.env, GH_TOKEN: "", RELEASE_VERSION: version, RELEASE_TAG: tag },
+        },
+      );
+      assert.equal(result.status, 0, result.stderr);
+      assert.deepEqual(result.stdout.trim().split(/\r?\n/), [
+        "release", "create", tag, "--title", tag, "--generate-notes", ...flags,
+      ]);
+    }
+    assert.equal(step.env?.RELEASE_VERSION, "${{ inputs.version }}");
+    assert.equal(step.env?.RELEASE_TAG, "${{ steps.version.outputs.tag }}");
   });
 
   it("does not suppress release validation failures", () => {
@@ -1090,64 +1228,46 @@ describe("workflow consolidation", () => {
   it("installs root and subpackage dependencies before release validation", () => {
     const release = workflows.find(({ file }) => file === "release.yml");
     assert.ok(release, "release.yml must exist");
-    const steps = Object.values(release!.workflow.jobs ?? {}).flatMap(
-      (job) => job.steps ?? [],
-    );
-    const rootInstallIndex = steps.findIndex(
-      (step) =>
-        step.run?.trim() === "npm ci" &&
-        step["working-directory"] === undefined,
-    );
-    const apiInstallIndex = steps.findIndex(
-      (step) =>
-        step.run?.trim() === "npm ci" &&
-        step["working-directory"] === "api",
-    );
-    const webInstallIndex = steps.findIndex(
-      (step) =>
-        step.run?.trim() === "npm ci" &&
-        step["working-directory"] === "web",
-    );
-    const pwaBrowserInstallIndex = steps.findIndex(
-      (step) =>
-        step.run?.trim() === "npm ci" &&
-        step["working-directory"] === "pwa-browser",
-    );
-    const pwaTokenApiInstallIndex = steps.findIndex(
-      (step) =>
-        step.run?.trim() === "npm ci" &&
-        step["working-directory"] === "pwa-token-api",
-    );
-    const typecheckIndex = steps.findIndex(
-      (step) => step.run?.trim() === "npm run typecheck",
-    );
-    const testIndex = steps.findIndex(
-      (step) => step.run?.trim() === "npm test",
-    );
-
-    assert.ok(rootInstallIndex >= 0, "release.yml must install root dependencies");
-    assert.ok(apiInstallIndex >= 0, "release.yml must install API dependencies");
-    assert.ok(webInstallIndex >= 0, "release.yml must install web dependencies");
-    assert.ok(pwaBrowserInstallIndex >= 0, "release.yml must install pwa-browser dependencies");
-    assert.ok(pwaTokenApiInstallIndex >= 0, "release.yml must install pwa-token-api dependencies");
+    const job = release.workflow.jobs?.release;
+    assert.ok(job, "release.yml must have a release job");
+    const steps = job.steps ?? [];
+    assertReleaseDependencies(steps);
     const setupNodeStep = steps.find((step) =>
       step.uses?.startsWith("actions/setup-node@"),
     );
     const cacheDependencyPath = String(setupNodeStep?.with?.["cache-dependency-path"] ?? "");
     assert.match(cacheDependencyPath, /pwa-browser\/package-lock\.json/);
     assert.match(cacheDependencyPath, /pwa-token-api\/package-lock\.json/);
-    for (const installIndex of [
-      rootInstallIndex,
-      apiInstallIndex,
-      webInstallIndex,
-      pwaBrowserInstallIndex,
-      pwaTokenApiInstallIndex,
-    ]) {
-      assert.ok(
-        installIndex < typecheckIndex && installIndex < testIndex,
-        "release.yml must install dependencies before typecheck and tests",
-      );
-    }
+  });
+
+  it("rejects skipped or misplaced release dependency installs", () => {
+    const steps: ReleaseStep[] = [
+      { run: "npm ci" },
+      ...["api", "web", "pwa-browser", "pwa-token-api"].map((directory) => ({
+        run: "npm ci",
+        "working-directory": directory,
+      })),
+      { run: "npm run typecheck" },
+      { run: "npm test" },
+    ];
+    assert.doesNotThrow(() => assertReleaseDependencies(steps));
+    assert.throws(() => assertReleaseDependencies(steps.filter(
+      (step) => step["working-directory"] !== "pwa-token-api",
+    )), /pwa-token-api/);
+    assert.throws(() => assertReleaseDependencies(steps.map((step) =>
+      step["working-directory"] === "pwa-browser" ? { ...step, if: "false" } : step,
+    )), /conditional/);
+    assert.throws(() => assertReleaseDependencies(steps.map((step) =>
+      step["working-directory"] === "pwa-token-api"
+        ? { ...step, "continue-on-error": true }
+        : step,
+    )));
+    assert.throws(() => assertReleaseDependencies(steps.filter(
+      (step) => step.run !== "npm run typecheck",
+    )), /typecheck/);
+    assert.throws(() => assertReleaseDependencies([
+      ...steps.slice(0, 4), ...steps.slice(5), steps[4]!,
+    ]), /precede/);
   });
 
   it("pins npm's \"test\" script to the concrete tests/index.test.ts entry point, not a glob (#242, #222)", () => {

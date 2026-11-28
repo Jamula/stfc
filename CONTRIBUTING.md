@@ -9,6 +9,19 @@ wins.
 
 ---
 
+## Product releases
+
+Product release publication requires a separate, explicit owner approval.
+The release workflow is manually dispatched on `main` with the exact approved
+version and checks the package, lockfile, and dated changelog entry before
+publishing. Prereleases are marked as such and are not promoted to latest.
+It does **not** verify the owner's identity or approval: anyone
+with permission to dispatch the workflow can provide the version. Do not
+dispatch it without the owner's authorization; an enforced owner-approval
+mechanism remains an open decision in [#471](https://github.com/Jamula/stfc/issues/471).
+
+---
+
 ## Build, test, and typecheck gates
 
 `npm test` and `npm run typecheck` are **two independent gates** at the root:
