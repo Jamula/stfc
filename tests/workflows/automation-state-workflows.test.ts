@@ -171,6 +171,7 @@ const scheduled = [
     persistStep: "Commit state + digest + promo-codes to automation-state (if changed)",
     paths: [
       "data/discord/cursors.json",
+      "data/discord/command-acks.json",
       "data/discord/candidates.jsonl",
       "data/discord/tips-seen.jsonl",
       "data/discord/cooldowns.json",
@@ -397,11 +398,24 @@ describe("automation-state scheduled workflow contract", () => {
       for (const [index, statePath] of config.paths.entries()) {
         assert.equal(
           addLines[index]?.trim(),
-          `git -C "$STATE_DIR" add -A -- ${statePath}`,
+          `git -C "$STATE_DIR" add ${statePath === "data/discord/command-acks.json" ? "-f " : ""}-A -- ${statePath}`,
         );
       }
       assert.doesNotMatch(persist, /\badd -A --? \.\s*$/m);
       assert.doesNotMatch(persist, /\badd\b[^\n]*\|\| true/);
+    });
+
+    it(`${config.name} keeps command acknowledgements out of the source tree`, () => {
+      if (config.name !== "discord monitor") return;
+      const statePath = "data/discord/command-acks.json";
+      const ignored = spawnSync("git", ["check-ignore", "-q", "--", statePath]);
+      assert.equal(ignored.status, 0, "runtime command acknowledgements must be ignored on main");
+      const tracked = spawnSync("git", ["ls-files", "--", statePath], { encoding: "utf8" });
+      assert.equal(tracked.status, 0);
+      assert.equal(tracked.stdout.trim(), "");
+      const attributes = spawnSync("git", ["check-attr", "merge", "--", statePath], { encoding: "utf8" });
+      assert.equal(attributes.status, 0);
+      assert.match(attributes.stdout, /: merge: unspecified\s*$/);
     });
 
     it(`${config.name} performs exactly three visible push attempts`, () => {

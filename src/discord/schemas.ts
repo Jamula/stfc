@@ -93,6 +93,12 @@ export const IngestionCursorMapSchema = z.record(
 export type IngestionCursor = z.infer<typeof IngestionCursorSchema>;
 export type IngestionCursorMap = z.infer<typeof IngestionCursorMapSchema>;
 
+export const CommandAcknowledgementsSchema = z.record(
+  SnowflakeSchema,
+  z.array(SnowflakeSchema),
+);
+export type CommandAcknowledgements = z.infer<typeof CommandAcknowledgementsSchema>;
+
 // ── Entity 2: candidates.jsonl line shape ───────────────────────────────────
 
 export const CandidateStatusSchema = z.enum([

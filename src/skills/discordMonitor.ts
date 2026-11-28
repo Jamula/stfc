@@ -42,6 +42,7 @@ import {
   appendTipSeen,
   loadAllowlist,
   loadCommandChannelAllowlist,
+  loadCommandAcknowledgements,
   loadCooldowns,
   loadCursors,
   loadSuppression,
@@ -49,6 +50,7 @@ import {
   readTipsSeen,
   saveCooldowns,
   saveCursors,
+  saveCommandAcknowledgements,
   DEFAULT_PATHS,
 } from "../discord/state.ts";
 import type {
@@ -101,6 +103,7 @@ export interface DiscordMonitorOptions {
     allowlist?: string;
     commandChannels?: string;
     cursors?: string;
+    commandAcks?: string;
     candidates?: string;
     tipsSeen?: string;
     suppression?: string;
@@ -138,6 +141,7 @@ export async function discordMonitor(
   const allowlistPath = opts.paths?.allowlist ?? DEFAULT_PATHS.allowlist;
   const commandChannelsPath = opts.paths?.commandChannels ?? DEFAULT_PATHS.commandChannels;
   const cursorsPath = opts.paths?.cursors ?? DEFAULT_PATHS.cursors;
+  const commandAcksPath = opts.paths?.commandAcks ?? DEFAULT_PATHS.commandAcks;
   const candidatesPath = opts.paths?.candidates ?? DEFAULT_PATHS.candidates;
   const tipsSeenPath = opts.paths?.tipsSeen ?? DEFAULT_PATHS.tipsSeen;
   const suppressionPath = opts.paths?.suppression ?? DEFAULT_PATHS.suppression;
@@ -221,6 +225,7 @@ export async function discordMonitor(
   let allAnnotated: CandidateCode[] = [];
   let classifiedTips: Tip[] = [];
   let newCursors = await loadCursors(cursorsPath);
+  const previousCursors = newCursors;
   let cooldowns = await loadCooldowns(cooldownsPath);
   let botUsername: string | undefined;
 
@@ -273,13 +278,38 @@ export async function discordMonitor(
 
       if (commandChannels.length > 0 && ingestOut.discordMessages.length > 0) {
         if (isCrewCommandResponder(client)) {
+          const acknowledged = await loadCommandAcknowledgements(commandAcksPath);
+          let pruned = false;
+          for (const [channelId, messageIds] of Object.entries(acknowledged)) {
+            const cursor = previousCursors[channelId]?.lastMessageId;
+            if (cursor === undefined) continue;
+            const pending = messageIds.filter((id) => BigInt(id) > BigInt(cursor));
+            if (pending.length !== messageIds.length) {
+              pruned = true;
+              if (pending.length === 0) delete acknowledged[channelId];
+              else acknowledged[channelId] = pending;
+            }
+          }
+          if (pruned) await saveCommandAcknowledgements(acknowledged, commandAcksPath);
           const commandStats = await processCrewCommands(
-            ingestOut.discordMessages,
+            ingestOut.discordMessages.filter((message) =>
+              !acknowledged[message.channel_id]?.includes(message.id)),
             commandChannels,
             client,
             {
               now,
               logger: (message) => log.info(message),
+              onProcessed: async (message) => {
+                (acknowledged[message.channel_id] ??= []).push(message.id);
+                try {
+                  await saveCommandAcknowledgements(acknowledged, commandAcksPath);
+                } catch (err) {
+                  throw new Error(
+                    `Discord reply was sent but its acknowledgement could not be saved; replay may repeat it: ${redactForLog(err)}`,
+                    { cause: err },
+                  );
+                }
+              },
             },
           );
           if (commandStats.seen > 0 || commandStats.rateLimited > 0) {
@@ -480,7 +510,8 @@ export async function discordMonitor(
   }
 
   // ── Step 8: state flush ───────────────────────────────────────────────────
-  const durableAnnotated = allAnnotated.map((candidate) => {
+  const digestAnnotated = [...allAnnotated];
+  const durableAnnotated = allAnnotated.map((candidate, index) => {
     const prior = priorCandidates.get(candidate.value);
     const replaySuppressed = candidate.status === "already-known" ||
       candidate.status === "duplicate" || candidate.status === "suppressed-cooldown";
@@ -490,6 +521,10 @@ export async function discordMonitor(
       prior.source.channelId === candidate.source.channelId &&
       prior.source.messageId === candidate.source.messageId
     ) {
+      digestAnnotated[index] = prior;
+      return prior;
+    }
+    if (candidate.status === "suppressed-cooldown" && prior?.status === "transient-failure") {
       return prior;
     }
     return candidate;
@@ -526,7 +561,7 @@ export async function discordMonitor(
     now,
     digestsDir,
     runId,
-    annotated: durableAnnotated,
+    annotated: digestAnnotated,
     tips: classifiedTips,
     redeemedCodes,
     deferredCodes,

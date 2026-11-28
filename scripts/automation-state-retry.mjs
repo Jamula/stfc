@@ -82,7 +82,8 @@ async function restorePaths(snapshotRoot, destinationRoot, relativePaths) {
 async function stagePresentPaths(stateDir, relativePaths) {
   for (const relativePath of relativePaths) {
     if (await pathType(path.join(stateDir, relativePath))) {
-      await runGit(["-C", stateDir, "add", "-A", "--", relativePath]);
+      const force = relativePath === "data/discord/command-acks.json" ? ["-f"] : [];
+      await runGit(["-C", stateDir, "add", ...force, "-A", "--", relativePath]);
     }
   }
 }

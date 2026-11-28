@@ -193,6 +193,9 @@ jobs:
           if [ -f "$STATE_DIR/data/discord/cursors.json" ]; then
             git -C "$STATE_DIR" add -A -- data/discord/cursors.json
           fi
+          if [ -f "$STATE_DIR/data/discord/command-acks.json" ]; then
+            git -C "$STATE_DIR" add -f -A -- data/discord/command-acks.json
+          fi
           if [ -f "$STATE_DIR/data/discord/candidates.jsonl" ]; then
             git -C "$STATE_DIR" add -A -- data/discord/candidates.jsonl
           fi
@@ -224,7 +227,7 @@ jobs:
               if git ls-remote --exit-code --heads origin automation-state >/dev/null; then
                 node scripts/automation-state-retry.mjs \
                   "$STATE_DIR" automation-state \
-                  data/discord/cursors.json data/discord/candidates.jsonl \
+                  data/discord/cursors.json data/discord/command-acks.json data/discord/candidates.jsonl \
                   data/discord/tips-seen.jsonl data/discord/cooldowns.json \
                   data/digests promo-codes.txt
                 branch_exists=true

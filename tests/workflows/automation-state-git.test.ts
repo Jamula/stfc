@@ -142,7 +142,12 @@ describe("automation-state linked-worktree bootstrap", () => {
         path.join(stateB, "data", "discord", "game-state", "2026-08-24", "snapshot.txt"),
         "writer-b\n",
       );
+      const exclusions = path.join(scratch, "exclude");
+      writeFileSync(exclusions, "data/discord/command-acks.json\n");
+      git(stateB, "config", "core.excludesFile", exclusions);
+      writeFileSync(path.join(stateB, "data", "discord", "command-acks.json"), '{"channel":["message"]}\n');
       git(stateB, "add", "-A", "--", "data/discord/game-state");
+      git(stateB, "add", "-f", "-A", "--", "data/discord/command-acks.json");
       git(stateB, "commit", "--no-verify", "-m", "writer b state");
 
       git(stateA, "push", "origin", "HEAD:automation-state");
@@ -192,7 +197,7 @@ describe("automation-state linked-worktree bootstrap", () => {
         mode = await reconcileAutomationStateAfterPushFailure({
           stateDir: stateB,
           ref: "automation-state",
-          relativePaths: ["data/discord/game-state"],
+          relativePaths: ["data/discord/game-state", "data/discord/command-acks.json"],
         });
       } finally {
         for (const [key, value] of inheritedGitVariables) {
@@ -201,6 +206,11 @@ describe("automation-state linked-worktree bootstrap", () => {
         }
       }
       assert.equal(mode, "replayed");
+      assert.equal(
+        git(stateB, "show", "HEAD:data/discord/command-acks.json"),
+        '{"channel":["message"]}',
+        "root bootstrap retry preserves the ignored acknowledgement file",
+      );
       assert.equal(git(stateB, "show", "-s", "--format=%an <%ae>", "HEAD"), "Retry Bot <retry@example.invalid>");
       git(stateB, "push", "origin", "HEAD:automation-state");
       assert.equal(await isAutomationStateCommitPublished({
@@ -213,7 +223,11 @@ describe("automation-state linked-worktree bootstrap", () => {
 
       assert.deepEqual(
         git(writerA, "ls-tree", "-r", "--name-only", "origin/automation-state").split(/\r?\n/).sort(),
-        ["data/discord/game-state/2026-08-24/snapshot.txt", "docs/redeem-history.md"],
+        [
+          "data/discord/command-acks.json",
+          "data/discord/game-state/2026-08-24/snapshot.txt",
+          "docs/redeem-history.md",
+        ],
       );
       assert.equal(
         git(stateB, "rev-list", "--parents", "-n", "1", "HEAD").split(/\s+/).length,

@@ -25,6 +25,7 @@ playwright-diagnostics/
 
 # CLI runtime output
 summary.md
+data/discord/command-acks.json
 
 # Local OCR POC screenshots and crops (operator-owned holdout data; never committed)
 data/crew/poc-screenshots/

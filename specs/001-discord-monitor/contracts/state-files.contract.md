@@ -67,6 +67,20 @@ successful run).
 
 ---
 
+## § command acknowledgements — `data/discord/command-acks.json`
+
+`Record<string /* channelId */, string[] /* replied-to message IDs */>`.
+IDs are Discord snowflakes. The monitor atomically records successful replies
+before advancing ingestion cursors and removes acknowledgements once the
+saved cursor covers them. This mutable file is ignored on `main` and restored
+and persisted on `automation-state`.
+
+Discord posting and acknowledgement persistence are not transactional: a
+crash, acknowledgement write failure, or failed state-branch push after a
+successful post can still cause a duplicate reply on replay.
+
+---
+
 ## § candidates — `data/discord/candidates.jsonl`
 
 Append-only log. Each line:

@@ -829,6 +829,218 @@ describe("discordMonitor / durable state failures", () => {
     assert.equal(JSON.parse(fs.readFileSync(ds.cursors, "utf8"))[channelId].lastMessageId, message.id);
     assert.ok(fs.existsSync(tipsSeen));
   });
+
+  it("keeps a transient attempt retryable when a different message is suppressed during cooldown", async () => {
+    const channelId = "222222222222222222";
+    const priorMessageId = "111111111111111111";
+    const suppressedId = "111111111111111112";
+    const retryId = "111111111111111113";
+    fs.writeFileSync(ds.cursors, JSON.stringify({
+      [channelId]: {
+        channelLabel: "promos", lastMessageId: priorMessageId,
+        lastTimestamp: "2026-05-16T06:00:00Z", lastRunId: "prior", lastRunAt: "2026-05-16T06:00:00Z",
+      },
+    }));
+    fs.writeFileSync(ds.candidates, JSON.stringify({
+      value: "RETRYCODE", firstSeen: "2026-05-16T06:00:00Z", lastAttempted: "2026-05-16T06:00:00Z",
+      suppressedUntil: null, extractionConfidence: 0.9, status: "transient-failure",
+      source: {
+        messageId: priorMessageId, channelId, channelLabel: "promos", timestamp: "2026-05-16T06:00:00Z",
+        jumpLink: `https://discord.com/channels/509679626763632640/${channelId}/${priorMessageId}`,
+      },
+      perAccountOutcome: [{ accountName: "main", runId: "prior", outcome: "TRANSIENT", attemptedAt: "2026-05-16T06:00:00Z" }],
+    }) + "\n");
+    fs.writeFileSync(ds.cooldowns, JSON.stringify({
+      RETRYCODE: {
+        firstFailedAt: "2026-05-16T06:00:00Z", lastFailedAt: "2026-05-16T06:00:00Z",
+        suppressedUntil: "2026-05-17T06:00:00Z", failureOutcomes: ["TRANSIENT"],
+      },
+    }));
+    let activeId = suppressedId;
+    let redeemCalls = 0;
+    const options: DiscordMonitorOptions = {
+      accounts: [{ name: "main", token: makeJwt() }],
+      paths: {
+        allowlist: ds.allowlist, commandChannels: path.join(ds.dir, "command-channels.json"),
+        cursors: ds.cursors, candidates: ds.candidates, suppression: ds.suppression,
+        cooldowns: ds.cooldowns, digestsDir: ds.digestsDir, promoCodes: ds.promoCodes,
+        tipsSeen: path.join(ds.dir, "tips-seen.jsonl"),
+      },
+      clientFactory: () => ({
+        getMe: async () => ({ id: "bot", username: "stfc-monitor" }),
+        getChannelMessages: async (_id, opts) =>
+          opts.after === activeId ? [] : [{
+            id: activeId, channel_id: channelId, content: "RETRYCODE",
+            timestamp: "2026-05-16T07:00:00Z", edited_timestamp: null,
+            author: { id: "999999999999999999", username: "poster", bot: false }, type: 0,
+          }],
+      }),
+      redeemFn: async () => {
+        redeemCalls++;
+        return { result: { rows: [{ accountName: "main", attempts: [{ code: "RETRYCODE", outcome: "CODE_REDEEMED" as const }] }] }, exitCode: 0 };
+      },
+    };
+    const suppressed = await discordMonitor({ ...options, now: () => NOW, runId: "suppressed" });
+    assert.equal(suppressed.result.candidatesSuppressedCooldown, 1);
+    const journal = fs.readFileSync(ds.candidates, "utf8").trim().split(/\r?\n/).map((line) => JSON.parse(line));
+    assert.equal(journal.at(-1).status, "transient-failure");
+    assert.equal(journal.at(-1).source.messageId, priorMessageId);
+    assert.equal(journal.at(-1).perAccountOutcome[0].outcome, "TRANSIENT");
+    assert.equal(redeemCalls, 0);
+
+    activeId = retryId;
+    const recovered = await discordMonitor({ ...options, now: () => new Date("2026-05-18T08:00:00Z"), runId: "retry" });
+    assert.equal(recovered.exitCode, 0);
+    assert.equal(redeemCalls, 1, "the transient code becomes eligible after cooldown expiry");
+    assert.equal(recovered.result.candidatesSubmitted, 1);
+  });
+
+  it("does not resend a completed crew reply when a digest failure causes replay", async () => {
+    const channelId = "222222222222222222";
+    const oldId = "111111111111111110";
+    const commandId = "111111111111111111";
+    const followupId = "111111111111111112";
+    fs.writeFileSync(ds.cursors, JSON.stringify({
+      [channelId]: {
+        channelLabel: "promos", lastMessageId: oldId,
+        lastTimestamp: "2026-05-16T06:00:00Z", lastRunId: "prior", lastRunAt: "2026-05-16T06:00:00Z",
+      },
+    }));
+    const commandChannels = path.join(ds.dir, "command-channels.json");
+    fs.writeFileSync(commandChannels, JSON.stringify([{ guild_id: "509679626763632640", channel_id: channelId }]));
+    const blocked = path.join(ds.dir, "not-a-directory");
+    fs.writeFileSync(blocked, "blocked");
+    const replies: string[] = [];
+    let deliverFollowup = false;
+    const options: DiscordMonitorOptions = {
+      paths: {
+        allowlist: ds.allowlist, commandChannels, cursors: ds.cursors,
+        commandAcks: path.join(ds.dir, "command-acks.json"),
+        candidates: ds.candidates, suppression: ds.suppression, cooldowns: ds.cooldowns,
+        digestsDir: path.join(blocked, "digests"), promoCodes: ds.promoCodes,
+        tipsSeen: path.join(ds.dir, "tips-seen.jsonl"),
+      },
+      clientFactory: () => ({
+        getMe: async () => ({ id: "bot", username: "stfc-monitor" }),
+        getChannelMessages: async (_id, opts) => {
+          const id = opts.after === oldId ? commandId : opts.after === commandId && deliverFollowup ? followupId : undefined;
+          return id === undefined ? [] : [{
+            id, channel_id: channelId, content: id === commandId ? "!crew help" : "ordinary discussion",
+            timestamp: "2026-05-16T07:00:00Z", edited_timestamp: null,
+            author: { id: "999999999999999999", username: "poster", bot: false }, type: 0,
+          }];
+        },
+        postMessage: async (_channel: string, text: string) => { replies.push(text); },
+      }),
+      now: () => NOW,
+    };
+
+    const failed = await discordMonitor({ ...options, runId: "digest-failed" });
+    assert.equal(failed.exitCode, DISCORD_MONITOR_EXIT_INFRA_FAILURE);
+    assert.equal(replies.length, 1);
+    assert.equal(JSON.parse(fs.readFileSync(ds.cursors, "utf8"))[channelId].lastMessageId, oldId);
+    const recovered = await discordMonitor({
+      ...options, paths: { ...options.paths, digestsDir: ds.digestsDir }, runId: "recovered",
+    });
+    assert.equal(recovered.exitCode, 0);
+    assert.equal(replies.length, 1, "replaying a command must not send a second reply");
+    assert.equal(JSON.parse(fs.readFileSync(ds.cursors, "utf8"))[channelId].lastMessageId, commandId);
+    deliverFollowup = true;
+    await discordMonitor({ ...options, paths: { ...options.paths, digestsDir: ds.digestsDir }, runId: "next" });
+    assert.deepEqual(JSON.parse(fs.readFileSync(options.paths!.commandAcks!, "utf8")), {});
+    assert.equal(replies.length, 1);
+  });
+
+  it("reports an acknowledgement write failure after a reply and retains the cursor", async (t) => {
+    const channelId = "222222222222222222";
+    const oldId = "111111111111111110";
+    const commandId = "111111111111111111";
+    const commandChannels = path.join(ds.dir, "command-channels.json");
+    const commandAcks = path.join(ds.dir, "command-acks.json");
+    fs.writeFileSync(commandChannels, JSON.stringify([{ guild_id: "509679626763632640", channel_id: channelId }]));
+    fs.writeFileSync(ds.cursors, JSON.stringify({
+      [channelId]: {
+        channelLabel: "promos", lastMessageId: oldId,
+        lastTimestamp: "2026-05-16T06:00:00Z", lastRunId: "prior", lastRunAt: "2026-05-16T06:00:00Z",
+      },
+    }));
+    const originalRename = fs.promises.rename.bind(fs.promises);
+    t.mock.method(fs.promises, "rename", async (...args: Parameters<typeof fs.promises.rename>) => {
+      if (String(args[1]) === commandAcks) throw new Error("simulated acknowledgement write failure");
+      await originalRename(...args);
+    });
+    let replies = 0;
+    await assert.rejects(discordMonitor({
+      paths: {
+        allowlist: ds.allowlist, commandChannels, commandAcks, cursors: ds.cursors,
+        candidates: ds.candidates, suppression: ds.suppression, cooldowns: ds.cooldowns,
+        digestsDir: ds.digestsDir, promoCodes: ds.promoCodes,
+      },
+      clientFactory: () => ({
+        getMe: async () => ({ id: "bot", username: "stfc-monitor" }),
+        getChannelMessages: async (_id, opts) => opts.after === oldId ? [{
+          id: commandId, channel_id: channelId, content: "!crew help",
+          timestamp: "2026-05-16T07:00:00Z", edited_timestamp: null,
+          author: { id: "999999999999999999", username: "poster", bot: false }, type: 0,
+        }] : [],
+        postMessage: async () => { replies++; },
+      }),
+      now: () => NOW,
+    }), /reply was sent but its acknowledgement could not be saved; replay may repeat it/);
+    assert.equal(replies, 1);
+    assert.equal(JSON.parse(fs.readFileSync(ds.cursors, "utf8"))[channelId].lastMessageId, oldId);
+  });
+
+  it("retries an unsent command after a later-ID command succeeded", async () => {
+    const channelId = "222222222222222222";
+    const oldId = "111111111111111110";
+    const laterId = "111111111111111113";
+    const earlierId = "111111111111111112";
+    fs.writeFileSync(ds.cursors, JSON.stringify({
+      [channelId]: {
+        channelLabel: "promos", lastMessageId: oldId,
+        lastTimestamp: "2026-05-16T06:00:00Z", lastRunId: "prior", lastRunAt: "2026-05-16T06:00:00Z",
+      },
+    }));
+    const commandChannels = path.join(ds.dir, "command-channels.json");
+    const commandAcks = path.join(ds.dir, "command-acks.json");
+    fs.writeFileSync(commandChannels, JSON.stringify([{ guild_id: "509679626763632640", channel_id: channelId }]));
+    let attempts = 0;
+    const sent: string[] = [];
+    const options: DiscordMonitorOptions = {
+      paths: {
+        allowlist: ds.allowlist, commandChannels, commandAcks, cursors: ds.cursors,
+        candidates: ds.candidates, suppression: ds.suppression, cooldowns: ds.cooldowns,
+        digestsDir: ds.digestsDir, promoCodes: ds.promoCodes,
+        tipsSeen: path.join(ds.dir, "tips-seen.jsonl"),
+      },
+      clientFactory: () => ({
+        getMe: async () => ({ id: "bot", username: "stfc-monitor" }),
+        getChannelMessages: async (_id, opts) => opts.after === oldId
+          ? [laterId, earlierId].map((id) => ({
+              id, channel_id: channelId, content: id === laterId ? "!crew help" : "!crew unknown",
+              timestamp: "2026-05-16T07:00:00Z", edited_timestamp: null,
+              author: { id: "999999999999999999", username: "poster", bot: false }, type: 0,
+            }))
+          : [],
+        postMessage: async (_channel: string, text: string) => {
+          if (++attempts === 2) throw new Error("simulated Discord post failure");
+          sent.push(text);
+        },
+      }),
+      now: () => NOW,
+    };
+
+    await assert.rejects(discordMonitor({ ...options, runId: "post-failed" }), /simulated Discord post failure/);
+    assert.deepEqual(JSON.parse(fs.readFileSync(commandAcks, "utf8")), { [channelId]: [laterId] });
+    assert.equal(JSON.parse(fs.readFileSync(ds.cursors, "utf8"))[channelId].lastMessageId, oldId);
+    const recovered = await discordMonitor({ ...options, runId: "recovered" });
+    assert.equal(recovered.exitCode, 0);
+    assert.equal(sent.length, 2);
+    assert.match(sent[0]!, /STFC crew commands/);
+    assert.match(sent[1]!, /Unknown command/);
+    assert.equal(JSON.parse(fs.readFileSync(ds.cursors, "utf8"))[channelId].lastMessageId, laterId);
+  });
 });
 
 describe("discordMonitor / workflow YAML assertions (T027)", () => {
