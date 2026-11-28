@@ -25,3 +25,8 @@ playwright-diagnostics/
 
 # CLI runtime output
 summary.md
+
+# Local OCR POC screenshots and crops (operator-owned holdout data; never committed)
+data/crew/poc-screenshots/
+data/crew/ocr-poc/
+

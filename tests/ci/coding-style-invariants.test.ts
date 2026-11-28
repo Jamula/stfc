@@ -346,6 +346,38 @@ describe("coding style & repository manifest invariants", () => {
     assert.equal(checkIgnore.status, 0, "README.md.local-backup must remain gitignored");
   });
 
+  it("keeps local OCR POC screenshots gitignored and prevents screenshot/video binaries under data/crew and tests", () => {
+    const lsFiles = spawnSync("git", ["ls-files", "-z", "--", "data/crew", "tests"], {
+      cwd: REPO_ROOT,
+      encoding: "utf8",
+    });
+    assert.ifError(lsFiles.error);
+    assert.equal(lsFiles.status, 0, `git ls-files failed: ${lsFiles.stderr}`);
+
+    const trackedMedia = lsFiles.stdout
+      .split("\0")
+      .filter(Boolean)
+      .filter((file) => /\.(?:png|jpe?g|webp|gif|bmp|mp4|mov)$/i.test(file));
+    assert.deepEqual(
+      trackedMedia,
+      [],
+      `No gameplay screenshot or video binaries may be tracked under data/crew or tests (found: ${trackedMedia.join(", ")})`,
+    );
+
+    for (const ignoredSample of [
+      "data/crew/poc-screenshots/roster-sample-01.png",
+      "data/crew/ocr-poc/crop-01.pgm",
+    ]) {
+      const checkIgnore = spawnSync(
+        "git",
+        ["check-ignore", "--no-index", "-q", "--", ignoredSample],
+        { cwd: REPO_ROOT },
+      );
+      assert.ifError(checkIgnore.error);
+      assert.equal(checkIgnore.status, 0, `${ignoredSample} must remain gitignored`);
+    }
+  });
+
   it("keeps the PR template, enforcement-gate checklist, and secondary docs aligned with the 0.1.0 baseline", () => {
     const readRepoFile = (...segments: string[]): string =>
       readFileSync(path.join(REPO_ROOT, ...segments), "utf8").replace(/\r\n/g, "\n");

@@ -64,11 +64,16 @@ function normalizeLookupKey(raw: string): string {
     .replace(/^-+|-+$/g, "");
 }
 
+function normalizeCompactApostropheKey(raw: string): string {
+  return normalizeLookupKey(raw.replace(/['’`]/g, ""));
+}
+
 function buildOfficerLookup(database: OfficerDatabase): Map<string, Officer> {
   const map = new Map<string, Officer>();
   for (const officer of database.officers) {
     map.set(officer.id, officer);
     map.set(normalizeLookupKey(officer.name), officer);
+    map.set(normalizeCompactApostropheKey(officer.name), officer);
   }
   return map;
 }
@@ -102,22 +107,34 @@ export function importSpocksClubRoster(args: {
   const lookup = buildOfficerLookup(args.database);
   const entriesById = new Map<string, RosterEntry>();
   const unmatchedOfficers: string[] = [];
+  const seenUnmatched = new Set<string>();
 
   for (const item of rawOfficers) {
     const candidateKeys = [item.id, item.officerId, item.name]
       .map((value) => value?.trim())
       .filter((value): value is string => Boolean(value));
     if (candidateKeys.length === 0) {
-      unmatchedOfficers.push("(unnamed-entry)");
+      if (!seenUnmatched.has("(unnamed-entry)")) {
+        seenUnmatched.add("(unnamed-entry)");
+        unmatchedOfficers.push("(unnamed-entry)");
+      }
       continue;
     }
     let matched: Officer | undefined;
     for (const key of candidateKeys) {
-      matched = lookup.get(key) ?? lookup.get(normalizeLookupKey(key));
+      matched =
+        lookup.get(key) ??
+        lookup.get(normalizeLookupKey(key)) ??
+        lookup.get(normalizeCompactApostropheKey(key));
       if (matched) break;
     }
     if (!matched) {
-      unmatchedOfficers.push(item.name?.trim() || candidateKeys[0]!);
+      const label = item.name?.trim() || candidateKeys[0]!;
+      const dedupKey = normalizeLookupKey(label) || label.toLowerCase();
+      if (!seenUnmatched.has(dedupKey)) {
+        seenUnmatched.add(dedupKey);
+        unmatchedOfficers.push(label);
+      }
       continue;
     }
 

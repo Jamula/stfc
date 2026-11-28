@@ -180,4 +180,56 @@ describe("spocksClub — JSON roster import/export compatibility (#472)", () => 
       await fs.rm(dir, { recursive: true, force: true });
     }
   });
+
+  it("normalizes iOS OFFICERS grid card headers, dropped/curly apostrophes, and overlapping-page duplicates", async () => {
+    const db = await loadOfficerDatabase();
+    const fixedNow = new Date("2026-11-27T00:00:00.000Z");
+
+    // Sanitized fixture derived from real 2000x921 iOS OFFICERS 6x2 grid captures:
+    // - Short ALL-CAPS card titles ("KIRK", "PIKE", "KHAN") map to full officer entries via id
+    // - Apostrophe names ("T’PRING" curly or OCR-dropped "TPRING") resolve to "t-pring"
+    // - Rank pips 1..5 map to promotions 0..4 when explicit promotions are absent
+    // - Overlapping sort/scroll captures ("MOREAU", "KEENSER") deduplicate cleanly
+    const rawJson = JSON.stringify({
+      officers: [
+        { name: "MOREAU", owned: true, level: 15, rank: 3 },
+        { name: "T’PRING", owned: true, level: 30, rank: 5 },
+        { name: "BAROT", owned: true, level: 30, rank: 5 },
+        { name: "STONN", owned: true, level: 30, rank: 5 },
+        { name: "KEENSER", owned: true, level: 20, rank: 4 },
+        // Overlapping second grid capture (e.g. UPGRADEABLE vs RARITY sort)
+        { name: "MOREAU", owned: true, level: 15, rank: 3 },
+        { name: "KEENSER", owned: true, level: 20, rank: 4 },
+        { name: "KIRK", owned: true, level: 15, rank: 3 },
+        { name: "PIKE", owned: true, level: 15, rank: 3 },
+        { name: "KHAN", owned: true, level: 20, rank: 4 },
+        // OCR-dropped apostrophe variant
+        { name: "TPRING", owned: true, level: 30, rank: 5 },
+        { name: "BYR CHKELRER", owned: true, level: 10, rank: 2 },
+        { name: "MIRROR PICARD", owned: true, level: 5, rank: 1 },
+      ],
+    });
+
+    const imported = importSpocksClubRoster({
+      rawJson,
+      account: "fixture",
+      database: db,
+      now: fixedNow,
+    });
+
+    assert.deepEqual(
+      imported.roster.officers,
+      [
+        { id: "barot", owned: true, level: 30, rank: 5, promotions: 4 },
+        { id: "byr-chkelrer", owned: true, level: 10, rank: 2, promotions: 1 },
+        { id: "khan", owned: true, level: 20, rank: 4, promotions: 3 },
+        { id: "kirk", owned: true, level: 15, rank: 3, promotions: 2 },
+        { id: "moreau", owned: true, level: 15, rank: 3, promotions: 2 },
+        { id: "pike", owned: true, level: 15, rank: 3, promotions: 2 },
+        { id: "stonn", owned: true, level: 30, rank: 5, promotions: 4 },
+        { id: "t-pring", owned: true, level: 30, rank: 5, promotions: 4 },
+      ],
+    );
+    assert.deepEqual(imported.unmatchedOfficers, ["KEENSER", "MIRROR PICARD"]);
+  });
 });
