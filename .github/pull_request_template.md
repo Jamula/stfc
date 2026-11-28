@@ -15,6 +15,13 @@ _Tick **at least one**. Multiple selections are allowed._
 - [ ] Chore (dependency bump, config, CI)
 - [ ] Version bump
 
+When **Version bump** is checked, link the explicit owner release approval and
+MVP acceptance evidence, or mark the PR as **version-policy preparation only**.
+The root package and lockfile must agree, the dated changelog entry must exist,
+and the GitHub Release action requires a separately authorized manual dispatch.
+See [docs/VERSIONING.md](../docs/VERSIONING.md). Do not publish a tag or
+merge merely because this checkbox is checked.
+
 ---
 
 ## Test-first evidence _(REQUIRED when "Bug fix" is ticked above)_

@@ -88,6 +88,22 @@ and the proposed runtime/hosting consolidation direction (`#453`, `#455`), see
 
 ---
 
+## Versioning and release status
+
+**Current STFC product version: `0.1.0`.** The root package is the product
+version source of truth. We use Semantic Versioning and `vX.Y.Z` GitHub tags,
+but keep `0.1.0` until the STFC MVP has verified end-to-end acceptance and
+the owner explicitly approves a later product version. Subpackage and Node
+runtime versions are independent. Historical `v1.0.0` and `v0.1.0` releases
+are preserved; the later `v0.1.0` is the agreed current baseline.
+
+See [product versioning and release policy](docs/VERSIONING.md),
+[release history](CHANGELOG.md) and [contribution rules](CONTRIBUTING.md).
+A documentation PR, green CI job or skipped deployment does not publish a
+release or establish MVP acceptance.
+
+---
+
 ## Quick start
 
 1. **Configure the private account-token store.** Follow

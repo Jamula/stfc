@@ -5,6 +5,18 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Documentation
+
+- Document the current product version freeze at `0.1.0` pending verified
+  STFC MVP acceptance and a separate owner-approved release decision.
+- Describe the root package, lockfile and changelog version contract,
+  independently versioned components, historical tags and controlled
+  release procedure in `docs/VERSIONING.md`.
+- Prepare the release workflow to require an explicit, manually dispatched
+  approved version rather than creating tags on routine `main` pushes.
+
 ## [0.1.0] - 2026-11-08
 
 ### Changed
