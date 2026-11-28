@@ -1,8 +1,12 @@
 name: Release
 
 on:
-  push:
-    branches: [main]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Exact version separately approved by the owner"
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -26,6 +30,30 @@ jobs:
             pwa-browser/package-lock.json
             pwa-token-api/package-lock.json
 
+      # Dispatch permission is not proof of owner approval; see CONTRIBUTING.md.
+      - name: Verify release request
+        env:
+          APPROVED_VERSION: ${{ inputs.version }}
+          RELEASE_REF: ${{ github.ref }}
+        run: |
+          node --input-type=module <<'NODE'
+          import { readFileSync } from 'node:fs';
+          const expected = process.env.APPROVED_VERSION ?? '';
+          const semver = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*))*)?$/;
+          const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
+          const lock = JSON.parse(readFileSync('package-lock.json', 'utf8'));
+          const prefix = `## [${expected}] - `;
+          const changelog = readFileSync('CHANGELOG.md', 'utf8').split(/\r?\n/);
+          if (process.env.RELEASE_REF !== 'refs/heads/main' ||
+              !semver.test(expected) || expected !== pkg.version ||
+              lock.version !== expected || lock.packages?.['']?.version !== expected ||
+              !changelog.some(line => line.startsWith(prefix) && /^\d{4}-\d{2}-\d{2}$/.test(line.slice(prefix.length)))) {
+            console.error('::error::Release requires main, a matching version and lockfile, and a dated changelog entry.');
+            process.exit(1);
+          }
+          console.log(`Release request v${expected} matches the checked-out metadata.`);
+          NODE
+
       - run: npm ci
 
       - run: npm ci
@@ -43,15 +71,6 @@ jobs:
       - run: npm run typecheck
 
       - run: npm test
-
-      - name: Validate version consistency
-        run: |
-          VERSION=$(node -e "console.log(require('./package.json').version)")
-          if ! grep -q "## \[$VERSION\]" CHANGELOG.md 2>/dev/null; then
-            echo "::error::Version $VERSION not found in CHANGELOG.md — update CHANGELOG.md before release"
-            exit 1
-          fi
-          echo "✅ Version $VERSION validated in CHANGELOG.md"
 
       - name: Read version from package.json
         id: version
