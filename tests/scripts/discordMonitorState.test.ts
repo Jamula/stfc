@@ -1,5 +1,6 @@
 import { afterEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import {
@@ -27,6 +28,21 @@ function writeFile(root: string, relativePath: string, contents: string) {
   fs.writeFileSync(filePath, contents, "utf8");
 }
 
+function writeAllowlist(root: string, enabled: boolean[]) {
+  writeFile(root, "config/discord-allowlist.json", JSON.stringify({
+    version: 1,
+    entries: enabled.map((value) => ({
+      serverId: "123456789012345678",
+      serverLabel: "server",
+      channelId: "123456789012345679",
+      channelLabel: "channel",
+      addedAt: "2026-08-24T12:00:00Z",
+      addedBy: "operator",
+      enabled: value,
+    })),
+  }));
+}
+
 afterEach(() => {
   for (const dir of createdDirs) {
     fs.rmSync(dir, { recursive: true, force: true });
@@ -42,11 +58,93 @@ afterEach(() => {
 });
 
 describe("scripts/discord-monitor-state.mjs", () => {
+  it("restores the dead-code cache for reading without persisting monitor changes to it", async () => {
+    const restoreRoot = makeScratchDir("discord-monitor-dead-restore");
+    const workspaceRoot = makeScratchDir("discord-monitor-dead-workspace");
+    const stateRoot = makeScratchDir("discord-monitor-dead-state");
+    const relativePath = "data/promo-code-dead.json";
+
+    writeAllowlist(workspaceRoot, [true]);
+    writeFile(restoreRoot, relativePath, '{"DEADCODE":{"first_seen_outcome":"CODE_INVALID_OR_EXPIRED"}}\n');
+    writeFile(stateRoot, relativePath, "original state\n");
+
+    await restoreDiscordMonitorState({ restoreRoot, workspaceRoot });
+    assert.equal(
+      fs.readFileSync(path.join(workspaceRoot, relativePath), "utf8"),
+      '{"DEADCODE":{"first_seen_outcome":"CODE_INVALID_OR_EXPIRED"}}\n',
+    );
+
+    writeFile(workspaceRoot, relativePath, "changed workspace\n");
+    await persistDiscordMonitorState({ workspaceRoot, stateRoot });
+    assert.equal(fs.readFileSync(path.join(stateRoot, relativePath), "utf8"), "original state\n");
+  });
+
+  it("rejects a dead-code cache path that is not a file", async () => {
+    const restoreRoot = makeScratchDir("discord-monitor-dead-directory");
+    const workspaceRoot = makeScratchDir("discord-monitor-dead-workspace");
+    writeAllowlist(workspaceRoot, [false, true]);
+    fs.mkdirSync(path.join(restoreRoot, "data", "promo-code-dead.json"), { recursive: true });
+
+    await assert.rejects(
+      restoreDiscordMonitorState({ restoreRoot, workspaceRoot }),
+      /dead-code cache.*not a file/i,
+    );
+  });
+
+  it("fails the restore command for an invalid dead-code path when a promo channel is enabled", () => {
+    const restoreRoot = makeScratchDir("discord-monitor-enabled-restore");
+    const workspaceRoot = makeScratchDir("discord-monitor-enabled-workspace");
+    writeAllowlist(workspaceRoot, [false, true]);
+    fs.mkdirSync(path.join(restoreRoot, "data", "promo-code-dead.json"), { recursive: true });
+
+    const result = spawnSync(process.execPath, [
+      path.join(process.cwd(), "scripts", "discord-monitor-state.mjs"),
+      "restore", restoreRoot, workspaceRoot, "HEAD",
+    ], { encoding: "utf8" });
+
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /dead-code cache.*not a file/i);
+  });
+
+  for (const [name, enabled] of [
+    ["empty promo allowlist", []],
+    ["disabled promo channels", [false]],
+  ] as const) {
+    it(`restores command-only state with ${name} despite an invalid dead-code path`, () => {
+      const restoreRoot = makeScratchDir("discord-monitor-command-restore");
+      const workspaceRoot = makeScratchDir("discord-monitor-command-workspace");
+      writeAllowlist(workspaceRoot, [...enabled]);
+      fs.mkdirSync(path.join(restoreRoot, "data", "promo-code-dead.json"), { recursive: true });
+      writeFile(restoreRoot, "data/discord/cursors.json", '{"command":"42"}\n');
+
+      const result = spawnSync(process.execPath, [
+        path.join(process.cwd(), "scripts", "discord-monitor-state.mjs"),
+        "restore", restoreRoot, workspaceRoot, "HEAD",
+      ], { encoding: "utf8" });
+
+      assert.equal(result.status, 0, result.stderr);
+      assert.equal(fs.readFileSync(path.join(workspaceRoot, "data/discord/cursors.json"), "utf8"), '{"command":"42"}\n');
+      assert.equal(fs.existsSync(path.join(workspaceRoot, "data/promo-code-dead.json")), false);
+    });
+  }
+
+  it("fails closed when the promo allowlist cannot determine whether scanning is enabled", async () => {
+    const restoreRoot = makeScratchDir("discord-monitor-invalid-allowlist");
+    const workspaceRoot = makeScratchDir("discord-monitor-invalid-workspace");
+    writeFile(workspaceRoot, "config/discord-allowlist.json", '{"version":1,"entries":[{}]}');
+
+    await assert.rejects(
+      restoreDiscordMonitorState({ restoreRoot, workspaceRoot }),
+      /Invalid Discord promo-channel allowlist/,
+    );
+  });
+
   it("preserves a concurrent /game-state upload when the monitor later persists its own state", async () => {
     const restoreRoot = makeScratchDir("discord-monitor-restore");
     const workspaceRoot = makeScratchDir("discord-monitor-workspace");
     const stateRoot = makeScratchDir("discord-monitor-state");
 
+    writeAllowlist(workspaceRoot, [true]);
     writeFile(restoreRoot, "data/discord/cursors.json", '{"channel":"old"}\n');
     writeFile(restoreRoot, "data/discord/candidates.jsonl", '{"value":"OLD"}\n');
     writeFile(restoreRoot, "data/discord/cooldowns.json", '{}\n');

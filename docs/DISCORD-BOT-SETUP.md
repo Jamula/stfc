@@ -225,6 +225,16 @@ servers, use Discord's built-in **Announcement Channel Follow** feature:
 Published announcements automatically syndicate into `#stfc-promo-feed`, where
 `discord-monitor` reads them with standard REST permissions.
 
+The monitor restores the shared `data/promo-code-dead.json` cache from
+`automation-state` for read-only filtering. Codes already marked invalid or
+expired are not submitted again, and repeated reports in one run are submitted
+at most once. The digest and job summary count cache-suppressed candidates;
+suppression is not a new redemption attempt. When a promo scan is enabled, a
+malformed or unreadable cache fails the run before ingest or command replies
+and leaves Discord cursors unchanged so messages can be retried after the
+cache is repaired. An absent cache is valid on the first run; command-only
+monitoring does not use it.
+
 ---
 
 ## Slash commands

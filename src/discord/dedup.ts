@@ -3,10 +3,11 @@
 //
 //   (a) promo-codes.txt           → status: already-known       (NOT fresh)
 //   (b) candidates.jsonl prior    → status: duplicate            (NOT fresh)
-//   (c) suppression deny rule     → status: suppressed-operator-deny
-//   (d) suppression allow rule    → OVERRIDES cooldown → pending (fresh)
-//   (e) cooldown.isInCooldown     → status: suppressed-cooldown  (NOT fresh)
-//   (f) else                       → status: pending             (fresh)
+//   (c) dead-code cache           → status: suppressed-dead-code (NOT fresh)
+//   (d) suppression deny rule     → status: suppressed-operator-deny
+//   (e) suppression allow rule    → OVERRIDES cooldown → pending (fresh)
+//   (f) cooldown.isInCooldown     → status: suppressed-cooldown  (NOT fresh)
+//   (g) else                       → status: pending             (fresh)
 //
 // Returns BOTH lists so the orchestrator can:
 //   - submit `fresh` to the redeemer via `redeemCodes({ extraCandidates })`
@@ -25,6 +26,7 @@ import type {
 export interface DedupContext {
   promoCodesTxt: Set<string>;
   priorCandidates: Map<string, CandidateCode>;
+  deadCodes?: ReadonlySet<string>;
   suppression: OperatorSuppressionMap;
   cooldowns: CooldownMap;
   now: Date;
@@ -55,18 +57,22 @@ function classify(value: string, ctx: DedupContext): CandidateStatus {
   // (a) Already in promo-codes.txt → already-known.
   if (ctx.promoCodesTxt.has(value)) return "already-known";
 
-  // (b) Seen on a prior run → duplicate, except retryable transient failures.
+  // (b) Seen on a prior run → duplicate, except retryable or cache-suppressed entries.
   const prior = ctx.priorCandidates.get(value);
-  if (prior !== undefined) {
-    if (prior.status === "transient-failure") {
-      return isInCooldown(ctx.cooldowns, value, ctx.now)
-        ? "suppressed-cooldown"
-        : "pending";
-    }
+  if (prior !== undefined && prior.status !== "transient-failure" && prior.status !== "suppressed-dead-code") {
     return "duplicate";
   }
 
-  // (c)/(d) Operator rules.
+  // (c) A known-invalid code cannot be reattempted, even with an allow rule.
+  if (ctx.deadCodes?.has(value)) return "suppressed-dead-code";
+
+  if (prior?.status === "transient-failure") {
+    return isInCooldown(ctx.cooldowns, value, ctx.now)
+      ? "suppressed-cooldown"
+      : "pending";
+  }
+
+  // (d)/(e) Operator rules.
   const rule = ctx.suppression[value];
   if (rule !== undefined) {
     if (rule.action === "deny") return "suppressed-operator-deny";
@@ -74,9 +80,9 @@ function classify(value: string, ctx: DedupContext): CandidateStatus {
     return "pending";
   }
 
-  // (e) Cooldown still active.
+  // (f) Cooldown still active.
   if (isInCooldown(ctx.cooldowns, value, ctx.now)) return "suppressed-cooldown";
 
-  // (f) Nothing blocks it.
+  // (g) Nothing blocks it.
   return "pending";
 }

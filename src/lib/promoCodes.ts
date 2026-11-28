@@ -4,8 +4,53 @@
 
 import { promises as fs } from "node:fs";
 
+export const DEFAULT_DEAD_CODES_PATH = "data/promo-code-dead.json";
+
 export class PromoCodesFileError extends Error {
   override readonly name = "PromoCodesFileError";
+}
+
+export class DeadCodeCacheError extends Error {
+  override readonly name = "DeadCodeCacheError";
+}
+
+export async function readDeadCodes(path: string = DEFAULT_DEAD_CODES_PATH): Promise<Set<string>> {
+  let raw: string;
+  try {
+    raw = await fs.readFile(path, "utf8");
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return new Set();
+    throw new DeadCodeCacheError(`Could not read dead-code cache at ${path}.`);
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new DeadCodeCacheError(`Malformed dead-code cache at ${path}.`);
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new DeadCodeCacheError(`Invalid dead-code cache at ${path}: expected an object.`);
+  }
+
+  const codes = new Set<string>();
+  for (const [code, value] of Object.entries(parsed)) {
+    if (!code.trim() || !value || typeof value !== "object" || Array.isArray(value)) {
+      throw new DeadCodeCacheError(`Invalid entry in dead-code cache at ${path}.`);
+    }
+    const entry = value as Record<string, unknown>;
+    if (
+      entry.first_seen_outcome !== "CODE_INVALID_OR_EXPIRED" ||
+      typeof entry.marked_dead_at !== "string" ||
+      !Number.isFinite(Date.parse(entry.marked_dead_at)) ||
+      !Array.isArray(entry.accounts_tried) ||
+      !entry.accounts_tried.every((account: unknown) => typeof account === "string")
+    ) {
+      throw new DeadCodeCacheError(`Invalid entry in dead-code cache at ${path}.`);
+    }
+    codes.add(code.trim().toUpperCase());
+  }
+  return codes;
 }
 
 export async function readPromoCodes(path: string): Promise<string[]> {

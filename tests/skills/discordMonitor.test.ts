@@ -177,6 +177,44 @@ describe("discordMonitor / empty allowlist (FR-001)", () => {
       /Promo-code scan \| NOT RUN .*no conclusion about code availability/,
     );
   });
+
+  it("does not require the dead-code cache for command-only channels", async () => {
+    const commandChannels = path.join(ds.dir, "command-channels.json");
+    const deadCodes = path.join(ds.dir, "promo-code-dead.json");
+    fs.writeFileSync(commandChannels, JSON.stringify([{
+      guild_id: "509679626763632640",
+      channel_id: "222222222222222222",
+    }]));
+    fs.writeFileSync(deadCodes, "{invalid");
+    const client: IngestClient = {
+      getMe: async () => ({ id: "bot", username: "stfc-monitor" }),
+      getChannelMessages: async () => [],
+    };
+
+    const { result, exitCode } = await discordMonitor({
+      accounts: [],
+      paths: {
+        allowlist: ds.allowlist,
+        commandChannels,
+        deadCodes,
+        cursors: ds.cursors,
+        candidates: ds.candidates,
+        tipsSeen: path.join(ds.dir, "tips-seen.jsonl"),
+        suppression: ds.suppression,
+        cooldowns: ds.cooldowns,
+        digestsDir: ds.digestsDir,
+        promoCodes: ds.promoCodes,
+      },
+      clientFactory: () => client,
+      now: () => NOW,
+      runId: "run-command-only",
+    });
+
+    assert.equal(exitCode, DISCORD_MONITOR_EXIT_OK);
+    assert.equal(result.promoChannelsConfigured, 0);
+    assert.equal(result.channelsRead, 1);
+    assert.equal(result.errorsByClass.DeadCodeCacheError, undefined);
+  });
 });
 
 describe("discordMonitor / empty message content", () => {
@@ -273,6 +311,152 @@ describe("discordMonitor / mixed fixture happy path", () => {
     fs.rmSync(ds.dir, { recursive: true, force: true });
     if (savedToken === undefined) delete process.env.DISCORD_BOT_TOKEN;
     else process.env.DISCORD_BOT_TOKEN = savedToken;
+  });
+
+  it("suppresses cached dead codes and submits repeated reports only once, keeping the earliest source", async () => {
+    const deadCodes = path.join(ds.dir, "promo-code-dead.json");
+    fs.writeFileSync(deadCodes, JSON.stringify({
+      deadcode: {
+        marked_dead_at: "2026-05-15T00:00:00.000Z",
+        first_seen_outcome: "CODE_INVALID_OR_EXPIRED",
+        accounts_tried: ["main"],
+      },
+    }));
+    const channelId = "222222222222222222";
+    const message = (id: string, content: string, timestamp: string) => ({
+      id,
+      channel_id: channelId,
+      content,
+      timestamp,
+      edited_timestamp: null,
+      author: { id: "999999999999999999", username: "poster", bot: false },
+      type: 0,
+    });
+    const client: IngestClient = {
+      getMe: async () => ({ id: "bot", username: "stfc-monitor" }),
+      getChannelMessages: async (_id, opts) => opts.after !== undefined ? [] : [
+        message("411111111111111111", "FRESH26 DEADCODE", "2026-05-16T07:00:00.000900Z"),
+        message("411111111111111112", "FRESH26", "2026-05-16T07:00:00.000100Z"),
+      ],
+    };
+    let submitted: string[] | undefined;
+    const { result, exitCode } = await discordMonitor({
+      accounts: [{ name: "main", token: makeJwt() }],
+      paths: {
+        allowlist: ds.allowlist,
+        commandChannels: path.join(ds.dir, "command-channels.json"),
+        cursors: ds.cursors,
+        candidates: ds.candidates,
+        tipsSeen: path.join(ds.dir, "tips-seen.jsonl"),
+        suppression: ds.suppression,
+        cooldowns: ds.cooldowns,
+        deadCodes,
+        digestsDir: ds.digestsDir,
+        promoCodes: ds.promoCodes,
+      },
+      clientFactory: () => client,
+      now: () => NOW,
+      runId: "run-dead-and-duplicate",
+      redeemFn: async (opts) => {
+        submitted = opts.extraCandidates;
+        return {
+          result: {
+            rows: [{ accountName: "main", attempts: [{ code: "FRESH26", outcome: "CODE_REDEEMED" }] }],
+          },
+          exitCode: 0,
+        };
+      },
+    });
+
+    assert.equal(exitCode, 0);
+    assert.deepEqual(submitted, ["FRESH26"]);
+    assert.equal(result.candidatesExtracted, 3);
+    assert.equal(result.candidatesSubmitted, 1);
+    assert.equal(result.candidatesSuppressedDedup, 1);
+    assert.equal(result.candidatesSuppressedDead, 1);
+    const records = fs.readFileSync(ds.candidates, "utf8").trim().split(/\r?\n/).map((line) => JSON.parse(line));
+    assert.equal(records.length, 2);
+    const fresh = records.find((record) => record.value === "FRESH26");
+    const dead = records.find((record) => record.value === "DEADCODE");
+    assert.equal(fresh.status, "redeemed");
+    assert.equal(fresh.source.messageId, "411111111111111112");
+    assert.equal(dead.status, "suppressed-dead-code");
+    assert.equal(dead.lastAttempted, null);
+    assert.deepEqual(dead.perAccountOutcome, []);
+    const digest = fs.readFileSync(path.join(ds.digestsDir, "2026-05-16.md"), "utf8");
+    assert.match(digest, /1 suppressed by dead-code cache/);
+  });
+
+  it("fails closed without advancing cursors or exposing malformed cache contents", async () => {
+    const deadCodes = path.join(ds.dir, "promo-code-dead.json");
+    const secretLike = "private-cache-content";
+    fs.writeFileSync(deadCodes, `{"broken":"${secretLike}"`);
+    const commandChannels = path.join(ds.dir, "command-channels.json");
+    fs.writeFileSync(commandChannels, JSON.stringify([{
+      guild_id: "509679626763632640",
+      channel_id: "222222222222222222",
+    }]));
+    const summaryPath = path.join(ds.dir, "summary.md");
+    const savedSummary = process.env.GITHUB_STEP_SUMMARY;
+    process.env.GITHUB_STEP_SUMMARY = summaryPath;
+    let clientCalls = 0;
+    const client: IngestClient = {
+      getMe: async () => {
+        clientCalls++;
+        return { id: "bot", username: "stfc-monitor" };
+      },
+      getChannelMessages: async () => {
+        clientCalls++;
+        return [];
+      },
+    };
+    const errors: string[] = [];
+    const originalError = console.error;
+    console.error = (...parts: unknown[]) => errors.push(parts.join(" "));
+
+    try {
+      let redeemCalls = 0;
+      const { result, exitCode } = await discordMonitor({
+        accounts: [{ name: "main", token: makeJwt() }],
+        paths: {
+          allowlist: ds.allowlist,
+          commandChannels,
+          cursors: ds.cursors,
+          candidates: ds.candidates,
+          tipsSeen: path.join(ds.dir, "tips-seen.jsonl"),
+          suppression: ds.suppression,
+          cooldowns: ds.cooldowns,
+          deadCodes,
+          digestsDir: ds.digestsDir,
+          promoCodes: ds.promoCodes,
+        },
+        clientFactory: () => client,
+        now: () => NOW,
+        runId: "run-malformed-dead-cache",
+        redeemFn: async () => {
+          redeemCalls++;
+          return { result: { rows: [] }, exitCode: 0 };
+        },
+      });
+
+      assert.equal(exitCode, DISCORD_MONITOR_EXIT_INFRA_FAILURE);
+      assert.equal(redeemCalls, 0);
+      assert.equal(clientCalls, 0, "cache failure must precede ingest and command replies");
+      assert.equal(result.errorsByClass.DeadCodeCacheError, 1);
+      assert.equal(fs.existsSync(ds.cursors), false);
+      assert.equal(fs.existsSync(ds.candidates), false);
+      const digest = fs.readFileSync(path.join(ds.digestsDir, "2026-05-16.md"), "utf8");
+      const summary = fs.readFileSync(summaryPath, "utf8");
+      assert.match(summary, /Promo-code scan \| FAILED.*dead-code cache unavailable/);
+      for (const visible of [errors.join("\n"), digest, summary]) {
+        assert.match(visible, /DeadCodeCacheError|dead.code cache/i);
+        assert.doesNotMatch(visible, new RegExp(secretLike));
+      }
+    } finally {
+      console.error = originalError;
+      if (savedSummary === undefined) delete process.env.GITHUB_STEP_SUMMARY;
+      else process.env.GITHUB_STEP_SUMMARY = savedSummary;
+    }
   });
 
   it("extracts codes, dedup filters prior, redeemCodes called once with fresh extras", async () => {
