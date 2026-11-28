@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
+import { spawnSync, type SpawnSyncReturns } from "node:child_process";
 import {
   chmodSync,
   existsSync,
@@ -1173,6 +1173,43 @@ describe("workflow consolidation", () => {
       ...valid,
       "CHANGELOG.md": "## [0.2.0-rc.1] - not-a-date\n",
     }), 0);
+  });
+
+  it("publishes prereleases without promoting them to latest", (t) => {
+    const bash = spawnSync("bash", ["--version"], { encoding: "utf8" });
+    if (process.platform === "win32" && bash.status !== 0) {
+      t.skip("Bash is required to exercise the Ubuntu release workflow");
+      return;
+    }
+    assert.equal(bash.status, 0, "Bash must be available to test the release workflow");
+
+    const release = workflows.find(({ file }) => file === "release.yml");
+    const step = release?.workflow.jobs?.release?.steps?.find(
+      (candidate) => candidate.name === "Create GitHub Release",
+    );
+    assert.ok(step?.run);
+
+    for (const [version, flags] of [
+      ["0.2.0", ["--latest"]],
+      ["0.2.0-rc.1", ["--prerelease", "--latest=false"]],
+      ["0.2.0-alpha-beta.2", ["--prerelease", "--latest=false"]],
+    ] as const) {
+      const tag = `v${version}`;
+      const result: SpawnSyncReturns<string> = spawnSync(
+        "bash",
+        ["-c", `gh() { printf '%s\\n' "$@"; }\n${step.run.replaceAll("${{ steps.version.outputs.tag }}", tag)}`],
+        {
+          encoding: "utf8",
+          env: { ...process.env, GH_TOKEN: "", RELEASE_VERSION: version, RELEASE_TAG: tag },
+        },
+      );
+      assert.equal(result.status, 0, result.stderr);
+      assert.deepEqual(result.stdout.trim().split(/\r?\n/), [
+        "release", "create", tag, "--title", tag, "--generate-notes", ...flags,
+      ]);
+    }
+    assert.equal(step.env?.RELEASE_VERSION, "${{ inputs.version }}");
+    assert.equal(step.env?.RELEASE_TAG, "${{ steps.version.outputs.tag }}");
   });
 
   it("does not suppress release validation failures", () => {
