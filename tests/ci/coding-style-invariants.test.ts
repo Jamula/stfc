@@ -3,6 +3,7 @@ import { spawnSync } from "node:child_process";
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, it } from "node:test";
+import { parse as parseYaml } from "yaml";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..", "..");
 const IGNORED_WALK_DIRS = new Set([".git", "node_modules", "dist", ".wrangler"]);
@@ -88,6 +89,50 @@ function collectManifests(dir: string, predicate: (fileName: string) => boolean)
 }
 
 describe("coding style & repository manifest invariants", () => {
+  it("covers tracked npm manifests and GitHub Actions with weekly routine Dependabot groups", () => {
+    const lsFiles = spawnSync("git", ["ls-files", "-z", "--", "*package.json"], {
+      cwd: REPO_ROOT,
+      encoding: "utf8",
+    });
+    assert.ifError(lsFiles.error);
+    assert.equal(lsFiles.status, 0, `git ls-files failed: ${lsFiles.stderr}`);
+
+    const npmDirectories = lsFiles.stdout.split("\0")
+      .filter((file) => path.posix.basename(file) === "package.json")
+      .map((file) => {
+        const directory = path.posix.dirname(file);
+        return directory === "." ? "/" : `/${directory}`;
+      });
+    assert.ok(npmDirectories.includes("/"), "root package.json must be tracked");
+
+    const config = parseYaml(readFileSync(path.join(REPO_ROOT, ".github", "dependabot.yml"), "utf8")) as {
+      version: number;
+      updates: Array<{
+        "package-ecosystem": string;
+        directory: string;
+        schedule: { interval: string };
+        groups: Record<string, { patterns?: string[]; "update-types"?: string[] }>;
+      }>;
+    };
+    assert.equal(config.version, 2);
+    for (const [ecosystem, directory] of [
+      ...npmDirectories.map((directory) => ["npm", directory]),
+      ["github-actions", "/"],
+    ]) {
+      const entries = config.updates.filter((entry) =>
+        entry["package-ecosystem"] === ecosystem && entry.directory === directory);
+      assert.equal(entries.length, 1, `expected exactly one ${ecosystem} entry for ${directory}`);
+      const entry = entries[0]!;
+      assert.equal(entry.schedule.interval, "weekly", `${ecosystem} ${directory} cadence`);
+      assert.deepEqual(entry.groups.routine?.patterns, ["*"]);
+      assert.deepEqual([...(entry.groups.routine?.["update-types"] ?? [])].sort(), ["minor", "patch"]);
+      for (const [name, group] of Object.entries(entry.groups)) {
+        assert.ok(group["update-types"], `${ecosystem} ${directory} group ${name} must not include majors`);
+        assert.ok(!group["update-types"].includes("major"), `${ecosystem} ${directory} group ${name} includes majors`);
+      }
+    }
+  });
+
   it("imports every tests/**/*.test.ts suite in tests/index.test.ts", () => {
     const testsDir = path.join(REPO_ROOT, "tests");
     const indexFile = path.join(testsDir, "index.test.ts");
